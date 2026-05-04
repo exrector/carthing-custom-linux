@@ -24,6 +24,13 @@
   - wrapper runs `S05-usbnet` and `S06-ssh` before BusyBox init
   - wrapper keeps retrying early network/ssh in the background
   - this gives us a stage-2 proof path even if normal init later breaks
+- `/init` now points to the same wrapper path as `/bin/init`:
+  - old stage-1 defaults to `/init`
+  - if `init=/bin/init` from kernel cmdline is not honored, stage-2 still lands in our wrapper
+- The current rootfs now covers both stage-2 entrypoints explicitly:
+  - `/init` -> `init-wrapper`
+  - `/bin/init` -> `init-wrapper`
+  - this removes a hidden dependency on kernel cmdline handoff correctness
 
 ## Findings Locked In
 
@@ -68,6 +75,7 @@
   - early `S05-usbnet` and `S06-ssh`
   - no duplicate late network/dropbear scripts
   - a wrapper `/bin/init` that tries network+ssh before BusyBox init
+  - a matching fallback `/init` for stage-2 handoff compatibility
 
 ## Next Checkpoint Goal
 

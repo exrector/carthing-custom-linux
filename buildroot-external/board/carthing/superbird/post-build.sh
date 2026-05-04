@@ -46,4 +46,10 @@ if [ -e "$TARGET_DIR/usr/libexec/carthing/init-wrapper" ]; then
 exec /usr/libexec/carthing/init-wrapper "$@"
 EOF
     chmod 0755 "$TARGET_DIR/bin/init"
+    rm -f "$TARGET_DIR/init"
+    cat >"$TARGET_DIR/init" <<'EOF'
+#!/bin/sh
+exec /usr/libexec/carthing/init-wrapper "$@"
+EOF
+    chmod 0755 "$TARGET_DIR/init"
 fi
