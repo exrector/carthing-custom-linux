@@ -18,7 +18,7 @@ list_usb_candidates() {
         [ "$name" = "${CARTHING_USB_IF:-}" ] && continue
 
         case "$name" in
-            usb*|eth*|en*)
+            usb*|eth*|en*|ncm*|rndis*)
                 echo "$name"
                 found=0
                 ;;

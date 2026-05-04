@@ -38,6 +38,18 @@
   - stage-2 runs, but USB/IP setup still does not happen as expected
   - the gadget interface appears under a path we still do not handle correctly
 
+## Latest Working Theory
+
+- The target-side gadget interface may not be named `usb0`.
+- The custom early network script originally matched only:
+  - `usb*`
+  - `eth*`
+  - `en*`
+- The current build widens that to include:
+  - `ncm*`
+  - `rndis*`
+- This is now the next concrete thing being tested on device `№1`.
+
 ## Next Checkpoint Goal
 
 - Get one successful SSH login into `№1` after normal boot.
