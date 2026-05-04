@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+TARGET_DIR="$1"
+
+mkdir -p \
+    "$TARGET_DIR/bin" \
+    "$TARGET_DIR/lib/firmware/brcm" \
+    "$TARGET_DIR/root/.ssh" \
+    "$TARGET_DIR/run/dropbear" \
+    "$TARGET_DIR/run/carthing" \
+    "$TARGET_DIR/usr/lib/carthing/vendor" \
+    "$TARGET_DIR/usr/share/carthing/firmware/brcm" \
+    "$TARGET_DIR/usr/share/fonts/truetype" \
+    "$TARGET_DIR/var/lib/bluetooth" \
+    "$TARGET_DIR/var/log"
+
+find "$TARGET_DIR/etc/init.d" -type f -name 'S*' -exec chmod 0755 {} +
+find "$TARGET_DIR/usr/libexec/carthing" -type f -exec chmod 0755 {} +
+
+if [ -d "$TARGET_DIR/root/.ssh" ]; then
+    chmod 0700 "$TARGET_DIR/root/.ssh"
+fi
+
+if [ -f "$TARGET_DIR/root/.ssh/authorized_keys" ]; then
+    chmod 0600 "$TARGET_DIR/root/.ssh/authorized_keys"
+fi
+
+if [ ! -e "$TARGET_DIR/bin/init" ] && [ -e "$TARGET_DIR/bin/busybox" ]; then
+    ln -sf busybox "$TARGET_DIR/bin/init"
+fi

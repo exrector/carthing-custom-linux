@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+serial=""
+bt_mac=""
+
+if [ -r /sys/class/efuse/usid ]; then
+    full_serial=$(cat /sys/class/efuse/usid || true)
+    serial=$(printf "%s" "$full_serial" | tail -c 5 || true)
+fi
+
+if [ -r /sys/class/efuse/mac_bt ]; then
+    bt_mac=$(awk -F: '/0x00/ {
+        split(toupper($2), s, " ");
+        printf("%s:%s:%s:%s:%s:%s\n", s[1], s[2], s[3], s[4], s[5], s[6]);
+    }' /sys/class/efuse/mac_bt || true)
+fi
+
+printf 'PRETTY_HOSTNAME=%s\n' "$CARTHING_BT_ALIAS" > /etc/machine-info
+
+if [ -n "$bt_mac" ]; then
+    settings_dir="/var/lib/bluetooth/$bt_mac"
+    mkdir -p "$settings_dir"
+    printf '[General]\nAlias=%s\n' "$CARTHING_BT_ALIAS" > "$settings_dir/settings"
+fi
+
+cat > /etc/superbird <<EOF
+{
+  "serialNumber": "${serial}",
+  "btMac": "${bt_mac}"
+}
+EOF
+
+echo "[S25-bt-metadata] metadata written"

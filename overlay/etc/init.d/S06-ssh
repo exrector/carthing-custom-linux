@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+[ "$CARTHING_SSH_ENABLE" = "1" ] || exit 0
+
+if ! command -v dropbear >/dev/null 2>&1; then
+    echo "[S06-ssh] dropbear not installed"
+    exit 0
+fi
+
+mkdir -p /etc/dropbear
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+[ ! -f /root/.ssh/authorized_keys ] || chmod 600 /root/.ssh/authorized_keys
+
+[ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key >/dev/null 2>&1
+[ -f /etc/dropbear/dropbear_rsa_host_key ] || dropbearkey -t rsa -s 2048 -f /etc/dropbear/dropbear_rsa_host_key >/dev/null 2>&1
+
+dropbear $CARTHING_DROPBEAR_ARGS >/var/log/dropbear.log 2>&1 &
+
+echo "[S06-ssh] dropbear started"

@@ -1,0 +1,9 @@
+*.pyc
+*.swp
+.DS_Store
+*.o
+carthing-bt-fwload
+output/
+host-tools/
+distfiles/
+artifacts/

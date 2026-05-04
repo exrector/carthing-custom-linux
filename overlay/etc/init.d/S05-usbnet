@@ -1,0 +1,89 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+list_usb_candidates() {
+    found=1
+
+    if [ -n "${CARTHING_USB_IF:-}" ] && [ -d "/sys/class/net/$CARTHING_USB_IF" ]; then
+        echo "$CARTHING_USB_IF"
+        found=0
+    fi
+
+    for netdir in /sys/class/net/*; do
+        [ -e "$netdir" ] || continue
+        name=${netdir##*/}
+        [ "$name" = "lo" ] && continue
+        [ "$name" = "${CARTHING_USB_IF:-}" ] && continue
+
+        case "$name" in
+            usb*|eth*|en*)
+                echo "$name"
+                found=0
+                ;;
+        esac
+    done
+
+    return "$found"
+}
+
+configure_usb_if() {
+    iface=$1
+    ip link set "$iface" up 2>/dev/null || true
+    ip addr flush dev "$iface" 2>/dev/null || true
+    ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+    mkdir -p /run/carthing
+    printf '%s\n' "$iface" > /run/carthing/usb-iface
+}
+
+configure_all_usb_ifs() {
+    configured=
+    for iface in $(list_usb_candidates); do
+        configure_usb_if "$iface"
+        configured="${configured}${configured:+ }$iface"
+    done
+    printf '%s\n' "$configured"
+}
+
+retry_usb_config() {
+    attempts=30
+    while [ "$attempts" -gt 0 ]; do
+        configured=$(configure_all_usb_ifs || true)
+        if [ -n "$configured" ]; then
+            echo "$configured"
+            return 0
+        fi
+        attempts=$((attempts - 1))
+        sleep 1
+    done
+    return 1
+}
+
+configured_ifs=
+
+if command -v ip >/dev/null 2>&1; then
+    configured_ifs=$(configure_all_usb_ifs || true)
+    if [ -z "$configured_ifs" ]; then
+        echo "[S05-usbnet] no USB network interface found, retrying in background"
+    fi
+
+    (
+        retry_usb_config >/run/carthing/usb-ifaces 2>/dev/null || true
+    ) &
+else
+    echo "[S05-usbnet] ip command not available"
+fi
+
+if [ "${CARTHING_USB_ENABLE_DHCP}" = "1" ] && command -v dnsmasq >/dev/null 2>&1; then
+    dnsmasq \
+        --interface="${CARTHING_USB_IF}" \
+        --bind-interfaces \
+        --dhcp-range=172.16.42.1,172.16.42.1,255.255.255.0,1m \
+        --dhcp-option=option:router,172.16.42.1 \
+        --server=1.1.1.1 \
+        --server=8.8.8.8 \
+        >/var/log/dnsmasq.log 2>&1 &
+fi
+
+echo "[S05-usbnet] configured ${configured_ifs:-none} -> ${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}"

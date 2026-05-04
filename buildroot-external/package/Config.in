@@ -1,0 +1,1 @@
+source "$BR2_EXTERNAL_CARTHING_CUSTOM_LINUX_PATH/package/carthing-bt-fwload/Config.in"

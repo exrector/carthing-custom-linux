@@ -1,0 +1,2 @@
+KERNEL=="event*", SUBSYSTEM=="input", ATTR{name}=="gpio-keys", SYMLINK+="input/carthing-buttons", GROUP="input", MODE="0660"
+KERNEL=="event*", SUBSYSTEM=="input", ATTR{name}=="*rotary*", SYMLINK+="input/carthing-rotary", GROUP="input", MODE="0660"

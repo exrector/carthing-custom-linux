@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+mkdir -p /run/carthing
+
+buttons=""
+rotary=""
+
+for name_file in /sys/class/input/event*/device/name; do
+    [ -f "$name_file" ] || continue
+    event_dir=$(basename "$(dirname "$(dirname "$name_file")")")
+    event_dev="/dev/input/$event_dir"
+    name=$(cat "$name_file")
+
+    case "$name" in
+        *gpio*|*keys*)
+            buttons="$event_dev"
+            ;;
+        *rotary*|*encoder*)
+            rotary="$event_dev"
+            ;;
+    esac
+done
+
+[ -n "$buttons" ] || [ ! -e /dev/input/event0 ] || buttons=/dev/input/event0
+[ -n "$rotary" ] || [ ! -e /dev/input/event1 ] || rotary=/dev/input/event1
+
+[ -n "$buttons" ] && ln -sf "$buttons" /run/carthing/input-buttons
+[ -n "$rotary" ] && ln -sf "$rotary" /run/carthing/input-rotary
+
+echo "[S45-input-links] buttons=${buttons:-missing} rotary=${rotary:-missing}"

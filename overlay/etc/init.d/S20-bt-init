@@ -1,0 +1,58 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+reset_gpio() {
+    gpio_path="/sys/class/gpio/gpio${CARTHING_BT_RESET_GPIO}"
+
+    if [ ! -d "$gpio_path" ]; then
+        echo "$CARTHING_BT_RESET_GPIO" > /sys/class/gpio/export
+        echo out > "$gpio_path/direction"
+    fi
+
+    echo 0 > "$gpio_path/value"
+    sleep 0.1
+    echo 1 > "$gpio_path/value"
+    sleep 0.3
+}
+
+attach_once() {
+    if [ "$CARTHING_BT_INIT_BACKEND" = "skip" ]; then
+        echo "[S20-bt-init] skipping Bluetooth init by configuration"
+        return 0
+    fi
+
+    if [ "$CARTHING_BT_INIT_BACKEND" != "fwload" ]; then
+        echo "[S20-bt-init] unsupported backend: $CARTHING_BT_INIT_BACKEND"
+        return 1
+    fi
+
+    if [ ! -x "$CARTHING_BT_FWLOAD_BINARY" ]; then
+        echo "[S20-bt-init] missing binary: $CARTHING_BT_FWLOAD_BINARY"
+        return 1
+    fi
+
+    if [ ! -f "$CARTHING_BT_FIRMWARE" ]; then
+        echo "[S20-bt-init] missing firmware: $CARTHING_BT_FIRMWARE"
+        return 1
+    fi
+
+    set -- \
+        --device "$CARTHING_BT_UART" \
+        --firmware "$CARTHING_BT_FIRMWARE" \
+        --download-baud "$CARTHING_BT_DOWNLOAD_BAUD" \
+        --baudrate "$CARTHING_BT_CONTROLLER_BAUD"
+
+    if [ -n "$CARTHING_BT_FWLOAD_ARGS" ]; then
+        set -- "$@" $CARTHING_BT_FWLOAD_ARGS
+    fi
+
+    "$CARTHING_BT_FWLOAD_BINARY" "$@" > /var/log/carthing-bt-fwload.log 2>&1
+}
+
+echo "[S20-bt-init] resetting Bluetooth chip on GPIO ${CARTHING_BT_RESET_GPIO}"
+reset_gpio
+echo "[S20-bt-init] initializing UART Bluetooth backend on ${CARTHING_BT_UART}"
+attach_once
+echo "[S20-bt-init] done"

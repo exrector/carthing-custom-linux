@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/libexec/carthing
+
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+
+mkdir -p /run/carthing /tmp /var/log /var/lib/bluetooth /var/lib/carthing /etc/dropbear
+
+for script in /etc/init.d/S??*; do
+    [ -x "$script" ] || continue
+    echo "[rcS] running $script"
+    if "$script"; then
+        :
+    else
+        status=$?
+        echo "[rcS] $script failed with status $status"
+    fi
+done

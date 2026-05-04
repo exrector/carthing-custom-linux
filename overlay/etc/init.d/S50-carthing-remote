@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+[ "$CARTHING_AUTOSTART_REMOTE" = "1" ] || exit 0
+
+if [ ! -x /usr/libexec/carthing/run-media-remote ]; then
+    echo "[S50-carthing-remote] missing runtime launcher"
+    exit 1
+fi
+
+nohup /usr/libexec/carthing/run-media-remote >> "$CARTHING_RUNTIME_LOG" 2>&1 &
+
+echo "[S50-carthing-remote] runtime started"

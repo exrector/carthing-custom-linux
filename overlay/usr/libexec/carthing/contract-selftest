@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+check_path() {
+    path="$1"
+    if [ -e "$path" ]; then
+        echo "[ok] $path"
+    else
+        echo "[missing] $path"
+        failed=1
+    fi
+}
+
+check_cmd() {
+    name="$1"
+    if command -v "$name" >/dev/null 2>&1; then
+        echo "[ok] command $name"
+    else
+        echo "[missing] command $name"
+        failed=1
+    fi
+}
+
+failed=0
+
+check_path /bin/init
+check_path "$CARTHING_BT_UART"
+check_path /dev/dri/card0
+check_path /sys/class/gpio
+check_path /sys/class/efuse
+check_path /dev/input
+check_path "$CARTHING_BT_FIRMWARE_DIR/BCM.hcd"
+check_path "$CARTHING_BT_FIRMWARE_DIR/BCM20703A2.hcd"
+check_path "$CARTHING_RUNTIME_ENTRY"
+check_path "$CARTHING_RUNTIME_LIB/bumble/host.py"
+check_path "$CARTHING_FONT_PATH"
+check_path /root/.ssh/authorized_keys
+
+check_cmd sh
+check_cmd ip
+check_cmd awk
+check_cmd sed
+check_cmd python3
+
+if [ "$CARTHING_BT_INIT_BACKEND" = "fwload" ]; then
+    check_path "$CARTHING_BT_FWLOAD_BINARY"
+fi
+
+if [ "$failed" -ne 0 ]; then
+    exit 1
+fi
