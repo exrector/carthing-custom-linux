@@ -20,6 +20,10 @@
   - removed `S40-ssh`
   - removed `S40network`
   - removed `S50dropbear`
+- `/bin/init` is now a controlled wrapper, not a BusyBox symlink:
+  - wrapper runs `S05-usbnet` and `S06-ssh` before BusyBox init
+  - wrapper keeps retrying early network/ssh in the background
+  - this gives us a stage-2 proof path even if normal init later breaks
 
 ## Findings Locked In
 
@@ -40,6 +44,7 @@
 - Keep Bluetooth init from being able to block first access.
 - Configure candidate USB network interfaces aggressively and retry in background.
 - Keep only one boot-time network path and one SSH path in the image.
+- Try to obtain SSH before `rcS` becomes a dependency.
 - Continue flashing only `rootfs.img` until SSH on `№1` is stable.
 
 ## Current Unknown
@@ -62,6 +67,7 @@
   - background USB interface retries
   - early `S05-usbnet` and `S06-ssh`
   - no duplicate late network/dropbear scripts
+  - a wrapper `/bin/init` that tries network+ssh before BusyBox init
 
 ## Next Checkpoint Goal
 

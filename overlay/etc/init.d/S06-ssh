@@ -10,6 +10,11 @@ if ! command -v dropbear >/dev/null 2>&1; then
     exit 0
 fi
 
+if pidof dropbear >/dev/null 2>&1; then
+    echo "[S06-ssh] dropbear already running"
+    exit 0
+fi
+
 mkdir -p /etc/dropbear
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh

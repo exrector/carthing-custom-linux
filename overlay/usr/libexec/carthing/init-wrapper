@@ -1,0 +1,44 @@
+#!/bin/sh
+set -u
+
+export PATH=/usr/libexec/carthing:/usr/sbin:/usr/bin:/sbin:/bin
+
+LOG_DIR=/run/carthing
+LOG_FILE="$LOG_DIR/init-wrapper.log"
+
+mkdir -p "$LOG_DIR" /var/log /etc/dropbear /root/.ssh 2>/dev/null || true
+
+log() {
+    msg="[init-wrapper] $*"
+    echo "$msg" >>"$LOG_FILE" 2>/dev/null || true
+    echo "$msg" >/dev/kmsg 2>/dev/null || true
+}
+
+log "stage-2 entry"
+
+if [ -x /etc/init.d/S05-usbnet ]; then
+    log "running early S05-usbnet"
+    /etc/init.d/S05-usbnet >>"$LOG_FILE" 2>&1 || log "S05-usbnet failed: $?"
+else
+    log "missing /etc/init.d/S05-usbnet"
+fi
+
+if [ -x /etc/init.d/S06-ssh ]; then
+    log "running early S06-ssh"
+    /etc/init.d/S06-ssh >>"$LOG_FILE" 2>&1 || log "S06-ssh failed: $?"
+else
+    log "missing /etc/init.d/S06-ssh"
+fi
+
+(
+    tries=18
+    while [ "$tries" -gt 0 ]; do
+        tries=$((tries - 1))
+        sleep 5
+        /etc/init.d/S05-usbnet >>"$LOG_FILE" 2>&1 || true
+        /etc/init.d/S06-ssh >>"$LOG_FILE" 2>&1 || true
+    done
+) >/dev/null 2>&1 &
+
+log "execing busybox init"
+exec /bin/busybox init

@@ -38,3 +38,12 @@ fi
 if [ ! -e "$TARGET_DIR/bin/init" ] && [ -e "$TARGET_DIR/bin/busybox" ]; then
     ln -sf busybox "$TARGET_DIR/bin/init"
 fi
+
+if [ -e "$TARGET_DIR/usr/libexec/carthing/init-wrapper" ]; then
+    rm -f "$TARGET_DIR/bin/init"
+    cat >"$TARGET_DIR/bin/init" <<'EOF'
+#!/bin/sh
+exec /usr/libexec/carthing/init-wrapper "$@"
+EOF
+    chmod 0755 "$TARGET_DIR/bin/init"
+fi
