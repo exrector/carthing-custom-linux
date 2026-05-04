@@ -16,6 +16,15 @@ fi
 
 cp -R "$repo_root/overlay/." "$target_rootfs/"
 
+for obsolete in \
+    "$target_rootfs/etc/init.d/S30-usbnet" \
+    "$target_rootfs/etc/init.d/S40-ssh" \
+    "$target_rootfs/etc/init.d/S40network" \
+    "$target_rootfs/etc/init.d/S50dropbear"
+do
+    rm -f "$obsolete"
+done
+
 find "$target_rootfs/etc/init.d" -type f -name 'S*' -exec chmod +x {} +
 find "$target_rootfs/usr/libexec/carthing" -type f -exec chmod +x {} +
 

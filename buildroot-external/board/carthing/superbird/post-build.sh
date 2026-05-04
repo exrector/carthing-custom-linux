@@ -15,6 +15,15 @@ mkdir -p \
     "$TARGET_DIR/var/lib/bluetooth" \
     "$TARGET_DIR/var/log"
 
+for obsolete in \
+    "$TARGET_DIR/etc/init.d/S30-usbnet" \
+    "$TARGET_DIR/etc/init.d/S40-ssh" \
+    "$TARGET_DIR/etc/init.d/S40network" \
+    "$TARGET_DIR/etc/init.d/S50dropbear"
+do
+    rm -f "$obsolete"
+done
+
 find "$TARGET_DIR/etc/init.d" -type f -name 'S*' -exec chmod 0755 {} +
 find "$TARGET_DIR/usr/libexec/carthing" -type f -exec chmod 0755 {} +
 
