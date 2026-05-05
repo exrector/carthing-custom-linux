@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+[ -f /etc/default/carthing ] || exit 0
+. /etc/default/carthing
+
+[ "${CARTHING_DEBUG_BEACON_ENABLE:-0}" = "1" ] || exit 0
+[ -n "${CARTHING_DEBUG_BEACON_URL:-}" ] || exit 0
+
+if command -v wget >/dev/null 2>&1; then
+    :
+elif command -v busybox >/dev/null 2>&1; then
+    wget() { busybox wget "$@"; }
+else
+    exit 0
+fi
+
+event=${1:-unknown}
+shift || true
+
+query="event=$event"
+for extra in "$@"; do
+    query="${query}&arg=${extra}"
+done
+
+wget -q -T 2 -O - "${CARTHING_DEBUG_BEACON_URL}?${query}" >/dev/null 2>&1 || true

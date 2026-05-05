@@ -27,6 +27,7 @@ log() {
 }
 
 log "stage-2 entry"
+/usr/libexec/carthing/beacon init-wrapper-entry || true
 
 if [ -x /etc/init.d/S05-usbnet ]; then
     log "running early S05-usbnet"
@@ -48,6 +49,8 @@ if [ -x /etc/init.d/S07-debug-http ]; then
 else
     log "missing /etc/init.d/S07-debug-http"
 fi
+
+/usr/libexec/carthing/beacon init-wrapper-services-done || true
 
 (
     tries=18

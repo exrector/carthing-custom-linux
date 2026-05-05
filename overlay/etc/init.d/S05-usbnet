@@ -3,6 +3,10 @@ set -eu
 
 . /etc/default/carthing
 
+beacon() {
+    /usr/libexec/carthing/beacon "$@" || true
+}
+
 list_usb_candidates() {
     found=1
 
@@ -90,6 +94,9 @@ if command -v ip >/dev/null 2>&1; then
     configured_ifs=$(configure_all_usb_ifs || true)
     if [ -z "$configured_ifs" ]; then
         echo "[S05-usbnet] no USB network interface found, retrying in background"
+        beacon s05-no-iface
+    else
+        beacon s05-configured "$configured_ifs"
     fi
 
     (

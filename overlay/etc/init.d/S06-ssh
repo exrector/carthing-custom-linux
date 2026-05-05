@@ -3,15 +3,21 @@ set -eu
 
 . /etc/default/carthing
 
+beacon() {
+    /usr/libexec/carthing/beacon "$@" || true
+}
+
 [ "$CARTHING_SSH_ENABLE" = "1" ] || exit 0
 
 if ! command -v dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear not installed"
+    beacon s06-no-dropbear
     exit 0
 fi
 
 if pidof dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear already running"
+    beacon s06-already-running
     exit 0
 fi
 
@@ -35,6 +41,7 @@ done
 if [ -z "$hostkeys" ]; then
     echo "[S06-ssh] no host keys present"
     printf 'no-host-keys\n' >/run/carthing/dropbear.state
+    beacon s06-no-hostkeys
     exit 1
 fi
 
@@ -48,8 +55,10 @@ sleep 1
 
 if kill -0 "$(cat /run/carthing/dropbear.wrapper.pid)" 2>/dev/null; then
     echo "running pid=$(cat /run/carthing/dropbear.wrapper.pid)" >/run/carthing/dropbear.state
+    beacon s06-running
 else
     echo "exited-immediately" >/run/carthing/dropbear.state
+    beacon s06-exited-immediately
 fi
 
 echo "[S06-ssh] dropbear started"
