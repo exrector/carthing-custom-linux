@@ -15,6 +15,10 @@
   - `NCM Gadget` appears reliably as `en14`
   - route to `172.16.42.2` can be pinned back to `en14`
   - ARP loopback was observed and cleared explicitly
+- `№1` now answers on the target IP in normal boot:
+  - `172.16.42.2` responds to ICMP
+  - ARP resolves to a real device MAC on `en14`
+  - this is the first confirmed successful stage-2 network bring-up on the custom rootfs
 - The rebuilt rootfs no longer contains stale init duplicates:
   - removed `S30-usbnet`
   - removed `S40-ssh`
@@ -66,27 +70,28 @@
 ## Current Unknown
 
 - We still do not have SSH into `№1`.
-- `NCM Gadget` is now stable on the host, but `172.16.42.2` still does not answer.
-- That means one of these is still true:
-  - stage-2 is not fully reached
-  - stage-2 runs, but USB/IP setup still does not happen as expected
-  - the gadget interface appears under a path we still do not handle correctly
+- `172.16.42.2` is alive, but `22/tcp` currently returns `Connection refused`.
+- That narrows the next unknown down to ssh bring-up only:
+  - either `dropbear` never starts
+  - or it exits immediately during early boot
 
 ## Latest Working Theory
 
 - The next suspect is no longer host routing.
-- The next suspect is target-side stage-2 behavior under the cleaned init set:
-  - either `S05-usbnet` still misses the real interface timing/path
-  - or stage-2 still does not run far enough to configure `172.16.42.2`
+- The next suspect is no longer basic stage-2 networking.
+- The next suspect is early ssh daemon startup under the cleaned init set.
 - The next image being tested carries:
   - widened USB interface matching (`usb*`, `eth*`, `en*`, `ncm*`, `rndis*`)
   - `/proc/net/dev` fallback when `/sys/class/net` is not usable yet
   - early mounts for `/dev`, `/proc`, `/sys`, `/run`
+  - `devpts` mounted explicitly in early stage-2
   - background USB interface retries
   - early `S05-usbnet` and `S06-ssh`
   - no duplicate late network/dropbear scripts
   - a wrapper `/bin/init` that tries network+ssh before BusyBox init
   - a matching fallback `/init` for stage-2 handoff compatibility
+  - baked host keys in `/etc/dropbear`
+  - no runtime dropbear key generation
 
 ## Next Checkpoint Goal
 

@@ -17,12 +17,25 @@ fi
 
 mkdir -p /etc/dropbear
 mkdir -p /root/.ssh
+mkdir -p /run/dropbear
 chmod 700 /root/.ssh
 [ ! -f /root/.ssh/authorized_keys ] || chmod 600 /root/.ssh/authorized_keys
 
-[ -f /etc/dropbear/dropbear_ed25519_host_key ] || dropbearkey -t ed25519 -f /etc/dropbear/dropbear_ed25519_host_key >/dev/null 2>&1
-[ -f /etc/dropbear/dropbear_rsa_host_key ] || dropbearkey -t rsa -s 2048 -f /etc/dropbear/dropbear_rsa_host_key >/dev/null 2>&1
+hostkeys=
+for key in \
+    /etc/dropbear/dropbear_ed25519_host_key \
+    /etc/dropbear/dropbear_rsa_host_key
+do
+    if [ -f "$key" ]; then
+        hostkeys="$hostkeys -r $key"
+    fi
+done
 
-dropbear $CARTHING_DROPBEAR_ARGS >/var/log/dropbear.log 2>&1 &
+if [ -z "$hostkeys" ]; then
+    echo "[S06-ssh] no host keys present"
+    exit 1
+fi
+
+dropbear -F -E -p 22 -P /run/dropbear.pid $hostkeys $CARTHING_DROPBEAR_ARGS >/var/log/dropbear.log 2>&1 &
 
 echo "[S06-ssh] dropbear started"
