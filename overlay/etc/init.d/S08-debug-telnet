@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+beacon() {
+    /usr/libexec/carthing/beacon "$@" || true
+}
+
+[ "${CARTHING_DEBUG_TELNET_ENABLE:-0}" = "1" ] || exit 0
+
+if ! command -v telnetd >/dev/null 2>&1; then
+    echo "[S08-debug-telnet] telnetd not installed"
+    beacon s08-no-telnetd
+    exit 0
+fi
+
+mkdir -p /run/carthing /var/log
+
+PIDFILE=/run/carthing/debug-telnet.pid
+
+if [ -f "$PIDFILE" ]; then
+    oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
+    if [ -n "${oldpid:-}" ] && kill -0 "$oldpid" 2>/dev/null; then
+        echo "[S08-debug-telnet] already running pid=$oldpid"
+        beacon s08-already-running
+        exit 0
+    fi
+fi
+
+(
+    exec telnetd -F -p "${CARTHING_DEBUG_TELNET_PORT}" -l /bin/sh
+) >/var/log/debug-telnet.log 2>&1 &
+
+echo $! >"$PIDFILE"
+echo "[S08-debug-telnet] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_TELNET_PORT}"
+beacon s08-started "port=${CARTHING_DEBUG_TELNET_PORT}"

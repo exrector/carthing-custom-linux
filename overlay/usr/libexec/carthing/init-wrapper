@@ -50,6 +50,13 @@ else
     log "missing /etc/init.d/S07-debug-http"
 fi
 
+if [ -x /etc/init.d/S08-debug-telnet ]; then
+    log "running early S08-debug-telnet"
+    /etc/init.d/S08-debug-telnet >>"$LOG_FILE" 2>&1 || log "S08-debug-telnet failed: $?"
+else
+    log "missing /etc/init.d/S08-debug-telnet"
+fi
+
 /usr/libexec/carthing/beacon init-wrapper-services-done || true
 
 (
@@ -60,6 +67,7 @@ fi
         /etc/init.d/S05-usbnet >>"$LOG_FILE" 2>&1 || true
         /etc/init.d/S06-ssh >>"$LOG_FILE" 2>&1 || true
         /etc/init.d/S07-debug-http >>"$LOG_FILE" 2>&1 || true
+        /etc/init.d/S08-debug-telnet >>"$LOG_FILE" 2>&1 || true
     done
 ) >/dev/null 2>&1 &
 

@@ -48,6 +48,11 @@
   - boot-time events are emitted toward `http://172.16.42.1:8099`
   - `S05-usbnet` now emits a second beacon when the interface appears late during background retry
   - this removes the earlier blind spot where stage-2 networking could come up after the first failed beacon window
+- BusyBox emergency ingress is now baked into the image build:
+  - `httpd` is present in the target image
+  - `telnetd` is present in the target image
+  - `S08-debug-telnet` starts a standalone shell listener on `2323`
+  - this gives us a stage-2 proof path that does not depend on Python or Dropbear
 
 ## Findings Locked In
 
@@ -81,6 +86,10 @@
   - either `dropbear` never starts
   - or it exits immediately during early boot
   - or the expected stage-2 debug path is still not being entered where we think it is
+- The next image is no longer limited to `ssh` and Python HTTP:
+  - it adds BusyBox `httpd`
+  - it adds BusyBox `telnetd`
+  - it keeps late USB beacons
 
 ## Latest Working Theory
 
@@ -100,7 +109,9 @@
   - baked host keys in `/etc/dropbear`
   - no runtime dropbear key generation
   - late USB beacon breadcrumbs for the delayed-interface path
-  - a pending BusyBox `httpd` path that still needs one more host-side fix before it is guaranteed to land in the target image
+  - BusyBox `httpd` on `8080`
+  - BusyBox `telnetd` on `2323`
+  - an early `S08-debug-telnet` path independent of Dropbear and Python
 
 ## Next Checkpoint Goal
 
