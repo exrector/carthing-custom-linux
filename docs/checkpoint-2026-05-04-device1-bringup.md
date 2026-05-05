@@ -31,6 +31,15 @@
   - `/init` -> `init-wrapper`
   - `/bin/init` -> `init-wrapper`
   - this removes a hidden dependency on kernel cmdline handoff correctness
+- Early stage-2 now self-mounts the minimum runtime filesystem set:
+  - `devtmpfs` on `/dev`
+  - `proc` on `/proc`
+  - `sysfs` on `/sys`
+  - `tmpfs` on `/run`
+  - this removes reliance on later init stages before network probing starts
+- USB interface probing no longer depends only on `/sys/class/net`:
+  - it also falls back to `/proc/net/dev`
+  - and it configures candidates through both `ip` and `ifconfig`
 
 ## Findings Locked In
 
@@ -71,6 +80,8 @@
   - or stage-2 still does not run far enough to configure `172.16.42.2`
 - The next image being tested carries:
   - widened USB interface matching (`usb*`, `eth*`, `en*`, `ncm*`, `rndis*`)
+  - `/proc/net/dev` fallback when `/sys/class/net` is not usable yet
+  - early mounts for `/dev`, `/proc`, `/sys`, `/run`
   - background USB interface retries
   - early `S05-usbnet` and `S06-ssh`
   - no duplicate late network/dropbear scripts

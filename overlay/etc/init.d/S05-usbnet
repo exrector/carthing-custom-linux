@@ -11,6 +11,11 @@ list_usb_candidates() {
         found=0
     fi
 
+    if [ -n "${CARTHING_USB_IF:-}" ] && [ -r /proc/net/dev ] && grep -q "^[[:space:]]*${CARTHING_USB_IF}:" /proc/net/dev 2>/dev/null; then
+        echo "$CARTHING_USB_IF"
+        found=0
+    fi
+
     for netdir in /sys/class/net/*; do
         [ -e "$netdir" ] || continue
         name=${netdir##*/}
@@ -25,6 +30,22 @@ list_usb_candidates() {
         esac
     done
 
+    if [ -r /proc/net/dev ]; then
+        sed -n '3,$p' /proc/net/dev | while IFS=: read -r raw_name _; do
+            name=$(echo "$raw_name" | tr -d '[:space:]')
+            [ -n "$name" ] || continue
+            [ "$name" = "lo" ] && continue
+            [ "$name" = "${CARTHING_USB_IF:-}" ] && continue
+
+            case "$name" in
+                usb*|eth*|en*|ncm*|rndis*)
+                    echo "$name"
+                    found=0
+                    ;;
+            esac
+        done
+    fi
+
     return "$found"
 }
 
@@ -33,6 +54,9 @@ configure_usb_if() {
     ip link set "$iface" up 2>/dev/null || true
     ip addr flush dev "$iface" 2>/dev/null || true
     ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+    if command -v ifconfig >/dev/null 2>&1; then
+        ifconfig "$iface" up "${CARTHING_USB_IP}" netmask 255.255.255.0 2>/dev/null || true
+    fi
     mkdir -p /run/carthing
     printf '%s\n' "$iface" > /run/carthing/usb-iface
 }
