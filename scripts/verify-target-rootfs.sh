@@ -44,6 +44,7 @@ check_absent '(^|/)etc/init\.d/S50dropbear$' 'buildroot dropbear init script'
 
 check_present './etc/init.d/S05-usbnet'
 check_present './etc/init.d/S06-ssh'
+check_present './etc/init.d/S07-debug-http'
 check_present './etc/init.d/S20-bt-init'
 check_present './init'
 check_present './bin/init'

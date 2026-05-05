@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+[ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ] || exit 0
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[S07-debug-http] python3 not installed"
+    exit 0
+fi
+
+mkdir -p /run/carthing /var/log
+
+PIDFILE=/run/carthing/debug-http.pid
+
+if [ -f "$PIDFILE" ]; then
+    oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
+    if [ -n "${oldpid:-}" ] && kill -0 "$oldpid" 2>/dev/null; then
+        echo "[S07-debug-http] already running pid=$oldpid"
+        exit 0
+    fi
+fi
+
+(
+    cd /
+    exec python3 -m http.server "${CARTHING_DEBUG_HTTP_PORT}" --bind 0.0.0.0
+) >/var/log/debug-http.log 2>&1 &
+
+echo $! >"$PIDFILE"
+echo "[S07-debug-http] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_HTTP_PORT}"

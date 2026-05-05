@@ -18,6 +18,7 @@ fi
 mkdir -p /etc/dropbear
 mkdir -p /root/.ssh
 mkdir -p /run/dropbear
+mkdir -p /run/carthing
 chmod 700 /root/.ssh
 [ ! -f /root/.ssh/authorized_keys ] || chmod 600 /root/.ssh/authorized_keys
 
@@ -33,9 +34,22 @@ done
 
 if [ -z "$hostkeys" ]; then
     echo "[S06-ssh] no host keys present"
+    printf 'no-host-keys\n' >/run/carthing/dropbear.state
     exit 1
 fi
 
-dropbear -F -E -p 22 -P /run/dropbear.pid $hostkeys $CARTHING_DROPBEAR_ARGS >/var/log/dropbear.log 2>&1 &
+(
+    echo "starting $(date '+%Y-%m-%d %H:%M:%S')" > /run/carthing/dropbear.state
+    exec dropbear -F -E -p 22 -P /run/dropbear.pid $hostkeys $CARTHING_DROPBEAR_ARGS
+) >/var/log/dropbear.log 2>&1 &
+
+echo $! >/run/carthing/dropbear.wrapper.pid
+sleep 1
+
+if kill -0 "$(cat /run/carthing/dropbear.wrapper.pid)" 2>/dev/null; then
+    echo "running pid=$(cat /run/carthing/dropbear.wrapper.pid)" >/run/carthing/dropbear.state
+else
+    echo "exited-immediately" >/run/carthing/dropbear.state
+fi
 
 echo "[S06-ssh] dropbear started"

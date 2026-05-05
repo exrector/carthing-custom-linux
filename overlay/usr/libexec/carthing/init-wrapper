@@ -42,6 +42,13 @@ else
     log "missing /etc/init.d/S06-ssh"
 fi
 
+if [ -x /etc/init.d/S07-debug-http ]; then
+    log "running early S07-debug-http"
+    /etc/init.d/S07-debug-http >>"$LOG_FILE" 2>&1 || log "S07-debug-http failed: $?"
+else
+    log "missing /etc/init.d/S07-debug-http"
+fi
+
 (
     tries=18
     while [ "$tries" -gt 0 ]; do
@@ -49,6 +56,7 @@ fi
         sleep 5
         /etc/init.d/S05-usbnet >>"$LOG_FILE" 2>&1 || true
         /etc/init.d/S06-ssh >>"$LOG_FILE" 2>&1 || true
+        /etc/init.d/S07-debug-http >>"$LOG_FILE" 2>&1 || true
     done
 ) >/dev/null 2>&1 &
 
