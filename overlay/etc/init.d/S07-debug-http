@@ -7,7 +7,12 @@ beacon() {
     /usr/libexec/carthing/beacon "$@" || true
 }
 
+mark_ip() {
+    /usr/libexec/carthing/debug-ip-mark "$@" || true
+}
+
 [ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ] || exit 0
+mark_ip 172.16.42.80
 
 if command -v httpd >/dev/null 2>&1; then
     HTTPD_BIN=httpd
@@ -38,4 +43,5 @@ fi
 
 echo $! >"$PIDFILE"
 echo "[S07-debug-http] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_HTTP_PORT}"
+mark_ip 172.16.42.81
 beacon s07-started "port=${CARTHING_DEBUG_HTTP_PORT}"

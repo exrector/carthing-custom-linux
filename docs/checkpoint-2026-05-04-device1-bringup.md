@@ -9,16 +9,20 @@
   - no `systemd`
   - `/bin/init` exists
 - `flash-device1` bundle is reproducibly regenerated from the current rootfs.
+- `flash-device1` rootfs can now also be regenerated directly from the current `target/` without a full Buildroot image pass:
+  - this is the fallback path when the `carthing-buildroot-case` volume fills up during `rootfs.ext2` generation
+  - script: `scripts/build-rootfs-image-fallback.sh`
 - `rootfs-only` flashing for device `№1` works reliably in Burn Mode.
 - Device `№1` now holds `NCM Gadget` steadily in normal boot instead of dropping back into the earlier obvious reboot loop.
 - Host-side macOS diagnostics are now separated from target-side failure:
   - `NCM Gadget` appears reliably as `en14`
   - route to `172.16.42.2` can be pinned back to `en14`
   - ARP loopback was observed and cleared explicitly
-- `№1` now answers on the target IP in normal boot:
-  - `172.16.42.2` responds to ICMP
+- `№1` now answers on the stage-2 fingerprint IP in normal boot:
+  - `172.16.42.77` responds to ICMP
+  - `172.16.42.2` no longer responds on the diagnostic image
   - ARP resolves to a real device MAC on `en14`
-  - this is the first confirmed successful stage-2 network bring-up on the custom rootfs
+  - this is the first confirmed proof that our own `S05-usbnet` is the component configuring the live target address
 - The rebuilt rootfs no longer contains stale init duplicates:
   - removed `S30-usbnet`
   - removed `S40-ssh`
@@ -53,6 +57,15 @@
   - `telnetd` is present in the target image
   - `S08-debug-telnet` starts a standalone shell listener on `2323`
   - this gives us a stage-2 proof path that does not depend on Python or Dropbear
+- The next diagnostic image now carries service progress IP markers:
+  - `172.16.42.78` = `S06-ssh` entered
+  - `172.16.42.79` = `dropbear` stayed alive after launch
+  - `172.16.42.80` = `S07-debug-http` entered
+  - `172.16.42.81` = BusyBox `httpd` launch path reached
+  - `172.16.42.82` = `S08-debug-telnet` entered
+  - `172.16.42.83` = BusyBox `telnetd` launch path reached
+  - `172.16.42.176` = host keys missing
+  - `172.16.42.179` = `dropbear` exited immediately
 
 ## Findings Locked In
 
@@ -79,39 +92,24 @@
 ## Current Unknown
 
 - We still do not have SSH into `№1`.
-- `172.16.42.2` is alive, but `22/tcp` currently returns `Connection refused`.
-- `8080/tcp` also remains closed on the currently flashed image.
+- `172.16.42.77` is alive, but `22/tcp`, `8080/tcp`, and `2323/tcp` currently return `Connection refused`.
 - No host beacon has been observed yet from the current boot path.
-- That narrows the next unknown down to ssh bring-up only:
-  - either `dropbear` never starts
-  - or it exits immediately during early boot
-  - or the expected stage-2 debug path is still not being entered where we think it is
-- The next image is no longer limited to `ssh` and Python HTTP:
-  - it adds BusyBox `httpd`
-  - it adds BusyBox `telnetd`
-  - it keeps late USB beacons
+- That narrows the next unknown down to service progress after `S05-usbnet`:
+  - whether `S06-ssh` is reached at all
+  - whether `dropbear` dies immediately after exec
+  - whether `S07-debug-http` and `S08-debug-telnet` are entered at all
+  - whether the lack of open ports is a daemon failure or a script-order failure
 
 ## Latest Working Theory
 
 - The next suspect is no longer host routing.
 - The next suspect is no longer basic stage-2 networking.
-- The next suspect is early ssh daemon startup under the cleaned init set.
+- The next suspect is service execution after stage-2 network is already alive.
 - The next image being tested carries:
-  - widened USB interface matching (`usb*`, `eth*`, `en*`, `ncm*`, `rndis*`)
-  - `/proc/net/dev` fallback when `/sys/class/net` is not usable yet
-  - early mounts for `/dev`, `/proc`, `/sys`, `/run`
-  - `devpts` mounted explicitly in early stage-2
-  - background USB interface retries
-  - early `S05-usbnet` and `S06-ssh`
-  - no duplicate late network/dropbear scripts
-  - a wrapper `/bin/init` that tries network+ssh before BusyBox init
-  - a matching fallback `/init` for stage-2 handoff compatibility
-  - baked host keys in `/etc/dropbear`
-  - no runtime dropbear key generation
-  - late USB beacon breadcrumbs for the delayed-interface path
-  - BusyBox `httpd` on `8080`
-  - BusyBox `telnetd` on `2323`
-  - an early `S08-debug-telnet` path independent of Dropbear and Python
+  - the `.77` network fingerprint proving `S05-usbnet`
+  - per-service debug IP markers for `S06`, `S07`, and `S08`
+  - the fallback `rootfs.img` rebuild path from `target/`
+  - no restored dependency on `bluez`, `btattach`, or `systemd`
 
 ## Next Checkpoint Goal
 

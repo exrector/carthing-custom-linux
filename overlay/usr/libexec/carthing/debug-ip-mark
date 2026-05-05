@@ -1,0 +1,50 @@
+#!/bin/sh
+set -eu
+
+[ -f /etc/default/carthing ] || exit 0
+. /etc/default/carthing
+
+[ "${CARTHING_DEBUG_IP_MARK_ENABLE:-1}" = "1" ] || exit 0
+
+mark_ip=${1:-}
+[ -n "$mark_ip" ] || exit 0
+
+find_iface() {
+    if [ -f /run/carthing/usb-iface ]; then
+        iface=$(cat /run/carthing/usb-iface 2>/dev/null || true)
+        if [ -n "${iface:-}" ]; then
+            echo "$iface"
+            return 0
+        fi
+    fi
+
+    if [ -f /run/carthing/usb-ifaces ]; then
+        set -- $(cat /run/carthing/usb-ifaces 2>/dev/null || true)
+        if [ "$#" -gt 0 ] && [ -n "${1:-}" ]; then
+            echo "$1"
+            return 0
+        fi
+    fi
+
+    if [ -n "${CARTHING_USB_IF:-}" ]; then
+        echo "$CARTHING_USB_IF"
+        return 0
+    fi
+
+    exit 1
+}
+
+iface=$(find_iface 2>/dev/null || true)
+[ -n "${iface:-}" ] || exit 0
+
+if ! command -v ip >/dev/null 2>&1; then
+    exit 0
+fi
+
+if ! ip link show dev "$iface" >/dev/null 2>&1; then
+    exit 0
+fi
+
+if ! ip addr show dev "$iface" 2>/dev/null | grep -q "inet ${mark_ip}/${CARTHING_USB_PREFIX}\\b"; then
+    ip addr add "${mark_ip}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+fi

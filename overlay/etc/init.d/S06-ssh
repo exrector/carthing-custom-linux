@@ -7,7 +7,12 @@ beacon() {
     /usr/libexec/carthing/beacon "$@" || true
 }
 
+mark_ip() {
+    /usr/libexec/carthing/debug-ip-mark "$@" || true
+}
+
 [ "$CARTHING_SSH_ENABLE" = "1" ] || exit 0
+mark_ip 172.16.42.78
 
 if ! command -v dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear not installed"
@@ -41,6 +46,7 @@ done
 if [ -z "$hostkeys" ]; then
     echo "[S06-ssh] no host keys present"
     printf 'no-host-keys\n' >/run/carthing/dropbear.state
+    mark_ip 172.16.42.176
     beacon s06-no-hostkeys
     exit 1
 fi
@@ -55,9 +61,11 @@ sleep 1
 
 if kill -0 "$(cat /run/carthing/dropbear.wrapper.pid)" 2>/dev/null; then
     echo "running pid=$(cat /run/carthing/dropbear.wrapper.pid)" >/run/carthing/dropbear.state
+    mark_ip 172.16.42.79
     beacon s06-running
 else
     echo "exited-immediately" >/run/carthing/dropbear.state
+    mark_ip 172.16.42.179
     beacon s06-exited-immediately
 fi
 

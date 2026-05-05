@@ -7,7 +7,12 @@ beacon() {
     /usr/libexec/carthing/beacon "$@" || true
 }
 
+mark_ip() {
+    /usr/libexec/carthing/debug-ip-mark "$@" || true
+}
+
 [ "${CARTHING_DEBUG_TELNET_ENABLE:-0}" = "1" ] || exit 0
+mark_ip 172.16.42.82
 
 if ! command -v telnetd >/dev/null 2>&1; then
     echo "[S08-debug-telnet] telnetd not installed"
@@ -34,4 +39,5 @@ fi
 
 echo $! >"$PIDFILE"
 echo "[S08-debug-telnet] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_TELNET_PORT}"
+mark_ip 172.16.42.83
 beacon s08-started "port=${CARTHING_DEBUG_TELNET_PORT}"
