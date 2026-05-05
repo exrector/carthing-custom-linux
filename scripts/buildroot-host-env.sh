@@ -323,6 +323,59 @@ ensure_gnu_chmod() {
     return 1
 }
 
+prefer_repo_local_readlink() {
+    if [ -z "${CARTHING_REPO_ROOT:-}" ]; then
+        return 1
+    fi
+
+    local_readlink="$CARTHING_REPO_ROOT/host-tools/bin/readlink"
+    if [ -x "$local_readlink" ]; then
+        version_line=$("$local_readlink" --version 2>/dev/null | head -n 1 || true)
+        case "$version_line" in
+            *"GNU coreutils"*)
+                prepend_wrapper_tool readlink "$local_readlink"
+                return 0
+                ;;
+        esac
+    fi
+
+    return 1
+}
+
+ensure_gnu_readlink() {
+    if prefer_repo_local_readlink; then
+        return 0
+    fi
+
+    if command -v readlink >/dev/null 2>&1; then
+        version_line=$(readlink --version 2>/dev/null | head -n 1 || true)
+        case "$version_line" in
+            *"GNU coreutils"*)
+                return 0
+                ;;
+        esac
+    fi
+
+    if command -v greadlink >/dev/null 2>&1; then
+        prepend_wrapper_tool readlink "$(command -v greadlink)"
+        return 0
+    fi
+
+    if command -v brew >/dev/null 2>&1; then
+        brew_prefix=$(brew --prefix coreutils 2>/dev/null || true)
+        if [ -n "$brew_prefix" ] && [ -x "$brew_prefix/libexec/gnubin/readlink" ]; then
+            prepend_wrapper_tool readlink "$brew_prefix/libexec/gnubin/readlink"
+            return 0
+        fi
+        if [ -n "$brew_prefix" ] && [ -x "$brew_prefix/bin/greadlink" ]; then
+            prepend_wrapper_tool readlink "$brew_prefix/bin/greadlink"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 is_modern_gnu_bash() {
     candidate="$1"
     [ -x "$candidate" ] || return 1
@@ -413,6 +466,10 @@ prepare_buildroot_host_env() {
     fi
     if ! ensure_gnu_chmod; then
         echo "missing GNU chmod: run ./scripts/install-buildroot-host-tools.sh or provide GNU chmod as 'chmod' in PATH" >&2
+        return 1
+    fi
+    if ! ensure_gnu_readlink; then
+        echo "missing GNU readlink: provide greadlink/coreutils readlink in PATH" >&2
         return 1
     fi
 

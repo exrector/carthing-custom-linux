@@ -25,7 +25,7 @@
   - removed `S40network`
   - removed `S50dropbear`
 - `/bin/init` is now a controlled wrapper, not a BusyBox symlink:
-  - wrapper runs `S05-usbnet` and `S06-ssh` before BusyBox init
+  - wrapper runs `S05-usbnet`, `S06-ssh`, and `S07-debug-http` before BusyBox init
   - wrapper keeps retrying early network/ssh in the background
   - this gives us a stage-2 proof path even if normal init later breaks
 - `/init` now points to the same wrapper path as `/bin/init`:
@@ -44,6 +44,10 @@
 - USB interface probing no longer depends only on `/sys/class/net`:
   - it also falls back to `/proc/net/dev`
   - and it configures candidates through both `ip` and `ifconfig`
+- The image now carries host beacon breadcrumbs:
+  - boot-time events are emitted toward `http://172.16.42.1:8099`
+  - `S05-usbnet` now emits a second beacon when the interface appears late during background retry
+  - this removes the earlier blind spot where stage-2 networking could come up after the first failed beacon window
 
 ## Findings Locked In
 
@@ -71,9 +75,12 @@
 
 - We still do not have SSH into `№1`.
 - `172.16.42.2` is alive, but `22/tcp` currently returns `Connection refused`.
+- `8080/tcp` also remains closed on the currently flashed image.
+- No host beacon has been observed yet from the current boot path.
 - That narrows the next unknown down to ssh bring-up only:
   - either `dropbear` never starts
   - or it exits immediately during early boot
+  - or the expected stage-2 debug path is still not being entered where we think it is
 
 ## Latest Working Theory
 
@@ -92,6 +99,8 @@
   - a matching fallback `/init` for stage-2 handoff compatibility
   - baked host keys in `/etc/dropbear`
   - no runtime dropbear key generation
+  - late USB beacon breadcrumbs for the delayed-interface path
+  - a pending BusyBox `httpd` path that still needs one more host-side fix before it is guaranteed to land in the target image
 
 ## Next Checkpoint Goal
 

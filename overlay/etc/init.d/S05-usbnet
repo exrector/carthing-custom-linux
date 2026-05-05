@@ -100,7 +100,11 @@ if command -v ip >/dev/null 2>&1; then
     fi
 
     (
-        retry_usb_config >/run/carthing/usb-ifaces 2>/dev/null || true
+        configured=$(retry_usb_config 2>/dev/null || true)
+        if [ -n "$configured" ]; then
+            printf '%s\n' "$configured" >/run/carthing/usb-ifaces
+            beacon s05-configured-late "$configured"
+        fi
     ) &
 else
     echo "[S05-usbnet] ip command not available"

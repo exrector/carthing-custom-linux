@@ -9,9 +9,13 @@ beacon() {
 
 [ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ] || exit 0
 
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "[S07-debug-http] python3 not installed"
-    beacon s07-no-python
+if command -v httpd >/dev/null 2>&1; then
+    HTTPD_BIN=httpd
+elif command -v busybox >/dev/null 2>&1; then
+    HTTPD_BIN="busybox httpd"
+else
+    echo "[S07-debug-http] no httpd available"
+    beacon s07-no-httpd
     exit 0
 fi
 
@@ -29,8 +33,7 @@ if [ -f "$PIDFILE" ]; then
 fi
 
 (
-    cd /
-    exec python3 -m http.server "${CARTHING_DEBUG_HTTP_PORT}" --bind 0.0.0.0
+    exec sh -c "exec $HTTPD_BIN -f -p ${CARTHING_DEBUG_HTTP_PORT} -h /"
 ) >/var/log/debug-http.log 2>&1 &
 
 echo $! >"$PIDFILE"
