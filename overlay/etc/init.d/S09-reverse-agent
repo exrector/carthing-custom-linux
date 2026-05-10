@@ -1,0 +1,61 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+beacon() {
+    /usr/libexec/carthing/beacon "$@" || true
+}
+
+mark_ip() {
+    /usr/libexec/carthing/debug-ip-mark "$@" || true
+}
+
+[ "${CARTHING_REVERSE_AGENT_ENABLE:-0}" = "1" ] || exit 0
+mark_ip 172.16.42.84
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "[S09-reverse-agent] python3 not installed"
+    mark_ip 172.16.42.184
+    beacon s09-no-python
+    exit 0
+fi
+
+AGENT=/usr/libexec/carthing/reverse-agent.py
+PIDFILE=/run/carthing/reverse-agent.pid
+LOGFILE=/var/log/reverse-agent.log
+
+if [ ! -f "$AGENT" ]; then
+    echo "[S09-reverse-agent] missing agent: $AGENT"
+    mark_ip 172.16.42.188
+    beacon s09-missing-agent
+    exit 1
+fi
+
+mkdir -p /run/carthing /var/log
+
+if [ -f "$PIDFILE" ]; then
+    oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
+    if [ -n "${oldpid:-}" ] && kill -0 "$oldpid" 2>/dev/null; then
+        echo "[S09-reverse-agent] already running pid=$oldpid"
+        beacon s09-already-running
+        exit 0
+    fi
+fi
+
+(
+    exec python3 "$AGENT"
+) >>"$LOGFILE" 2>&1 &
+
+echo $! >"$PIDFILE"
+sleep 1
+
+if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    echo "[S09-reverse-agent] started pid=$(cat "$PIDFILE")"
+    mark_ip 172.16.42.85
+    beacon s09-running
+else
+    echo "[S09-reverse-agent] exited immediately"
+    mark_ip 172.16.42.185
+    beacon s09-exited-immediately
+fi

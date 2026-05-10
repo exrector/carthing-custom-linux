@@ -57,6 +57,13 @@ else
     log "missing /etc/init.d/S08-debug-telnet"
 fi
 
+if [ -x /etc/init.d/S09-reverse-agent ]; then
+    log "running early S09-reverse-agent"
+    /etc/init.d/S09-reverse-agent >>"$LOG_FILE" 2>&1 || log "S09-reverse-agent failed: $?"
+else
+    log "missing /etc/init.d/S09-reverse-agent"
+fi
+
 /usr/libexec/carthing/beacon init-wrapper-services-done || true
 
 (
@@ -68,6 +75,7 @@ fi
         /etc/init.d/S06-ssh >>"$LOG_FILE" 2>&1 || true
         /etc/init.d/S07-debug-http >>"$LOG_FILE" 2>&1 || true
         /etc/init.d/S08-debug-telnet >>"$LOG_FILE" 2>&1 || true
+        /etc/init.d/S09-reverse-agent >>"$LOG_FILE" 2>&1 || true
     done
 ) >/dev/null 2>&1 &
 

@@ -15,9 +15,10 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
 1. `docs/upstream-userspace-contract.md`
 2. `docs/migration-roadmap.md`
 3. `docs/buildroot-bringup.md`
-4. `overlay/etc/default/carthing`
-5. `overlay/etc/init.d/`
-6. `overlay/usr/libexec/carthing/contract-selftest`
+4. `docs/reverse-control-agent.md`
+5. `overlay/etc/default/carthing`
+6. `overlay/etc/init.d/`
+7. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
@@ -51,6 +52,10 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
   - installs a project-local GNU `patch` into `host-tools/` for Buildroot on macOS
 - `scripts/install-buildroot-host-tools.sh`
   - installs project-local Buildroot host prerequisites into `host-tools/`
+- `scripts/reverse-control-server.py`
+  - host-side reverse control server for device-driven polling and result return
+- `scripts/reverse-agent-enqueue.sh`
+  - queues one shell command for the reverse control agent
 
 ## Current Design Choice
 
@@ -71,7 +76,7 @@ Boot a minimal Linux rootfs on device `№1` that:
 
 - provides `/bin/init`
 - configures `usb0`
-- starts SSH
+- gives us at least one reliable control ingress
 - stages Bluetooth firmware
 - initializes the Bluetooth chip with our own loader
 - starts the Car Thing runtime without `/opt` hacks or manual post-boot steps
@@ -83,7 +88,7 @@ Boot a minimal Linux rootfs on device `№1` that:
 - custom `carthing-bt-fwload` helper added to avoid `bluez` in the target image
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
-- hardware validation on device `№1` is still pending
+- reverse control agent is now wired into early init for the next `№1` test
 
 ## Not In Scope Yet
 

@@ -64,6 +64,11 @@
   - `172.16.42.81` = BusyBox `httpd` launch path reached
   - `172.16.42.82` = `S08-debug-telnet` entered
   - `172.16.42.83` = BusyBox `telnetd` launch path reached
+  - `172.16.42.84` = `S09-reverse-agent` entered
+  - `172.16.42.85` = reverse agent stayed alive after launch
+  - `172.16.42.184` = no `python3`
+  - `172.16.42.185` = reverse agent exited immediately
+  - `172.16.42.188` = reverse agent file missing
   - `172.16.42.176` = host keys missing
   - `172.16.42.179` = `dropbear` exited immediately
 
@@ -98,6 +103,7 @@
   - whether `S06-ssh` is reached at all
   - whether `dropbear` dies immediately after exec
   - whether `S07-debug-http` and `S08-debug-telnet` are entered at all
+  - whether `S09-reverse-agent` starts and polls home even if no inbound ports ever open
   - whether the lack of open ports is a daemon failure or a script-order failure
 
 ## Latest Working Theory
@@ -107,13 +113,14 @@
 - The next suspect is service execution after stage-2 network is already alive.
 - The next image being tested carries:
   - the `.77` network fingerprint proving `S05-usbnet`
-  - per-service debug IP markers for `S06`, `S07`, and `S08`
+  - per-service debug IP markers for `S06`, `S07`, `S08`, and `S09`
+  - a reverse control agent that polls the host and returns stdout/stderr
   - the fallback `rootfs.img` rebuild path from `target/`
   - no restored dependency on `bluez`, `btattach`, or `systemd`
 
 ## Next Checkpoint Goal
 
-- Get one successful SSH login into `№1` after normal boot.
+- Get one successful control foothold into `№1` after normal boot.
 - As soon as that happens, stop and record:
   - interface names
   - `ip addr`
