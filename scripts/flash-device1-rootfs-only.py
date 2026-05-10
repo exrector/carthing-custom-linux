@@ -96,10 +96,9 @@ def raw_bulkcmd(dev: SuperbirdDevice, cmd: str):
     time.sleep(0.05)
 
 
-def get_device() -> SuperbirdDevice:
+def ensure_burn_mode() -> None:
     print("finding device...")
     device_status = find_device(silent=True)
-    device = SuperbirdDevice()
 
     if device_status not in ("usb", "usb-burn"):
         print("device could not be found. please try again.")
@@ -107,15 +106,15 @@ def get_device() -> SuperbirdDevice:
 
     if device_status == "usb":
         print("entering usb burn mode:\n")
+        device = SuperbirdDevice()
         device = enter_burn_mode(device)
         print()
 
-    if device is None:
+    if device_status == "usb" and device is None:
         print("device could not be found. please try again.")
         sys.exit(1)
 
     print("device found!")
-    return device
 
 
 def make_dev(max_retries: int = 8, initial_settle: float = 2.0) -> SuperbirdDevice:
@@ -137,6 +136,8 @@ def make_dev(max_retries: int = 8, initial_settle: float = 2.0) -> SuperbirdDevi
             dev = SuperbirdDevice()
             time.sleep(1.0)
             raw_bulkcmd(dev, "amlmmc part 1")
+            raw_bulkcmd(dev, "mmc dev 1 0")
+            raw_bulkcmd(dev, "amlmmc key")
             return dev
         except SystemExit:
             raise
@@ -149,7 +150,7 @@ def make_dev(max_retries: int = 8, initial_settle: float = 2.0) -> SuperbirdDevi
 
 def write_chunk(dev: SuperbirdDevice, data: bytes, target_blk: int, blk_count: int):
     dev.device.writeLargeMemory(ADDR_TMP, data, TRANSFER_BLOCK_SIZE, appendZeros=True)
-    raw_bulkcmd(dev, f"amlmmc write 1 {hex(ADDR_TMP)} {hex(target_blk)} {hex(blk_count)}")
+    raw_bulkcmd(dev, f"mmc write {hex(ADDR_TMP)} {hex(target_blk)} {hex(blk_count)}")
 
 
 def write_image(dev: SuperbirdDevice, infile: str, sector_offset: int, label: str):
@@ -214,7 +215,8 @@ def main() -> int:
     print("bootfs.bin and env.txt are left unchanged.\n")
     input("boot device №1 into Burn Mode, then press enter >>> ")
 
-    dev = get_device()
+    ensure_burn_mode()
+    dev = make_dev(initial_settle=0.0)
     dev = write_image(dev, str(ROOTFS_IMG), ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
     print("\nrootfs write complete. power-cycle the device and test normal boot.")
     return 0
