@@ -15,10 +15,11 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
 1. `docs/upstream-userspace-contract.md`
 2. `docs/migration-roadmap.md`
 3. `docs/buildroot-bringup.md`
-4. `docs/reverse-control-agent.md`
-5. `overlay/etc/default/carthing`
-6. `overlay/etc/init.d/`
-7. `overlay/usr/libexec/carthing/contract-selftest`
+4. `docs/storage-map-and-cleanup.md`
+5. `docs/reverse-control-agent.md`
+6. `overlay/etc/default/carthing`
+7. `overlay/etc/init.d/`
+8. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
@@ -89,6 +90,7 @@ Boot a minimal Linux rootfs on device `№1` that:
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
 - reverse control agent is now wired into early init for the next `№1` test
+- storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
 
 ## Not In Scope Yet
 
