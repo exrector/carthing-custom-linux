@@ -12,7 +12,7 @@ import pyamlboot.pyamlboot as _pab
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BUNDLE_DIR = REPO_ROOT / "artifacts" / "flash-device1"
+BUNDLE_DIR = Path(os.environ.get("CARTHING_FLASH_BUNDLE_DIR", str(REPO_ROOT / "artifacts" / "flash-device1"))).resolve()
 MANUAL_DIR = BUNDLE_DIR / "manual"
 ROOTFS_IMG = BUNDLE_DIR / "rootfs.img"
 ROOT_RESTORE_BLOCK_OFFSET = 352256
@@ -220,6 +220,7 @@ def main() -> int:
         print(f"missing rootfs image: {ROOTFS_IMG}")
         return 1
 
+    print(f"using bundle: {BUNDLE_DIR}")
     print("WARNING: this writes only rootfs.img to device №1.")
     print("bootfs.bin and env.txt are left unchanged.\n")
     input("boot device №1 into Burn Mode, then press enter >>> ")
