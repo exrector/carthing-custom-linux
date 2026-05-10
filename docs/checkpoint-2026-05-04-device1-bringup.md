@@ -106,6 +106,18 @@
   - whether `S09-reverse-agent` starts and polls home even if no inbound ports ever open
   - whether the lack of open ports is a daemon failure or a script-order failure
 
+## Later Regression Check
+
+- A later control flash using the preserved Buildroot artifact
+  - `/Volumes/carthing-buildroot-case/output-carthing/images/rootfs.ext2`
+  - flashed via `artifacts/flash-device1-buildroot-control/rootfs.img`
+  - completed cleanly in Burn Mode with `failures=0`
+- That control image does **not** currently reproduce the earlier `.77` proof:
+  - `NCM Gadget` repeatedly disappears and reappears in normal boot
+  - the gadget MAC changes across re-enumerations
+  - during the windows where the USB gadget exists, neither `172.16.42.77` nor `172.16.42.2` answers
+  - this points to a target-side early boot / USB gadget reset loop, not a macOS route issue
+
 ## Latest Working Theory
 
 - The next suspect is no longer host routing.
