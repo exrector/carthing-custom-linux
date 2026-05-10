@@ -26,6 +26,9 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
 - `docs/`
   - upstream-only contract analysis
   - migration plan from NixOS userspace to our own userspace
+- `reference/legacy-mfi-iap2/`
+  - curated archive of the old MFi / iAP2 reverse-engineering notes and one representative `slot_a` code snapshot
+  - preserved so the large legacy Car Thing trees can be deleted without losing the useful archaeology
 
 - `buildroot-external/`
   - first Buildroot `br2-external` tree for the custom rootfs
@@ -91,6 +94,7 @@ Boot a minimal Linux rootfs on device `№1` that:
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
 - reverse control agent is now wired into early init for the next `№1` test
 - storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
+- legacy MFi / iAP2 notes have been curated into `reference/legacy-mfi-iap2/`
 
 ## Not In Scope Yet
 

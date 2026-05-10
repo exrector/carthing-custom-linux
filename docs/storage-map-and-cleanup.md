@@ -16,6 +16,7 @@ These paths are the real project and should be kept:
 - `overlay/`
 - `scripts/`
 - `artifacts/flash-device1/`
+- `reference/legacy-mfi-iap2/`
 
 Notes:
 
@@ -71,7 +72,7 @@ These paths are large and reproducible:
 
 ## Historical Repos Outside This Repo
 
-These are not part of the current custom-linux source of truth, but they are historically useful:
+These are not part of the current custom-linux source of truth:
 
 - `~/Documents/ПРОЕКТЫ/CAR-THING/carthing-media-remote`
   - about `9.0G`
@@ -82,8 +83,8 @@ These are not part of the current custom-linux source of truth, but they are his
   - about `1.7G`
   - almost all weight is `_prebuilt/`
 
-Do not delete these blindly if you still need the historical firmware / remote archaeology.
-They are not the active source of truth for `carthing-custom-linux`, but they may still matter for old experiments and for the working device `№2`.
+The important MFi / iAP2 archaeology has been curated into `reference/legacy-mfi-iap2/`.
+After that preservation step, these old repos are no longer required by the current project.
 
 ## Safe To Delete Now
 

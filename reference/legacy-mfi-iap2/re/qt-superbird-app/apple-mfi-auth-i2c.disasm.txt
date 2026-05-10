@@ -1,0 +1,292 @@
+
+extracted/lib/modules/4.9.113/extra/apple-mfi-auth-i2c.ko:	file format elf64-littleaarch64
+
+Disassembly of section .text:
+
+0000000000000000 <apple_mfi_auth_i2c_remove>:
+       0: a9be7bfd     	stp	x29, x30, [sp, #-0x20]!
+       4: 910003fd     	mov	x29, sp
+       8: f9000bf3     	str	x19, [sp, #0x10]
+       c: f9406013     	ldr	x19, [x0, #0xc0]
+      10: 58000100     	ldr	x0, 0x30 <apple_mfi_auth_i2c_remove+0x30>
+      14: 94000000     	bl	0x14 <apple_mfi_auth_i2c_remove+0x14>
+      18: aa1303e0     	mov	x0, x19
+      1c: 94000000     	bl	0x1c <apple_mfi_auth_i2c_remove+0x1c>
+      20: f9400bf3     	ldr	x19, [sp, #0x10]
+      24: a8c27bfd     	ldp	x29, x30, [sp], #0x20
+      28: d65f03c0     	ret
+      2c: d503201f     	nop
+      30: 00 00 00 00  	.word	0x00000000
+      34: 00 00 00 00  	.word	0x00000000
+
+0000000000000038 <apple_mfi_auth_i2c_probe>:
+      38: a9be7bfd     	stp	x29, x30, [sp, #-0x20]!
+      3c: 910003fd     	mov	x29, sp
+      40: f9000bf3     	str	x19, [sp, #0x10]
+      44: aa0003f3     	mov	x19, x0
+      48: f9400c01     	ldr	x1, [x0, #0x18]
+      4c: aa0103e0     	mov	x0, x1
+      50: f9400821     	ldr	x1, [x1, #0x10]
+      54: f9400821     	ldr	x1, [x1, #0x10]
+      58: d63f0020     	blr	x1
+      5c: 36d001e0     	tbz	w0, #0x1a, 0x98 <apple_mfi_auth_i2c_probe+0x60>
+      60: 580002c1     	ldr	x1, 0xb8 <apple_mfi_auth_i2c_probe+0x80>
+      64: 91008273     	add	x19, x19, #0x20
+      68: aa1303e0     	mov	x0, x19
+      6c: 94000000     	bl	0x6c <apple_mfi_auth_i2c_probe+0x34>
+      70: aa0003e1     	mov	x1, x0
+      74: b140041f     	cmn	x0, #0x1, lsl #12       // =0x1000
+      78: 540000a8     	b.hi	0x8c <apple_mfi_auth_i2c_probe+0x54>
+      7c: 58000220     	ldr	x0, 0xc0 <apple_mfi_auth_i2c_probe+0x88>
+      80: f9005261     	str	x1, [x19, #0xa0]
+      84: 94000000     	bl	0x84 <apple_mfi_auth_i2c_probe+0x4c>
+      88: 52800000     	mov	w0, #0x0                // =0
+      8c: f9400bf3     	ldr	x19, [sp, #0x10]
+      90: a8c27bfd     	ldp	x29, x30, [sp], #0x20
+      94: d65f03c0     	ret
+      98: 580000c1     	ldr	x1, 0xb0 <apple_mfi_auth_i2c_probe+0x78>
+      9c: 91008260     	add	x0, x19, #0x20
+      a0: 94000000     	bl	0xa0 <apple_mfi_auth_i2c_probe+0x68>
+      a4: 12800080     	mov	w0, #-0x5               // =-5
+      a8: 17fffff9     	b	0x8c <apple_mfi_auth_i2c_probe+0x54>
+      ac: d503201f     	nop
+      b0: 00 00 00 00  	.word	0x00000000
+      b4: 00 00 00 00  	.word	0x00000000
+      b8: 00 00 00 00  	.word	0x00000000
+      bc: 00 00 00 00  	.word	0x00000000
+      c0: 00 00 00 00  	.word	0x00000000
+      c4: 00 00 00 00  	.word	0x00000000
+
+00000000000000c8 <retry_if_chip_is_sleeping.part.0>:
+      c8: b9400001     	ldr	w1, [x0]
+      cc: 11000421     	add	w1, w1, #0x1
+      d0: b9000001     	str	w1, [x0]
+      d4: 7100083f     	cmp	w1, #0x2
+      d8: 5400008d     	b.le	0xe8 <retry_if_chip_is_sleeping.part.0+0x20>
+      dc: 52800000     	mov	w0, #0x0                // =0
+      e0: d65f03c0     	ret
+      e4: d503201f     	nop
+      e8: a9bf7bfd     	stp	x29, x30, [sp, #-0x10]!
+      ec: d2989580     	mov	x0, #0xc4ac             // =50348
+      f0: f2a00400     	movk	x0, #0x20, lsl #16
+      f4: 910003fd     	mov	x29, sp
+      f8: 94000000     	bl	0xf8 <retry_if_chip_is_sleeping.part.0+0x30>
+      fc: 52800020     	mov	w0, #0x1                // =1
+     100: a8c17bfd     	ldp	x29, x30, [sp], #0x10
+     104: d65f03c0     	ret
+
+0000000000000108 <apple_mfi_smbus_write>:
+     108: a9bb7bfd     	stp	x29, x30, [sp, #-0x50]!
+     10c: 910003fd     	mov	x29, sp
+     110: a90153f3     	stp	x19, x20, [sp, #0x10]
+     114: 910143b4     	add	x20, x29, #0x50
+     118: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     11c: d1008016     	sub	x22, x0, #0x20
+     120: a90363f7     	stp	x23, x24, [sp, #0x30]
+     124: 12001c55     	and	w21, w2, #0xff
+     128: 12001c38     	and	w24, w1, #0xff
+     12c: aa0303f7     	mov	x23, x3
+     130: b81fce9f     	str	wzr, [x20, #-0x4]!
+     134: 14000004     	b	0x144 <apple_mfi_smbus_write+0x3c>
+     138: aa1403e0     	mov	x0, x20
+     13c: 97ffffe3     	bl	0xc8 <retry_if_chip_is_sleeping.part.0>
+     140: 34000100     	cbz	w0, 0x160 <apple_mfi_smbus_write+0x58>
+     144: aa1703e3     	mov	x3, x23
+     148: 2a1503e2     	mov	w2, w21
+     14c: 2a1803e1     	mov	w1, w24
+     150: aa1603e0     	mov	x0, x22
+     154: 94000000     	bl	0x154 <apple_mfi_smbus_write+0x4c>
+     158: 2a0003f3     	mov	w19, w0
+     15c: 37fffee0     	tbnz	w0, #0x1f, 0x138 <apple_mfi_smbus_write+0x30>
+     160: 2a1303e0     	mov	w0, w19
+     164: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     168: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     16c: a94363f7     	ldp	x23, x24, [sp, #0x30]
+     170: a8c57bfd     	ldp	x29, x30, [sp], #0x50
+     174: d65f03c0     	ret
+
+0000000000000178 <apple_mfi_i2c_prepare>:
+     178: a9bc7bfd     	stp	x29, x30, [sp, #-0x40]!
+     17c: 910003fd     	mov	x29, sp
+     180: a90153f3     	stp	x19, x20, [sp, #0x10]
+     184: 910103b4     	add	x20, x29, #0x40
+     188: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     18c: 12001c36     	and	w22, w1, #0xff
+     190: d1008015     	sub	x21, x0, #0x20
+     194: b81fce9f     	str	wzr, [x20, #-0x4]!
+     198: 14000005     	b	0x1ac <apple_mfi_i2c_prepare+0x34>
+     19c: d503201f     	nop
+     1a0: aa1403e0     	mov	x0, x20
+     1a4: 97ffffc9     	bl	0xc8 <retry_if_chip_is_sleeping.part.0>
+     1a8: 340000c0     	cbz	w0, 0x1c0 <apple_mfi_i2c_prepare+0x48>
+     1ac: 2a1603e1     	mov	w1, w22
+     1b0: aa1503e0     	mov	x0, x21
+     1b4: 94000000     	bl	0x1b4 <apple_mfi_i2c_prepare+0x3c>
+     1b8: 2a0003f3     	mov	w19, w0
+     1bc: 37ffff20     	tbnz	w0, #0x1f, 0x1a0 <apple_mfi_i2c_prepare+0x28>
+     1c0: 2a1303e0     	mov	w0, w19
+     1c4: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     1c8: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     1cc: a8c47bfd     	ldp	x29, x30, [sp], #0x40
+     1d0: d65f03c0     	ret
+     1d4: d503201f     	nop
+
+00000000000001d8 <apple_mfi_smbus_read_cert_len>:
+     1d8: a9bb7bfd     	stp	x29, x30, [sp, #-0x50]!
+     1dc: 910003fd     	mov	x29, sp
+     1e0: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     1e4: 12001c36     	and	w22, w1, #0xff
+     1e8: a90153f3     	stp	x19, x20, [sp, #0x10]
+     1ec: aa0203f5     	mov	x21, x2
+     1f0: f9001bf7     	str	x23, [sp, #0x30]
+     1f4: aa0003f4     	mov	x20, x0
+     1f8: 2a1603e1     	mov	w1, w22
+     1fc: b9004fbf     	str	wzr, [x29, #0x4c]
+     200: aa0303f7     	mov	x23, x3
+     204: 97ffffdd     	bl	0x178 <apple_mfi_i2c_prepare>
+     208: 2a0003f3     	mov	w19, w0
+     20c: 37f80220     	tbnz	w0, #0x1f, 0x250 <apple_mfi_smbus_read_cert_len+0x78>
+     210: 12001eb5     	and	w21, w21, #0xff
+     214: d1008294     	sub	x20, x20, #0x20
+     218: 52800140     	mov	w0, #0xa                // =10
+     21c: 94000000     	bl	0x21c <apple_mfi_smbus_read_cert_len+0x44>
+     220: 14000005     	b	0x234 <apple_mfi_smbus_read_cert_len+0x5c>
+     224: d503201f     	nop
+     228: 910133a0     	add	x0, x29, #0x4c
+     22c: 97ffffa7     	bl	0xc8 <retry_if_chip_is_sleeping.part.0>
+     230: 34000100     	cbz	w0, 0x250 <apple_mfi_smbus_read_cert_len+0x78>
+     234: aa1703e3     	mov	x3, x23
+     238: 2a1503e2     	mov	w2, w21
+     23c: 2a1603e1     	mov	w1, w22
+     240: aa1403e0     	mov	x0, x20
+     244: 94000000     	bl	0x244 <apple_mfi_smbus_read_cert_len+0x6c>
+     248: 2a0003f3     	mov	w19, w0
+     24c: 37fffee0     	tbnz	w0, #0x1f, 0x228 <apple_mfi_smbus_read_cert_len+0x50>
+     250: 2a1303e0     	mov	w0, w19
+     254: f9401bf7     	ldr	x23, [sp, #0x30]
+     258: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     25c: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     260: a8c57bfd     	ldp	x29, x30, [sp], #0x50
+     264: d65f03c0     	ret
+
+0000000000000268 <apple_mfi_smbus_read>:
+     268: a9bb7bfd     	stp	x29, x30, [sp, #-0x50]!
+     26c: 910003fd     	mov	x29, sp
+     270: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     274: 12001c35     	and	w21, w1, #0xff
+     278: a90153f3     	stp	x19, x20, [sp, #0x10]
+     27c: d1008016     	sub	x22, x0, #0x20
+     280: f9001bf7     	str	x23, [sp, #0x30]
+     284: aa0203f4     	mov	x20, x2
+     288: 2a1503e1     	mov	w1, w21
+     28c: b9004fbf     	str	wzr, [x29, #0x4c]
+     290: aa0303f7     	mov	x23, x3
+     294: 97ffffb9     	bl	0x178 <apple_mfi_i2c_prepare>
+     298: 2a0003f3     	mov	w19, w0
+     29c: 37f801a0     	tbnz	w0, #0x1f, 0x2d0 <apple_mfi_smbus_read+0x68>
+     2a0: 12001e94     	and	w20, w20, #0xff
+     2a4: 14000004     	b	0x2b4 <apple_mfi_smbus_read+0x4c>
+     2a8: 910133a0     	add	x0, x29, #0x4c
+     2ac: 97ffff87     	bl	0xc8 <retry_if_chip_is_sleeping.part.0>
+     2b0: 34000100     	cbz	w0, 0x2d0 <apple_mfi_smbus_read+0x68>
+     2b4: aa1703e3     	mov	x3, x23
+     2b8: 2a1403e2     	mov	w2, w20
+     2bc: 2a1503e1     	mov	w1, w21
+     2c0: aa1603e0     	mov	x0, x22
+     2c4: 94000000     	bl	0x2c4 <apple_mfi_smbus_read+0x5c>
+     2c8: 2a0003f3     	mov	w19, w0
+     2cc: 37fffee0     	tbnz	w0, #0x1f, 0x2a8 <apple_mfi_smbus_read+0x40>
+     2d0: 2a1303e0     	mov	w0, w19
+     2d4: f9401bf7     	ldr	x23, [sp, #0x30]
+     2d8: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     2dc: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     2e0: a8c57bfd     	ldp	x29, x30, [sp], #0x50
+     2e4: d65f03c0     	ret
+
+00000000000002e8 <apple_mfi_smbus_read_cert>:
+     2e8: a9bc7bfd     	stp	x29, x30, [sp, #-0x40]!
+     2ec: 910003fd     	mov	x29, sp
+     2f0: a90153f3     	stp	x19, x20, [sp, #0x10]
+     2f4: aa0003f4     	mov	x20, x0
+     2f8: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     2fc: aa0203f5     	mov	x21, x2
+     300: aa0303f6     	mov	x22, x3
+     304: b9003fbf     	str	wzr, [x29, #0x3c]
+     308: 97ffff9c     	bl	0x178 <apple_mfi_i2c_prepare>
+     30c: 2a0003f3     	mov	w19, w0
+     310: 37f801e0     	tbnz	w0, #0x1f, 0x34c <apple_mfi_smbus_read_cert+0x64>
+     314: d1008294     	sub	x20, x20, #0x20
+     318: 52800140     	mov	w0, #0xa                // =10
+     31c: 94000000     	bl	0x31c <apple_mfi_smbus_read_cert+0x34>
+     320: 14000005     	b	0x334 <apple_mfi_smbus_read_cert+0x4c>
+     324: d503201f     	nop
+     328: 9100f3a0     	add	x0, x29, #0x3c
+     32c: 97ffff67     	bl	0xc8 <retry_if_chip_is_sleeping.part.0>
+     330: 340000e0     	cbz	w0, 0x34c <apple_mfi_smbus_read_cert+0x64>
+     334: 2a1503e2     	mov	w2, w21
+     338: aa1603e1     	mov	x1, x22
+     33c: aa1403e0     	mov	x0, x20
+     340: 94000000     	bl	0x340 <apple_mfi_smbus_read_cert+0x58>
+     344: 2a0003f3     	mov	w19, w0
+     348: 37ffff00     	tbnz	w0, #0x1f, 0x328 <apple_mfi_smbus_read_cert+0x40>
+     34c: 2a1303e0     	mov	w0, w19
+     350: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     354: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     358: a8c47bfd     	ldp	x29, x30, [sp], #0x40
+     35c: d65f03c0     	ret
+
+0000000000000360 <apple_mfi_i2c_read>:
+     360: a9bc7bfd     	stp	x29, x30, [sp, #-0x40]!
+     364: 910003fd     	mov	x29, sp
+     368: a90153f3     	stp	x19, x20, [sp, #0x10]
+     36c: aa0203f4     	mov	x20, x2
+     370: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     374: aa0303f6     	mov	x22, x3
+     378: d1008015     	sub	x21, x0, #0x20
+     37c: b9003fbf     	str	wzr, [x29, #0x3c]
+     380: 97ffff7e     	bl	0x178 <apple_mfi_i2c_prepare>
+     384: 2a0003f3     	mov	w19, w0
+     388: 36f800a0     	tbz	w0, #0x1f, 0x39c <apple_mfi_i2c_read+0x3c>
+     38c: 1400000a     	b	0x3b4 <apple_mfi_i2c_read+0x54>
+     390: 9100f3a0     	add	x0, x29, #0x3c
+     394: 97ffff4d     	bl	0xc8 <retry_if_chip_is_sleeping.part.0>
+     398: 340000e0     	cbz	w0, 0x3b4 <apple_mfi_i2c_read+0x54>
+     39c: 2a1403e2     	mov	w2, w20
+     3a0: aa1603e1     	mov	x1, x22
+     3a4: aa1503e0     	mov	x0, x21
+     3a8: 94000000     	bl	0x3a8 <apple_mfi_i2c_read+0x48>
+     3ac: 2a0003f3     	mov	w19, w0
+     3b0: 37ffff00     	tbnz	w0, #0x1f, 0x390 <apple_mfi_i2c_read+0x30>
+     3b4: 2a1303e0     	mov	w0, w19
+     3b8: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     3bc: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     3c0: a8c47bfd     	ldp	x29, x30, [sp], #0x40
+     3c4: d65f03c0     	ret
+
+Disassembly of section .init.text:
+
+0000000000000000 <init_module>:
+       0: a9bf7bfd     	stp	x29, x30, [sp, #-0x10]!
+       4: 910003fd     	mov	x29, sp
+       8: 580000c1     	ldr	x1, 0x20 <init_module+0x20>
+       c: 580000e0     	ldr	x0, 0x28 <init_module+0x28>
+      10: 94000000     	bl	0x10 <init_module+0x10>
+      14: a8c17bfd     	ldp	x29, x30, [sp], #0x10
+      18: d65f03c0     	ret
+      1c: d503201f     	nop
+      20: 00 00 00 00  	.word	0x00000000
+      24: 00 00 00 00  	.word	0x00000000
+      28: 00 00 00 00  	.word	0x00000000
+      2c: 00 00 00 00  	.word	0x00000000
+
+Disassembly of section .exit.text:
+
+0000000000000000 <cleanup_module>:
+       0: a9bf7bfd     	stp	x29, x30, [sp, #-0x10]!
+       4: 910003fd     	mov	x29, sp
+       8: 58000080     	ldr	x0, 0x18 <cleanup_module+0x18>
+       c: 94000000     	bl	0xc <cleanup_module+0xc>
+      10: a8c17bfd     	ldp	x29, x30, [sp], #0x10
+      14: d65f03c0     	ret
+      18: 00 00 00 00  	.word	0x00000000
+      1c: 00 00 00 00  	.word	0x00000000

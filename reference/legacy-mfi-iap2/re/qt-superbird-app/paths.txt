@@ -1,0 +1,16 @@
+/dev/apple_mfi
+/interapp/iAP2WrapperWampSession.cpp
+/interapp/iAP2WrapperWampSession.h
+/phone-bt/Iap2Profile.cpp
+/phone-iap2/MFiWrapperLibrary.cpp
+/phone-iap2/iAP2BtSocketTransport.cpp
+/phone-iap2/iAP2BtSocketTransport.h
+/phone-iap2/iAP2LogImpl.cpp
+/phone-iap2/iAP2Manager.cpp
+/phone-iap2/iAP2MediaToWamp.cpp
+/phone-iap2/iAP2Utilities.cpp
+/vendor/iap2_link/iAP2Link/iAP2Link.c
+/vendor/iap2_link/iAP2Link/iAP2LinkAccessory.c
+/vendor/iap2_link/iAP2Link/iAP2LinkRunLoop.c
+/vendor/iap2_link/iAP2Link/iAP2Packet.c
+/vendor/iap2_link/iAP2Utility/iAP2FSM.c

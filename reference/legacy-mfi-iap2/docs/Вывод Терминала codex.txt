@@ -1,0 +1,2120 @@
+Last login: Mon Apr 20 00:24:04 on ttys000
+15:08:56 exrector@MacBook-Pro:~% codex
+╭───────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.121.0)                │
+│                                           │
+│ model:     gpt-5.4 low   /model to change │
+│ directory: ~                              │
+╰───────────────────────────────────────────╯
+
+  Tip: New For a limited time, Codex is included in your plan for free – let’s build together.
+
+• Model changed to gpt-5.3-codex xhigh
+
+
+› привет у меня есть небольшая проблема у меня оборвалась сессия cloud из-за лимитов я сохранил вывод терминала за
+  последние сутки можешь помочь мне продолжить эту работу ~/Documents/carthing-media-remote/Вывод\
+  Терминала.txt Суть в том, что мы устанавливаем прошивку, и есть очень много разных мелких нюансов, которые, к
+  сожалению, Клод не успел записать, чтобы не повторять их.~/Documents/carthing-media-remote Сейчас мы на
+  стадии тестирования прошивки NixOS.
+
+
+■ You've hit your usage limit. Upgrade to Plus to continue using Codex (https://chatgpt.com/explore/plus), or try again
+at Apr 24th, 2026 12:49 PM.
+
+
+› привет у меня есть небольшая проблема у меня оборвалась сессия cloud из-за лимитов я сохранил вывод терминала за
+    последние сутки можешь помочь мне продолжить эту работу ~/Documents/carthing-media-remote/Вывод\
+    Терминала.txt Суть в том, что мы устанавливаем прошивку, и есть очень много разных мелких нюансов, которые, к
+    сожалению, Клод не успел записать, чтобы не повторять их.~/Documents/carthing-media-remote Сейчас мы
+  на
+    стадии тестирования прошивки NixOS.
+
+
+■ {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.1-codex-mini' model is not
+supported when using Codex with a ChatGPT account."}}
+To continue this session, run codex resume 019daacb-6805-7240-84da-a1cd48b77a1e
+15:12:14 exrector@MacBook-Pro:~% codex
+
+╭─────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.121.0)                  │
+│                                             │
+│ model:     gpt-5.4 xhigh   /model to change │
+│ directory: ~                                │
+╰─────────────────────────────────────────────╯
+
+  Tip: New For a limited time, Codex is included in your plan for free – let’s build together.
+
+• Model changed to gpt-5.4 xhigh
+
+
+› привет у меня есть небольшая проблема у меня оборвалась сессия cloud из-за лимитов я сохранил вывод терминала за
+    последние сутки можешь помочь мне продолжить эту работу ~/Documents/carthing-media-remote/Вывод\
+    Терминала.txt Суть в том, что мы устанавливаем прошивку, и есть очень много разных мелких нюансов, которые, к
+    сожалению, Клод не успел записать, чтобы не повторять их.~/Documents/carthing-media-remote Сейчас мы
+  на
+    стадии тестирования прошивки NixOS.
+
+
+• Сейчас подниму контекст из двух мест: посмотрю состояние репозитория в ~/Documents/carthing-media-remote
+  и быстро вытащу ключевые этапы из сохранённого лога терминала, чтобы не повторять уже пройденные шаги.
+
+• Explored
+  └ List carthing-media-remote
+
+• Ran git -C ~/Documents/carthing-media-remote status --short --branch
+  └ ## main...origin/main
+    ?? .DS_Store
+    … +5 lines (ctrl + t to view transcript)
+    ?? "\320\260\321\200\321\205\320\270\320\262.zip"
+    ?? "\320\260\321\200\321\205\320\270\320\262/"
+
+• Explored
+  └ Read  Терминала.txt
+
+• Ran wc -l ~/Documents/carthing-media-remote/Вывод\ Терминала.txt
+  └    35017 ~/Documents/carthing-media-remote/Вывод Терминала.txt
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Из хвоста видно, что к моменту обрыва уже работали SSH по ключу и по паролю, экран был перевёрнут правильно, USB NCM
+  поднимался стабильно, а провал был именно на холодной загрузке после физического переподключения. Сейчас вытащу из
+  лога и файлов точную цепочку действий и текущее техническое состояние, чтобы понять, что именно тестировать дальше.
+
+• Explored
+  └ Search NixOS|ssh|sshd|reboot|physical|физ|USB|osd_reverse|video_reverse|g_ncm|172\.16\.42\.2|initrd|u-boot|firmware|
+           bluetooth|logo|логотип|guide|гайд|парол|UsePAM|pam_unix in  Терминала.txt
+    Read README.md, continue_flash.py, flake.nix
+    List carthing-media-remote
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Основной проект здесь оказался не про прошивку, а про приложение поверх уже прошитого устройства. Сама история
+  установки лежит в архив/nixos-superbird-install, туда и переключаюсь: проверю финальный flake.nix, Justfile, гайд и
+  заметки, которые успели записать перед обрывом.
+
+• Explored
+  └ Read Justfile, flake.nix, INSTALL_GUIDE.md
+    List nixos-superbird-install
+    Search continue_flash|manual.py|patches|TODO|env|README|logo|bootargs|ssh
+    Read  .md
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Контекст восстановился достаточно чётко: прошивка уже была успешно записана, NixOS после power-cycle один раз
+  загрузился, SSH ключ и пароль exrector работали, а незакрытый вопрос остался один — что происходит после следующего
+  физического переподключения питания. Проверяю текущее живое состояние устройства с этой машины, чтобы продолжить
+  именно с места тестирования, а не пересобирать всё заново.
+
+• Ran route get 172.16.42.2 2>&1 | head -20
+  └ route: socket: Operation not permitted
+
+• Ran ifconfig 2>/dev/null | sed -n '/^en14:/,/^$/p'
+  └ en14: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+        ether 02:11:22:33:44:01
+        media: autoselect (none)
+        status: inactive
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ ping: sendto: Operation not permitted
+    PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    … +2 lines (ctrl + t to view transcript)
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 0 packets received, 100.0% packet loss
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Локальный лог подтверждает ровно тот симптом, который был перед обрывом: en14 сейчас есть, MAC правильный
+  02:11:22:33:44:01, но интерфейс не поднят и сетевые проверки из песочницы заблокированы. Дальше мне нужен реальный
+  доступ к USB/NCM и SSH с этой машины, поэтому запрошу выполнение сетевых диагностик вне sandbox.
+
+• Running route get 172.16.42.2
+
+• Running ifconfig en14
+
+• Running ping -c 2 -W 1000 172.16.42.2
+
+✔ You approved codex to always run commands that start with route get 172.16.42.2
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: default
+    … +4 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1480         0
+
+✔ You approved codex to always run commands that start with ssh -o 'StrictHostKeyChecking=no'
+
+✔ You approved codex to always run commands that start with ping -c
+
+✔ You approved codex to always run commands that start with ifconfig en14
+
+• Ran ifconfig en14
+  └ en14: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+        ether 02:11:22:33:44:01
+        media: autoselect (none)
+        status: inactive
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    Request timeout for icmp_seq 0
+
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 0 packets received, 100.0% packet loss
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok;
+  │ hostname; uptime'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+■ '/permissions' is disabled while a task is in progress.
+
+• Updated Plan
+  └ Восстановил историю из лога и проверил текущее живое состояние хоста. Дальше работаю как по незавершённому тест-
+    плану прошивки.
+    ✔ Собрать точный статус прошивки и результатов прошлой сессии из лога и локальных файлов
+    ✔ Проверить текущее подключение Car Thing по USB/NCM и SSH на этой машине
+    □ Найти, что именно зафиксировано про проблему холодной загрузки и подготовить следующий безопасный шаг теста
+    □ Если нужно, обновить локальный гайд/заметки, чтобы второй раз не терять нюансы
+
+• Waited for background terminal
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Сейчас устройство фактически не в рабочем NCM-сеансе: en14 не поднят, маршрут уходит в en0, 172.16.42.2 не пингуется и
+  SSH таймаутится. Это хорошо совпадает с финалом той сессии: прошивка была валидна, но после следующего физического
+  переподключения поведение стало нестабильным, так что копаю именно в уже записанных заметках про cold boot/power-
+  cycle.
+
+• Explored
+  └ Read WORK_COMPLETED_SUMMARY.txt, TODO.md, SYSTEM_READY_REPORT.txt, superbird_resume.md
+    Search power-cycle|power cycle|физ|cold boot|cold|reboot|SSH timeout|timeout|NCM|en14|172\.16\.42\.2|bootargs|osd_reverse|video_reverse|
+g_ncm|
+           rescue ssh|2222|failsafe|USB Burn Mode in архив
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Важный разрыв нашёлся сразу: сохранённый архив/nixos-superbird-install/flake.nix сейчас не содержит финальных правок из лога, то есть часть
+  знаний осталась только в терминальном выводе, а не в файлах. Значит безопаснее не гадать по текущему дереву, а восстановить отдельный
+  checkpoint-документ с тем, что реально было успешно сделано и что именно осталось проверить.
+
+• Explored
+  └ Read INSTALL_GUIDE.md
+    Search sshpass -p \"exrector\"|UsePAM = mkForce true|pam_unix|boot.logo = ./logo.png|g_ncm.host_addr=02:11:22:33:44:01|Физ\. ребут|SSH не
+           ответил|continue_flash|Rootfs 100%|saveenv|logo.png|osd_reverse=1|video_reverse=1 in  Терминала.txt
+    Search UsePAM|pam_unix|exrector|PermitEmptyPasswords|g_ncm.host_addr|osd_reverse|video_reverse|boot.logo|logo.png|sshd|
+PasswordAuthentication|
+           authorizedKeys|hashedPassword in nixos-superbird-install
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Судя по живому состоянию, сейчас проблема даже не в SSH-конфиге: хост не видит рабочего линка до NCM-устройства. Это надо разделить на два
+  случая: Car Thing вообще не подключён/не загрузился в NixOS, или он подключён, но ушёл в другой USB-режим. Проверю сам USB-режим напрямую,
+  чтобы не гадать по одному en14.
+
+• Ran system_profiler SPUSBDataType 2>/dev/null | grep -E "(NCM Gadget|GX-CHIP|Car Thing|Superbird|0x0525|0xa4a1|0x1b8e|0xc003)" -A 6 -B 2
+  └ (no output)
+
+• Ran system_profiler SPNetworkDataType 2>/dev/null | grep -A 6 "NCM Gadget"
+  └ (no output)
+
+• Explored
+  └ Read  Терминала.txt
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Сейчас зафиксирую recovered checkpoint в отдельный файл рядом с установщиком. Это важнее любой догадки по текущему flake.nix, потому что
+  успешные правки и результаты тестов сохранились в логе, но не попали обратно в дерево.
+
+• Added Documents/carthing-media-remote/архив/nixos-superbird-install/SESSION_2026-04-20_RECOVERY.md (+217 -0)
+      1 +# Checkpoint: NixOS firmware recovery and test status
+      2 +
+      3 +Дата: 2026-04-20
+      4 +
+      5 +Этот файл восстановлен по `Вывод Терминала.txt` и `session claude .md`.
+      6 +Он нужен как источник правды, потому что финальные успешные правки были сделаны в рабочем дереве во время сессии, но в сохранённый `архи
+         в/nixos-superbird-install/flake.nix` целиком не попали.
+      7 +
+      8 +## Что уже точно удалось
+      9 +
+     10 +- Финальная прошивка была записана успешно: `bootfs + rootfs + env + saveenv`.
+     11 +- После физического power-cycle без кнопок устройство один раз загрузилось в нормальный `NCM Gadget (0525:A4A1)`.
+     12 +- Сеть после загрузки работала по `172.16.42.2`.
+     13 +- Вход по SSH работал:
+     14 +  - ключом;
+     15 +  - паролем `exrector`.
+     16 +- Экран был ориентирован правильно:
+     17 +  - `osd_reverse=1`
+     18 +  - `video_reverse=1`
+     19 +- USB NCM MAC был зафиксирован и давал стабильный интерфейс:
+     20 +  - `g_ncm.host_addr=02:11:22:33:44:01`
+     21 +  - на macOS интерфейс появлялся как `en14`
+     22 +- Логотип на экране загрузки был заменён на картинку из `inverted1.png`.
+     23 +
+     24 +## Что было изменено в успешной сборке
+     25 +
+     26 +### flake.nix
+     27 +
+     28 +В финальной рабочей сборке были сделаны такие изменения:
+     29 +
+     30 +- `superbird.boot.logo = ./logo.png;`
+     31 +- `services.openssh.settings = {`
+     32 +- `  PasswordAuthentication = true;`
+     33 +- `  UsePAM = mkForce true;`
+     34 +- `  PermitEmptyPasswords = mkForce false;`
+     35 +- `};`
+     36 +- `security.pam.services.sshd = mkForce { ... pam_unix ... };`
+     37 +
+     38 +Смысл этих правок:
+     39 +
+     40 +- штатный `nixos-superbird` держит `UsePAM = false`;
+     41 +- его профиль безопасности подменяет PAM на `pam_permit.so`;
+     42 +- из-за этого парольный вход либо не работает как надо, либо получается небезопасным;
+     43 +- рабочий вариант был: включить `UsePAM`, отключить пустые пароли и заменить PAM-стек `sshd` на нормальный `pam_unix`.
+     44 +
+     45 +PAM-блок в рабочей сборке был таким по сути:
+     46 +
+     47 +```nix
+     48 +security.pam.services.sshd = mkForce {
+     49 +  name = "sshd";
+     50 +  allowNullPassword = false;
+     51 +  text = ''
+     52 +    account required pam_unix.so
+     53 +
+     54 +    auth required pam_unix.so likeauth try_first_pass
+     55 +
+     56 +    password required pam_unix.so
+     57 +
+     58 +    session required pam_env.so conffile=/etc/pam/environment readenv=0
+     59 +    session required pam_unix.so
+     60 +  '';
+     61 +};
+     62 +```
+     63 +
+     64 +Дополнительно в system packages были добавлены утилиты для диагностики:
+     65 +
+     66 +- `strace`
+     67 +- `procps`
+     68 +- `tcpdump`
+     69 +- `socat`
+     70 +- `util-linux`
+     71 +- `e2fsprogs`
+     72 +- `pciutils`
+     73 +- `picocom`
+     74 +
+     75 +### logo.png
+     76 +
+     77 +- `logo.png` был собран из `inverted1.png` под экран `480x800`.
+     78 +- Важный нюанс: Nix не включал файл в source, пока он был untracked.
+     79 +- Для сборки понадобилось `git add -N logo.png`.
+     80 +
+     81 +### Justfile / сборка bootfs
+     82 +
+     83 +В `Justfile` были добавлены патчи bootargs перед копированием в FAT bootfs:
+     84 +
+     85 +```sh
+     86 +perl -i -pe 's/osd_reverse=0/osd_reverse=1/g; s/video_reverse=0/video_reverse=1/g' ./builder/bootargs.txt
+     87 +grep -q "g_ncm.host_addr" ./builder/bootargs.txt || \
+     88 +  perl -i -pe 's|^(bootargs=.*)|$1 g_ncm.host_addr=02:11:22:33:44:01|' ./builder/bootargs.txt
+     89 +```
+     90 +
+     91 +Почему `perl`, а не `sed`:
+     92 +
+     93 +- в builder-container `sed` не оказался в `PATH`;
+     94 +- `perl` был доступен и с ним сборка прошла.
+     95 +
+     96 +Отдельный нюанс с loop device:
+     97 +
+     98 +- фиксированный `/dev/loop0` ломал повторную упаковку;
+     99 +- рабочий вариант был через динамический `losetup -f --show`.
+    100 +
+    101 +## Что было важно при прошивке
+    102 +
+    103 +### Режимы USB
+    104 +
+    105 +- Нормальная загрузка: `NCM Gadget`
+    106 +- USB Mode: `GX-CHIP`
+    107 +- USB Burn Mode: `product=None`
+    108 +
+    109 +Рабочая прошивка закончилась тем, что устройство осталось в `USB Burn Mode`, и программный reset не помогал.
+    110 +Нужен был именно физический power-cycle: отключить USB, подождать 2-3 секунды, подключить без кнопок.
+    111 +
+    112 +### Почему появился continue_flash.py
+    113 +
+    114 +Во время записи `manual.py` несколько раз срывался:
+    115 +
+    116 +- 1-я попытка: disconnect на rootfs;
+    117 +- 2-я попытка: устройство уже было в burn mode, а стандартный путь ожидал другой сценарий;
+    118 +- 3-я попытка: использовался отдельный `continue_flash.py`, который писал `bootfs`, `rootfs` и `env` напрямую без повторного `bl2_boot`.
+    119 +
+    120 +Именно после этого сценария финальный флеш дошёл до конца:
+    121 +
+    122 +- `Rootfs 100%`
+    123 +- `env written`
+    124 +- `saveenv`
+    125 +
+    126 +## Что было проверено после успешной загрузки
+    127 +
+    128 +После физического переподключения без кнопок было подтверждено:
+    129 +
+    130 +- устройство появилось как `NCM Gadget`;
+    131 +- интерфейс на Mac: `en14`;
+    132 +- `ping 172.16.42.2` отвечал;
+    133 +- вход по SSH ключом работал;
+    134 +- вход по SSH паролем `exrector` работал;
+    135 +- `bluetooth` и `sshd` были `active`;
+    136 +- шрифты и пакеты были на месте;
+    137 +- логотип отображался;
+    138 +- ориентация экрана была правильной;
+    139 +- MAC NCM был фиксирован.
+    140 +
+    141 +## Что решили не делать
+    142 +
+    143 +ADB как запасной транспорт был признан плохой идеей:
+    144 +
+    145 +- на устройстве не было `adbd`;
+    146 +- USB gadget уже занят `g_ncm`;
+    147 +- добавление USB ADB конфликтует с NCM/SSH;
+    148 +- `ADB over TCP` не даёт преимуществ перед SSH.
+    149 +
+    150 +Итог:
+    151 +
+    152 +- основной транспорт к устройству: SSH по `172.16.42.2`;
+    153 +- запасной путь восстановления: снова вход в `USB Burn Mode` и перепрошивка.
+    154 +
+    155 +## Незакрытая проблема
+    156 +
+    157 +После успешной загрузки и проверки сервисов дальше началось тестирование повторных входов и reboot/power-cycle.
+    158 +Именно на этом месте сессия оборвалась.
+    159 +
+    160 +Последний незакрытый симптом:
+    161 +
+    162 +- после следующего физического ребута `SSH` уже не ответил;
+    163 +- это было признано отдельной проблемой для разбора;
+    164 +- перед обрывом знаний был сделан вывод: сама прошивка валидна, но cold-boot / повторный старт надо тестировать отдельно.
+    165 +
+    166 +## Текущее живое состояние на этой машине
+    167 +
+    168 +Проверка уже после восстановления контекста показала:
+    169 +
+    170 +- `en14` существует, но сейчас `inactive`;
+    171 +- маршрут до `172.16.42.2` уходит через `en0`, а не через NCM;
+    172 +- `ping 172.16.42.2` не отвечает;
+    173 +- `ssh root@172.16.42.2` уходит в timeout;
+    174 +- `system_profiler` сейчас не показывает ни `NCM Gadget`, ни `GX-CHIP`.
+    175 +
+    176 +Это значит, что прямо сейчас устройство не находится в рабочем NCM-сеансе с этой машиной.
+    177 +
+    178 +## Следующий безопасный шаг
+    179 +
+    180 +1. Подключить Car Thing по USB без нажатых кнопок.
+    181 +2. Посмотреть, что происходит физически:
+    182 +   - есть ли логотип;
+    183 +   - появляется ли `NCM Gadget`;
+    184 +   - не уходит ли устройство снова в другой режим.
+    185 +3. Если появится `NCM Gadget`, на Mac поднять интерфейс:
+    186 +
+    187 +```sh
+    188 +sudo ifconfig en14 172.16.42.1/24 up
+    189 +```
+    190 +
+    191 +4. Затем проверить:
+    192 +
+    193 +```sh
+    194 +ping -c 2 172.16.42.2
+    195 +ssh -o StrictHostKeyChecking=no root@172.16.42.2
+    196 +```
+    197 +
+    198 +5. Если SSH появится, сразу снять диагностику до следующего ребута:
+    199 +
+    200 +```sh
+    201 +ssh root@172.16.42.2 'hostname; uptime; systemctl is-active bluetooth sshd; journalctl -b --no-pager | tail -200'
+    202 +```
+    203 +
+    204 +6. Если `NCM Gadget` не появится, сначала определить USB-режим:
+    205 +   - `GX-CHIP` = устройство ушло в USB mode;
+    206 +   - `product=None` = burn mode;
+    207 +   - ничего не видно = либо не загрузилось, либо нет питания/контакта.
+    208 +
+    209 +## Где смотреть подтверждение в логе
+    210 +
+    211 +Ключевые маркеры в `Вывод Терминала.txt`:
+    212 +
+    213 +- успешный финальный флеш: район строк `34397-34448`
+    214 +- успешная загрузка в NCM и SSH тест: район строк `34481-34517`
+    215 +- подтверждение `UsePAM/pam_unix/logo/bootargs`: район строк `33463-33618`
+    216 +- незакрытая проблема после следующего физического ребута: район строк `34931-34986`
+    217 +
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Checkpoint-файл уже добавлен. Сейчас быстро проверю, что он читается как надо, и после этого дам тебе сжатый статус плюс конкретное следующее
+  действие, чтобы мы продолжили именно с места тестирования.
+
+• Explored
+  └ Read SESSION_2026-04-20_RECOVERY.md
+
+• Ran git -C ~/Documents/carthing-media-remote status --short
+  └ ?? .DS_Store
+    ?? "Untitled 6.PNG"
+    … +3 lines (ctrl + t to view transcript)
+    ?? "\320\260\321\200\321\205\320\270\320\262.zip"
+    ?? "\320\260\321\200\321\205\320\270\320\262/"
+
+• Updated Plan
+  └ Восстановил рабочие правки и результаты тестов в отдельный checkpoint-файл, а также определил безопасный следующий шаг для продолжения
+    тестирования cold-boot.
+    ✔ Собрать точный статус прошивки и результатов прошлой сессии из лога и локальных файлов
+    ✔ Проверить текущее подключение Car Thing по USB/NCM и SSH на этой машине
+    ✔ Найти, что именно зафиксировано про проблему холодной загрузки и подготовить следующий безопасный шаг теста
+    ✔ Если нужно, обновить локальный гайд/заметки, чтобы второй раз не терять нюансы
+
+
+› Слушай, а ведь есть еще логи ~/.claude
+
+
+• Да, это может добить недостающие куски, особенно если там остались memory/checkpoint-файлы с точными командами и итогами. Сейчас быстро
+  просмотрю .claude на всё, что связано с carthing, superbird, nixos и этой сессией, и затем дополню картину.
+
+• Explored
+  └ List .claude
+    Search carthing|superbird|nixos|debug-log|checkpoint|session-state|memory
+    List .claude
+    Search carthing|superbird|nixos|172\.16\.42\.2|exrector|UsePAM|g_ncm|continue_flash|cold-boot|power-cycle|power cycle|SSH не ответил|
+pam_unix|
+           logo.png in .claude
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• В .claude есть именно те файлы, которые могут дать недостающий смысл, а не просто сырые логи: carthing-debug-log.md, carthing-nixos-install-
+  guide.md, feedback_no_empty_ssh_password.md, feedback_nixos_mac_stability.md, feedback_carthing_access.md. Сейчас прочитаю их точечно и сверю,
+  не объясняют ли они незакрытый cold-boot симптом.
+
+• Explored
+  └ Read carthing-debug-log.md, carthing-nixos-install-guide.md, feedback_nixos_mac_stability.md, feedback_carthing_access.md,
+         feedback_no_empty_ssh_password.md
+    Search Сессия 9|Сессия 10|NixOS|UsePAM|g_ncm|power-cycle|power cycle|cold|SSH не ответил|exrector|continue_flash|logo|manualScript
+in carthing-
+           debug-log.md
+    Read feedback_carthing_access.md
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Нашлись два очень полезных .claude-источника. Первый: carthing-nixos-install-guide.md уже содержит почти готовый живой гайд с точными причинами
+  и фиксам по UsePAM, logo.png, perl вместо sed, continue_flash.py и динамическому losetup. Второй: carthing-debug-log.md подтверждает, что
+  холодная загрузка после первой успешной загрузки осталась незакрытой задачей, а не моим домыслом. Достану ещё точный кусок про Сессии 8-9 и
+  потом сведу всё в один статус.
+
+• Explored
+  └ Read carthing-debug-log.md, carthing-nixos-install-guide.md, SESSION_2026-04-20_RECOVERY.md
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• В .claude уже есть два практически готовых источника правды. Я добавлю их в наш recovered checkpoint, и отдельно отмечу, что старое правило из
+  feedback_carthing_access.md про «Car Thing никогда не грузится сам» относится к прошлым стоковым/Nocturne сценариям и конфликтует с тем, что
+  реально подтвердилось на NixOS 20 апреля.
+
+• Edited Documents/carthing-media-remote/архив/nixos-superbird-install/SESSION_2026-04-20_RECOVERY.md (+29 -0)
+    217
+    218 +## Дополнительные источники в `.claude`
+    219 +
+    220 +Нашлись ещё два очень полезных файла:
+    221 +
+    222 +- `~/.claude/projects/-Users-exrector/memory/carthing-nixos-install-guide.md`
+    223 +- `~/.claude/projects/-Users-exrector/memory/carthing-debug-log.md`
+    224 +
+    225 +Что в них важно:
+    226 +
+    227 +- в `carthing-nixos-install-guide.md` уже есть почти полный живой гайд установки с точным `continue_flash.py`, описанием `UsePAM`, `logo
+         .png`, `perl` вместо `sed`, динамического `losetup` и чек-листом проверки;
+    228 +- в `carthing-debug-log.md` подтверждены Сессия 8 и Сессия 9:
+    229 +  - Сессия 8: прошивка с macOS-патчами и успешный флеш;
+    230 +  - Сессия 9: после физического power-cycle NixOS загрузился, SSH по ключу и затем по паролю был восстановлен;
+    231 +  - далее пароль был окончательно починен через `UsePAM + pam_unix`, а незакрытым остался именно следующий cold-boot / повторный power-c
+         ycle.
+    232 +
+    233 +## Важное замечание про старые memory-файлы
+    234 +
+    235 +В `~/.claude/projects/-Users-exrector/memory/feedback_carthing_access.md` есть старое правило:
+    236 +
+    237 +- «Car Thing никогда не загружается сам без кнопок»
+    238 +
+    239 +Для текущей NixOS-сборки это уже не абсолютная истина.
+    240 +Оно было верным для ранних сценариев со stock / Nocturne / buildroot, но 2026-04-20 подтверждено другое:
+    241 +
+    242 +- после успешного NixOS flash устройство хотя бы один раз нормально загрузилось **без кнопок**;
+    243 +- появилось как `NCM Gadget`;
+    244 +- SSH заработал.
+    245 +
+    246 +Поэтому для текущего этапа тестирования это правило надо считать **устаревшим** и не использовать как жёсткую аксиому.
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Да. Самые полезные логи оказались тут:
+
+  - .claude/projects/-Users-exrector/memory/carthing-nixos-install-guide.md
+  - .claude/projects/-Users-exrector/memory/carthing-debug-log.md
+
+  Что они добавили:
+
+  - там уже есть точный continue_flash.py, рабочие фиксы UsePAM + pam_unix, logo.png, perl вместо sed, динамический losetup, фиксированный
+    g_ncm.host_addr;
+  - carthing-debug-log.md подтверждает хронологию: после успешного флеша NixOS один раз нормально загрузился без кнопок, SSH заработал, а
+    незакрытой осталась именно следующая проверка cold-boot / повторного power-cycle;
+  - старый файл feedback_carthing_access.md с тезисом “Car Thing никогда не грузится сам без кнопок” для текущей NixOS-сборки уже устарел.
+
+  Я уже дополнил этим recovery-файл: Documents/carthing-media-remote/архив/nixos-superbird-install/SESSION_2026-04-20_RECOVERY.md.
+
+  Если продолжаем live, следующий шаг прежний: подключи Car Thing без кнопок, и я сразу проверю, появляется ли NCM Gadget или устройство уходит в
+  другой USB-режим.
+
+
+› Подключен, проверь.
+
+
+• Проверяю по слоям: сначала USB-режим и наличие NCM Gadget, затем подниму en14, после этого пинг и SSH.
+
+• Ran ifconfig en14
+  └ en14: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+        ether 02:11:22:33:44:01
+        media: autoselect (none)
+        status: inactive
+
+• Ran system_profiler SPNetworkDataType 2>/dev/null | grep -A 8 "NCM Gadget"
+  └ (no output)
+
+• Ran system_profiler SPUSBDataType 2>/dev/null | grep -E "(NCM Gadget|GX-CHIP|Car Thing|Superbird|0x0525|0xa4a1|0x1b8e|0xc003)" -A 8 -B 2
+  └ (no output)
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: default
+    … +4 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1480         0
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Сейчас виден только след от NCM на хосте: en14 с правильным MAC 02:11:22:33:44:01, но интерфейс inactive, а маршрут до 172.16.42.2 всё ещё
+  уходит через en0. Поднимаю en14 вручную и сразу проверяю доступность устройства.
+
+• Ran ifconfig en14 172.16.42.1/24 up
+  └ ifconfig: up: permission denied
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: default
+    … +4 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1480         0
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    Request timeout for icmp_seq 0
+
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 0 packets received, 100.0% packet loss
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok; hostname; uptime'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Команда упёрлась не в устройство, а в права на изменение сетевого интерфейса на Mac. Перезапускаю уже с sudo и затем, если линк появится, сразу
+  добью маршрут и SSH.
+
+✔ You approved codex to always run commands that start with sudo ifconfig en14
+
+• Ran sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+  └ (no output)
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+■ '/permissions' is disabled while a task is in progress.
+
+• en14 поднялся. Проверяю, назначился ли прямой маршрут и ожил ли 172.16.42.2.
+
+• Ran ifconfig en14
+  └ en14: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+    … +2 lines (ctrl + t to view transcript)
+        media: autoselect (100baseTX <full-duplex>)
+        status: active
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: 172.16.42.2
+    … +2 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1500      1197
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok; hostname; uptime'
+  └ ok
+    superbird
+     18:46:40 up 17 min,  0 user,  load average: 1.00, 0.99, 0.73
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ 64 bytes from 172.16.42.2: icmp_seq=1 ttl=64 time=1.283 ms
+
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 2 packets received, 0.0% packet loss
+    round-trip min/avg/max/stddev = 1.283/6.015/10.748/4.732 ms
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Связь восстановилась. Пока устройство живое, сниму короткий статус прошивки: сервисы, runtime SSH-настройки и то, что реально попало в cmdline.
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'sshd -T 2>/dev/null | grep -iE "^(usepam|
+  │ passwordauthentication|permitrootlogin|permitemptypasswords)"'
+  └ usepam yes
+    permitrootlogin yes
+    passwordauthentication yes
+    permitemptypasswords no
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== status ==="; systemctl is-active bluetooth
+  │ sshd; echo "=== cmdline ==="; cat /proc/cmdline'
+  └ === status ===
+    active
+    … +5 lines (ctrl + t to view transcript)
+    androidboot.selinux=enforcing androidboot.firstboot=0 jtag=disable uboot_version=v1.0-74-gfd61b37038 androidboot.hardware=amlogic
+    androidboot.slot_suffix=_a g_ncm.host_addr=02:11:22:33:44:01
+
+✔ You approved codex to always run commands that start with sshpass -p exrector ssh -o 'StrictHostKeyChecking=no' -o 'UserKnownHostsFile=...
+
+• Ran sshpass -p exrector ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=password -o
+  │ PubkeyAuthentication=no -o ConnectTimeout=5 root@172.16.42.2 'echo PASSWORD_OK; id -u'
+  └ PASSWORD_OK
+    0
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Проверил: сейчас устройство живо и доступно.
+
+  - en14 поднят: 172.16.42.1/24, линк active
+  - маршрут до 172.16.42.2 идёт через en14
+  - ping проходит без потерь
+  - SSH работает
+  - вход по паролю exrector тоже работает
+  - hostname: superbird
+  - uptime: 17 min
+
+  Runtime на устройстве сейчас корректный:
+
+  - usepam yes
+  - passwordauthentication yes
+  - permitrootlogin yes
+  - permitemptypasswords no
+
+  В cmdline тоже на месте нужные флаги:
+
+  - osd_reverse=1
+  - video_reverse=1
+  - g_ncm.host_addr=02:11:22:33:44:01
+
+  То есть на этом включении NixOS загрузился нормально. Следующий логичный шаг: либо сразу снять расширенную диагностику, либо повторить ещё один
+  physical power-cycle, чтобы добить именно нестабильность повторных стартов.
+
+
+› Ты мог бы вот это, то что ты выяснил сейчас и тот гайд, который начал писать Клод и другой файл, короче все что там важно, все что ты нашел,
+  сохранить в папке именно проекта.
+
+
+• Сохраняю это локально в сам проект, без привязки к .claude: сделаю project-local пакет из recovery, живого гайда, выжимки из debug-log и
+  короткий индекс, чтобы в следующий раз всё лежало рядом с прошивкой.
+
+• Добавляю три project-local документа и обновляю recovery-файл текущей проверкой устройства. После этого быстро сверю, что они лежат там, где
+  надо.
+
+• Edited 4 files (+421 -0)
+  └ Documents/carthing-media-remote/архив/nixos-superbird-install/DEBUG_LOG_RECOVERED.md (+133 -0)
+      1 +# Car Thing NixOS: Восстановленная Хронология
+      2 +
+      3 +Ниже только важные этапы, без шумового мусора.
+      4 +
+      5 +## Сессия 8: fresh flash с macOS-патчами
+      6 +
+      7 +Цель:
+      8 +
+      9 +- прошить устройство с нуля по `JoeyEamigh/nixos-superbird`;
+     10 +- не потерять SSH снова.
+     11 +
+     12 +Что было сделано:
+     13 +
+     14 +- собран новый `flake.nix` для headless NixOS;
+     15 +- root password задан через `hashedPassword`;
+     16 +- собран installer bundle через Docker builder;
+     17 +- применены macOS-патчи к `manual.py`, `superbird_device.py`, `pyamlboot.py`;
+     18 +- увеличен timeout ожидания burn mode;
+     19 +- подготовлен `flash/` bundle с `bootfs.bin`, `rootfs.img`, `env.txt`, `manual/`, `.venv`.
+     20 +
+     21 +Как шёл флеш:
+     22 +
+     23 +- попытка 1: `bootfs` записался, `rootfs` сорвался на USB disconnect;
+     24 +- попытка 2: устройство дошло до burn mode, но штатный сценарий не подхватил его корректно;
+     25 +- попытка 3: запись продолжена отдельным `continue_flash.py`, дошла до конца;
+     26 +- `env` и `saveenv` записаны успешно.
+     27 +
+     28 +Наблюдение после `reset`:
+     29 +
+     30 +- устройство не загрузилось штатно;
+     31 +- оставалось в `USB Mode`;
+     32 +- был сделан вывод, что нужен физический power-cycle.
+     33 +
+     34 +## Сессия 9: прорыв, NixOS действительно жив
+     35 +
+     36 +После физического power-cycle:
+     37 +
+     38 +- устройство загрузилось;
+     39 +- появилось как `NCM Gadget (0525:a4a1)`;
+     40 +- на Mac поднялся интерфейс `en14`;
+     41 +- доступ по `172.16.42.2` заработал.
+     42 +
+     43 +Что удалось подтвердить:
+     44 +
+     45 +- NixOS 25.05, kernel 4.9.113
+     46 +- hostname `superbird`
+     47 +- rootfs живой
+     48 +- SSH по ключу заработал
+     49 +
+     50 +Сначала был ложный след:
+     51 +
+     52 +- казалось, что прошивка не пускает по ключу;
+     53 +- потом выяснилось, что проблема была на стороне Mac: ключ был под passphrase, а `BatchMode=yes` мешал подписанию.
+     54 +
+     55 +Дальше выяснилось:
+     56 +
+     57 +- парольный вход всё ещё не работал корректно при `UsePAM=no`;
+     58 +- это привело к отдельной задаче починить `UsePAM` и `pam_unix`.
+     59 +
+     60 +## Сессия 10: финальная правка образа
+     61 +
+     62 +Была собрана более правильная версия:
+     63 +
+     64 +- `UsePAM = mkForce true`
+     65 +- `security.pam.services.sshd = mkForce ... pam_unix ...`
+     66 +- `PermitEmptyPasswords = false`
+     67 +- `logo.png` подключён как boot logo
+     68 +- в bootargs добавлены:
+     69 +  - `osd_reverse=1`
+     70 +  - `video_reverse=1`
+     71 +  - `g_ncm.host_addr=02:11:22:33:44:01`
+     72 +
+     73 +Дополнительно:
+     74 +
+     75 +- в builder-container заменён `sed` на `perl`
+     76 +- упаковка bootfs переделана на динамический `losetup`
+     77 +
+     78 +Финал флеша:
+     79 +
+     80 +- `Rootfs 100%`
+     81 +- `env записан`
+     82 +- `saveenv прошёл`
+     83 +
+     84 +После физического переподключения без кнопок:
+     85 +
+     86 +- устройство загрузилось в `NCM Gadget`
+     87 +- `en14` определился по MAC `02:11:22:33:44:01`
+     88 +- `ping 172.16.42.2` заработал
+     89 +- SSH по ключу заработал
+     90 +- SSH по паролю `exrector` заработал
+     91 +- экран был ориентирован правильно
+     92 +- логотип показывался
+     93 +
+     94 +То есть прошивка была уже реально валидной.
+     95 +
+     96 +## Где именно сессия оборвалась
+     97 +
+     98 +После этого начали тестировать устойчивость:
+     99 +
+    100 +- повторные входы;
+    101 +- программный reboot;
+    102 +- следующий физический power-cycle.
+    103 +
+    104 +Именно на этом шаге появился незакрытый симптом:
+    105 +
+    106 +- после следующего физического ребута SSH уже не ответил;
+    107 +- это признали отдельной проблемой;
+    108 +- до разбора дело не дошло из-за лимита сессии.
+    109 +
+    110 +## Текущая живая проверка после восстановления
+    111 +
+    112 +После восстановления контекста и нового подключения устройства было подтверждено:
+    113 +
+    114 +- `en14` поднимается как `172.16.42.1/24`
+    115 +- маршрут на `172.16.42.2` идёт через `en14`
+    116 +- `ping` проходит
+    117 +- SSH проходит
+    118 +- пароль `exrector` проходит
+    119 +- runtime `sshd` сейчас такой:
+    120 +  - `usepam yes`
+    121 +  - `passwordauthentication yes`
+    122 +  - `permitrootlogin yes`
+    123 +  - `permitemptypasswords no`
+    124 +- `/proc/cmdline` содержит:
+    125 +  - `osd_reverse=1`
+    126 +  - `video_reverse=1`
+    127 +  - `g_ncm.host_addr=02:11:22:33:44:01`
+    128 +
+    129 +Вывод по состоянию на сейчас:
+    130 +
+    131 +- прошивка в рабочем состоянии;
+    132 +- доступ к устройству восстановлен;
+    133 +- главный остаточный риск: нестабильность следующего cold-boot, а не сам образ и не SSH-конфиг.
+
+  └ Documents/carthing-media-remote/архив/nixos-superbird-install/NIXOS_INSTALL_GUIDE_PROJECT.md (+219 -0)
+      1 +# Car Thing NixOS: Практический Гайд
+      2 +
+      3 +Этот файл собран в сам проект из:
+      4 +
+      5 +- терминального лога;
+      6 +- recovery-заметок;
+      7 +- project memory из `.claude`.
+      8 +
+      9 +Цель простая: чтобы следующий запуск можно было продолжить без восстановления контекста по кускам.
+     10 +
+     11 +## 1. Что было критично в конфиге
+     12 +
+     13 +Базовый `nixos-superbird` оказался недостаточным для нормального SSH по паролю.
+     14 +
+     15 +Нужно было явно починить:
+     16 +
+     17 +- `UsePAM = true`
+     18 +- `PermitEmptyPasswords = false`
+     19 +- PAM-стек `sshd` на `pam_unix`
+     20 +- `users.users.root.hashedPassword = mkForce ...`
+     21 +- `authorizedKeys` для root
+     22 +- `superbird.boot.logo = ./logo.png`
+     23 +- `g_ncm.host_addr=02:11:22:33:44:01` в bootargs
+     24 +- `osd_reverse=1`
+     25 +- `video_reverse=1`
+     26 +
+     27 +Рабочий смысл такой:
+     28 +
+     29 +```nix
+     30 +services.openssh.settings = {
+     31 +  PasswordAuthentication = true;
+     32 +  UsePAM = mkForce true;
+     33 +  PermitEmptyPasswords = mkForce false;
+     34 +};
+     35 +
+     36 +security.pam.services.sshd = mkForce {
+     37 +  name = "sshd";
+     38 +  allowNullPassword = false;
+     39 +  text = ''
+     40 +    account required pam_unix.so
+     41 +    auth required pam_unix.so likeauth try_first_pass
+     42 +    password required pam_unix.so
+     43 +    session required pam_env.so conffile=/etc/pam/environment readenv=0
+     44 +    session required pam_unix.so
+     45 +  '';
+     46 +};
+     47 +```
+     48 +
+     49 +## 2. Логотип
+     50 +
+     51 +`logo.png` собирался из `inverted1.png` под экран `480x800`.
+     52 +
+     53 +Рабочая команда:
+     54 +
+     55 +```bash
+     56 +convert source.png -resize '420x680>' -background black -gravity center \
+     57 +  -extent 480x800 -alpha on PNG32:logo.png
+     58 +```
+     59 +
+     60 +Важный нюанс:
+     61 +
+     62 +- если `logo.png` untracked, Nix может не включить его в source;
+     63 +- рабочий фикс: `git add -N logo.png`.
+     64 +
+     65 +## 3. Сборка bootfs на macOS
+     66 +
+     67 +Ключевые нюансы builder-контейнера:
+     68 +
+     69 +- `sed` в контейнере не было в `PATH`
+     70 +- нужно использовать `perl -i -pe`
+     71 +- фиксированный `/dev/loop0` ломал повторную упаковку
+     72 +- нужно использовать динамический `losetup -f --show`
+     73 +
+     74 +Рабочая логика для bootargs:
+     75 +
+     76 +```bash
+     77 +perl -i -pe 's/osd_reverse=0/osd_reverse=1/g; s/video_reverse=0/video_reverse=1/g' ./builder/bootargs.txt
+     78 +grep -q "g_ncm.host_addr" ./builder/bootargs.txt || \
+     79 +  perl -i -pe 's|^(bootargs=.*)|$1 g_ncm.host_addr=02:11:22:33:44:01|' ./builder/bootargs.txt
+     80 +```
+     81 +
+     82 +## 4. Что было важно при прошивке
+     83 +
+     84 +Нужно различать USB-режимы:
+     85 +
+     86 +- `NCM Gadget` = нормальная загрузка
+     87 +- `GX-CHIP` = USB Mode
+     88 +- `product=None` = USB Burn Mode
+     89 +
+     90 +Прошивка несколько раз срывалась на rootfs, поэтому стандартного `manual.py` оказалось мало.
+     91 +
+     92 +Реально рабочий сценарий был такой:
+     93 +
+     94 +1. старт через `manual.py`
+     95 +2. при срыве на rootfs проверить, что устройство уже в `usb-burn`
+     96 +3. продолжить отдельным `continue_flash.py` без повторного `bl2_boot`
+     97 +
+     98 +## 5. Рабочий `continue_flash.py`
+     99 +
+    100 +Ключевая идея:
+    101 +
+    102 +- если устройство уже в burn mode, не надо снова дёргать BL2;
+    103 +- надо просто заново записать `bootfs`, `rootfs` и `env`.
+    104 +
+    105 +Смысловой шаблон:
+    106 +
+    107 +```python
+    108 +import sys, time
+    109 +sys.path.insert(0, 'manual')
+    110 +from superbird_device import SuperbirdDevice, find_device
+    111 +
+    112 +BOOTFS = "./bootfs.bin"
+    113 +ROOTFS = "./rootfs.img"
+    114 +ENVS = "./env.txt"
+    115 +BOOT_RESTORE_BLOCK_OFFSET = 0
+    116 +ROOT_RESTORE_BLOCK_OFFSET = 352256
+    117 +
+    118 +for attempt in range(10):
+    119 +    status = find_device(silent=True)
+    120 +    if status == "usb-burn":
+    121 +        break
+    122 +    time.sleep(1)
+    123 +else:
+    124 +    raise SystemExit("device never reached usb-burn")
+    125 +
+    126 +device = SuperbirdDevice()
+    127 +device.bulkcmd("amlmmc part 1", ignore_timeout=True)
+    128 +device.bulkcmd("amlmmc key", ignore_timeout=True)
+    129 +device.restore_partition(BOOT_RESTORE_BLOCK_OFFSET, BOOTFS)
+    130 +device.restore_partition(ROOT_RESTORE_BLOCK_OFFSET, ROOTFS)
+    131 +device.bulkcmd("amlmmc env", ignore_timeout=True)
+    132 +device.send_env_file(ENVS)
+    133 +device.bulkcmd("saveenv", ignore_timeout=True)
+    134 +```
+    135 +
+    136 +## 6. Какие macOS-патчи к flash-скриптам реально были нужны
+    137 +
+    138 +Подтверждённые рабочие патчи:
+    139 +
+    140 +1. `find_device()` чинить под macOS / libusb странности
+    141 +2. `ignore_timeout=True` для `amlmmc key/part/env/saveenv`
+    142 +3. `restore_partition`: меньший `WRITE_CHUNK_SIZE` и retry на chunk
+    143 +4. `_writeLargeMemory`: запись без малого timeout и с retry
+    144 +
+    145 +Итог:
+    146 +
+    147 +- 1-я попытка флеша сорвалась
+    148 +- 2-я застряла на переходе режимов
+    149 +- 3-я через `continue_flash.py` дошла до конца
+    150 +
+    151 +## 7. Сеть на Mac
+    152 +
+    153 +После загрузки NixOS устройство появляется как USB NCM.
+    154 +
+    155 +Рабочая схема:
+    156 +
+    157 +```bash
+    158 +sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+    159 +route get 172.16.42.2
+    160 +ping -c 2 172.16.42.2
+    161 +ssh root@172.16.42.2
+    162 +```
+    163 +
+    164 +Почему был нужен фиксированный MAC:
+    165 +
+    166 +- без него macOS создаёт новый `enN` после ребута;
+    167 +- доступ к устройству легко теряется;
+    168 +- `g_ncm.host_addr=02:11:22:33:44:01` устраняет это.
+    169 +
+    170 +## 8. Что было подтверждено как рабочее
+    171 +
+    172 +На успешной загрузке было подтверждено:
+    173 +
+    174 +- `NCM Gadget` появился
+    175 +- `en14` поднялся
+    176 +- `ping 172.16.42.2` отвечал
+    177 +- SSH по ключу работал
+    178 +- SSH по паролю `exrector` работал
+    179 +- `bluetooth` и `sshd` были `active`
+    180 +- `UsePAM=yes` в runtime
+    181 +- `cmdline` содержал:
+    182 +  - `osd_reverse=1`
+    183 +  - `video_reverse=1`
+    184 +  - `g_ncm.host_addr=02:11:22:33:44:01`
+    185 +
+    186 +## 9. Что не стоит делать
+    187 +
+    188 +- не полагаться на `initialPassword`
+    189 +- не оставлять пустой пароль
+    190 +- не рассчитывать на ADB как запасной транспорт
+    191 +- не использовать снова `sed` внутри builder-container
+    192 +- не жёстко привязываться к `/dev/loop0`
+    193 +
+    194 +## 10. Что осталось проверить
+    195 +
+    196 +Незакрытый вопрос ровно один:
+    197 +
+    198 +- стабильность следующего физического power-cycle / cold-boot.
+    199 +
+    200 +Сама прошивка уже доказала, что может:
+    201 +
+    202 +- загрузиться в NixOS;
+    203 +- поднять NCM;
+    204 +- принять SSH по ключу и по паролю.
+    205 +
+    206 +## 11. Минимальный чек-лист на будущее
+    207 +
+    208 +После каждого следующего запуска проверять:
+    209 +
+    210 +```bash
+    211 +ifconfig en14
+    212 +route get 172.16.42.2
+    213 +ping -c 2 172.16.42.2
+    214 +ssh -o StrictHostKeyChecking=no root@172.16.42.2 'hostname; uptime'
+    215 +ssh root@172.16.42.2 'sshd -T | grep -iE "^(usepam|passwordauthentication|permitrootlogin|permitemptypasswords)"'
+    216 +ssh root@172.16.42.2 'cat /proc/cmdline'
+    217 +```
+    218 +
+    219 +Если всё это проходит, значит прошивка жива, и проблема была только в конкретном цикле старта, а не в образе.
+
+  └ Documents/carthing-media-remote/архив/nixos-superbird-install/PROJECT_DOCS_INDEX.md (+35 -0)
+     1 +# NixOS Car Thing: Важные Документы
+     2 +
+     3 +Все ключевые знания по установке и восстановлению NixOS на Car Thing сохранены локально в этой папке.
+     4 +
+     5 +## Читать в таком порядке
+     6 +
+     7 +1. [SESSION_2026-04-20_RECOVERY.md](./SESSION_2026-04-20_RECOVERY.md)
+     8 +   Текущее состояние, что уже точно работало, что осталось незакрытым, и последняя живая проверка.
+     9 +
+    10 +2. [NIXOS_INSTALL_GUIDE_PROJECT.md](./NIXOS_INSTALL_GUIDE_PROJECT.md)
+    11 +   Практический гайд установки и перепрошивки с нуля, собранный из лога и project memory.
+    12 +
+    13 +3. [DEBUG_LOG_RECOVERED.md](./DEBUG_LOG_RECOVERED.md)
+    14 +   Хронология ключевых сессий, где видно, что именно ломалось и что реально сработало.
+    15 +
+    16 +## Первичные сырые источники
+    17 +
+    18 +- [INSTALL_GUIDE.md](./INSTALL_GUIDE.md)
+    19 +  Исходный локальный гайд по `nixos-superbird-install`.
+    20 +
+    21 +- [Вывод Терминала.txt](~/Documents/carthing-media-remote/Вывод%20Терминала.txt)
+    22 +  Полный терминальный лог последней большой сессии.
+    23 +
+    24 +- [session claude .md](~/Documents/carthing-media-remote/session%20claude%20.md)
+    25 +  Сохранённый текст compacted-сессии.
+    26 +
+    27 +## Короткий итог
+    28 +
+    29 +- Прошивка NixOS была успешно записана.
+    30 +- Исправлены `UsePAM`, `pam_unix`, boot logo, bootargs, фиксированный MAC NCM.
+    31 +- Устройство уже подтверждённо загружалось в `NCM Gadget` и принимало SSH:
+    32 +  - по ключу;
+    33 +  - по паролю `exrector`.
+    34 +- Текущий незакрытый вопрос:
+    35 +  - стабильность следующего физического power-cycle / cold-boot.
+
+  └ Documents/carthing-media-remote/архив/nixos-superbird-install/SESSION_2026-04-20_RECOVERY.md (+34 -0)
+    246  Поэтому для текущего этапа тестирования это правило надо считать **устаревшим** и не использовать как жёсткую аксиому.
+    247 +
+    248 +## Живая проверка после восстановления контекста
+    249 +
+    250 +После повторного подключения устройства и ручного подъёма `en14` на Mac было подтверждено:
+    251 +
+    252 +- `en14` поднялся как `172.16.42.1/24`
+    253 +- линк стал `active`, `100baseTX`
+    254 +- маршрут до `172.16.42.2` пошёл через `en14`
+    255 +- `ping 172.16.42.2` отвечает без потерь
+    256 +- `ssh root@172.16.42.2` работает
+    257 +- `sshpass` с паролем `exrector` тоже работает
+    258 +- `hostname = superbird`
+    259 +- uptime на момент проверки был `17 min`
+    260 +
+    261 +Runtime-состояние `sshd`:
+    262 +
+    263 +```text
+    264 +usepam yes
+    265 +permitrootlogin yes
+    266 +passwordauthentication yes
+    267 +permitemptypasswords no
+    268 +```
+    269 +
+    270 +Подтверждённый runtime `cmdline`:
+    271 +
+    272 +```text
+    273 +... osd_reverse=1 video_reverse=1 ... g_ncm.host_addr=02:11:22:33:44:01
+    274 +```
+    275 +
+    276 +Вывод:
+    277 +
+    278 +- на текущем включении NixOS загрузился нормально;
+    279 +- SSH и парольный вход сейчас исправны;
+    280 +- незакрытой остаётся только стабильность следующего cold-boot / повторного физического power-cycle.
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Документы записаны в проект. Быстро проверяю, что все файлы на месте и индекс ссылается на правильные пути.
+
+• Explored
+  └ Read PROJECT_DOCS_INDEX.md, NIXOS_INSTALL_GUIDE_PROJECT.md
+    List nixos-superbird-install
+    Search PROJECT_DOCS_INDEX|NIXOS_INSTALL_GUIDE_PROJECT|DEBUG_LOG_RECOVERED|SESSION_2026-04-20_RECOVERY
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Сохранил всё важное прямо в проект, в папку Documents/carthing-media-remote/архив/nixos-superbird-install.
+
+  Главные файлы:
+
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/PROJECT_DOCS_INDEX.md — индекс, с чего читать
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/SESSION_2026-04-20_RECOVERY.md — recovery + текущая живая проверка
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/NIXOS_INSTALL_GUIDE_PROJECT.md — практический гайд по сборке/прошивке
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/DEBUG_LOG_RECOVERED.md — восстановленная хронология
+
+  Туда же в индекс добавил ссылки на сырые источники:
+
+  - Documents/carthing-media-remote/Вывод Терминала.txt
+  - Documents/carthing-media-remote/session claude .md
+
+  Отдельно я уже вписал в recovery, что устройство сейчас поднимается, ping/SSH работают, пароль exrector работает, а незакрытый вопрос остался
+  только по стабильности следующего cold-boot.
+
+  Если хочешь, следующим шагом я могу ещё сделать один финальный файл FINAL_NIXOS_HANDOFF.md на 1 страницу: совсем короткую выжимку без истории,
+  только “что делать дальше”.
+
+
+› хорошо, то есть мы получили доступ к устройству а какое железо у нас там есть, какие датчики, кнопки сенсоры полный расклад дай пожалуйста по
+  железу
+
+
+• Сейчас соберу это из двух источников: локальные наработки по проекту и живую инвентаризацию самого устройства по SSH, чтобы не гадать по старым
+  воспоминаниям.
+
+• Explored
+  └ Read carthing-project.md, README.md
+    Search BCM|encoder|event0|event1|GPIO|button|mic|microphone|sensor|I2C|i2c|touch|ambient|light|ALS|display|drm|ttyS1|bluetooth|MMC|eMMC|ram|
+           storage|SoC|Amlogic|S905|rotary|wheel|speaker|audio|codec|uart|wifi|SDIO in carthing-media-remote
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Сейчас доберу живую инвентаризацию с самого устройства: модель, память, eMMC, input-устройства, звук, I²C, термодатчики, DRM и доступные tty/
+  GPIO.
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== input devices ==="; cat /proc/bus/input/
+  │ devices; echo "=== input nodes ==="; ls -l /dev/input'
+  └ === input devices ===
+    I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+    … +46 lines (ctrl + t to view transcript)
+    crw-rw---- 1 root input 13, 67 Jul  5 18:03 event3
+    crw-rw---- 1 root input 13, 63 Jul  5 18:03 mice
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== model ==="; cat /proc/device-tree/model 2>/dev/
+  │ null; echo; echo "=== compatible ==="; tr "\0" "\n" </proc/device-tree/compatible 2>/dev/null | head -20; echo "=== mem ==="; free -h; echo
+  │ "=== block ==="; lsblk -o NAME,SIZE,TYPE,MOUNTPOINT'
+  └ === model ===
+    Amlogic
+    … +13 lines (ctrl + t to view transcript)
+    mmcblk0rpmb    512K disk
+    zram0        389.6M disk [SWAP]
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== sound ==="; cat /proc/asound/cards 2>/dev/null
+  │ || true; echo "=== pcm ==="; cat /proc/asound/pcm 2>/dev/null || true; echo "=== tty ==="; ls -l /dev/ttyS* 2>/dev/null || true; echo "===
+  │ drm ==="; ls -l /dev/dri 2>/dev/null || true'
+  └ === sound ===
+     0 [AMLAUGESOUND   ]: AML-AUGESOUND - AML-AUGESOUND
+    … +9 lines (ctrl + t to view transcript)
+    crw-rw---- 1 root video 226,  0 Jul  5 18:03 card0
+    crw-rw---- 1 root video 226, 64 Jul  5 18:03 controlD64
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== i2c ==="; ls -l /dev/i2c* 2>/dev/null || true;
+  │ echo "=== i2c sysfs ==="; ls -1 /sys/bus/i2c/devices 2>/dev/null | head -50; echo "=== gpiochips ==="; ls -1 /sys/class/gpio 2>/dev/null |
+  │ head -50; echo "=== thermal ==="; find /sys/class/thermal -maxdepth 2 -type f \( -name type -o -name temp \) 2>/dev/null | sed -n "1,40p"'
+  └ === i2c ===
+    crw------- 1 root root 89, 0 Jul  5 18:03 /dev/i2c-0
+    … +15 lines (ctrl + t to view transcript)
+    unexport
+    === thermal ===
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Есть уже несколько важных живых фактов: кнопки, энкодер, сенсорный контроллер, аудиозахват, Bluetooth UART и несколько I²C-устройств. Сейчас
+  добью идентификацию I²C-адресов и расклад по input, чтобы не оставлять “неизвестные коробочки”.
+
+• Explored
+  └ Search tlsc6x|0-002e|2-0039|2-0018|3-0010|gpio-keys|rotary@0|aml_vkeypad|PDM|BCM20703A2|ttyS1|touch|touchscreen|ambient|light|sensor|mic|
+           microphone|codec|pdm in carthing-media-remote
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== input uevents ==="; for i in /sys/class/input/
+  │ input*; do echo "--- $i ---"; cat "$i/name" 2>/dev/null; cat "$i/uevent" 2>/dev/null; done'
+  └ === input uevents ===
+    --- /sys/class/input/input0 ---
+    … +33 lines (ctrl + t to view transcript)
+    ABS=665800000000000
+    MODALIAS=input:b0018v0000p0000e0000-e0,1,3,k14A,ra2F,30,32,35,36,39,3A,mlsfw
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'for d in /sys/bus/i2c/devices/0-002e /sys/bus/i2c/
+  │ devices/2-0018 /sys/bus/i2c/devices/2-0039 /sys/bus/i2c/devices/3-0010; do echo "=== $d ==="; [ -e "$d/name" ] && cat "$d/name"; [ -e "$d/
+  │ modalias" ] && echo mod:$(cat "$d/modalias"); [ -e "$d/of_node/name" ] && echo of_name:$(cat "$d/of_node/name"); [ -e "$d/of_node/
+  │ … +1 lines
+  └ === /sys/bus/i2c/devices/0-002e ===
+    tlsc6x_ts
+    … +20 lines (ctrl + t to view transcript)
+    of_name:mfi
+    compat:apple_mfi_auth,
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== dt aliases ==="; for f in /proc/device-tree/
+  │ aliases/*; do printf "%s=" "$(basename "$f")"; tr -d "\0" < "$f"; echo; done 2>/dev/null | head -80; echo "=== chosen audio/input nodes
+  │ ==="; find /proc/device-tree -maxdepth 4 \( -iname "*audio*" -o -iname "*touch*" -o -iname "*rotary*" -o -iname "*key*" -o -iname
+  │ … +1 lines
+  └ === dt aliases ===
+    i2c0=/soc/cbus@ffd00000/i2c@1f000
+    … +11 lines (ctrl + t to view transcript)
+    tsensor1=/d_tsensor@ff800228
+    === chosen audio/input nodes ===
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Железо почти полностью раскрылось: нашлись touch, акселерометр, ALS/proximity и MFi-чип. Добиваю расшифровку кнопок и свожу это в человеческую
+  карту устройства.
+
+• Explored
+  └ Read input_handler.py, start.md, MFI_IAP2_SPECIFICATION.md
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== backlight ==="; ls -l /sys/class/backlight 2>/
+  │ dev/null; for f in /sys/class/backlight/*/brightness /sys/class/backlight/*/max_brightness; do [ -e "$f" ] && echo "$f=$(cat "$f")"; done;
+  │ echo "=== sensors iio ==="; for d in /sys/bus/iio/devices/iio:device*; do echo "--- $d ---"; [ -e "$d/name" ] && cat "$d/name"; find "$d"
+  │ … +1 lines
+  └ === backlight ===
+    total 0
+    … +6 lines (ctrl + t to view transcript)
+    --- /sys/bus/iio/devices/iio:device1 ---
+    meson-g12a-saradc
+
+• Searching the web
+
+• Searched Spotify Car Thing button key code 50 event0 gpio-keys
+
+• Searching the web
+
+• Searched linux input keycode 50 name
+
+• Searching the web
+
+• Searched linux input keycode 50 KEY_M
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Ещё два мелких пробела хочу закрыть: что именно видит система у датчика света/приближения и как именно торчит акселерометр, чтобы не смешивать
+  “чип есть” и “драйвер реально отдаёт данные”.
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== lis2dh12 tree ==="; find /sys/bus/i2c/
+  │ devices/2-0018 -maxdepth 2 | sed -n "1,120p"; echo "=== lis2dh12 attrs ==="; for f in /sys/bus/i2c/devices/2-0018/* /sys/bus/i2c/
+  │ devices/2-0018/*/*; do [ -f "$f" ] && case "$f" in *uevent|*modalias|*name|*enable|*raw|*scale|*input|*poll* ) printf "%s=%s\n" "$f" "$(cat
+  │ … +1 lines
+  └ === lis2dh12 tree ===
+    /sys/bus/i2c/devices/2-0018
+    … +9 lines (ctrl + t to view transcript)
+    /sys/bus/i2c/devices/2-0018/of_node/name=lis2dh12
+    /sys/bus/i2c/devices/2-0018/subsystem/uevent=
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== tmd2772 files ==="; find /sys/bus/iio/devices/
+  │ iio:device0 -maxdepth 1 -type f | sort | sed -n "1,80p"; echo "=== tmd2772 sample ==="; for f in /sys/bus/iio/devices/iio:device0/in_* /
+  │ sys/bus/iio/devices/iio:device0/*raw /sys/bus/iio/devices/iio:device0/*input; do [ -f "$f" ] && printf "%s=%s\n" "$f" "$(cat "$f" 2>/dev/
+  │ … +1 lines
+  └ === tmd2772 files ===
+    === tmd2772 sample ===
+    … +18 lines (ctrl + t to view transcript)
+    /sys/bus/iio/devices/iio:device0/in_illuminance0_input=2
+    /sys/bus/iio/devices/iio:device0/in_illuminance0_target_input=150
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Доберу две вещи для чистоты: Bluetooth-адаптер live и есть ли вообще какой-то Wi‑Fi-интерфейс в текущем NixOS. Тогда расклад будет уже без
+  спорных мест.
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== lsmod interesting ==="; lsmod | grep -Ei "(bcm|
+  │ bluetooth|bt|brcm|wifi|wlan|mac80211|cfg80211|tlsc6x|lis2dh12|tmd2772|apple_mfi|meson|snd)" | sed -n "1,120p"'
+  └ === lsmod interesting ===
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@172.16.42.2 'echo "=== bt ==="; [ -d /sys/class/bluetooth/hci0 ] &&
+  │ { cat /sys/class/bluetooth/hci0/address 2>/dev/null; cat /sys/class/bluetooth/hci0/name 2>/dev/null || true; }; echo "=== net ==="; ls -1 /
+  │ sys/class/net; echo "=== wireless dirs ==="; find /sys/class/net -maxdepth 2 -type d -name wireless | sed -n "1,20p"'
+  └ === bt ===
+    === net ===
+    … +6 lines (ctrl + t to view transcript)
+    usb0
+    === wireless dirs ===
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Да. По текущему NixOS и живой проверке по SSH расклад такой.
+
+  Подтверждено Live
+
+  - SoC: Amlogic G12A; по проектным заметкам это Car Thing на базе S905D2/G12A.
+  - RAM: 487 MiB видимо системе, swap ещё 645 MiB.
+  - eMMC: 3.7G, разделы mmcblk0p1 32M и mmcblk0p2 3.5G, плюс mmcblk0boot0/1, rpmb.
+  - Дисплей: DRM/KMS через /dev/dri/card0, физически 480x800.
+  - Подсветка: /sys/class/backlight/aml-bl, сейчас 100/255.
+  - USB-сеть: на самом устройстве интерфейс usb0; на Mac это твой en14.
+  - UART:
+      - /dev/ttyS0 — консоль
+      - /dev/ttyS1 — внешний чип связи
+  - I²C-шины активны: /dev/i2c-0, /dev/i2c-2, /dev/i2c-3.
+
+  Кнопки, энкодер, тач
+
+  - event0 = gpio-keys
+      - точно есть: KEY_ESC (back), KEY_1..KEY_4 (4 пресета), KEY_ENTER (нажатие на энкодер)
+      - ещё есть keycode 50; это почти наверняка верхняя правая physical settings-кнопка, но это уже вывод по форме устройства, а не по kernel
+        name.
+  - event1 = rotary@0
+      - поворотный энкодер, EV_REL, код REL_HWHEEL.
+  - event2 = aml_vkeypad
+      - виртуальная клавиатура/кнопки SoC, в старых заметках помечена как power/ADC path.
+  - event3 = tlsc6x_dbg
+      - это тачскрин.
+
+  Датчики и спецчипы
+
+  - Тач-контроллер: tlsc6x_ts на i2c-0, адрес 0x2e.
+  - Акселерометр: lis2dh12-accel на i2c-2, адрес 0x18.
+      - чип физически виден, но в текущем NixOS quick-check он не surfaced как отдельный iio:device/input для чтения в userspace.
+  - Датчик света/приближения: tmd2772 на i2c-2, адрес 0x39.
+      - live-значения сейчас были:
+          - in_illuminance0_input=2
+          - in_proximity0_raw=0
+  - MFi/iAP2 auth chip: apple_mfi_auth на i2c-3, адрес 0x10.
+      - это не сенсор, а чип аутентификации Apple, работает через /dev/apple_mfi.
+
+  Аудио
+
+  - ALSA-карта: AML-AUGESOUND.
+  - PCM сейчас виден только capture:
+      - PDM-dummy-alsaPORT-pdm dummy-0 : capture 1
+  - То есть микрофонный тракт подтверждён.
+  - Playback-устройство в текущем /proc/asound/pcm не видно, так что speaker/audio-out в этом NixOS не подтверждён так же явно.
+
+  Bluetooth / Wi‑Fi
+
+  - По проекту BLE идёт через Broadcom BCM20703A2 на /dev/ttyS1,3000000:
+    Documents/carthing-media-remote/README.md:13
+    Documents/carthing-media-remote/src/ble_transport.py:10
+  - В этой сессии kernel-style hci0 в sysfs не surfaced, что нормально, если работать с чипом напрямую из userspace.
+  - Wi‑Fi в текущем NixOS не surfaced:
+      - wlan* интерфейсов нет
+      - wireless каталогов в /sys/class/net нет
+  - В старых RE-заметках фигурирует отдельный SDIO Wi‑Fi путь, но live сейчас он не поднят.
+
+  Итоговая карта железа
+
+  - CPU/SoC: Amlogic G12A/S905D2-class
+  - RAM/eMMC: 512M-ish + 4G eMMC-class
+  - Экран: 480x800 + подсветка aml-bl
+  - Touchscreen: tlsc6x
+  - Свет/приближение: tmd2772
+  - Акселерометр: lis2dh12
+  - Кнопки: back + 4 presets + ещё 1 top button
+  - Энкодер: поворот + нажатие
+  - Микрофон: PDM capture path есть
+  - Apple auth: apple_mfi_auth
+  - BT path: /dev/ttyS1
+  - USB gadget network: usb0 / en14
+
+  Если хочешь, я могу следующим сообщением оформить это в виде аккуратной таблицы “железо → Linux-узел → статус → для чего можно использовать” и
+
+
+› Отлично сделает такую заметку в проекте.
+
+
+⚠ Heads up, you have less than 25% of your weekly limit left. Run /status for a breakdown.
+
+• Сделаю отдельный HARDWARE_MAP.md в папке проекта рядом с остальными NixOS-доками: с таблицей “железо → Linux-узел → статус → применение” и
+  пометками, что подтверждено live, а что взято из проектных заметок.
+
+• Added Documents/carthing-media-remote/архив/nixos-superbird-install/HARDWARE_MAP.md (+244 -0)
+      1 +# Car Thing Hardware Map
+      2 +
+      3 +Дата: 2026-04-20
+      4 +
+      5 +Эта заметка фиксирует железо Spotify Car Thing в текущем проекте.
+      6 +
+      7 +Статусы:
+      8 +
+      9 +- `live` — подтверждено прямо на текущем NixOS по SSH
+     10 +- `project` — подтверждено проектными файлами и предыдущими исследованиями
+     11 +- `inferred` — разумный вывод, но не подтверждён отдельной live-командой в этой сессии
+     12 +
+     13 +## Краткий итог
+     14 +
+     15 +Устройство уже даёт доступ почти ко всему полезному железу:
+     16 +
+     17 +- экран и подсветка;
+     18 +- кнопки;
+     19 +- энкодер;
+     20 +- тачскрин;
+     21 +- датчик освещённости и proximity;
+     22 +- микрофонный тракт;
+     23 +- Bluetooth через отдельный UART-чип;
+     24 +- Apple MFi/iAP2 auth chip;
+     25 +- USB networking.
+     26 +
+     27 +Wi‑Fi-чип физически в проекте фигурирует, но в текущем NixOS live не поднят как сетевой интерфейс.
+     28 +
+     29 +## Основная таблица
+     30 +
+     31 +| Компонент | Идентификация | Linux-узел / интерфейс | Статус | Комментарий |
+     32 +|---|---|---|---|---|
+     33 +| SoC | Amlogic G12A | `/proc/device-tree/compatible` | `live` | `amlogic,g12a`; в проекте устройство проходит как S905D2/G12A-class |
+     34 +| RAM | ~512 MB | `free -h` | `live` | системе доступно ~487 MiB |
+     35 +| Swap | zram | `zram0` | `live` | ~645 MiB |
+     36 +| eMMC | 3.7 GB | `mmcblk0`, `mmcblk0p1`, `mmcblk0p2` | `live` | rootfs на `mmcblk0p2` |
+     37 +| Boot regions | eMMC boot areas | `mmcblk0boot0`, `mmcblk0boot1`, `mmcblk0rpmb` | `live` | доступны и видны в `lsblk` |
+     38 +| Дисплей | 480×800 | `/dev/dri/card0` | `live` | используется DRM/KMS |
+     39 +| Подсветка | `aml-bl` | `/sys/class/backlight/aml-bl` | `live` | яркость и max_brightness читаются |
+     40 +| USB gadget network | NCM/USB net | `usb0` на устройстве, `en14` на Mac | `live` | текущий рабочий канал SSH |
+     41 +| UART консоль | serial console | `/dev/ttyS0` | `live` | системная консоль |
+     42 +| BT UART | внешний BT чип | `/dev/ttyS1` | `live` | используется проектом для BLE/HCI |
+     43 +| I²C bus 0 | системная шина | `/dev/i2c-0` | `live` | на ней висит тач |
+     44 +| I²C bus 2 | системная шина | `/dev/i2c-2` | `live` | на ней датчики |
+     45 +| I²C bus 3 | системная шина | `/dev/i2c-3` | `live` | на ней Apple MFi chip |
+     46 +| Кнопки | `gpio-keys` | `/dev/input/event0` | `live` | back + presets + ещё одна верхняя кнопка |
+     47 +| Энкодер | `rotary@0` | `/dev/input/event1` | `live` | поворотный энкодер |
+     48 +| Виртуальный keypad | `aml_vkeypad` | `/dev/input/event2` | `live` | внутренний keypad/ADC path |
+     49 +| Тачскрин input | `tlsc6x_dbg` | `/dev/input/event3` | `live` | touch input присутствует |
+     50 +| Тач-контроллер | TLSC6X | `i2c-0` addr `0x2e` | `live` | sysfs name: `tlsc6x_ts` |
+     51 +| Акселерометр | LIS2DH12 | `i2c-2` addr `0x18` | `live` | sysfs name: `lis2dh12-accel` |
+     52 +| Свет / proximity | TMD2772 | `i2c-2` addr `0x39` | `live` | surfaced как `iio:device0` |
+     53 +| Apple auth chip | MFi / iAP2 auth | `i2c-3` addr `0x10`, `/dev/apple_mfi` | `live` + `project` | критично для iAP2/MFi |
+     54 +| ALSA sound card | AML-AUGESOUND | `/proc/asound/cards` | `live` | звуковой стек активен |
+     55 +| Микрофонный capture path | PDM capture | `/proc/asound/pcm` | `live` | `capture 1` подтверждён |
+     56 +| Bluetooth chip | BCM20703A2 | userspace через `/dev/ttyS1,3000000` | `project` | зафиксировано в проекте и коде |
+     57 +| Wi‑Fi path | Broadcom SDIO family | проектные заметки о BCM4345C0 | `project` | live в текущем NixOS не поднят |
+     58 +
+     59 +## Кнопки и управление
+     60 +
+     61 +### Input-устройства
+     62 +
+     63 +| Event | Имя | Тип | Статус | Что это |
+     64 +|---|---|---|---|---|
+     65 +| `event0` | `gpio-keys` | `EV_KEY` | `live` | физические кнопки на корпусе |
+     66 +| `event1` | `rotary@0` | `EV_REL` | `live` | вращение энкодера |
+     67 +| `event2` | `aml_vkeypad` | `EV_KEY` | `live` | виртуальные/системные кнопки |
+     68 +| `event3` | `tlsc6x_dbg` | touch | `live` | тачскрин |
+     69 +
+     70 +### Раскладка кнопок из проекта
+     71 +
+     72 +Подтверждено кодом:
+     73 +
+     74 +- `KEY_ESC = 1` — back button
+     75 +- `KEY_1 = 2` — preset 1
+     76 +- `KEY_2 = 3` — preset 2
+     77 +- `KEY_3 = 4` — preset 3
+     78 +- `KEY_4 = 5` — preset 4
+     79 +- `KEY_ENTER = 28` — нажатие на энкодер
+     80 +
+     81 +Источник:
+     82 +- [input_handler.py](~/Documents/carthing-media-remote/src/input_handler.py:1)
+     83 +
+     84 +Есть ещё один бит в маске `gpio-keys`, соответствующий keycode `50`.
+     85 +
+     86 +Что про него можно сказать:
+     87 +
+     88 +- `50` в Linux input codes соответствует `KEY_M`
+     89 +- для Car Thing это почти наверняка отдельная physical top-button, которая в заводском UI открывала settings
+     90 +- но в этой сессии это **не было live-проверено нажатием**, поэтому считать это нужно как `inferred`
+     91 +
+     92 +## Датчики
+     93 +
+     94 +### Touchscreen
+     95 +
+     96 +- Чип: `tlsc6x_ts`
+     97 +- Шина: `i2c-0`
+     98 +- Адрес: `0x2e`
+     99 +- Input-устройство: `event3`
+    100 +
+    101 +Назначение:
+    102 +
+    103 +- полноценный touch input для UI на экране.
+    104 +
+    105 +### Ambient light + proximity
+    106 +
+    107 +- Чип: `tmd2772`
+    108 +- Шина: `i2c-2`
+    109 +- Адрес: `0x39`
+    110 +- surfaced как `iio:device0`
+    111 +
+    112 +Live-значения в момент проверки:
+    113 +
+    114 +- `in_illuminance0_input=2`
+    115 +- `in_proximity0_raw=0`
+    116 +
+    117 +То есть датчик не просто есть в DT, а реально отдаёт значения.
+    118 +
+    119 +### Accelerometer
+    120 +
+    121 +- Чип: `lis2dh12-accel`
+    122 +- Шина: `i2c-2`
+    123 +- Адрес: `0x18`
+    124 +
+    125 +Важный нюанс:
+    126 +
+    127 +- сам девайс в sysfs есть;
+    128 +- но в текущей live-проверке он не surfaced как отдельный `iio:device` с удобными `*_raw` файлами;
+    129 +- значит для его использования может понадобиться отдельная настройка драйвера/userspace path.
+    130 +
+    131 +## Аудио
+    132 +
+    133 +### Что подтверждено
+    134 +
+    135 +- ALSA карта:
+    136 +  - `AML-AUGESOUND`
+    137 +- PCM path:
+    138 +  - `00-00: PDM-dummy-alsaPORT-pdm dummy-0 : capture 1`
+    139 +
+    140 +Что это означает:
+    141 +
+    142 +- микрофонный тракт в системе виден;
+    143 +- PDM capture path жив;
+    144 +- для задач голосового ввода это хороший знак.
+    145 +
+    146 +### Что не подтверждено отдельно
+    147 +
+    148 +- playback/speaker path в этой сессии явно не surfaced в `/proc/asound/pcm`;
+    149 +- это не значит, что его нет физически, только что мы его сейчас не зафиксировали отдельной командой.
+    150 +
+    151 +## Bluetooth
+    152 +
+    153 +Подтверждённое проектом:
+    154 +
+    155 +- чип работает через `/dev/ttyS1`
+    156 +- тип: `BCM20703A2`
+    157 +- transport в коде: `serial:/dev/ttyS1,3000000`
+    158 +
+    159 +Источники:
+    160 +
+    161 +- [README.md](~/Documents/carthing-media-remote/README.md:13)
+    162 +- [ble_transport.py](~/Documents/carthing-media-remote/src/ble_transport.py:10)
+    163 +
+    164 +Комментарий:
+    165 +
+    166 +- в текущем NixOS live не surfaced `hci0` через обычный sysfs-путь;
+    167 +- это нормально, если Bluetooth используется напрямую из userspace, например через Bumble.
+    168 +
+    169 +## Apple MFi / iAP2
+    170 +
+    171 +Один из самых важных аппаратных блоков:
+    172 +
+    173 +- чип: `apple_mfi_auth`
+    174 +- шина: `i2c-3`
+    175 +- адрес: `0x10`
+    176 +- userspace device: `/dev/apple_mfi`
+    177 +
+    178 +Зачем нужен:
+    179 +
+    180 +- аутентификация аксессуара Apple;
+    181 +- iAP2 / MFi-сценарии;
+    182 +- интеграция с iPhone вне простого BLE HID.
+    183 +
+    184 +Источник:
+    185 +- [MFI_IAP2_SPECIFICATION.md](~/Documents/carthing-media-remote/архив/MFI_IAP2_SPECIFICATION.md:1)
+    186 +
+    187 +## Экран и подсветка
+    188 +
+    189 +Что подтверждено:
+    190 +
+    191 +- DRM-устройство: `/dev/dri/card0`
+    192 +- backlight: `/sys/class/backlight/aml-bl`
+    193 +- текущее значение яркости: `100`
+    194 +- максимум: `255`
+    195 +
+    196 +Это значит:
+    197 +
+    198 +- можно рисовать напрямую в DRM/KMS;
+    199 +- можно программно управлять яркостью.
+    200 +
+    201 +## Сеть
+    202 +
+    203 +Для текущего NixOS-потока рабочий сетевой канал такой:
+    204 +
+    205 +- на устройстве: `usb0`
+    206 +- на Mac: `en14`
+    207 +- связь: USB NCM gadget
+    208 +
+    209 +Это сейчас основной путь доступа в систему.
+    210 +
+    211 +## Что доступно для разработки уже сейчас
+    212 +
+    213 +Практически без дополнительного reverse engineering уже доступны:
+    214 +
+    215 +- экран через DRM
+    216 +- яркость экрана
+    217 +- тачскрин
+    218 +- физические кнопки
+    219 +- энкодер
+    220 +- микрофонный capture path
+    221 +- датчик освещённости
+    222 +- proximity sensor
+    223 +- Apple MFi auth chip
+    224 +- Bluetooth через `/dev/ttyS1`
+    225 +- USB networking / SSH
+    226 +
+    227 +## Что пока не считать готовым
+    228 +
+    229 +- Wi‑Fi как рабочий сетевой интерфейс
+    230 +- удобный userspace path к акселерометру
+    231 +- явный playback path для динамика
+    232 +- точную идентификацию `keycode 50` как именно “settings button” без live-нажатия
+    233 +
+    234 +## Полезные команды для повторной проверки
+    235 +
+    236 +```bash
+    237 +ssh root@172.16.42.2 'cat /proc/bus/input/devices'
+    238 +ssh root@172.16.42.2 'lsblk -o NAME,SIZE,TYPE,MOUNTPOINT'
+    239 +ssh root@172.16.42.2 'cat /proc/asound/cards; cat /proc/asound/pcm'
+    240 +ssh root@172.16.42.2 'ls -l /sys/class/backlight; cat /sys/class/backlight/*/brightness'
+    241 +ssh root@172.16.42.2 'find /sys/bus/i2c/devices -maxdepth 1 -mindepth 1 | sort'
+    242 +ssh root@172.16.42.2 'for d in /sys/bus/i2c/devices/*; do [ -f "$d/name" ] && echo "$d: $(cat "$d/name")"; done'
+    243 +```
+    244 +
+
+─ Worked for 1m 03s ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Добавлю новый hardware-файл в индекс проектных документов, чтобы он не потерялся между recovery и install guide.
+
+• Edited Documents/carthing-media-remote/архив/nixos-superbird-install/PROJECT_DOCS_INDEX.md (+3 -0)
+    15
+    16 +4. [HARDWARE_MAP.md](./HARDWARE_MAP.md)
+    17 +   Полная карта железа: кнопки, энкодер, тач, датчики, аудио, BT, MFi, дисплей, интерфейсы.
+    18 +
+    19  ## Первичные сырые источники
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Готово. Сохранил заметку в проект:
+
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/HARDWARE_MAP.md
+
+  И добавил её в индекс:
+
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/PROJECT_DOCS_INDEX.md
+
+  Внутри HARDWARE_MAP.md есть:
+
+  - полная таблица железа;
+  - что подтверждено live, что взято из project notes, а что только inferred;
+  - кнопки, энкодер, тач, сенсоры, аудио, BT, MFi, дисплей, USB-сеть;
+  - список того, что уже можно использовать в разработке;
+  - список того, что пока не стоит считать окончательно подтверждённым.
+
+  Если хочешь, следующим шагом я могу сделать ещё один файл: INPUT_MAP.md с отдельной точной картой всех кнопок и событий, чтобы потом не
+  копаться в event0/event1/event3.
+
+
+› Ты же четко написал, когда устройство подключено, как поднимать SSH и входить в инструкции?
+
+
+• Сейчас проверю, насколько это уже явно записано, и если формулировка недостаточно прямолинейная, добавлю отдельный короткий файл с пошаговым
+  SSH quick access в проект.
+
+• Explored
+  └ Search 172\.16\.42\.2|ssh root@|ifconfig en14|NCM Gadget|password: exrector|пароль|UsePAM|quick ssh|just net|en14 in nixos-superbird-install
+    Read PROJECT_DOCS_INDEX.md, NIXOS_INSTALL_GUIDE_PROJECT.md
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Это уже было в гайде, но не в самом жёстком и коротком виде. Я сейчас добавлю отдельный QUICK_SSH_ACCESS.md, чтобы вход на устройство был
+  описан совсем без лишнего текста.
+
+• Edited 2 files (+130 -0)
+  └ Documents/carthing-media-remote/архив/nixos-superbird-install/PROJECT_DOCS_INDEX.md (+3 -0)
+    18
+    19 +5. [QUICK_SSH_ACCESS.md](./QUICK_SSH_ACCESS.md)
+    20 +   Самая короткая инструкция: как поднять сеть на Mac и войти на устройство по SSH.
+    21 +
+    22  ## Первичные сырые источники
+
+  └ Documents/carthing-media-remote/архив/nixos-superbird-install/QUICK_SSH_ACCESS.md (+127 -0)
+      1 +# Car Thing: Быстрый Доступ по SSH
+      2 +
+      3 +Этот файл для ситуации:
+      4 +
+      5 +- устройство уже подключено по USB;
+      6 +- ты хочешь быстро понять, живо ли оно;
+      7 +- тебе нужен доступ без чтения всей истории проекта.
+      8 +
+      9 +## 1. Что должно быть на стороне устройства
+     10 +
+     11 +Если NixOS загрузился нормально, устройство на Mac появится как USB NCM.
+     12 +
+     13 +Ориентиры:
+     14 +
+     15 +- на Mac обычно это интерфейс `en14`
+     16 +- MAC устройства должен быть:
+     17 +
+     18 +```text
+     19 +02:11:22:33:44:01
+     20 +```
+     21 +
+     22 +## 2. Поднять сеть на Mac
+     23 +
+     24 +Основная команда:
+     25 +
+     26 +```bash
+     27 +sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+     28 +```
+     29 +
+     30 +Проверка:
+     31 +
+     32 +```bash
+     33 +ifconfig en14
+     34 +route get 172.16.42.2
+     35 +```
+     36 +
+     37 +Ожидаемо:
+     38 +
+     39 +- `en14` должен быть `active`
+     40 +- маршрут до `172.16.42.2` должен идти через `en14`
+     41 +
+     42 +## 3. Проверить, что устройство отвечает
+     43 +
+     44 +```bash
+     45 +ping -c 2 172.16.42.2
+     46 +```
+     47 +
+     48 +Если пинг идёт, SSH почти наверняка тоже поднимется.
+     49 +
+     50 +## 4. Войти по SSH
+     51 +
+     52 +### Вариант 1: по ключу
+     53 +
+     54 +```bash
+     55 +ssh -o StrictHostKeyChecking=no root@172.16.42.2
+     56 +```
+     57 +
+     58 +### Вариант 2: по паролю
+     59 +
+     60 +```bash
+     61 +ssh -o StrictHostKeyChecking=no root@172.16.42.2
+     62 +```
+     63 +
+     64 +Пароль:
+     65 +
+     66 +```text
+     67 +exrector
+     68 +```
+     69 +
+     70 +## 5. Быстрая проверка после входа
+     71 +
+     72 +```bash
+     73 +hostname
+     74 +uptime
+     75 +systemctl is-active bluetooth sshd
+     76 +sshd -T | grep -iE '^(usepam|passwordauthentication|permitrootlogin|permitemptypasswords)'
+     77 +cat /proc/cmdline
+     78 +```
+     79 +
+     80 +Что должно быть хорошо:
+     81 +
+     82 +- `hostname` = `superbird`
+     83 +- `bluetooth` и `sshd` = `active`
+     84 +- `usepam yes`
+     85 +- `passwordauthentication yes`
+     86 +- `permitrootlogin yes`
+     87 +- `permitemptypasswords no`
+     88 +- в `cmdline` есть:
+     89 +  - `osd_reverse=1`
+     90 +  - `video_reverse=1`
+     91 +  - `g_ncm.host_addr=02:11:22:33:44:01`
+     92 +
+     93 +## 6. Если `en14` не тот интерфейс
+     94 +
+     95 +Найти интерфейс по MAC:
+     96 +
+     97 +```bash
+     98 +ifconfig | grep -B2 '02:11:22:33:44:01'
+     99 +```
+    100 +
+    101 +Потом поднять уже его:
+    102 +
+    103 +```bash
+    104 +sudo ifconfig <enN> 172.16.42.1 netmask 255.255.255.0 up
+    105 +```
+    106 +
+    107 +## 7. Если SSH не работает
+    108 +
+    109 +Порядок проверки:
+    110 +
+    111 +1. Проверить, что интерфейс на Mac `active`
+    112 +2. Проверить, что маршрут до `172.16.42.2` идёт через нужный `enN`
+    113 +3. Проверить `ping -c 2 172.16.42.2`
+    114 +4. Если `ping` не идёт:
+    115 +   - устройство не загрузилось в рабочий NCM-режим;
+    116 +   - или ушло в другой USB-режим;
+    117 +   - или линк ещё не поднялся
+    118 +
+    119 +## 8. Минимальная шпаргалка
+    120 +
+    121 +```bash
+    122 +sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+    123 +ping -c 2 172.16.42.2
+    124 +ssh -o StrictHostKeyChecking=no root@172.16.42.2
+    125 +# пароль: exrector
+    126 +```
+    127 +
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Было, но не настолько жёстко и коротко, как нужно для быстрого входа. Я это дописал отдельно.
+
+  Новый файл:
+
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/QUICK_SSH_ACCESS.md
+
+  Там теперь прямо по шагам:
+
+  - как понять, что устройство загрузилось в NCM;
+  - как поднять en14;
+  - как проверить маршрут и ping;
+  - как зайти по SSH;
+  - какой пароль;
+  - что проверить уже после входа;
+  - что делать, если en14 поменялся.
+
+  Индекс тоже обновил:
+
+  - Documents/carthing-media-remote/архив/nixos-superbird-install/PROJECT_DOCS_INDEX.md
+
+  Самая короткая шпаргалка теперь там такая:
+
+  sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+  ping -c 2 172.16.42.2
+  ssh -o StrictHostKeyChecking=no root@172.16.42.2
+  # пароль: exrector
+
+  Если хочешь, я ещё так же вынесу отдельную короткую шпаргалку QUICK_FLASH_ACCESS.md только про перепрошивку и USB-режимы.
+
+
+› Не, не надо, давай я сейчас выключу устройство, а потом через там продолжительное время включу и проверим, все ли в порядке. Итак, сделаю три
+  раза.
+
+
+• Подходит.
+
+  Делаем так:
+
+  1. Ты полностью отключаешь питание устройства.
+  2. Ждёшь заметное время.
+  3. Подключаешь обратно без кнопок.
+  4. Пишешь мне после каждого включения: 1, потом 2, потом 3.
+
+  После каждого цикла я сразу проверю:
+
+  - появился ли NCM Gadget
+  - поднялся ли en14
+  - идёт ли ping
+  - работает ли SSH
+  - работает ли пароль exrector
+
+  Если на каком-то цикле что-то сломается, остановимся на нём и сразу снимем диагностику.
+
+
+› 1
+
+
+• Проверяю первый цикл: USB/NCM, линк, маршрут, пинг, SSH и парольный вход.
+
+• Ran ifconfig en14
+  └ en14: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+        ether 02:11:22:33:44:01
+        media: autoselect (none)
+        status: inactive
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: default
+    … +4 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1480         0
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    Request timeout for icmp_seq 0
+
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 0 packets received, 100.0% packet loss
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok; hostname; uptime'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+• Ran sshpass -p exrector ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=password -o
+  │ PubkeyAuthentication=no -o ConnectTimeout=5 root@172.16.42.2 'echo PASSWORD_OK; id -u'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Первый цикл без ручного подъёма сети не проходит: en14 снова существует, но inactive, маршрут уходит через en0, ping и SSH не идут. Сейчас
+  подниму en14 вручную и проверю, оживает ли устройство после этого или это уже настоящий сбой cold-boot.
+
+• Ran ifconfig en14
+  └ en14: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+        ether 02:11:22:33:44:01
+        media: autoselect (none)
+        status: inactive
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: 172.16.42.2
+    … +3 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1480         0
+
+• Ran sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+  └ (no output)
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok; hostname; uptime'
+  └ Warning: Permanently added '172.16.42.2' (ED25519) to the list of known hosts.
+    ok
+    superbird
+     19:03:22 up 0 min,  0 user,  load average: 0.87, 0.21, 0.07
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    Request timeout for icmp_seq 0
+    … +3 lines (ctrl + t to view transcript)
+    2 packets transmitted, 1 packets received, 50.0% packet loss
+    round-trip min/avg/max/stddev = 2.087/2.087/2.087/0.000 ms
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Первый цикл интересный.
+
+  Что видно:
+
+  - сразу после включения en14 есть, но inactive
+  - маршрут сначала оставался через en0
+  - без ручного вмешательства ping и SSH не шли
+
+  После ручного подъёма сети:
+
+  - ping начал отвечать
+  - SSH поднялся
+  - устройство живо: hostname=superbird, uptime=0 min
+
+  Вывод по циклу 1:
+
+  - сам cold-boot прошёл
+  - устройство загрузилось
+  - проблема не в полном падении NixOS, а в том, что на Mac линк/маршрут после включения подхватываются нестабильно
+
+  Можешь делать 2.
+
+
+› 2
+
+
+⚠ Heads up, you have less than 10% of your weekly limit left. Run /status for a breakdown.
+
+• Проверяю второй цикл по той же схеме: сначала смотрю, поднялось ли всё само, потом при необходимости добиваю ручным подъёмом en14.
+
+• Ran ifconfig en14
+  └ en14: flags=8822<BROADCAST,SMART,SIMPLEX,MULTICAST> mtu 1500
+        options=404<VLAN_MTU,CHANNEL_IO>
+        ether 02:11:22:33:44:01
+        media: autoselect (none)
+        status: inactive
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: default
+    … +4 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1480         0
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    Request timeout for icmp_seq 0
+
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 0 packets received, 100.0% packet loss
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok; hostname; uptime'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Второй цикл повторяет первый один в один: сам по себе доступ не поднимается. Сейчас снова вручную подниму en14 и проверю, живо ли устройство
+  после cold-boot, или на этом цикле уже есть деградация самой загрузки.
+
+• Ran sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+  └ (no output)
+
+• Ran route get 172.16.42.2
+  └    route to: 172.16.42.2
+    destination: 172.16.42.0
+    … +3 lines (ctrl + t to view transcript)
+     recvpipe  sendpipe  ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+           0         0         0         0         0         0      1500        -1
+
+• Ran ping -c 2 -W 1000 172.16.42.2
+  └ PING 172.16.42.2 (172.16.42.2): 56 data bytes
+    Request timeout for icmp_seq 0
+
+    --- 172.16.42.2 ping statistics ---
+    2 packets transmitted, 0 packets received, 100.0% packet loss
+
+• Ran ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 root@172.16.42.2 'echo ok; hostname; uptime'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+• Ran sshpass -p exrector ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o PreferredAuthentications=password -o
+  │ PubkeyAuthentication=no -o ConnectTimeout=5 root@172.16.42.2 'echo PASSWORD_OK; id -u'
+  └ ssh: connect to host 172.16.42.2 port 22: Operation timed out
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Второй цикл уже хуже.
+
+  Что произошло:
+
+  - как и раньше, en14 сам не поднялся
+  - после ручного sudo ifconfig en14 172.16.42.1 ... up маршрут уже корректно ушёл через en14
+  - но даже после этого:
+      - ping не отвечает
+      - SSH не отвечает
+      - парольный вход, естественно, тоже недоступен
+
+  Вывод по циклу 2:
+
+  - это уже не просто сетевая проблема на Mac
+  - на втором длительном cold-boot устройство либо не дошло до рабочего NixOS/NCM-состояния, либо зависло раньше сети
+
+  На этом лучше не делать 3 сразу, если цель именно диагностика. Сейчас правильнее зафиксировать, что:
+
+  - цикл 1: после ручного подъёма сети устройство ожило
+  - цикл 2: даже после ручного подъёма сети устройство не ожило
+
+  Если хочешь, следующим сообщением я:
+
+  1. кратко запишу это в проектные заметки;
+  2. дам план диагностики именно этого сбоя второго cold-boot.
+
+
+› сохрани
+
+
+■ {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The 'gpt-5.1-codex-mini' model is not supported when using
+Codex with a ChatGPT account."}}
+
+ 
+› Implement {feature}
+ 
+  gpt-5.1-codex-mini medium · ~
