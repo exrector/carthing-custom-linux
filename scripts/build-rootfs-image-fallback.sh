@@ -16,6 +16,9 @@ fakeroot_bin="$output_dir/host/bin/fakeroot"
 mke2fs_bin=${MKE2FS_BIN:-$(command -v mke2fs || true)}
 rootfs_size=${CARTHING_ROOTFS_SIZE:-60M}
 fake_root_ownership=${CARTHING_FAKE_ROOT_OWNERSHIP:-0}
+rootfs_block_size=${CARTHING_ROOTFS_BLOCK_SIZE:-1024}
+rootfs_fs_type=${CARTHING_ROOTFS_FS_TYPE:-ext4}
+rootfs_feature_flags=${CARTHING_ROOTFS_FEATURE_FLAGS:-^64bit}
 
 if [ ! -d "$target_dir" ]; then
     echo "missing target dir: $target_dir" >&2
@@ -89,13 +92,37 @@ if [ -e "$stage_dir/bin/busybox" ]; then
     chmod 4755 "$stage_dir/bin/busybox"
 fi
 
+build_image() {
+    "$mke2fs_bin" \
+        -q \
+        -t "$rootfs_fs_type" \
+        -b "$rootfs_block_size" \
+        -I 256 \
+        -L rootfs \
+        -m 0 \
+        -O "$rootfs_feature_flags" \
+        -F \
+        -d "$1" \
+        "$2"
+}
+
 if [ "$fake_root_ownership" = "1" ]; then
     STAGE_DIR=$stage_dir ROOTFS_IMG=$rootfs_img MKE2FS_BIN=$mke2fs_bin "$fakeroot_bin" sh -eu <<'EOF'
 chown -hR 0:0 "$STAGE_DIR"
-"$MKE2FS_BIN" -q -t ext4 -L rootfs -m 0 -F -d "$STAGE_DIR" "$ROOTFS_IMG"
+"$MKE2FS_BIN" \
+    -q \
+    -t "${CARTHING_ROOTFS_FS_TYPE:-ext4}" \
+    -b "${CARTHING_ROOTFS_BLOCK_SIZE:-1024}" \
+    -I 256 \
+    -L rootfs \
+    -m 0 \
+    -O "${CARTHING_ROOTFS_FEATURE_FLAGS:-^64bit}" \
+    -F \
+    -d "$STAGE_DIR" \
+    "$ROOTFS_IMG"
 EOF
 else
-    "$mke2fs_bin" -q -t ext4 -L rootfs -m 0 -F -d "$stage_dir" "$rootfs_img"
+    build_image "$stage_dir" "$rootfs_img"
 fi
 
 file "$rootfs_img"
