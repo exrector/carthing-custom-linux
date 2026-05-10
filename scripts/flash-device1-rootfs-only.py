@@ -3,6 +3,7 @@
 import os
 import sys
 import time
+import gc
 from pathlib import Path
 from struct import pack
 
@@ -122,13 +123,15 @@ def make_dev(max_retries: int = 8, initial_settle: float = 2.0) -> SuperbirdDevi
 
     last_err = None
     for attempt in range(max_retries):
+        dev = None
         try:
             if attempt > 0:
                 try:
-                    for dev in _uc.find(find_all=True, idVendor=0x1B8E, idProduct=0xC003):
-                        usb.util.dispose_resources(dev)
+                    for usb_dev in _uc.find(find_all=True, idVendor=0x1B8E, idProduct=0xC003):
+                        usb.util.dispose_resources(usb_dev)
                 except Exception:
                     pass
+                gc.collect()
                 time.sleep(2.0)
             else:
                 time.sleep(initial_settle)
@@ -142,6 +145,11 @@ def make_dev(max_retries: int = 8, initial_settle: float = 2.0) -> SuperbirdDevi
         except SystemExit:
             raise
         except Exception as exc:
+            if dev is not None:
+                try:
+                    usb.util.dispose_resources(dev.device.dev)
+                except Exception:
+                    pass
             last_err = exc
             print(f"  ~ make_dev #{attempt + 1}/{max_retries}: {exc.__class__.__name__}: {str(exc)[:80]}")
 
@@ -216,7 +224,7 @@ def main() -> int:
     input("boot device №1 into Burn Mode, then press enter >>> ")
 
     ensure_burn_mode()
-    dev = make_dev(initial_settle=0.0)
+    dev = make_dev(initial_settle=3.0)
     dev = write_image(dev, str(ROOTFS_IMG), ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
     print("\nrootfs write complete. power-cycle the device and test normal boot.")
     return 0
