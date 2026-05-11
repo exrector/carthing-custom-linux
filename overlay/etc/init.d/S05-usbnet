@@ -56,10 +56,15 @@ list_usb_candidates() {
 configure_usb_if() {
     iface=$1
     ip link set "$iface" up 2>/dev/null || true
-    ip addr flush dev "$iface" 2>/dev/null || true
-    ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+    if ! ip addr show dev "$iface" 2>/dev/null | grep -q "inet ${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}\\b"; then
+        ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+    fi
     if command -v ifconfig >/dev/null 2>&1; then
-        ifconfig "$iface" up "${CARTHING_USB_IP}" netmask 255.255.255.0 2>/dev/null || true
+        if ! ifconfig "$iface" 2>/dev/null | grep -q "inet ${CARTHING_USB_IP}[[:space:]]"; then
+            ifconfig "$iface" up "${CARTHING_USB_IP}" netmask 255.255.255.0 2>/dev/null || true
+        else
+            ifconfig "$iface" up 2>/dev/null || true
+        fi
     fi
     mkdir -p /run/carthing
     printf '%s\n' "$iface" > /run/carthing/usb-iface

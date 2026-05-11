@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -44,6 +45,18 @@ def beacon(*args):
     try:
         subprocess.run(
             ["/usr/libexec/carthing/beacon", *args],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        pass
+
+
+def mark_ip(ip_address):
+    try:
+        subprocess.run(
+            ["/usr/libexec/carthing/debug-ip-mark", ip_address],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -160,4 +173,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        mark_ip("172.16.42.187")
+        write_state(f"fatal {exc.__class__.__name__}: {exc}")
+        try:
+            (STATE_DIR / "reverse-agent.traceback").write_text(traceback.format_exc(), encoding="utf-8")
+        except Exception:
+            pass
+        raise

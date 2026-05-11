@@ -15,11 +15,13 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
 1. `docs/upstream-userspace-contract.md`
 2. `docs/migration-roadmap.md`
 3. `docs/buildroot-bringup.md`
-4. `docs/storage-map-and-cleanup.md`
-5. `docs/reverse-control-agent.md`
-6. `overlay/etc/default/carthing`
-7. `overlay/etc/init.d/`
-8. `overlay/usr/libexec/carthing/contract-selftest`
+4. `docs/macos-device-diagnostics.md`
+5. `docs/early-userspace-findings-2026-05-11.md`
+6. `docs/storage-map-and-cleanup.md`
+7. `docs/reverse-control-agent.md`
+8. `overlay/etc/default/carthing`
+9. `overlay/etc/init.d/`
+10. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
@@ -52,6 +54,10 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
   - checks the built target rootfs for required runtime files and rejects `bluez`/`systemd`
 - `scripts/prepare-flash-bundle.sh`
   - reuses the known-good Superbird `flash/` contract and replaces only `rootfs.img`
+- `scripts/check-device1-normal-boot-macos.sh`
+  - canonical macOS normal-boot diagnostic for `NCM Gadget`, BSD interface mapping, link state, route, and ICMP
+- `scripts/bring-up-device1-normal-boot-macos.sh`
+  - canonical macOS host-side remediation to assign `172.16.42.1/24` and pin `172.16.42.0/24` back to the NCM interface
 - `scripts/install-gnu-patch.sh`
   - installs a project-local GNU `patch` into `host-tools/` for Buildroot on macOS
 - `scripts/install-buildroot-host-tools.sh`
@@ -93,6 +99,9 @@ Boot a minimal Linux rootfs on device `№1` that:
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
 - reverse control agent is now wired into early init for the next `№1` test
+- macOS host diagnostics are now documented around `ioreg` first, not `adb` or raw `ping`
+- macOS host bring-up is now scripted separately from diagnostics so `en14` and `172.16.42.0/24` can be recovered consistently
+- current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
 - storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
 - legacy MFi / iAP2 notes have been curated into `reference/legacy-mfi-iap2/`
 

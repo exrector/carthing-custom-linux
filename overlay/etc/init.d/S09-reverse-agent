@@ -21,6 +21,13 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 0
 fi
 
+if ! python3 -c 'import json, pathlib, runpy, subprocess, urllib.error, urllib.parse, urllib.request' >/dev/null 2>&1; then
+    echo "[S09-reverse-agent] python3 stdlib preflight failed"
+    mark_ip 172.16.42.186
+    beacon s09-python-preflight-failed
+    exit 1
+fi
+
 AGENT=/usr/libexec/carthing/reverse-agent.py
 PIDFILE=/run/carthing/reverse-agent.pid
 LOGFILE=/var/log/reverse-agent.log
@@ -33,6 +40,19 @@ if [ ! -f "$AGENT" ]; then
 fi
 
 mkdir -p /run/carthing /var/log
+
+if ! AGENT_PATH="$AGENT" python3 - >>"$LOGFILE" 2>&1 <<'PY'
+import os
+import runpy
+
+runpy.run_path(os.environ["AGENT_PATH"], run_name="__probe__")
+PY
+then
+    echo "[S09-reverse-agent] module probe failed"
+    mark_ip 172.16.42.189
+    beacon s09-module-probe-failed
+    exit 1
+fi
 
 if [ -f "$PIDFILE" ]; then
     oldpid=$(cat "$PIDFILE" 2>/dev/null || true)

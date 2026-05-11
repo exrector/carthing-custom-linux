@@ -13,11 +13,15 @@
   - this is the fallback path when the `carthing-buildroot-case` volume fills up during `rootfs.ext2` generation
   - script: `scripts/build-rootfs-image-fallback.sh`
 - `rootfs-only` flashing for device `№1` works reliably in Burn Mode.
+- `rootfs-only` flash probing must use direct USB via `pyusb`:
+  - `adb devices` is **not** the Burn Mode source of truth in this repo
 - Device `№1` now holds `NCM Gadget` steadily in normal boot instead of dropping back into the earlier obvious reboot loop.
 - Host-side macOS diagnostics are now separated from target-side failure:
   - `NCM Gadget` appears reliably as `en14`
   - route to `172.16.42.2` can be pinned back to `en14`
   - ARP loopback was observed and cleared explicitly
+  - the canonical host-side source of truth is `scripts/check-device1-normal-boot-macos.sh`
+  - `ioreg` comes first; `ping` and `route get` are secondary signals
 - `№1` now answers on the stage-2 fingerprint IP in normal boot:
   - `172.16.42.77` responds to ICMP
   - `172.16.42.2` no longer responds on the diagnostic image
@@ -106,6 +110,22 @@
   - whether `S09-reverse-agent` starts and polls home even if no inbound ports ever open
   - whether the lack of open ports is a daemon failure or a script-order failure
 
+## 2026-05-11 Narrowed Failure
+
+- A later diagnostic image proves the next failure is above basic stage-2 networking:
+  - `172.16.42.77` responds
+  - `172.16.42.84` responds
+  - `172.16.42.189` responds
+  - `172.16.42.185` no longer appears on that image
+- `.189` is the current strongest localization signal:
+  - module-level probe failed before `reverse-agent.py` reached `main()`
+- Host-side queue state supports the same conclusion:
+  - reverse-agent commands remain in `pending/`
+  - no `/agent/poll` or `/agent/result` activity arrives
+- Host beacons show repeated `s07-started`, `s08-started`, and `s09-module-probe-failed`
+  - this strongly implicates the `init-wrapper` retry loop and top-level Python startup, not the USB or IP layers
+- See `docs/early-userspace-findings-2026-05-11.md` for the consolidated Buildroot/BusyBox/Python findings and the cleanup order they imply.
+
 ## Later Regression Check
 
 - A later control flash using the preserved Buildroot artifact
@@ -116,6 +136,7 @@
   - `NCM Gadget` repeatedly disappears and reappears in normal boot
   - the gadget MAC changes across re-enumerations
   - during the windows where the USB gadget exists, neither `172.16.42.77` nor `172.16.42.2` answers
+  - presence of `NCM Gadget` alone is not enough to claim target networking is alive
   - this points to a target-side early boot / USB gadget reset loop, not a macOS route issue
 
 ## Latest Working Theory

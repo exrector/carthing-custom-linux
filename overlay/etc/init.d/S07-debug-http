@@ -45,3 +45,13 @@ echo $! >"$PIDFILE"
 echo "[S07-debug-http] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_HTTP_PORT}"
 mark_ip 172.16.42.81
 beacon s07-started "port=${CARTHING_DEBUG_HTTP_PORT}"
+
+sleep 1
+
+if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    mark_ip 172.16.42.180
+    beacon s07-running
+else
+    mark_ip 172.16.42.181
+    beacon s07-exited-immediately
+fi

@@ -67,7 +67,17 @@ The current image uses extra IP aliases to show how far boot progressed:
 - `172.16.42.85` = reverse agent stayed alive after launch
 - `172.16.42.184` = no `python3`
 - `172.16.42.185` = reverse agent exited immediately
+- `172.16.42.186` = python preflight failed before agent exec
+- `172.16.42.187` = reverse agent hit a top-level Python exception
 - `172.16.42.188` = `reverse-agent.py` missing
+- `172.16.42.189` = module-level probe failed before entering `main()`
+
+The current image also distinguishes listener launch from listener survival:
+
+- `172.16.42.180` = BusyBox `httpd` survived the post-launch liveness check
+- `172.16.42.181` = BusyBox `httpd` exited immediately after launch
+- `172.16.42.182` = BusyBox `telnetd` survived the post-launch liveness check
+- `172.16.42.183` = BusyBox `telnetd` exited immediately after launch
 
 ## Host Usage
 

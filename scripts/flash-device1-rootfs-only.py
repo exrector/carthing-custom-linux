@@ -82,11 +82,18 @@ SuperbirdDevice.WRITE_CHUNK_SIZE = 512
 
 
 ADDR_TMP = 0x13000000
-TRANSFER_BLOCK_SIZE = 32768
-WRITE_CHUNK_SIZE = 256 * 1024
+TRANSFER_BLOCK_SIZE = int(os.environ.get("CARTHING_FLASH_TRANSFER_BLOCK_SIZE", "32768"))
 SECTOR = 512
-MAX_RETRIES = 12
-RECONNECT_WAIT = 4.0
+WRITE_CHUNK_SECTORS = int(os.environ.get("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "128"))
+WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS * SECTOR
+MAX_RETRIES = int(os.environ.get("CARTHING_FLASH_MAX_RETRIES", "16"))
+RECONNECT_WAIT = float(os.environ.get("CARTHING_FLASH_RECONNECT_WAIT", "6"))
+MAKE_DEV_RETRIES = int(os.environ.get("CARTHING_FLASH_MAKE_DEV_RETRIES", "10"))
+MAKE_DEV_INITIAL_SETTLE = float(os.environ.get("CARTHING_FLASH_MAKE_DEV_INITIAL_SETTLE", "3"))
+USE_RESTORE_PARTITION = os.environ.get("CARTHING_FLASH_USE_RESTORE_PARTITION", "1") != "0"
+
+SuperbirdDevice.TRANSFER_BLOCK_SIZE = TRANSFER_BLOCK_SIZE
+SuperbirdDevice.WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS
 
 
 def raw_bulkcmd(dev: SuperbirdDevice, cmd: str):
@@ -119,7 +126,7 @@ def get_device() -> SuperbirdDevice:
     return device
 
 
-def make_dev(max_retries: int = 8, initial_settle: float = 2.0) -> SuperbirdDevice:
+def make_dev(max_retries: int = MAKE_DEV_RETRIES, initial_settle: float = MAKE_DEV_INITIAL_SETTLE) -> SuperbirdDevice:
     import usb.core as _uc
 
     last_err = None
@@ -223,12 +230,33 @@ def main() -> int:
     print(f"using bundle: {BUNDLE_DIR}")
     print("WARNING: this writes only rootfs.img to device №1.")
     print("bootfs.bin and env.txt are left unchanged.\n")
+    print("NOTE: Burn Mode detection here uses direct USB via pyusb.")
+    print("NOTE: `adb devices` is not the source of truth for this script.\n")
+    print(
+        "TUNING: "
+        f"block={TRANSFER_BLOCK_SIZE}B "
+        f"chunk={WRITE_CHUNK_SIZE // 1024}KB "
+        f"chunk_sectors={WRITE_CHUNK_SECTORS} "
+        f"retries={MAX_RETRIES} "
+        f"reconnect_wait={RECONNECT_WAIT}s "
+        f"make_dev_retries={MAKE_DEV_RETRIES} "
+        f"use_restore_partition={int(USE_RESTORE_PARTITION)}\n"
+    )
     input("boot device №1 into Burn Mode, then press enter >>> ")
 
     dev = get_device()
     dev.bulkcmd("amlmmc part 1", ignore_timeout=True)
     dev.bulkcmd("amlmmc key", ignore_timeout=True)
-    dev = write_image(dev, str(ROOTFS_IMG), ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
+    if USE_RESTORE_PARTITION:
+        print(
+            f"\n>>> restoring ROOT via restore_partition: {ROOTFS_IMG} "
+            f"({ROOTFS_IMG.stat().st_size // 1024 // 1024} MB) -> sector {ROOT_RESTORE_BLOCK_OFFSET}"
+        )
+        print(f"    block={TRANSFER_BLOCK_SIZE}B chunk={WRITE_CHUNK_SIZE // 1024}KB")
+        dev.restore_partition(ROOT_RESTORE_BLOCK_OFFSET, str(ROOTFS_IMG))
+        print("DONE ROOT: restore_partition returned")
+    else:
+        dev = write_image(dev, str(ROOTFS_IMG), ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
     print("\nrootfs write complete. power-cycle the device and test normal boot.")
     return 0
 

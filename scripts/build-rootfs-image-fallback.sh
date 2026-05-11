@@ -83,7 +83,7 @@ check_present "etc/dropbear/dropbear_rsa_host_key"
 
 rm -rf "$stage_dir"
 mkdir -p "$stage_dir"
-rsync -a --delete "$target_dir/" "$stage_dir/"
+rsync -a --no-o --no-g --delete "$target_dir/" "$stage_dir/"
 mkdir -p "$(dirname "$rootfs_img")"
 rm -f "$rootfs_img"
 truncate -s "$rootfs_size" "$rootfs_img"
