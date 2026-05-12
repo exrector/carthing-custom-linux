@@ -9,8 +9,19 @@ mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
 
 mkdir -p /run/carthing /tmp /var/log /var/lib/bluetooth /var/lib/carthing /etc/dropbear
 
+STAGE2_ONCE_MARK=/run/carthing/init-wrapper-done
+
 for script in /etc/init.d/S??*; do
     [ -x "$script" ] || continue
+    base=${script##*/}
+    if [ -f "$STAGE2_ONCE_MARK" ]; then
+        case "$base" in
+            S05-*|S06-*|S07-*|S08-*|S09-*)
+                echo "[rcS] skipping $script; already handled by init-wrapper"
+                continue
+                ;;
+        esac
+    fi
     echo "[rcS] running $script"
     if "$script"; then
         :

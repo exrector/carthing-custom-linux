@@ -58,8 +58,8 @@ check_present './usr/lib/carthing/media_remote.py'
 check_present './usr/share/carthing/firmware/brcm/BCM.hcd'
 check_present './usr/share/carthing/firmware/brcm/BCM20703A2.hcd'
 check_present './root/.ssh/authorized_keys'
-check_present './etc/dropbear/dropbear_ed25519_host_key'
-check_present './etc/dropbear/dropbear_rsa_host_key'
+check_present './usr/sbin/dropbear'
+check_present './usr/bin/dropbearkey'
 
 echo "target rootfs verification passed"
 echo "  no bluez/systemd artifacts detected in rootfs.tar"

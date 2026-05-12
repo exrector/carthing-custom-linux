@@ -16,55 +16,98 @@ mark_ip 172.16.42.78
 
 if ! command -v dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear not installed"
+    mark_ip 172.16.42.177
     beacon s06-no-dropbear
     exit 0
 fi
 
 if pidof dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear already running"
+    mark_ip 172.16.42.178
     beacon s06-already-running
     exit 0
 fi
 
-mkdir -p /etc/dropbear
-mkdir -p /root/.ssh
+mark_ip 172.16.42.220
 mkdir -p /run/dropbear
 mkdir -p /run/carthing
-chmod 700 /root/.ssh
-[ ! -f /root/.ssh/authorized_keys ] || chmod 600 /root/.ssh/authorized_keys
+mark_ip 172.16.42.221
+
+# Rootfs can still be read-only here. Stage authorized_keys on tmpfs with strict
+# permissions, then bind-mount it over /root/.ssh so Dropbear doesn't reject it.
+runtime_auth_dir=/run/carthing/root-ssh
+mkdir -p "$runtime_auth_dir"
+chmod 700 "$runtime_auth_dir" 2>/dev/null || true
+if [ -f /root/.ssh/authorized_keys ]; then
+    cp /root/.ssh/authorized_keys "$runtime_auth_dir/authorized_keys" 2>/dev/null || true
+fi
+[ ! -f "$runtime_auth_dir/authorized_keys" ] || chmod 600 "$runtime_auth_dir/authorized_keys" 2>/dev/null || true
+if [ -d /root/.ssh ] && ! mount | grep -q ' on /root/.ssh '; then
+    mount -o bind "$runtime_auth_dir" /root/.ssh 2>/dev/null || true
+fi
+mark_ip 172.16.42.222
+
+LOGFILE=/run/carthing/dropbear.log
+: >>"$LOGFILE"
 
 hostkeys=
 for key in \
     /etc/dropbear/dropbear_ed25519_host_key \
     /etc/dropbear/dropbear_rsa_host_key
 do
-    if [ -f "$key" ]; then
+    if [ -f "$key" ] &&
+        ! grep -q '^-----BEGIN OPENSSH PRIVATE KEY-----' "$key" 2>/dev/null &&
+        dropbearkey -y -f "$key" >/dev/null 2>&1
+    then
         hostkeys="$hostkeys -r $key"
     fi
 done
+mark_ip 172.16.42.223
 
 if [ -z "$hostkeys" ]; then
-    echo "[S06-ssh] no host keys present"
-    printf 'no-host-keys\n' >/run/carthing/dropbear.state
-    mark_ip 172.16.42.176
-    beacon s06-no-hostkeys
-    exit 1
+    runtime_key=/run/dropbear/dropbear_rsa_host_key
+    if ! command -v dropbearkey >/dev/null 2>&1; then
+        echo "[S06-ssh] dropbearkey not available for runtime host key generation" >>"$LOGFILE"
+        printf 'no-host-keys\n' >/run/carthing/dropbear.state
+        mark_ip 172.16.42.176
+        beacon s06-no-hostkeys
+        exit 1
+    fi
+
+    if [ ! -f "$runtime_key" ] || ! dropbearkey -y -f "$runtime_key" >/dev/null 2>&1; then
+        rm -f "$runtime_key"
+        if ! dropbearkey -t rsa -f "$runtime_key" >>"$LOGFILE" 2>&1; then
+            echo "[S06-ssh] runtime host key generation failed" >>"$LOGFILE"
+            printf 'keygen-failed\n' >/run/carthing/dropbear.state
+            mark_ip 172.16.42.176
+            beacon s06-no-hostkeys
+            exit 1
+        fi
+        chmod 0600 "$runtime_key" 2>/dev/null || true
+    fi
+
+    hostkeys=" -r $runtime_key"
 fi
+
+mark_ip 172.16.42.200
 
 (
     echo "starting $(date '+%Y-%m-%d %H:%M:%S')" > /run/carthing/dropbear.state
     exec dropbear -F -E -p 22 -P /run/dropbear.pid $hostkeys $CARTHING_DROPBEAR_ARGS
-) >/var/log/dropbear.log 2>&1 &
+) >"$LOGFILE" 2>&1 &
 
 echo $! >/run/carthing/dropbear.wrapper.pid
+mark_ip 172.16.42.201
 sleep 1
 
 if kill -0 "$(cat /run/carthing/dropbear.wrapper.pid)" 2>/dev/null; then
     echo "running pid=$(cat /run/carthing/dropbear.wrapper.pid)" >/run/carthing/dropbear.state
+    mark_ip 172.16.42.202
     mark_ip 172.16.42.79
     beacon s06-running
 else
     echo "exited-immediately" >/run/carthing/dropbear.state
+    mark_ip 172.16.42.203
     mark_ip 172.16.42.179
     beacon s06-exited-immediately
 fi

@@ -41,23 +41,10 @@ if [ -L "$TARGET_DIR/etc/dropbear" ]; then
 fi
 
 mkdir -p "$TARGET_DIR/etc/dropbear"
-
-if ! command -v ssh-keygen >/dev/null 2>&1; then
-    echo "ssh-keygen is required on the host to embed dropbear host keys" >&2
-    exit 1
-fi
-
-if [ ! -f "$TARGET_DIR/etc/dropbear/dropbear_ed25519_host_key" ]; then
-    ssh-keygen -q -t ed25519 -N '' -f "$TARGET_DIR/etc/dropbear/dropbear_ed25519_host_key" >/dev/null
-fi
-
-if [ ! -f "$TARGET_DIR/etc/dropbear/dropbear_rsa_host_key" ]; then
-    ssh-keygen -q -t rsa -b 2048 -N '' -f "$TARGET_DIR/etc/dropbear/dropbear_rsa_host_key" >/dev/null
-fi
-
-chmod 0600 \
-    "$TARGET_DIR/etc/dropbear/dropbear_ed25519_host_key" \
-    "$TARGET_DIR/etc/dropbear/dropbear_rsa_host_key"
+# Dropbear host keys are generated at runtime by S06-ssh when the image doesn't
+# already contain valid Dropbear-format keys. Do not embed OpenSSH private keys
+# here: Dropbear treats them as invalid host keys and exits during early boot.
+find "$TARGET_DIR/etc/dropbear" -maxdepth 1 -type f -name 'dropbear_*_host_key' -exec chmod 0600 {} +
 
 if [ ! -e "$TARGET_DIR/bin/init" ] && [ -e "$TARGET_DIR/bin/busybox" ]; then
     ln -sf busybox "$TARGET_DIR/bin/init"
