@@ -34,7 +34,8 @@ for obsolete in \
     "$target_rootfs/etc/init.d/S30-usbnet" \
     "$target_rootfs/etc/init.d/S40-ssh" \
     "$target_rootfs/etc/init.d/S40network" \
-    "$target_rootfs/etc/init.d/S50dropbear"
+    "$target_rootfs/etc/init.d/S50dropbear" \
+    "$target_rootfs/etc/init.d/S50telnet"
 do
     rm -f "$obsolete"
 done

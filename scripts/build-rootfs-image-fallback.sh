@@ -60,6 +60,7 @@ check_absent "etc/init.d/S30-usbnet" "obsolete late usbnet init script"
 check_absent "etc/init.d/S40-ssh" "obsolete late ssh init script"
 check_absent "etc/init.d/S40network" "buildroot ifupdown network init script"
 check_absent "etc/init.d/S50dropbear" "buildroot dropbear init script"
+check_absent "etc/init.d/S50telnet" "buildroot telnet init script"
 
 check_present "etc/init.d/S05-usbnet"
 check_present "etc/init.d/S06-ssh"
