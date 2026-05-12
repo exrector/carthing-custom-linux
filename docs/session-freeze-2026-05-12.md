@@ -204,8 +204,16 @@ So the original shorter reset path was the best of the manual live attempts so f
 
 ### Implications
 
+One concrete boot-logic bug was found after the original freeze note:
+
+- the firmware blobs are present inside the flashed rootfs image under `/usr/share/carthing/firmware/brcm`
+- however, `S10-firmware-stage` was written to copy them into `/lib/firmware/brcm`
+- on the live system `/` is mounted read-only, so that copy path is fundamentally wrong
+- the correct fix is to stage firmware under `/run` and bind-mount it onto `/lib/firmware/brcm`
+- `S20-bt-init` also needs its `fwload` log moved from `/var/log` to `/run`
+
 At the next return point, the first useful Bluetooth/runtime work should be:
 
-1. fix why firmware files are missing from the flashed live image even though they exist in the repo overlay
+1. keep the `/run` plus bind-mount firmware staging fix
 2. inspect the first HCD command / firmware blob provenance because both current `.hcd` files are byte-identical
-3. revisit the `fwload` sequence itself only after the firmware staging issue is understood
+3. revisit the `fwload` sequence itself after the staging fix is in the image

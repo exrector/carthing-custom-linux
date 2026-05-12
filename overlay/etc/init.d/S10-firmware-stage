@@ -3,15 +3,17 @@ set -eu
 
 . /etc/default/carthing
 
+stage_dir=${CARTHING_BT_RUNTIME_FIRMWARE_DIR:-/run/carthing/firmware/brcm}
+
+mkdir -p "$stage_dir"
 mkdir -p "$CARTHING_BT_FIRMWARE_DIR"
 
 need_copy=0
-[ -f "$CARTHING_BT_FIRMWARE_DIR/BCM.hcd" ] || need_copy=1
-[ -f "$CARTHING_BT_FIRMWARE_DIR/BCM20703A2.hcd" ] || need_copy=1
+[ -f "$stage_dir/BCM.hcd" ] || need_copy=1
+[ -f "$stage_dir/BCM20703A2.hcd" ] || need_copy=1
 
 if [ "$need_copy" -eq 0 ]; then
-    echo "[S10-firmware-stage] firmware already present"
-    exit 0
+    :
 fi
 
 if [ ! -d "$CARTHING_BT_SOURCE_FIRMWARE_DIR" ]; then
@@ -19,7 +21,13 @@ if [ ! -d "$CARTHING_BT_SOURCE_FIRMWARE_DIR" ]; then
     exit 1
 fi
 
-cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM.hcd" "$CARTHING_BT_FIRMWARE_DIR/BCM.hcd"
-cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM20703A2.hcd" "$CARTHING_BT_FIRMWARE_DIR/BCM20703A2.hcd"
+cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM.hcd" "$stage_dir/BCM.hcd"
+cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM20703A2.hcd" "$stage_dir/BCM20703A2.hcd"
 
-echo "[S10-firmware-stage] firmware staged into $CARTHING_BT_FIRMWARE_DIR"
+if awk -v target="$CARTHING_BT_FIRMWARE_DIR" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
+    umount "$CARTHING_BT_FIRMWARE_DIR"
+fi
+
+mount -o bind "$stage_dir" "$CARTHING_BT_FIRMWARE_DIR"
+
+echo "[S10-firmware-stage] firmware staged into $stage_dir and bind-mounted on $CARTHING_BT_FIRMWARE_DIR"

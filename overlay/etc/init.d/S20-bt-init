@@ -48,7 +48,7 @@ attach_once() {
         set -- "$@" $CARTHING_BT_FWLOAD_ARGS
     fi
 
-    "$CARTHING_BT_FWLOAD_BINARY" "$@" > /var/log/carthing-bt-fwload.log 2>&1
+    "$CARTHING_BT_FWLOAD_BINARY" "$@" > "$CARTHING_BT_FWLOAD_LOG" 2>&1
 }
 
 echo "[S20-bt-init] resetting Bluetooth chip on GPIO ${CARTHING_BT_RESET_GPIO}"
