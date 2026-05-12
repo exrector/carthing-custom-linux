@@ -5,10 +5,8 @@ This repository replaces the upstream userspace contract for Superbird with an e
 Scope:
 
 - keep the existing Superbird boot contract and hardware BSP assumptions
-- remove the hidden NixOS/systemd/BlueZ policy layer
+- remove the hidden upstream userspace policy layer
 - replace it with a small rootfs overlay, our own init scripts, and a documented runtime contract
-
-This repository is intentionally not based on the local `carthing-nixos` or `carthing-media-remote` project copies. Those can help explain history, but the architecture work here is driven by upstream behavior and by the live hardware contract.
 
 ## Read Order
 
@@ -19,15 +17,16 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
 5. `docs/early-userspace-findings-2026-05-11.md`
 6. `docs/storage-map-and-cleanup.md`
 7. `docs/reverse-control-agent.md`
-8. `overlay/etc/default/carthing`
-9. `overlay/etc/init.d/`
-10. `overlay/usr/libexec/carthing/contract-selftest`
+8. `docs/local-access-profile.md`
+9. `overlay/etc/default/carthing`
+10. `overlay/etc/init.d/`
+11. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
 - `docs/`
   - upstream-only contract analysis
-  - migration plan from NixOS userspace to our own userspace
+  - migration plan from the inherited userspace to our own userspace
 - `reference/legacy-mfi-iap2/`
   - curated archive of the old MFi / iAP2 reverse-engineering notes and one representative `slot_a` code snapshot
   - preserved so the large legacy Car Thing trees can be deleted without losing the useful archaeology
@@ -66,6 +65,10 @@ This repository is intentionally not based on the local `carthing-nixos` or `car
   - host-side reverse control server for device-driven polling and result return
 - `scripts/reverse-agent-enqueue.sh`
   - queues one shell command for the reverse control agent
+- `scripts/reset-reverse-control-state.sh`
+  - archives stale `pending/` and `running/` reverse-control entries for one device
+- `scripts/check-device1-local-open-access-macos.sh`
+  - host-side one-shot check for `ssh`, `httpd`, and `telnetd`
 
 ## Current Design Choice
 
@@ -109,6 +112,7 @@ Boot a minimal Linux rootfs on device `№1` that:
   - BusyBox `httpd` on `8080` enabled
   - BusyBox `telnetd` on `2323` enabled
   - default root password is `carthing`
+  - canonical access profile documented in `docs/local-access-profile.md`
 
 ## Not In Scope Yet
 

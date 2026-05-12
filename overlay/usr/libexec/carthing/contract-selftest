@@ -37,12 +37,28 @@ check_path "$CARTHING_RUNTIME_ENTRY"
 check_path "$CARTHING_RUNTIME_LIB/bumble/host.py"
 check_path "$CARTHING_FONT_PATH"
 check_path /root/.ssh/authorized_keys
+check_path /etc/shadow
 
 check_cmd sh
 check_cmd ip
 check_cmd awk
 check_cmd sed
 check_cmd python3
+check_cmd dropbear
+check_cmd dropbearkey
+
+if [ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ]; then
+    if command -v httpd >/dev/null 2>&1 || command -v busybox >/dev/null 2>&1; then
+        echo "[ok] debug httpd available"
+    else
+        echo "[missing] debug httpd"
+        failed=1
+    fi
+fi
+
+if [ "${CARTHING_DEBUG_TELNET_ENABLE:-0}" = "1" ]; then
+    check_cmd telnetd
+fi
 
 if [ "$CARTHING_BT_INIT_BACKEND" = "fwload" ]; then
     check_path "$CARTHING_BT_FWLOAD_BINARY"

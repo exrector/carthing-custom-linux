@@ -105,6 +105,18 @@ Results are written as JSON files in:
 /tmp/carthing-control-server/completed/device1/
 ```
 
+If stale `pending/` or `running/` entries pile up from old bring-up sessions:
+
+```sh
+./scripts/reset-reverse-control-state.sh device1
+```
+
+That archives them under:
+
+```text
+/tmp/carthing-control-server/archive/<timestamp>/device1/
+```
+
 ## Why This Exists
 
 This is not meant as a permanent management plane.
