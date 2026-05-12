@@ -2,6 +2,13 @@
 
 This repository replaces the upstream userspace contract for Superbird with an explicit, minimal contract that we control.
 
+Current project stage:
+
+- this is already a custom Linux system in the practical sense
+- at this stage "custom Linux" means our own Buildroot rootfs and userspace
+- the inherited Superbird bootloader, kernel, dtb, and boot ABI are still reused on purpose
+- replacing kernel or dtb is a later decision, not the current migration step
+
 Scope:
 
 - keep the existing Superbird boot contract and hardware BSP assumptions
@@ -93,6 +100,8 @@ Boot a minimal Linux rootfs on device `№1` that:
 - stages Bluetooth firmware
 - initializes the Bluetooth chip with our own loader
 - starts the Car Thing runtime without `/opt` hacks or manual post-boot steps
+
+In other words: first own userspace completely, then decide whether a kernel replacement is even needed.
 
 ## Current Status
 

@@ -16,6 +16,12 @@ Build a custom rootfs that:
 
 At this stage we are only replacing userspace. We are not replacing the bootloader, kernel, or dtb.
 
+That is still consistent with the project goal of "custom Linux":
+
+- the practical ownership boundary we want first is the whole rootfs/userspace
+- the inherited low boot layer stays in place until userspace is stable
+- kernel or dtb replacement is a later step, not a prerequisite for the current milestone
+
 ## Inputs You Need
 
 - a Buildroot checkout
