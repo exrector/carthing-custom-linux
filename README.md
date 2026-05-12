@@ -25,9 +25,10 @@ Scope:
 6. `docs/storage-map-and-cleanup.md`
 7. `docs/reverse-control-agent.md`
 8. `docs/local-access-profile.md`
-9. `overlay/etc/default/carthing`
-10. `overlay/etc/init.d/`
-11. `overlay/usr/libexec/carthing/contract-selftest`
+9. `docs/session-freeze-2026-05-12.md`
+10. `overlay/etc/default/carthing`
+11. `overlay/etc/init.d/`
+12. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
