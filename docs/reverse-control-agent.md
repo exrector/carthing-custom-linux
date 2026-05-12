@@ -32,7 +32,7 @@ The agent writes local state to:
 
 - `/run/carthing/reverse-agent.state`
 - `/run/carthing/reverse-agent-pending-result.json`
-- `/var/log/reverse-agent.log`
+- `/run/carthing/reverse-agent.log`
 
 ## Host Behavior
 
@@ -59,25 +59,19 @@ Current defaults in `overlay/etc/default/carthing`:
 - `CARTHING_REVERSE_AGENT_COMMAND_TIMEOUT=45`
 - `CARTHING_REVERSE_AGENT_MAX_OUTPUT=65536`
 
-## Service IP Markers
+## Current Runtime Contract
 
-The current image uses extra IP aliases to show how far boot progressed:
+The current image no longer depends on extra IP aliases or one-shot beacon markers.
 
-- `172.16.42.84` = entered `S09-reverse-agent`
-- `172.16.42.85` = reverse agent stayed alive after launch
-- `172.16.42.184` = no `python3`
-- `172.16.42.185` = reverse agent exited immediately
-- `172.16.42.186` = python preflight failed before agent exec
-- `172.16.42.187` = reverse agent hit a top-level Python exception
-- `172.16.42.188` = `reverse-agent.py` missing
-- `172.16.42.189` = module-level probe failed before entering `main()`
+The stable signals now are:
 
-The current image also distinguishes listener launch from listener survival:
+- `ssh` on `172.16.42.77:22`
+- BusyBox `httpd` on `172.16.42.77:8080`
+- BusyBox `telnetd` on `172.16.42.77:2323`
+- reverse-agent state in `/run/carthing/reverse-agent.state`
+- reverse-agent results in `/tmp/carthing-control-server/completed/device1/`
 
-- `172.16.42.180` = BusyBox `httpd` survived the post-launch liveness check
-- `172.16.42.181` = BusyBox `httpd` exited immediately after launch
-- `172.16.42.182` = BusyBox `telnetd` survived the post-launch liveness check
-- `172.16.42.183` = BusyBox `telnetd` exited immediately after launch
+Historical bring-up markers are still documented in `docs/early-userspace-findings-2026-05-11.md`.
 
 ## Host Usage
 

@@ -3,35 +3,20 @@ set -eu
 
 . /etc/default/carthing
 
-beacon() {
-    /usr/libexec/carthing/beacon "$@" || true
-}
-
-mark_ip() {
-    /usr/libexec/carthing/debug-ip-mark "$@" || true
-}
-
 [ "$CARTHING_SSH_ENABLE" = "1" ] || exit 0
-mark_ip 172.16.42.78
 
 if ! command -v dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear not installed"
-    mark_ip 172.16.42.177
-    beacon s06-no-dropbear
     exit 0
 fi
 
 if pidof dropbear >/dev/null 2>&1; then
     echo "[S06-ssh] dropbear already running"
-    mark_ip 172.16.42.178
-    beacon s06-already-running
     exit 0
 fi
 
-mark_ip 172.16.42.220
 mkdir -p /run/dropbear
 mkdir -p /run/carthing
-mark_ip 172.16.42.221
 
 # Rootfs can still be read-only here. Stage authorized_keys on tmpfs with strict
 # permissions, then bind-mount it over /root/.ssh so Dropbear doesn't reject it.
@@ -45,9 +30,11 @@ fi
 if [ -d /root/.ssh ] && ! mount | grep -q ' on /root/.ssh '; then
     mount -o bind "$runtime_auth_dir" /root/.ssh 2>/dev/null || true
 fi
-mark_ip 172.16.42.222
 
 LOGFILE=/run/carthing/dropbear.log
+STATEFILE=/run/carthing/dropbear.state
+PIDFILE=/run/carthing/dropbear.pid
+
 : >>"$LOGFILE"
 
 hostkeys=
@@ -62,15 +49,12 @@ do
         hostkeys="$hostkeys -r $key"
     fi
 done
-mark_ip 172.16.42.223
 
 if [ -z "$hostkeys" ]; then
     runtime_key=/run/dropbear/dropbear_rsa_host_key
     if ! command -v dropbearkey >/dev/null 2>&1; then
         echo "[S06-ssh] dropbearkey not available for runtime host key generation" >>"$LOGFILE"
-        printf 'no-host-keys\n' >/run/carthing/dropbear.state
-        mark_ip 172.16.42.176
-        beacon s06-no-hostkeys
+        printf 'no-host-keys\n' >"$STATEFILE"
         exit 1
     fi
 
@@ -78,9 +62,7 @@ if [ -z "$hostkeys" ]; then
         rm -f "$runtime_key"
         if ! dropbearkey -t rsa -f "$runtime_key" >>"$LOGFILE" 2>&1; then
             echo "[S06-ssh] runtime host key generation failed" >>"$LOGFILE"
-            printf 'keygen-failed\n' >/run/carthing/dropbear.state
-            mark_ip 172.16.42.176
-            beacon s06-no-hostkeys
+            printf 'keygen-failed\n' >"$STATEFILE"
             exit 1
         fi
         chmod 0600 "$runtime_key" 2>/dev/null || true
@@ -89,27 +71,19 @@ if [ -z "$hostkeys" ]; then
     hostkeys=" -r $runtime_key"
 fi
 
-mark_ip 172.16.42.200
+rm -f "$PIDFILE"
+dropbear -F -E -p 22 -P "$PIDFILE" $hostkeys $CARTHING_DROPBEAR_ARGS >"$LOGFILE" 2>&1 &
 
-(
-    echo "starting $(date '+%Y-%m-%d %H:%M:%S')" > /run/carthing/dropbear.state
-    exec dropbear -F -E -p 22 -P /run/dropbear.pid $hostkeys $CARTHING_DROPBEAR_ARGS
-) >"$LOGFILE" 2>&1 &
+attempts=3
+while [ "$attempts" -gt 0 ]; do
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "running pid=$(cat "$PIDFILE")" >"$STATEFILE"
+        echo "[S06-ssh] dropbear started"
+        exit 0
+    fi
+    attempts=$((attempts - 1))
+    sleep 1
+done
 
-echo $! >/run/carthing/dropbear.wrapper.pid
-mark_ip 172.16.42.201
-sleep 1
-
-if kill -0 "$(cat /run/carthing/dropbear.wrapper.pid)" 2>/dev/null; then
-    echo "running pid=$(cat /run/carthing/dropbear.wrapper.pid)" >/run/carthing/dropbear.state
-    mark_ip 172.16.42.202
-    mark_ip 172.16.42.79
-    beacon s06-running
-else
-    echo "exited-immediately" >/run/carthing/dropbear.state
-    mark_ip 172.16.42.203
-    mark_ip 172.16.42.179
-    beacon s06-exited-immediately
-fi
-
-echo "[S06-ssh] dropbear started"
+echo "exited-immediately" >"$STATEFILE"
+echo "[S06-ssh] dropbear exited immediately"

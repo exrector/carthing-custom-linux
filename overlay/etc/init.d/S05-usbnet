@@ -3,14 +3,6 @@ set -eu
 
 . /etc/default/carthing
 
-beacon() {
-    /usr/libexec/carthing/beacon "$@" || true
-}
-
-mark_ip() {
-    /usr/libexec/carthing/debug-ip-mark "$@" || true
-}
-
 list_usb_candidates() {
     found=1
 
@@ -64,8 +56,6 @@ configure_usb_if() {
         ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
     fi
     if command -v ifconfig >/dev/null 2>&1; then
-        # Avoid a second address-assignment pass via ifconfig here: on this target
-        # that can wipe alias markers we rely on for early-boot tracing.
         ifconfig "$iface" up 2>/dev/null || true
     fi
     mkdir -p /run/carthing
@@ -74,10 +64,18 @@ configure_usb_if() {
 
 configure_all_usb_ifs() {
     configured=
+    seen=' '
+
     for iface in $(list_usb_candidates); do
+        case "$seen" in
+            *" $iface "*) continue ;;
+        esac
+        seen="${seen}${iface} "
+
         configure_usb_if "$iface"
         configured="${configured}${configured:+ }$iface"
     done
+
     printf '%s\n' "$configured"
 }
 
@@ -100,21 +98,15 @@ configured_ifs=
 if command -v ip >/dev/null 2>&1; then
     configured_ifs=$(configure_all_usb_ifs || true)
     if [ -z "$configured_ifs" ]; then
-        mark_ip 172.16.42.218
         echo "[S05-usbnet] no USB network interface found, retrying in background"
-        beacon s05-no-iface
         (
             configured=$(retry_usb_config 2>/dev/null || true)
             if [ -n "$configured" ]; then
                 printf '%s\n' "$configured" >/run/carthing/usb-ifaces
-                mark_ip 172.16.42.219
-                beacon s05-configured-late "$configured"
             fi
         ) &
     else
         printf '%s\n' "$configured_ifs" >/run/carthing/usb-ifaces
-        mark_ip 172.16.42.217
-        beacon s05-configured "$configured_ifs"
     fi
 else
     echo "[S05-usbnet] ip command not available"

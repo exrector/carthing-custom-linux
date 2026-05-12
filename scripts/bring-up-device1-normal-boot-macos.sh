@@ -14,14 +14,12 @@ and the BSD interface name, then use this script to:
 1. assign `172.16.42.1/24` to the BSD interface
 2. clear stale ARP entries for the target IPs
 3. pin `172.16.42.0/24` back to that interface
-4. re-check ICMP on `.2`, `.77`, `.84`, and `.85`
+4. re-check ICMP on `.2` and `.77`
 EOF
 }
 
 ROOT_DEFAULT_IP=${ROOT_DEFAULT_IP:-172.16.42.2}
 ROOT_STAGE2_IP=${ROOT_STAGE2_IP:-172.16.42.77}
-ROOT_S09_ENTER_IP=${ROOT_S09_ENTER_IP:-172.16.42.84}
-ROOT_S09_ALIVE_IP=${ROOT_S09_ALIVE_IP:-172.16.42.85}
 HOST_USB_IP=${HOST_USB_IP:-172.16.42.1}
 USB_NETMASK=${USB_NETMASK:-255.255.255.0}
 USB_ROUTE_CIDR=${USB_ROUTE_CIDR:-172.16.42.0/24}
@@ -109,7 +107,7 @@ echo "host_bsd_name: $bsd_name"
 echo "host_assign_ip: $HOST_USB_IP/$USB_NETMASK"
 sudo ifconfig "$bsd_name" "$HOST_USB_IP" netmask "$USB_NETMASK" up
 
-for ip in "$ROOT_DEFAULT_IP" "$ROOT_STAGE2_IP" "$ROOT_S09_ENTER_IP" "$ROOT_S09_ALIVE_IP"; do
+for ip in "$ROOT_DEFAULT_IP" "$ROOT_STAGE2_IP"; do
     sudo arp -d "$ip" >/dev/null 2>&1 || true
 done
 
@@ -124,9 +122,5 @@ echo "route_${ROOT_DEFAULT_IP}_interface: $(route_iface "$ROOT_DEFAULT_IP")"
 echo "route_${ROOT_STAGE2_IP}_interface: $(route_iface "$ROOT_STAGE2_IP")"
 echo "ping_${ROOT_DEFAULT_IP}: $(ping_state "$ROOT_DEFAULT_IP")"
 echo "ping_${ROOT_STAGE2_IP}: $(ping_state "$ROOT_STAGE2_IP")"
-echo "ping_${ROOT_S09_ENTER_IP}: $(ping_state "$ROOT_S09_ENTER_IP")"
-echo "ping_${ROOT_S09_ALIVE_IP}: $(ping_state "$ROOT_S09_ALIVE_IP")"
 echo "arp_${ROOT_DEFAULT_IP}: $(arp_state "$ROOT_DEFAULT_IP")"
 echo "arp_${ROOT_STAGE2_IP}: $(arp_state "$ROOT_STAGE2_IP")"
-echo "arp_${ROOT_S09_ENTER_IP}: $(arp_state "$ROOT_S09_ENTER_IP")"
-echo "arp_${ROOT_S09_ALIVE_IP}: $(arp_state "$ROOT_S09_ALIVE_IP")"

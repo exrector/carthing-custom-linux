@@ -3,16 +3,7 @@ set -eu
 
 . /etc/default/carthing
 
-beacon() {
-    /usr/libexec/carthing/beacon "$@" || true
-}
-
-mark_ip() {
-    /usr/libexec/carthing/debug-ip-mark "$@" || true
-}
-
 [ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ] || exit 0
-mark_ip 172.16.42.80
 
 if command -v httpd >/dev/null 2>&1; then
     HTTPD_BIN=httpd
@@ -20,7 +11,6 @@ elif command -v busybox >/dev/null 2>&1; then
     HTTPD_BIN="busybox httpd"
 else
     echo "[S07-debug-http] no httpd available"
-    beacon s07-no-httpd
     exit 0
 fi
 
@@ -33,7 +23,6 @@ if [ -f "$PIDFILE" ]; then
     oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
     if [ -n "${oldpid:-}" ] && kill -0 "$oldpid" 2>/dev/null; then
         echo "[S07-debug-http] already running pid=$oldpid"
-        beacon s07-already-running
         exit 0
     fi
 fi
@@ -46,15 +35,3 @@ fi
 
 echo $! >"$PIDFILE"
 echo "[S07-debug-http] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_HTTP_PORT}"
-mark_ip 172.16.42.81
-beacon s07-started "port=${CARTHING_DEBUG_HTTP_PORT}"
-
-sleep 1
-
-if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-    mark_ip 172.16.42.180
-    beacon s07-running
-else
-    mark_ip 172.16.42.181
-    beacon s07-exited-immediately
-fi

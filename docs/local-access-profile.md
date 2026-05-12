@@ -13,6 +13,9 @@ Device `№1` on normal boot is expected to expose:
 - BusyBox `telnetd` on `172.16.42.77:2323`
 - reverse control agent polling the host at `172.16.42.1:8099`
 
+The default `httpd` listener is only a simple local file server. A `404` on `/`
+still proves that the listener is alive.
+
 Default root password:
 
 - `carthing`

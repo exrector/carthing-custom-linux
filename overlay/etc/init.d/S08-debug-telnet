@@ -3,20 +3,10 @@ set -eu
 
 . /etc/default/carthing
 
-beacon() {
-    /usr/libexec/carthing/beacon "$@" || true
-}
-
-mark_ip() {
-    /usr/libexec/carthing/debug-ip-mark "$@" || true
-}
-
 [ "${CARTHING_DEBUG_TELNET_ENABLE:-0}" = "1" ] || exit 0
-mark_ip 172.16.42.82
 
 if ! command -v telnetd >/dev/null 2>&1; then
     echo "[S08-debug-telnet] telnetd not installed"
-    beacon s08-no-telnetd
     exit 0
 fi
 
@@ -29,7 +19,6 @@ if [ -f "$PIDFILE" ]; then
     oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
     if [ -n "${oldpid:-}" ] && kill -0 "$oldpid" 2>/dev/null; then
         echo "[S08-debug-telnet] already running pid=$oldpid"
-        beacon s08-already-running
         exit 0
     fi
 fi
@@ -42,15 +31,3 @@ fi
 
 echo $! >"$PIDFILE"
 echo "[S08-debug-telnet] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_TELNET_PORT}"
-mark_ip 172.16.42.83
-beacon s08-started "port=${CARTHING_DEBUG_TELNET_PORT}"
-
-sleep 1
-
-if kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
-    mark_ip 172.16.42.182
-    beacon s08-running
-else
-    mark_ip 172.16.42.183
-    beacon s08-exited-immediately
-fi
