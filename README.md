@@ -104,6 +104,11 @@ Boot a minimal Linux rootfs on device `№1` that:
 - current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
 - storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
 - legacy MFi / iAP2 notes have been curated into `reference/legacy-mfi-iap2/`
+- default local-open ingress is intentional:
+  - SSH enabled
+  - BusyBox `httpd` on `8080` enabled
+  - BusyBox `telnetd` on `2323` enabled
+  - default root password is `carthing`
 
 ## Not In Scope Yet
 

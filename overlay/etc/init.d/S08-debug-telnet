@@ -23,6 +23,7 @@ fi
 mkdir -p /run/carthing /var/log
 
 PIDFILE=/run/carthing/debug-telnet.pid
+LOGFILE=/run/carthing/debug-telnet.log
 
 if [ -f "$PIDFILE" ]; then
     oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
@@ -33,9 +34,11 @@ if [ -f "$PIDFILE" ]; then
     fi
 fi
 
+: >"$LOGFILE"
+
 (
     exec telnetd -F -p "${CARTHING_DEBUG_TELNET_PORT}" -l /bin/sh
-) >/var/log/debug-telnet.log 2>&1 &
+) >"$LOGFILE" 2>&1 &
 
 echo $! >"$PIDFILE"
 echo "[S08-debug-telnet] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_TELNET_PORT}"

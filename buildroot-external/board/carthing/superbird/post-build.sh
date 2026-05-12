@@ -2,6 +2,8 @@
 set -eu
 
 TARGET_DIR="$1"
+DEFAULT_ROOT_PASSWORD="carthing"
+DEFAULT_ROOT_PASSWORD_HASH='$6$carthing$V4FPwXVBv//YUovhGvEi6cpjtEVxhUUQ7NqTjMfiRdslZ.O0j.9CA5W.Z14GOcmB7O1/vsscFyuoWKz9vm2jD.'
 
 mkdir -p \
     "$TARGET_DIR/bin" \
@@ -35,6 +37,38 @@ fi
 if [ -f "$TARGET_DIR/root/.ssh/authorized_keys" ]; then
     chmod 0600 "$TARGET_DIR/root/.ssh/authorized_keys"
 fi
+
+if [ -f "$TARGET_DIR/etc/shadow" ]; then
+    python3 - "$TARGET_DIR/etc/shadow" "$DEFAULT_ROOT_PASSWORD_HASH" <<'EOF'
+import sys
+from pathlib import Path
+
+shadow_path = Path(sys.argv[1])
+root_hash = sys.argv[2]
+lines = shadow_path.read_text(encoding="utf-8").splitlines()
+updated = False
+for idx, line in enumerate(lines):
+    if line.startswith("root:"):
+        parts = line.split(":")
+        while len(parts) < 9:
+            parts.append("")
+        parts[1] = root_hash
+        parts[2] = parts[2] or "0"
+        parts[3] = parts[3] or "0"
+        parts[4] = parts[4] or "99999"
+        parts[5] = parts[5] or "7"
+        lines[idx] = ":".join(parts[:9])
+        updated = True
+        break
+if not updated:
+    lines.append(f"root:{root_hash}:0:0:99999:7:::")
+shadow_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+EOF
+else
+    mkdir -p "$TARGET_DIR/etc"
+    printf 'root:%s:0:0:99999:7:::\n' "$DEFAULT_ROOT_PASSWORD_HASH" >"$TARGET_DIR/etc/shadow"
+fi
+chmod 0600 "$TARGET_DIR/etc/shadow"
 
 if [ -L "$TARGET_DIR/etc/dropbear" ]; then
     rm -f "$TARGET_DIR/etc/dropbear"

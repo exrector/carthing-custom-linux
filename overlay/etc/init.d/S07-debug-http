@@ -27,6 +27,7 @@ fi
 mkdir -p /run/carthing /var/log
 
 PIDFILE=/run/carthing/debug-http.pid
+LOGFILE=/run/carthing/debug-http.log
 
 if [ -f "$PIDFILE" ]; then
     oldpid=$(cat "$PIDFILE" 2>/dev/null || true)
@@ -37,9 +38,11 @@ if [ -f "$PIDFILE" ]; then
     fi
 fi
 
+: >"$LOGFILE"
+
 (
     exec sh -c "exec $HTTPD_BIN -f -p ${CARTHING_DEBUG_HTTP_PORT} -h /"
-) >/var/log/debug-http.log 2>&1 &
+) >"$LOGFILE" 2>&1 &
 
 echo $! >"$PIDFILE"
 echo "[S07-debug-http] started pid=$(cat "$PIDFILE") port=${CARTHING_DEBUG_HTTP_PORT}"
