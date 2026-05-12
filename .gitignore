@@ -7,3 +7,6 @@ output/
 host-tools/
 distfiles/
 artifacts/
+
+!buildroot-external/package/carthing-bt-fwload/
+!buildroot-external/package/carthing-bt-fwload/**

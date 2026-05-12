@@ -202,6 +202,21 @@ Additional manual variants were worse:
 
 So the original shorter reset path was the best of the manual live attempts so far.
 
+After that first freeze note, an external firmware sanity check changed the picture:
+
+- the local `BCM.hcd` and `BCM20703A2.hcd` blobs are not only similarly named; they are byte-identical
+- an external firmware corpus did not contain a plain `BCM20703A2.hcd`, but did contain several `BCM20703A1-*.hcd` files
+- one of those external files, `BCM20703A1-0a5c-6410.hcd`, behaved much better on the live device
+
+With that external `A1` blob:
+
+- `HCI_RESET` completed
+- `DOWNLOAD_MINIDRIVER` completed
+- the full HCD streaming phase progressed through many successful `0xFC4C` command-complete exchanges
+- the stop moved all the way to the final `Launch RAM (0xFC4E)` step
+
+That is a much stronger signal than the original local blob, which failed almost immediately in the first HCD command.
+
 ### Implications
 
 One concrete boot-logic bug was found after the original freeze note:
@@ -212,8 +227,15 @@ One concrete boot-logic bug was found after the original freeze note:
 - the correct fix is to stage firmware under `/run` and bind-mount it onto `/lib/firmware/brcm`
 - `S20-bt-init` also needs its `fwload` log moved from `/var/log` to `/run`
 
+Another concrete source-level issue was identified in `carthing-bt-fwload`:
+
+- the current loader expected a `Command Complete` after `Launch RAM (0xFC4E)`
+- the better external `A1` live test suggests this controller likely reboots immediately instead
+- therefore `Launch RAM` should be sent as a fire-and-reboot step, followed by a settle delay, a UART flush, and only then the post-launch `HCI_RESET`
+
 At the next return point, the first useful Bluetooth/runtime work should be:
 
 1. keep the `/run` plus bind-mount firmware staging fix
-2. inspect the first HCD command / firmware blob provenance because both current `.hcd` files are byte-identical
-3. revisit the `fwload` sequence itself after the staging fix is in the image
+2. stop treating the current local `BCM20703A2.hcd` blob as trustworthy just because it is present in the repo
+3. decide whether to replace the local blob set with a better known external candidate or an extracted original blob
+4. keep the `Launch RAM` no-response fix in `carthing-bt-fwload`
