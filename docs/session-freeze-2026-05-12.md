@@ -123,3 +123,89 @@ The ingress problem is solved. The next stage is no longer about access. The nex
 1. keep this local-open profile as the recovery baseline
 2. use it to work on Bluetooth and the actual runtime
 3. only revisit kernel or dtb replacement if userspace ownership stops being enough
+
+## Manual Bluetooth And Runtime Frontier
+
+The next blocker after ingress is now clearly the Bluetooth bring-up and runtime path, not SSH or USB networking.
+
+Live findings from manual checks on the verified boot:
+
+- `CARTHING_AUTOSTART_REMOTE=0`, so the runtime is intentionally not auto-starting yet
+- `/dev/ttyS1` exists on the device
+- `/usr/bin/carthing-bt-fwload` exists on the device
+- the Python runtime vendor tree imports correctly when `PYTHONPATH=/usr/lib/carthing/vendor`
+- a manual start of `python3 /usr/lib/carthing/media_remote.py` gets as far as:
+
+```text
+INFO Opening transport serial:/dev/ttyS1,3000000
+```
+
+- this means the next blocker is lower than the Python app layer
+
+Important filesystem finding:
+
+- `/` is mounted `ro`
+- `/tmp` is also on the read-only rootfs
+- `/run` is writable
+- bind mounts over read-only rootfs paths do work
+
+This matters because the current image booted with:
+
+- `/usr/share/carthing/firmware/brcm/` present but empty
+- `/lib/firmware/brcm/` present but empty
+
+For the manual live test, firmware was copied into `/run`, then bind-mounted over `/lib/firmware/brcm`.
+
+### Manual `fwload` Results
+
+The most useful manual sequence was:
+
+1. copy `BCM.hcd` and `BCM20703A2.hcd` into `/run`
+2. bind-mount `/run/brcm` over `/lib/firmware/brcm`
+3. export and toggle GPIO `493`
+4. run:
+
+```sh
+/usr/bin/carthing-bt-fwload \
+  --device /dev/ttyS1 \
+  --firmware /lib/firmware/brcm/BCM20703A2.hcd \
+  --download-baud 115200 \
+  --baudrate 3000000 \
+  --debug
+```
+
+Observed result:
+
+- initial `HCI_RESET` completed
+- `DOWNLOAD_MINIDRIVER` completed
+- first HCD streaming step timed out
+- log ended with:
+
+```text
+=> 01 03 0c 00
+<= 04 0e 04 01 03 0c 00
+=> 01 2e fc 00
+<= 04 0e 04 01 2e fc 00
+=> 01 4c fc ...
+timed out waiting for UART data
+short HCI event
+```
+
+Additional manual variants were worse:
+
+- no reset:
+  - `<= 04 10 01 00`
+  - `short HCI event`
+- longer `sleep 1.0` after reset:
+  - `timed out waiting for UART data`
+  - `short HCI event`
+
+So the original shorter reset path was the best of the manual live attempts so far.
+
+### Implications
+
+At the next return point, the first useful Bluetooth/runtime work should be:
+
+1. fix why firmware files are missing from the flashed live image even though they exist in the repo overlay
+2. inspect the first HCD command / firmware blob provenance because both current `.hcd` files are byte-identical
+3. revisit the `fwload` sequence itself only after the firmware staging issue is understood
