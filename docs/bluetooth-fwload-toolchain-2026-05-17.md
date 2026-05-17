@@ -204,6 +204,20 @@ Live proof on device `№1`:
   - `open_transport_or_link('hci-socket:0')`
   - `device.power_on()`
   - `device.start_advertising(...)`
+- a live `media_remote.main()` probe on `CAR_THING_TRANSPORT=hci-socket:0`
+  also reached:
+  - `Car Thing Media Remote запущен.`
+  - `DRM display ready`
+  - `Input: watching /dev/input/event1`
+  - `Input: watching /dev/input/event0`
+
+Important scope note:
+
+- this proof was done live by manually attaching the helper on the running
+  device
+- it confirms the runtime direction
+- it does not mean the new attach path is already persistent in the flashed
+  image yet
 
 This changes the preferred runtime architecture:
 
