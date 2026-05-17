@@ -28,9 +28,9 @@ CARTHING_BT_ALIAS="CarThing"
 CARTHING_RUNTIME_ROOT=/usr/lib/carthing
 CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/media_remote.py
 CARTHING_RUNTIME_LIB=/usr/lib/carthing/vendor
-CARTHING_RUNTIME_KEYS=/var/lib/carthing/keys.json
-CARTHING_RUNTIME_LOG=/var/log/carthing-remote.log
-CARTHING_AUTOSTART_REMOTE=0
+CARTHING_RUNTIME_KEYS=/run/carthing/keys.json
+CARTHING_RUNTIME_LOG=/run/carthing/carthing-remote.log
+CARTHING_AUTOSTART_REMOTE=1
 CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4
 CARTHING_FONT_PATH=/usr/share/fonts/truetype/DejaVuSans.ttf
 

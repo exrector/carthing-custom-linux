@@ -10,6 +10,8 @@ if [ ! -x /usr/libexec/carthing/run-media-remote ]; then
     exit 1
 fi
 
+mkdir -p /run/carthing
+
 nohup /usr/libexec/carthing/run-media-remote >> "$CARTHING_RUNTIME_LOG" 2>&1 &
 
 echo "[S50-carthing-remote] runtime started"

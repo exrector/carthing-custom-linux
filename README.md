@@ -137,7 +137,8 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - custom `carthing-btattach-mini` helper added to keep the runtime attach path small and explicit
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
-- reverse control agent is now wired into early init for the next `№1` test
+- attach -> `hci0` -> Bumble `hci-socket:0` is now live-proven on device `№1`
+- runtime is now configured to autostart with writable `/run/carthing` log and keystore paths
 - macOS host diagnostics are now documented around `ioreg` first, not `adb` or raw `ping`
 - macOS host bring-up is now scripted separately from diagnostics so `en14` and `172.16.42.0/24` can be recovered consistently
 - current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
