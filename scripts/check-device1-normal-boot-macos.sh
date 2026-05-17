@@ -16,7 +16,8 @@ Source of truth on macOS:
 3. `route get <ip>` only after the USB gadget is confirmed.
 
 If the gadget exists but macOS still leaves the link or route in a bad state,
-use `./scripts/bring-up-device1-normal-boot-macos.sh`.
+use `./scripts/bring-up-device1-normal-boot-macos.sh` immediately.
+Do not wait for `en14` or `utun*` routing to self-heal on this host.
 EOF
 }
 
@@ -152,9 +153,11 @@ snapshot() {
 
     if [ "${if_status:-}" = "inactive" ]; then
         echo "diagnosis: USB gadget is present and mapped to ${bsd_name}, but the NCM link is not active yet"
+        echo "rule: do not wait; force host-side bring-up now"
         echo "next_action: ./scripts/bring-up-device1-normal-boot-macos.sh --bsd ${bsd_name}"
     elif [ -n "${route_default:-}" ] && [ "$route_default" != "$bsd_name" ]; then
         echo "diagnosis: USB link exists on ${bsd_name}, but route to ${ROOT_DEFAULT_IP} is pinned elsewhere"
+        echo "rule: do not wait; force host-side bring-up now"
         echo "next_action: ./scripts/bring-up-device1-normal-boot-macos.sh --bsd ${bsd_name}"
     elif [ "$ping_default" = "ok" ] || [ "$ping_stage2" = "ok" ]; then
         echo "diagnosis: USB gadget and network path are alive"

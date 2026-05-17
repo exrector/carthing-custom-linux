@@ -31,6 +31,12 @@ Current recovery key set includes:
 
 ## Host Bring-Up
 
+First rule on this Mac:
+
+- if device `№1` was replugged in normal boot, do not wait for `en14` or the route to recover by themselves
+- force host-side bring-up first
+- only after that decide whether the target itself is still broken
+
 On this Mac host, bring the USB link up with:
 
 ```sh
@@ -41,6 +47,12 @@ That should assign:
 
 - host IP `172.16.42.1/24`
 - route `172.16.42.0/24` pinned to the NCM interface
+
+Typical bad host-side state that still requires this script:
+
+- `NCM Gadget` exists in `ioreg`
+- `en14` exists but shows `status: inactive`
+- route to `172.16.42.77` points to `utun*`
 
 ## Recommended Access Order
 

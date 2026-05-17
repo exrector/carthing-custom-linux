@@ -15,6 +15,27 @@ Scope:
 - remove the hidden upstream userspace policy layer
 - replace it with a small rootfs overlay, our own init scripts, and a documented runtime contract
 
+## First Rule On This Mac
+
+When device `№1` is reconnected in normal boot, DO NOT wait for macOS to fix
+USB networking by itself.
+
+On this host, the first recovery action is:
+
+```sh
+./scripts/bring-up-device1-normal-boot-macos.sh
+```
+
+Reason:
+
+- `NCM Gadget` may already be present in `ioreg`
+- `en14` may still be `inactive`
+- route `172.16.42.0/24` may drift to `utun*`
+- that state is host-side drift, not proof that the target disappeared
+
+Only after forced host-side bring-up should device absence or target-side boot
+failure be considered.
+
 ## Read Order
 
 1. `docs/upstream-userspace-contract.md`

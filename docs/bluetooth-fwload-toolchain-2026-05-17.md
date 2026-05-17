@@ -71,8 +71,35 @@ ssh -i ~/.ssh/id_rsa root@172.16.42.77 '
 '
 ```
 
-Live blocker at the end of this checkpoint:
-- device was reattached on USB, `NCM Gadget` was visible in `ioreg`
-- but host-side `en14` stayed `inactive`
-- route to `172.16.42.77` stayed pinned to `utun13`
-- therefore the rebuilt binary was not uploaded to the device in this session
+Follow-up live result:
+- host-side bring-up had to be forced manually on macOS:
+  - `sudo ifconfig en14 inet 172.16.42.1 netmask 255.255.255.0 up`
+  - `sudo route -n add -net 172.16.42.0/24 -interface en14`
+- waiting for `en14` or `utun*` routing to self-heal was the wrong move
+- after host-side bring-up:
+  - `ssh`, `http`, and `telnet` came back
+  - rebuilt `carthing-bt-fwload` was uploaded to `/run`
+  - external `BCM20703A1-0a5c-6410.hcd` was uploaded to `/run`
+
+What the live run proved:
+- the rebuilt binary is valid on target
+- firmware upload now gets through the full HCD stream again
+- the stop moved to a narrower point:
+  - after a successful `0xFC4E` launch sequence
+  - then a post-launch `HCI_RESET` times out
+
+Tail of the decisive live sequence:
+
+```text
+=> 01 4e fc 04 ff ff ff ff
+<= 04 0e 04 01 4e fc 00
+=> 01 4e fc 00
+=> 01 03 0c 00
+timed out waiting for UART data
+short HCI event
+```
+
+Current next step:
+- keep the host-side bring-up rule fixed in docs and scripts
+- narrow the `fwload` logic further around post-launch reset timing or whether
+  that reset should be skipped entirely after RAM launch

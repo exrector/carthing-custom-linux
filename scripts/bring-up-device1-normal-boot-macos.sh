@@ -7,8 +7,12 @@ usage: bring-up-device1-normal-boot-macos.sh [--bsd IFACE]
 
 Host-side macOS remediation for device №1 normal boot.
 
-This script does not decide whether the USB gadget exists.
-Run `check-device1-normal-boot-macos.sh` first to confirm `NCM Gadget`
+On this host, once `NCM Gadget` exists in `ioreg`, this is the canonical first
+recovery action after a replug. Do not wait for `en14` or `utun*` routing to
+self-heal.
+
+This script does not decide whether the USB gadget exists. Use
+`check-device1-normal-boot-macos.sh` when you need to confirm `NCM Gadget`
 and the BSD interface name, then use this script to:
 
 1. assign `172.16.42.1/24` to the BSD interface

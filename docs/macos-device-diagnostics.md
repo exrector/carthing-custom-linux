@@ -2,6 +2,20 @@
 
 ## STOP USING THE WRONG SIGNALS
 
+## FIRST RULE ON THIS MAC
+
+If device `№1` was replugged in normal boot and `NCM Gadget` exists in
+`ioreg`, do not wait for `en14` or routing to repair themselves.
+
+Do this first:
+
+```sh
+./scripts/bring-up-device1-normal-boot-macos.sh
+```
+
+This is not an optional cleanup step. On this host it is the canonical first
+recovery action after reconnect.
+
 DO NOT use `adb devices` as the source of truth for device `№1` normal boot.
 
 DO NOT infer "USB gadget absent" from:
@@ -43,11 +57,13 @@ These states mean different things and must not be collapsed together:
   - the USB gadget is missing or re-enumerating
 - `NCM Gadget` present and `BSD Name` exists, but `ifconfig status: inactive`
   - the USB gadget exists and macOS attached the NCM driver
-  - the host-side USB service may still need explicit bring-up on this Mac
+  - the host-side USB service still needs explicit bring-up on this Mac
+  - do not wait for it to recover by itself
   - run `./scripts/bring-up-device1-normal-boot-macos.sh` before concluding that the target is dead
 - `NCM Gadget` present, `BSD Name` exists, link is active, but route points to `utun*`
   - the gadget exists
   - routing is wrong
+  - do not wait for VPN routing to move away by itself
   - run `./scripts/bring-up-device1-normal-boot-macos.sh`
 - `NCM Gadget` present, link active, route correct, but no ICMP reply
   - host-side USB/NCM exists
