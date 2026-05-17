@@ -141,3 +141,41 @@ CARTHING_BT_FWLOAD_ARGS="--post-launch-reset none" \
 
 - if that path consistently succeeds, promote the chosen firmware blob and
   `CARTHING_BT_FWLOAD_ARGS` into the normal device configuration
+
+New live frontier after the `skip reset` experiments:
+- a clean `fwload` run with:
+
+```sh
+/run/carthing-bt-fwload \
+  --device /dev/ttyS1 \
+  --firmware /run/BCM20703A1-0a5c-6410.hcd \
+  --download-baud 115200 \
+  --baudrate 3000000 \
+  --post-launch-reset none
+```
+
+  now exits `0` on target
+- after that, a direct Bumble probe can already open the serial transport:
+  - `open_transport_or_link('serial:/dev/ttyS1,3000000')` succeeds
+  - `open_transport_or_link('serial:/dev/ttyS1,3000000,rtscts')` also succeeds
+- but `device.power_on()` still times out on the very first HCI command:
+  - first at `host.reset()` (`HCI_Reset_Command`)
+  - and even with a temporary monkey-patch that skips `host.reset()`, the next
+    command (`HCI_Read_BD_ADDR_Command`) still times out
+
+What this means:
+- the frontier is no longer "can the loader upload firmware?"
+- and no longer "can Bumble open the serial transport?"
+- the current narrow stop is:
+  - post-upload controller state does not answer regular HCI commands yet
+
+Negative results also confirmed:
+- longer quiet time after `Launch RAM` did not fix `device.power_on()`
+- enabling `rtscts` only on the Bumble transport side did not fix
+  `device.power_on()`
+
+Most likely next direction:
+- compare our post-launch behavior against the exact controller state expected
+  by the original Broadcom init path
+- focus on post-upload controller readiness / first-HCI-command semantics, not
+  on host-side USB, toolchain, or simple serial-open logic
