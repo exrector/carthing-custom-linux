@@ -82,6 +82,8 @@ pin_route() {
     attempts=3
     while [ "$attempts" -gt 0 ]; do
         attempts=$((attempts - 1))
+        sudo route -n delete -host "$ROOT_DEFAULT_IP" >/dev/null 2>&1 || true
+        sudo route -n delete -host "$ROOT_STAGE2_IP" >/dev/null 2>&1 || true
         sudo route -n delete -net "$USB_ROUTE_CIDR" >/dev/null 2>&1 || true
         sudo route -n add -net "$USB_ROUTE_CIDR" -interface "$bsd_name" >/dev/null 2>&1 \
             || sudo route -n change -net "$USB_ROUTE_CIDR" -interface "$bsd_name" >/dev/null 2>&1 \

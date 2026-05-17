@@ -159,6 +159,10 @@ snapshot() {
         echo "diagnosis: USB link exists on ${bsd_name}, but route to ${ROOT_DEFAULT_IP} is pinned elsewhere"
         echo "rule: do not wait; force host-side bring-up now"
         echo "next_action: ./scripts/bring-up-device1-normal-boot-macos.sh --bsd ${bsd_name}"
+    elif [ -n "${route_stage2:-}" ] && [ "$route_stage2" != "$bsd_name" ]; then
+        echo "diagnosis: USB link exists on ${bsd_name}, but route to ${ROOT_STAGE2_IP} is pinned elsewhere"
+        echo "rule: do not wait; force host-side bring-up now"
+        echo "next_action: ./scripts/bring-up-device1-normal-boot-macos.sh --bsd ${bsd_name}"
     elif [ "$ping_default" = "ok" ] || [ "$ping_stage2" = "ok" ]; then
         echo "diagnosis: USB gadget and network path are alive"
     else

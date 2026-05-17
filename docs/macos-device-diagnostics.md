@@ -46,8 +46,9 @@ canonical remediation is:
 
 That script is intentionally separate from the read-only diagnostic. It assigns
 `172.16.42.1/24` to the detected NCM interface, clears stale ARP entries for
-the target IPs, and pins `172.16.42.0/24` back to the USB interface instead of
-letting VPN or Wi-Fi routes win.
+the target IPs, deletes stale host-routes for `.2` and `.77`, and pins
+`172.16.42.0/24` back to the USB interface instead of letting VPN or Wi-Fi
+routes win.
 
 ## NORMAL BOOT: WHAT COUNTS AS PROOF
 
@@ -65,6 +66,10 @@ These states mean different things and must not be collapsed together:
   - routing is wrong
   - do not wait for VPN routing to move away by itself
   - run `./scripts/bring-up-device1-normal-boot-macos.sh`
+- `NCM Gadget` present, link is active, subnet route is pinned to `en14`, but a stale host-route to `.77` still points elsewhere
+  - this is still host-side routing drift on macOS
+  - delete the stale host-route before concluding that the device vanished
+  - the canonical bring-up script now does this automatically
 - `NCM Gadget` present, link active, route correct, but no ICMP reply
   - host-side USB/NCM exists
   - target-side service or IP state is still broken
@@ -102,6 +107,7 @@ of action that `bring-up-device1-normal-boot-macos.sh` performs:
 
 ```sh
 sudo ifconfig en14 172.16.42.1 netmask 255.255.255.0 up
+sudo route -n delete -host 172.16.42.77 || true
 sudo route -n delete -net 172.16.42.0/24 || true
 sudo route -n add -net 172.16.42.0/24 -interface en14
 ```
