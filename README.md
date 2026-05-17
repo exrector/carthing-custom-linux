@@ -46,10 +46,13 @@ failure be considered.
 6. `docs/storage-map-and-cleanup.md`
 7. `docs/reverse-control-agent.md`
 8. `docs/local-access-profile.md`
-9. `docs/session-freeze-2026-05-12.md`
-10. `overlay/etc/default/carthing`
-11. `overlay/etc/init.d/`
-12. `overlay/usr/libexec/carthing/contract-selftest`
+9. `docs/checkpoint-2026-05-18-hid-pair-cold-boot.md`
+10. `docs/device1-v1-working-baseline-2026-05-18.md`
+11. `docs/device1-reliability-pass-2026-05-18.md`
+12. `docs/session-freeze-2026-05-12.md`
+13. `overlay/etc/default/carthing`
+14. `overlay/etc/init.d/`
+15. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
@@ -141,8 +144,14 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - attach -> `hci0` -> Bumble `hci-socket:0` is now live-proven on device `№1`
 - runtime is now configured to autostart with writable `/run/carthing` logs and persistent bond storage on `mmcblk0p1`
 - iPhone pairing requires the HID profile layer first; AMS alone is not sufficient for discovery in iOS Settings
+- a real cold boot with the permanent flashed image is now proven:
+  - the iPhone pair survives reboot
+  - the device auto-reconnects
+  - Podcast metadata appears on screen
+  - the encoder works
 - macOS host diagnostics are now documented around `ioreg` first, not `adb` or raw `ping`
 - macOS host bring-up is now scripted separately from diagnostics so `en14` and `172.16.42.0/24` can be recovered consistently
+- stale macOS host-routes to `172.16.42.77` are now treated as a first-class failure mode and are cleared by the canonical bring-up script
 - current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
 - storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
 - legacy MFi / iAP2 notes have been curated into `reference/legacy-mfi-iap2/`
@@ -152,6 +161,8 @@ In other words: first own userspace completely, then decide whether a kernel rep
   - BusyBox `telnetd` on `2323` enabled
   - default root password is `carthing`
   - canonical access profile documented in `docs/local-access-profile.md`
+- the current known-good release artifact is:
+  - `artifacts/releases/device1-v1-working-20260518/bundle/`
 
 ## Not In Scope Yet
 
