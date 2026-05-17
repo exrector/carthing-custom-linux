@@ -9,7 +9,7 @@ from bumble.keys import JsonKeyStore
 logger = logging.getLogger(__name__)
 
 
-async def init_ble(on_ready=None):
+async def init_ble(configure_device=None, on_ready=None):
     logger.info("Opening transport %s", TRANSPORT)
     transport = await open_transport_or_link(TRANSPORT)
 
@@ -22,6 +22,9 @@ async def init_ble(on_ready=None):
         ),
     )
     device.keystore = JsonKeyStore("CarThing", str(KEYSTORE_PATH))
+
+    if configure_device:
+        configure_device(device)
 
     await device.power_on()
     logger.info("BLE device ON — address: %s", device.public_address)

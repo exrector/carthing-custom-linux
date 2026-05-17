@@ -10,6 +10,7 @@ ensure_runtime_paths()
 
 from bumble.core import UUID
 from bumble.device import AdvertisingData, Connection, Device, OwnAddressType
+from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
 from ams_client import AMSClient, MediaState
@@ -33,6 +34,110 @@ ui: NowPlayingUI | None = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
+_ams_starting: set[int] = set()
+
+GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
+BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
+HID_SERVICE_UUID = UUID.from_16_bits(0x1812)
+
+BATTERY_LEVEL_UUID = UUID.from_16_bits(0x2A19)
+HID_INFORMATION_UUID = UUID.from_16_bits(0x2A4A)
+REPORT_MAP_UUID = UUID.from_16_bits(0x2A4B)
+HID_CONTROL_POINT_UUID = UUID.from_16_bits(0x2A4C)
+REPORT_UUID = UUID.from_16_bits(0x2A4D)
+PROTOCOL_MODE_UUID = UUID.from_16_bits(0x2A4E)
+
+CCCD_UUID = UUID.from_16_bits(0x2902)
+REPORT_REFERENCE_UUID = UUID.from_16_bits(0x2908)
+
+HID_REPORT_MAP = bytes(
+    [
+        0x05, 0x0C,
+        0x09, 0x01,
+        0xA1, 0x01,
+        0x85, 0x01,
+        0x15, 0x00,
+        0x25, 0x01,
+        0x75, 0x01,
+        0x95, 0x05,
+        0x09, 0xCD,
+        0x09, 0xB5,
+        0x09, 0xB6,
+        0x09, 0xE9,
+        0x09, 0xEA,
+        0x81, 0x02,
+        0x95, 0x03,
+        0x81, 0x03,
+        0xC0,
+    ]
+)
+HID_INFORMATION = struct.pack("<HBB", 0x0111, 0x00, 0x03)
+
+
+def install_hid_pairing_profile(device: Device):
+    report_char = Characteristic(
+        REPORT_UUID,
+        Characteristic.READ | Characteristic.NOTIFY,
+        Characteristic.READABLE,
+        bytes([0x00]),
+        descriptors=[
+            Descriptor(CCCD_UUID, Descriptor.READABLE | Descriptor.WRITEABLE, bytes([0x00, 0x00])),
+            Descriptor(REPORT_REFERENCE_UUID, Descriptor.READABLE, bytes([0x01, 0x01])),
+        ],
+    )
+
+    device.add_service(
+        Service(
+            GATT_SERVICE_UUID,
+            [],
+        )
+    )
+    device.add_service(
+        Service(
+            BATTERY_SERVICE_UUID,
+            [
+                Characteristic(
+                    BATTERY_LEVEL_UUID,
+                    Characteristic.READ | Characteristic.NOTIFY,
+                    Characteristic.READABLE,
+                    bytes([100]),
+                )
+            ],
+        )
+    )
+    device.add_service(
+        Service(
+            HID_SERVICE_UUID,
+            [
+                Characteristic(
+                    HID_INFORMATION_UUID,
+                    Characteristic.READ,
+                    Characteristic.READABLE,
+                    HID_INFORMATION,
+                ),
+                Characteristic(
+                    REPORT_MAP_UUID,
+                    Characteristic.READ,
+                    Characteristic.READABLE,
+                    HID_REPORT_MAP,
+                ),
+                Characteristic(
+                    PROTOCOL_MODE_UUID,
+                    Characteristic.READ | Characteristic.WRITE_WITHOUT_RESPONSE,
+                    Characteristic.READABLE | Characteristic.WRITEABLE,
+                    bytes([0x01]),
+                ),
+                report_char,
+                Characteristic(
+                    HID_CONTROL_POINT_UUID,
+                    Characteristic.WRITE_WITHOUT_RESPONSE,
+                    Characteristic.WRITEABLE,
+                    bytes([0x00]),
+                ),
+            ],
+        )
+    )
+    logger.info("HID pairing profile installed")
 
 
 def on_state_update(s: MediaState):
@@ -55,16 +160,65 @@ def on_state_update(s: MediaState):
 
 
 async def on_connection(connection: Connection):
-    global ams, _last_activity, _active_conn
+    global _last_activity
     _last_activity = time.monotonic()
-    _active_conn = connection
-    logger.info("iPhone подключился: %s handle=%d", connection.peer_address, connection.handle)
-    ams = AMSClient(state, on_update=on_state_update)
-    ok = await ams.setup(connection)
-    if ok:
-        logger.info("AMS готов — жду метаданные")
+    logger.info(
+        "iPhone подключился: %s handle=%d encrypted=%s",
+        connection.peer_address,
+        connection.handle,
+        connection.is_encrypted,
+    )
+    connection.on("pairing_start", lambda: logger.info("SMP: pairing started handle=%d", connection.handle))
+    connection.on("pairing", lambda keys: on_pairing(connection, keys))
+    connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
+    connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
+
+    if connection.is_encrypted:
+        await maybe_start_ams(connection, "connected-encrypted")
     else:
-        logger.warning("AMS не найден на этом устройстве")
+        logger.info("Requesting pairing for handle=%d", connection.handle)
+        connection.request_pairing()
+
+
+def on_pairing(connection: Connection, keys):
+    logger.info("SMP: bonding complete handle=%d keys=%s", connection.handle, keys)
+    if connection.is_encrypted:
+        asyncio.create_task(maybe_start_ams(connection, "pairing-complete"))
+
+
+def on_connection_encryption_change(connection: Connection):
+    logger.info(
+        "Encryption change handle=%d encrypted=%s",
+        connection.handle,
+        connection.is_encrypted,
+    )
+    if connection.is_encrypted:
+        asyncio.create_task(maybe_start_ams(connection, "link-encrypted"))
+
+
+async def maybe_start_ams(connection: Connection, reason: str):
+    global ams, _active_conn
+    if not connection.is_encrypted:
+        logger.info("AMS wait for encryption: handle=%d reason=%s", connection.handle, reason)
+        return
+    if _active_conn is connection and ams is not None:
+        return
+    if connection.handle in _ams_starting:
+        return
+
+    _ams_starting.add(connection.handle)
+    try:
+        logger.info("AMS setup start: handle=%d reason=%s", connection.handle, reason)
+        candidate = AMSClient(state, on_update=on_state_update)
+        ok = await candidate.setup(connection)
+        if ok:
+            _active_conn = connection
+            ams = candidate
+            logger.info("AMS готов — жду метаданные")
+        else:
+            logger.warning("AMS не найден на этом устройстве")
+    finally:
+        _ams_starting.discard(connection.handle)
 
 
 async def on_disconnection(connection: Connection, reason: int):
@@ -174,7 +328,7 @@ def _last_activity_bump():
 
 async def main():
     global ui, _device
-    device, _transport = await init_ble()
+    device, _transport = await init_ble(configure_device=install_hid_pairing_profile)
     _device = device
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))

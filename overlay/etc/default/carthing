@@ -25,10 +25,13 @@ CARTHING_BT_ATTACH_ARGS=
 CARTHING_BT_BUMBLE_TRANSPORT=hci-socket:0
 CARTHING_BT_ALIAS="CarThing"
 
+CARTHING_STATE_DEVICE=/dev/mmcblk0p1
+CARTHING_STATE_MOUNT=/run/carthing-state
+
 CARTHING_RUNTIME_ROOT=/usr/lib/carthing
 CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/media_remote.py
 CARTHING_RUNTIME_LIB=/usr/lib/carthing/vendor
-CARTHING_RUNTIME_KEYS=/run/carthing/keys.json
+CARTHING_RUNTIME_KEYS=/run/carthing-state/carthing/keys.json
 CARTHING_RUNTIME_LOG=/run/carthing/carthing-remote.log
 CARTHING_AUTOSTART_REMOTE=1
 CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4

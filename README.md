@@ -109,7 +109,8 @@ The Bluetooth bring-up path is now explicitly ours:
 2. reset the Bluetooth chip on GPIO 493
 3. attach the Broadcom UART controller with `carthing-btattach-mini`
 4. let the kernel create `hci0`
-5. start the app on Bumble `hci-socket:0`
+5. expose a real BLE HID pairing profile for iPhone
+6. then start the AMS runtime on Bumble `hci-socket:0`
 
 `carthing-bt-fwload` is still kept in the image as a low-level diagnostic and
 recovery tool, but it is no longer the preferred runtime path.
@@ -138,7 +139,8 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
 - attach -> `hci0` -> Bumble `hci-socket:0` is now live-proven on device `№1`
-- runtime is now configured to autostart with writable `/run/carthing` log and keystore paths
+- runtime is now configured to autostart with writable `/run/carthing` logs and persistent bond storage on `mmcblk0p1`
+- iPhone pairing requires the HID profile layer first; AMS alone is not sufficient for discovery in iOS Settings
 - macOS host diagnostics are now documented around `ioreg` first, not `adb` or raw `ping`
 - macOS host bring-up is now scripted separately from diagnostics so `en14` and `172.16.42.0/24` can be recovered consistently
 - current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
