@@ -84,8 +84,11 @@ Follow-up live result:
 What the live run proved:
 - the rebuilt binary is valid on target
 - firmware upload now gets through the full HCD stream again
-- the stop moved to a narrower point:
-  - after a successful `0xFC4E` launch sequence
+- the old double-launch bug was real:
+  - the HCD blob already contains `0xFC4E`
+  - sending an extra manual `Launch RAM` after the stream was wrong
+- after removing the duplicate `Launch RAM`, the stop moved to a narrower point:
+  - a single successful `0xFC4E` launch sequence
   - then a post-launch `HCI_RESET` times out
 
 Tail of the decisive live sequence:
@@ -93,13 +96,48 @@ Tail of the decisive live sequence:
 ```text
 => 01 4e fc 04 ff ff ff ff
 <= 04 0e 04 01 4e fc 00
-=> 01 4e fc 00
+=> 01 03 0c 00
+timed out waiting for UART data
+short HCI event
+post-launch reset failed at 115200, retrying at 3000000 baud
 => 01 03 0c 00
 timed out waiting for UART data
 short HCI event
 ```
 
+Further source-side narrowing that was added after this run:
+- `carthing-bt-fwload` now has explicit runtime controls for the two disputed
+  areas, so the next experiments do not require new recompiles each time:
+  - `--post-launch-delay-us <usec>`
+  - `--post-launch-reset both|download|controller|none`
+  - `--hw-flow-control`
+- `S20-bt-init` already supports arbitrary `CARTHING_BT_FWLOAD_ARGS`, so these
+  experiments can be driven through normal boot once the desired defaults are
+  chosen.
+
+What the next live experiments showed:
+- enabling `--hw-flow-control` made things worse on this hardware revision:
+  the loader then failed earlier at `DOWNLOAD_MINIDRIVER` instead of at the
+  post-launch reset
+- keeping hardware flow control off and using baseline `--post-launch-reset both`
+  reproduced the same narrow stop as above
+- using `--post-launch-reset none` on a clean run reached `Launch RAM` without
+  printing a new loader-side error after the `0xFC4E` completion
+- after several back-to-back manual runs, the UART/chip state became dirty
+  enough that later direct retries could fail even on the very first
+  `HCI_RESET`; that state should not be mistaken for a regression of the
+  `skip reset` experiment itself
+
 Current next step:
 - keep the host-side bring-up rule fixed in docs and scripts
-- narrow the `fwload` logic further around post-launch reset timing or whether
-  that reset should be skipped entirely after RAM launch
+- keep default `fwload` behavior conservative in the image for now
+- on the next clean device cycle, test the standard boot path with:
+
+```sh
+CARTHING_BT_FIRMWARE=/run/BCM20703A1-0a5c-6410.hcd \
+CARTHING_BT_FWLOAD_ARGS="--post-launch-reset none" \
+/etc/init.d/S20-bt-init
+```
+
+- if that path consistently succeeds, promote the chosen firmware blob and
+  `CARTHING_BT_FWLOAD_ARGS` into the normal device configuration

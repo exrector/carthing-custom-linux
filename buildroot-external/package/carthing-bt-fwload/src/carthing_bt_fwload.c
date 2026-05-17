@@ -11,12 +11,22 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 
+enum post_launch_reset_mode {
+    POST_LAUNCH_RESET_BOTH,
+    POST_LAUNCH_RESET_DOWNLOAD,
+    POST_LAUNCH_RESET_CONTROLLER,
+    POST_LAUNCH_RESET_NONE,
+};
+
 struct options {
     const char *device;
     const char *firmware;
     unsigned int download_baud;
     unsigned int controller_baud;
     unsigned int sleep_us;
+    unsigned int post_launch_delay_us;
+    enum post_launch_reset_mode post_launch_reset_mode;
+    bool hw_flow_control;
     bool debug;
 };
 
@@ -28,9 +38,30 @@ static void usage(FILE *stream, const char *argv0) {
         "  --download-baud <baud>  Initial UART baud rate before firmware upload\n"
         "  --baudrate <baud>       Final controller baud rate after upload\n"
         "  --sleep-us <usec>       Delay between HCD commands\n"
+        "  --post-launch-delay-us <usec>\n"
+        "                         Delay after Launch RAM before more UART traffic\n"
+        "  --post-launch-reset <mode>\n"
+        "                         Post-launch reset strategy: both, download,\n"
+        "                         controller, none\n"
+        "  --hw-flow-control       Enable RTS/CTS on the UART\n"
         "  --debug                 Print HCI packets\n"
         "  --help                  Show this help\n",
         argv0);
+}
+
+static const char *post_launch_reset_mode_name(enum post_launch_reset_mode mode) {
+    switch (mode) {
+    case POST_LAUNCH_RESET_BOTH:
+        return "both";
+    case POST_LAUNCH_RESET_DOWNLOAD:
+        return "download";
+    case POST_LAUNCH_RESET_CONTROLLER:
+        return "controller";
+    case POST_LAUNCH_RESET_NONE:
+        return "none";
+    }
+
+    return "unknown";
 }
 
 static speed_t speed_from_uint(unsigned int baud) {
@@ -102,7 +133,7 @@ static speed_t speed_from_uint(unsigned int baud) {
     return (speed_t)0;
 }
 
-static int set_serial_baud(int fd, unsigned int baud) {
+static int set_serial_baud(int fd, unsigned int baud, bool hw_flow_control) {
     struct termios tio;
     speed_t speed = speed_from_uint(baud);
 
@@ -118,7 +149,11 @@ static int set_serial_baud(int fd, unsigned int baud) {
 
     cfmakeraw(&tio);
     tio.c_cflag |= CLOCAL | CREAD;
-    tio.c_cflag &= ~CRTSCTS;
+    if (hw_flow_control) {
+        tio.c_cflag |= CRTSCTS;
+    } else {
+        tio.c_cflag &= ~CRTSCTS;
+    }
     tio.c_cc[VMIN] = 0;
     tio.c_cc[VTIME] = 1;
 
@@ -247,6 +282,37 @@ static int read_hci_event(int fd, uint8_t *buf, size_t cap, bool debug) {
     return (int)(3 + payload_len);
 }
 
+static int maybe_read_hci_event(int fd, uint8_t *buf, size_t cap, int timeout_ms, bool debug) {
+    struct pollfd pfd = {
+        .fd = fd,
+        .events = POLLIN,
+    };
+    int ready = poll(&pfd, 1, timeout_ms);
+
+    if (ready < 0) {
+        perror("poll");
+        return -1;
+    }
+    if (ready == 0) {
+        return 0;
+    }
+
+    return read_hci_event(fd, buf, cap, debug);
+}
+
+static int settle_after_launch(int fd, const struct options *opts) {
+    if (opts->post_launch_delay_us != 0) {
+        usleep(opts->post_launch_delay_us);
+    }
+
+    if (tcflush(fd, TCIOFLUSH) != 0) {
+        perror("tcflush");
+        return -1;
+    }
+
+    return 0;
+}
+
 static int send_hci_cmd_expect_complete(int fd, const uint8_t *cmd, size_t len,
                                         uint16_t opcode, bool debug) {
     uint8_t event[260];
@@ -287,8 +353,10 @@ static int send_hci_cmd_expect_complete(int fd, const uint8_t *cmd, size_t len,
     return 0;
 }
 
-static int stream_hcd(FILE *fw, int fd, const struct options *opts) {
+static int stream_hcd(FILE *fw, int fd, const struct options *opts, bool *saw_launch_ram) {
     uint8_t hdr[3];
+
+    *saw_launch_ram = false;
 
     while (fread(hdr, 1, sizeof(hdr), fw) == sizeof(hdr)) {
         uint8_t cmd[260];
@@ -308,6 +376,32 @@ static int stream_hcd(FILE *fw, int fd, const struct options *opts) {
         if (fread(cmd + 4, 1, payload_len, fw) != payload_len) {
             fprintf(stderr, "truncated HCD payload\n");
             return -1;
+        }
+
+        if (opcode == 0xfc4e) {
+            uint8_t event[260];
+
+            *saw_launch_ram = true;
+
+            /*
+             * Standard Broadcom HCD blobs already carry the final Launch RAM
+             * command. Some controllers send a Command Complete for it, while
+             * others reboot immediately. Send the HCD-provided command once,
+             * consume one optional event if it appears quickly, then give the
+             * controller time to restart and flush stale bytes.
+             */
+            if (send_hci_cmd_no_response(fd, cmd, 4 + payload_len, opts->debug) != 0) {
+                return -1;
+            }
+
+            if (maybe_read_hci_event(fd, event, sizeof(event), 200, opts->debug) < 0) {
+                return -1;
+            }
+
+            if (settle_after_launch(fd, opts) != 0) {
+                return -1;
+            }
+            continue;
         }
 
         if (send_hci_cmd_expect_complete(fd, cmd, 4 + payload_len, opcode, opts->debug) != 0) {
@@ -360,17 +454,62 @@ static int maybe_set_final_baud(int fd, const struct options *opts) {
     }
 
     usleep(50000);
-    if (set_serial_baud(fd, opts->controller_baud) != 0) {
+    if (set_serial_baud(fd, opts->controller_baud, opts->hw_flow_control) != 0) {
         return -1;
     }
 
     return 0;
 }
 
+static int try_hci_reset(int fd, bool debug) {
+    uint8_t hci_reset[] = {0x01, 0x03, 0x0c, 0x00};
+
+    return send_hci_cmd_expect_complete(fd, hci_reset, sizeof(hci_reset), 0x0c03, debug);
+}
+
+static int reset_after_launch(int fd, const struct options *opts, bool *already_at_final_baud) {
+    *already_at_final_baud = false;
+
+    if (opts->post_launch_reset_mode == POST_LAUNCH_RESET_DOWNLOAD ||
+        opts->post_launch_reset_mode == POST_LAUNCH_RESET_BOTH ||
+        opts->controller_baud == 0 ||
+        opts->controller_baud == opts->download_baud) {
+        if (try_hci_reset(fd, opts->debug) == 0) {
+            return 0;
+        }
+
+        if (opts->post_launch_reset_mode == POST_LAUNCH_RESET_DOWNLOAD ||
+            opts->controller_baud == 0 ||
+            opts->controller_baud == opts->download_baud) {
+            return -1;
+        }
+    }
+
+    fprintf(stderr, "post-launch reset failed at %u, retrying at %u baud\n",
+            opts->download_baud, opts->controller_baud);
+
+    if (set_serial_baud(fd, opts->controller_baud, opts->hw_flow_control) != 0) {
+        return -1;
+    }
+
+    usleep(100000);
+    if (settle_after_launch(fd, opts) != 0) {
+        return -1;
+    }
+
+    if (try_hci_reset(fd, opts->debug) != 0) {
+        return -1;
+    }
+
+    *already_at_final_baud = true;
+    return 0;
+}
+
 static int do_firmware_load(int fd, FILE *fw, const struct options *opts) {
+    bool saw_launch_ram = false;
+    bool already_at_final_baud = false;
     uint8_t hci_reset[] = {0x01, 0x03, 0x0c, 0x00};
     uint8_t hci_download_minidriver[] = {0x01, 0x2e, 0xfc, 0x00};
-    uint8_t hci_launch_ram[] = {0x01, 0x4e, 0xfc, 0x00};
 
     if (send_hci_cmd_expect_complete(fd, hci_reset, sizeof(hci_reset), 0x0c03, opts->debug) != 0) {
         return -1;
@@ -382,35 +521,30 @@ static int do_firmware_load(int fd, FILE *fw, const struct options *opts) {
         return -1;
     }
 
-    if (stream_hcd(fw, fd, opts) != 0) {
+    if (stream_hcd(fw, fd, opts, &saw_launch_ram) != 0) {
         return -1;
     }
 
-    /*
-     * Some Broadcom patchram flows reboot immediately after Launch RAM and
-     * never send a Command Complete for opcode 0xFC4E. Treat Launch RAM as a
-     * fire-and-reboot step: send it, give the controller time to restart, then
-     * flush any stale bytes before the next HCI reset.
-     */
-    if (send_hci_cmd_no_response(fd, hci_launch_ram, sizeof(hci_launch_ram), opts->debug) != 0) {
+    if (!saw_launch_ram) {
+        fprintf(stderr, "firmware stream did not contain Launch RAM (opcode 0xFC4E)\n");
         return -1;
     }
 
-    usleep(500000);
-    if (tcflush(fd, TCIOFLUSH) != 0) {
-        perror("tcflush");
+    if (opts->post_launch_reset_mode == POST_LAUNCH_RESET_NONE) {
+        return 0;
+    }
+
+    if (reset_after_launch(fd, opts, &already_at_final_baud) != 0) {
         return -1;
     }
 
-    if (send_hci_cmd_expect_complete(fd, hci_reset, sizeof(hci_reset), 0x0c03, opts->debug) != 0) {
+    if (!already_at_final_baud && maybe_set_final_baud(fd, opts) != 0) {
         return -1;
     }
 
-    if (maybe_set_final_baud(fd, opts) != 0) {
-        return -1;
-    }
-
-    if (opts->controller_baud != 0 && opts->controller_baud != opts->download_baud) {
+    if (!already_at_final_baud &&
+        opts->controller_baud != 0 &&
+        opts->controller_baud != opts->download_baud) {
         if (send_hci_cmd_expect_complete(fd, hci_reset, sizeof(hci_reset), 0x0c03, opts->debug) != 0) {
             return -1;
         }
@@ -431,6 +565,27 @@ static int parse_u32(const char *arg, unsigned int *value) {
     return 0;
 }
 
+static int parse_post_launch_reset_mode(const char *arg, enum post_launch_reset_mode *mode) {
+    if (strcmp(arg, "both") == 0) {
+        *mode = POST_LAUNCH_RESET_BOTH;
+        return 0;
+    }
+    if (strcmp(arg, "download") == 0) {
+        *mode = POST_LAUNCH_RESET_DOWNLOAD;
+        return 0;
+    }
+    if (strcmp(arg, "controller") == 0) {
+        *mode = POST_LAUNCH_RESET_CONTROLLER;
+        return 0;
+    }
+    if (strcmp(arg, "none") == 0) {
+        *mode = POST_LAUNCH_RESET_NONE;
+        return 0;
+    }
+
+    return -1;
+}
+
 static int parse_args(int argc, char **argv, struct options *opts) {
     int i;
 
@@ -438,6 +593,9 @@ static int parse_args(int argc, char **argv, struct options *opts) {
     opts->download_baud = 115200;
     opts->controller_baud = 3000000;
     opts->sleep_us = 5000;
+    opts->post_launch_delay_us = 500000;
+    opts->post_launch_reset_mode = POST_LAUNCH_RESET_BOTH;
+    opts->hw_flow_control = false;
 
     for (i = 1; i < argc; ++i) {
         const char *arg = argv[i];
@@ -464,6 +622,20 @@ static int parse_args(int argc, char **argv, struct options *opts) {
                 fprintf(stderr, "invalid --sleep-us value\n");
                 return -1;
             }
+        } else if (strcmp(arg, "--post-launch-delay-us") == 0 && i + 1 < argc) {
+            if (parse_u32(argv[++i], &opts->post_launch_delay_us) != 0) {
+                fprintf(stderr, "invalid --post-launch-delay-us value\n");
+                return -1;
+            }
+        } else if (strcmp(arg, "--post-launch-reset") == 0 && i + 1 < argc) {
+            if (parse_post_launch_reset_mode(argv[++i], &opts->post_launch_reset_mode) != 0) {
+                fprintf(stderr, "invalid --post-launch-reset value\n");
+                return -1;
+            }
+        } else if (strcmp(arg, "--hw-flow-control") == 0) {
+            opts->hw_flow_control = true;
+        } else if (strcmp(arg, "--no-hw-flow-control") == 0) {
+            opts->hw_flow_control = false;
         } else if (strcmp(arg, "--debug") == 0) {
             opts->debug = true;
         } else {
@@ -475,6 +647,13 @@ static int parse_args(int argc, char **argv, struct options *opts) {
     if (opts->device == NULL || opts->firmware == NULL) {
         usage(stderr, argv[0]);
         return -1;
+    }
+
+    if (opts->debug) {
+        fprintf(stderr, "post-launch reset mode: %s, delay: %u us, hw-flow-control: %s\n",
+                post_launch_reset_mode_name(opts->post_launch_reset_mode),
+                opts->post_launch_delay_us,
+                opts->hw_flow_control ? "on" : "off");
     }
 
     return 0;
@@ -502,7 +681,7 @@ int main(int argc, char **argv) {
         goto out;
     }
 
-    if (set_serial_baud(fd, opts.download_baud) != 0) {
+    if (set_serial_baud(fd, opts.download_baud, opts.hw_flow_control) != 0) {
         goto out;
     }
 
