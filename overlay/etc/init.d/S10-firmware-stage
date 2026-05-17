@@ -11,6 +11,7 @@ mkdir -p "$CARTHING_BT_FIRMWARE_DIR"
 need_copy=0
 [ -f "$stage_dir/BCM.hcd" ] || need_copy=1
 [ -f "$stage_dir/BCM20703A2.hcd" ] || need_copy=1
+[ -f "$stage_dir/BCM4345C0.hcd" ] || need_copy=1
 
 if [ "$need_copy" -eq 0 ]; then
     :
@@ -23,6 +24,11 @@ fi
 
 cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM.hcd" "$stage_dir/BCM.hcd"
 cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM20703A2.hcd" "$stage_dir/BCM20703A2.hcd"
+if [ -f "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM4345C0.hcd" ]; then
+    cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM4345C0.hcd" "$stage_dir/BCM4345C0.hcd"
+else
+    cp "$CARTHING_BT_SOURCE_FIRMWARE_DIR/BCM20703A2.hcd" "$stage_dir/BCM4345C0.hcd"
+fi
 
 if awk -v target="$CARTHING_BT_FIRMWARE_DIR" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
     umount "$CARTHING_BT_FIRMWARE_DIR"

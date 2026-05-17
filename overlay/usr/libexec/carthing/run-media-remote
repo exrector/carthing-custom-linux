@@ -6,7 +6,20 @@ set -eu
 export PYTHONPATH="$CARTHING_RUNTIME_LIB"
 export CAR_THING_LIB="$CARTHING_RUNTIME_LIB"
 export CAR_THING_KEYSTORE="$CARTHING_RUNTIME_KEYS"
-export CAR_THING_TRANSPORT="serial:${CARTHING_BT_UART},3000000"
+
+transport=${CARTHING_BT_BUMBLE_TRANSPORT:-}
+if [ -z "$transport" ]; then
+    case "${CARTHING_BT_INIT_BACKEND:-fwload}" in
+        attach)
+            transport=hci-socket:0
+            ;;
+        *)
+            transport="serial:${CARTHING_BT_UART},${CARTHING_BT_CONTROLLER_BAUD:-3000000}"
+            ;;
+    esac
+fi
+
+export CAR_THING_TRANSPORT="$transport"
 export CAR_THING_BD_ADDRESS="$CARTHING_BD_ADDRESS"
 export CARTHING_INPUT_BUTTONS=/run/carthing/input-buttons
 export CARTHING_INPUT_ROTARY=/run/carthing/input-rotary

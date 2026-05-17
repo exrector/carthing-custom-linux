@@ -179,3 +179,39 @@ Most likely next direction:
   by the original Broadcom init path
 - focus on post-upload controller readiness / first-HCI-command semantics, not
   on host-side USB, toolchain, or simple serial-open logic
+
+## Attach-Path Breakthrough
+
+The next live step changed the preferred direction:
+
+- the kernel already had `n_hci` line discipline support
+- the kernel already had `hci_uart` and `hci_bcm` support active
+- a tiny target-side helper that only does:
+  - `TIOCSETD -> N_HCI`
+  - `HCIUARTSETFLAGS(HCI_UART_RESET_ON_INIT)`
+  - `HCIUARTSETPROTO(HCI_UART_BCM)`
+  was enough to create:
+  - `/sys/class/bluetooth/hci0`
+
+Live proof on device `№1`:
+
+- `carthing-btattach-mini /dev/ttyS1 115200` attached successfully
+- kernel dmesg showed:
+  - `Bluetooth: hci0: BCM20703A2`
+  - `Bluetooth: hci0: BCM (001.002.011) build 0353`
+- after that, Bumble no longer needed raw UART
+- Bumble on `hci-socket:0` succeeded through:
+  - `open_transport_or_link('hci-socket:0')`
+  - `device.power_on()`
+  - `device.start_advertising(...)`
+
+This changes the preferred runtime architecture:
+
+1. stage firmware into `/lib/firmware/brcm`
+2. reset GPIO 493
+3. run `carthing-btattach-mini`
+4. let kernel create `hci0`
+5. run Bumble on `hci-socket:0`
+
+The old `fwload` path is still useful for low-level recovery and chip forensics,
+but it is no longer the best default runtime path.

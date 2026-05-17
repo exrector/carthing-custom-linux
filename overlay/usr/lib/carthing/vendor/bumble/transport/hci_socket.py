@@ -31,6 +31,9 @@ from .common import Transport, ParserSource
 # -----------------------------------------------------------------------------
 logger = logging.getLogger(__name__)
 
+AF_BLUETOOTH = getattr(socket, 'AF_BLUETOOTH', 31)
+BTPROTO_HCI = getattr(socket, 'BTPROTO_HCI', 1)
+
 
 # -----------------------------------------------------------------------------
 async def open_hci_socket_transport(spec):
@@ -44,9 +47,8 @@ async def open_hci_socket_transport(spec):
 
     # Create a raw HCI socket
     try:
-        hci_socket = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_RAW | socket.SOCK_NONBLOCK, socket.BTPROTO_HCI)
-    except AttributeError:
-        # Not supported on this platform
+        hci_socket = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW | socket.SOCK_NONBLOCK, BTPROTO_HCI)
+    except OSError:
         logger.info("HCI sockets not supported on this platform")
         raise Exception('Bluetooth HCI sockets not supported on this platform')
 
@@ -67,7 +69,7 @@ async def open_hci_socket_transport(spec):
         raise Exception('Bluetooth HCI sockets not supported on this platform')
     libc.bind.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_char), ctypes.c_int)
     libc.bind.restype = ctypes.c_int
-    bind_address = struct.pack('<HHH', socket.AF_BLUETOOTH, adapter_index, HCI_CHANNEL_USER)
+    bind_address = struct.pack('<HHH', AF_BLUETOOTH, adapter_index, HCI_CHANNEL_USER)
     if libc.bind(hci_socket.fileno(), ctypes.create_string_buffer(bind_address), len(bind_address)) != 0:
         raise IOError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
 

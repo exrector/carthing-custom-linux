@@ -12,7 +12,7 @@ Build a custom rootfs that:
 - does not include `systemd`
 - does not include `bluetoothd`
 - does not include `bluez5_utils`
-- uses our own `carthing-bt-fwload` helper for BCM firmware upload
+- uses our own small Bluetooth attach path instead of target-side BlueZ tools
 
 At this stage we are only replacing userspace. We are not replacing the bootloader, kernel, or dtb.
 
@@ -111,6 +111,7 @@ That is the first safe migration step because it does not change the bootloader,
 - `libgpiod`
 - Python 3
 - `carthing-bt-fwload`
+- `carthing-btattach-mini`
 - our init scripts under `/etc/init.d`
 
 ## What This Rootfs Should Not Contain
@@ -131,5 +132,5 @@ Success criteria for that step:
 - allows SSH
 - stages BCM firmware
 - resets the Bluetooth chip
-- uploads BCM firmware through `carthing-bt-fwload`
-- leaves `/dev/ttyS1` free for the app
+- attaches the Broadcom UART controller without BlueZ tooling
+- brings the app up on `hci-socket:0`

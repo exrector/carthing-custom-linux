@@ -107,8 +107,12 @@ The Bluetooth bring-up path is now explicitly ours:
 
 1. stage Broadcom firmware files
 2. reset the Bluetooth chip on GPIO 493
-3. run `carthing-bt-fwload` once to upload firmware and release the UART
-4. start the app directly on `/dev/ttyS1`
+3. attach the Broadcom UART controller with `carthing-btattach-mini`
+4. let the kernel create `hci0`
+5. start the app on Bumble `hci-socket:0`
+
+`carthing-bt-fwload` is still kept in the image as a low-level diagnostic and
+recovery tool, but it is no longer the preferred runtime path.
 
 This keeps the upstream hardware expectations but removes the upstream Bluetooth policy stack from the target system.
 
@@ -120,7 +124,7 @@ Boot a minimal Linux rootfs on device `№1` that:
 - configures `usb0`
 - gives us at least one reliable control ingress
 - stages Bluetooth firmware
-- initializes the Bluetooth chip with our own loader
+- initializes the Bluetooth chip with our own attach path
 - starts the Car Thing runtime without `/opt` hacks or manual post-boot steps
 
 In other words: first own userspace completely, then decide whether a kernel replacement is even needed.
@@ -130,6 +134,7 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - upstream userspace contract mapped into explicit replacement scripts
 - first `br2-external` tree created
 - custom `carthing-bt-fwload` helper added to avoid `bluez` in the target image
+- custom `carthing-btattach-mini` helper added to keep the runtime attach path small and explicit
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
 - reverse control agent is now wired into early init for the next `№1` test

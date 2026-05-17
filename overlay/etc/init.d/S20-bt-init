@@ -17,17 +17,7 @@ reset_gpio() {
     sleep 0.3
 }
 
-attach_once() {
-    if [ "$CARTHING_BT_INIT_BACKEND" = "skip" ]; then
-        echo "[S20-bt-init] skipping Bluetooth init by configuration"
-        return 0
-    fi
-
-    if [ "$CARTHING_BT_INIT_BACKEND" != "fwload" ]; then
-        echo "[S20-bt-init] unsupported backend: $CARTHING_BT_INIT_BACKEND"
-        return 1
-    fi
-
+start_fwload() {
     if [ ! -x "$CARTHING_BT_FWLOAD_BINARY" ]; then
         echo "[S20-bt-init] missing binary: $CARTHING_BT_FWLOAD_BINARY"
         return 1
@@ -51,8 +41,90 @@ attach_once() {
     "$CARTHING_BT_FWLOAD_BINARY" "$@" > "$CARTHING_BT_FWLOAD_LOG" 2>&1
 }
 
+start_attach() {
+    pidfile=${CARTHING_BT_ATTACH_PIDFILE:-/run/carthing-btattach.pid}
+    logfile=${CARTHING_BT_ATTACH_LOG:-/run/carthing-btattach.log}
+    binary=${CARTHING_BT_ATTACH_BINARY:-/usr/bin/carthing-btattach-mini}
+    baud=${CARTHING_BT_ATTACH_BAUD:-115200}
+
+    if [ -f "$pidfile" ]; then
+        oldpid=$(cat "$pidfile" 2>/dev/null || true)
+        if [ -n "$oldpid" ] && kill -0 "$oldpid" 2>/dev/null; then
+            if [ -e /sys/class/bluetooth/hci0 ]; then
+                echo "[S20-bt-init] attach helper already running pid=$oldpid"
+                return 0
+            fi
+            kill "$oldpid" 2>/dev/null || true
+        fi
+        rm -f "$pidfile"
+    fi
+
+    if [ ! -x "$binary" ]; then
+        echo "[S20-bt-init] missing attach helper: $binary"
+        return 1
+    fi
+
+    if [ ! -f "$CARTHING_BT_FIRMWARE" ]; then
+        echo "[S20-bt-init] missing firmware: $CARTHING_BT_FIRMWARE"
+        return 1
+    fi
+
+    set -- "$CARTHING_BT_UART" "$baud"
+    if [ -n "${CARTHING_BT_ATTACH_ARGS:-}" ]; then
+        set -- "$@" $CARTHING_BT_ATTACH_ARGS
+    fi
+
+    "$binary" "$@" > "$logfile" 2>&1 &
+    newpid=$!
+    echo "$newpid" > "$pidfile"
+
+    i=0
+    while [ "$i" -lt 40 ]; do
+        if [ -e /sys/class/bluetooth/hci0 ]; then
+            echo "[S20-bt-init] attach helper started pid=$newpid"
+            return 0
+        fi
+        if ! kill -0 "$newpid" 2>/dev/null; then
+            echo "[S20-bt-init] attach helper exited early"
+            return 1
+        fi
+        sleep 0.2
+        i=$((i + 1))
+    done
+
+    echo "[S20-bt-init] timed out waiting for hci0"
+    return 1
+}
+
+case "${CARTHING_BT_INIT_BACKEND:-fwload}" in
+    skip)
+        echo "[S20-bt-init] skipping Bluetooth init by configuration"
+        exit 0
+        ;;
+    attach)
+        if [ -f "${CARTHING_BT_ATTACH_PIDFILE:-/run/carthing-btattach.pid}" ]; then
+            oldpid=$(cat "${CARTHING_BT_ATTACH_PIDFILE:-/run/carthing-btattach.pid}" 2>/dev/null || true)
+            if [ -n "$oldpid" ] && kill -0 "$oldpid" 2>/dev/null && [ -e /sys/class/bluetooth/hci0 ]; then
+                echo "[S20-bt-init] hci0 already attached pid=$oldpid"
+                exit 0
+            fi
+        fi
+        ;;
+    fwload)
+        ;;
+    *)
+        echo "[S20-bt-init] unsupported backend: $CARTHING_BT_INIT_BACKEND"
+        exit 1
+        ;;
+esac
+
 echo "[S20-bt-init] resetting Bluetooth chip on GPIO ${CARTHING_BT_RESET_GPIO}"
 reset_gpio
-echo "[S20-bt-init] initializing UART Bluetooth backend on ${CARTHING_BT_UART}"
-attach_once
+echo "[S20-bt-init] initializing Bluetooth backend=${CARTHING_BT_INIT_BACKEND} on ${CARTHING_BT_UART}"
+
+case "${CARTHING_BT_INIT_BACKEND:-fwload}" in
+    attach) start_attach ;;
+    fwload) start_fwload ;;
+esac
+
 echo "[S20-bt-init] done"

@@ -33,8 +33,10 @@ check_path /sys/class/efuse
 check_path /dev/input
 check_path "$CARTHING_BT_FIRMWARE_DIR/BCM.hcd"
 check_path "$CARTHING_BT_FIRMWARE_DIR/BCM20703A2.hcd"
+check_path "$CARTHING_BT_FIRMWARE_DIR/BCM4345C0.hcd"
 check_path "$CARTHING_RUNTIME_ENTRY"
 check_path "$CARTHING_RUNTIME_LIB/bumble/host.py"
+check_path "$CARTHING_RUNTIME_LIB/bumble/transport/hci_socket.py"
 check_path "$CARTHING_FONT_PATH"
 check_path /root/.ssh/authorized_keys
 check_path /etc/shadow
@@ -62,6 +64,11 @@ fi
 
 if [ "$CARTHING_BT_INIT_BACKEND" = "fwload" ]; then
     check_path "$CARTHING_BT_FWLOAD_BINARY"
+fi
+
+if [ "$CARTHING_BT_INIT_BACKEND" = "attach" ]; then
+    check_path "$CARTHING_BT_ATTACH_BINARY"
+    check_path /sys/module/hci_uart
 fi
 
 if [ "$failed" -ne 0 ]; then
