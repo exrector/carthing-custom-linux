@@ -1004,3 +1004,52 @@ Status:
 - no live iPhone-side proof yet in this turn
 - the next step is to feed it a real peer BD_ADDR from the already working
   HID-paired phone and observe whether the iPhone exposes `CAFE` at all
+
+## 2026-05-19: classic ACL bring-up is now proven, `No route to host` moved above raw link creation
+
+The next clean-room missing layer turned out to be lower than SDP/RFCOMM
+discovery, but higher than the controller identity work.
+
+`carthing-iap2-mini` now explicitly creates a classic ACL link before trying
+`SDP` or outbound `RFCOMM`:
+
+```text
+carthing-iap2-mini hci-create-acl <AA:BB:CC:DD:EE:FF>
+carthing-iap2-mini cafe-connect <AA:BB:CC:DD:EE:FF>
+```
+
+`cafe-connect` now does this by default unless
+`CARTHING_IAP2_SKIP_ACL_CREATE=1` is set.
+
+Live proof on the device against the real iPhone classic address:
+
+```text
+[iap2-mini] HCI remote name request peer=10:A2:D3:83:82:50
+iPhone
+[iap2-mini] HCI create ACL started peer=10:A2:D3:83:82:50
+[iap2-mini] HCI ACL up peer=10:A2:D3:83:82:50 handle=0x000c link_type=0x01
+```
+
+After that, outbound sockets still fail:
+
+```text
+[iap2-mini] L2CAP connect peer=10:A2:D3:83:82:50 psm=0x0001
+connect(L2CAP client): No route to host
+[iap2-mini] RFCOMM connect peer=10:A2:D3:83:82:50 ch=1
+connect(RFCOMM client): No route to host
+```
+
+The client sockets were then upgraded to `BT_SECURITY_HIGH`, but the result
+did not change.
+
+This narrows the frontier sharply:
+
+- the real iPhone classic `BD_ADDR` is known and live
+- raw classic ACL creation is proven
+- the old `No route to host` is no longer explained by "no classic link"
+- the blocker is now above ACL creation and below successful `SDP/RFCOMM`
+  attachment
+
+So the next layer to investigate is no longer basic HCI reachability, but the
+classic attach contract itself: service availability, authorization, or iPhone
+policy on top of an already-up ACL.

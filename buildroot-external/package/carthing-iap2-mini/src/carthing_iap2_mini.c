@@ -58,6 +58,7 @@
 #define HCI_COMMAND_PKT 0x01
 #define HCI_EVENT_PKT   0x04
 #define BT_H4_EVT_PKT   0x04
+#define EVT_CONN_COMPLETE 0x03
 #define EVT_AUTH_COMPLETE 0x06
 #define EVT_REMOTE_NAME_REQ_COMPLETE 0x07
 #define EVT_CMD_COMPLETE 0x0E
@@ -77,6 +78,7 @@
 #define OGF_INFO_PARAM  0x04
 #define OCF_SET_EVENT_MASK 0x0001
 #define OCF_INQUIRY 0x0001
+#define OCF_CREATE_CONN 0x0005
 #define OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY 0x000C
 #define OCF_PIN_CODE_REQUEST_NEGATIVE_REPLY 0x000E
 #define OCF_REMOTE_NAME_REQUEST 0x0019
@@ -749,7 +751,7 @@ static int hci_write_cmd_fd(int fd, uint16_t opcode, const uint8_t *payload, siz
     return write_all_fd(fd, cmd, 4 + payload_len);
 }
 
-static int hci_wait_cmd_status(int fd, uint16_t opcode) {
+static int hci_wait_cmd_status_ex(int fd, uint16_t opcode, uint8_t *status_out) {
     for (;;) {
         uint8_t buf[260];
         ssize_t n;
@@ -771,6 +773,7 @@ static int hci_wait_cmd_status(int fd, uint16_t opcode) {
         }
         if (buf[1] == EVT_CMD_STATUS) {
             uint16_t evt_opcode;
+            uint8_t status;
             if (n < 7) {
                 continue;
             }
@@ -778,7 +781,11 @@ static int hci_wait_cmd_status(int fd, uint16_t opcode) {
             if (evt_opcode != opcode) {
                 continue;
             }
-            if (buf[3] != 0x00) {
+            status = buf[3];
+            if (status_out) {
+                *status_out = status;
+            }
+            if (status != 0x00) {
                 errno = EIO;
                 return -1;
             }
@@ -786,6 +793,7 @@ static int hci_wait_cmd_status(int fd, uint16_t opcode) {
         }
         if (buf[1] == EVT_CMD_COMPLETE) {
             uint16_t evt_opcode;
+            uint8_t status;
             if (n < 7) {
                 continue;
             }
@@ -793,13 +801,21 @@ static int hci_wait_cmd_status(int fd, uint16_t opcode) {
             if (evt_opcode != opcode) {
                 continue;
             }
-            if (buf[6] != 0x00) {
+            status = buf[6];
+            if (status_out) {
+                *status_out = status;
+            }
+            if (status != 0x00) {
                 errno = EIO;
                 return -1;
             }
             return 0;
         }
     }
+}
+
+static int hci_wait_cmd_status(int fd, uint16_t opcode) {
+    return hci_wait_cmd_status_ex(fd, opcode, NULL);
 }
 
 static size_t eir_extract_name(const uint8_t *eir, size_t eir_len, char *out, size_t out_cap) {
@@ -1337,6 +1353,101 @@ static int hci_remote_name_request(int dev_id, const char *addr_str) {
             name[copy_len] = '\0';
         }
         printf("%s\n", name);
+        close(fd);
+        return 0;
+    }
+}
+
+static int hci_create_acl_link(int dev_id, const char *addr_str, uint16_t *handle_out) {
+    uint8_t payload[13];
+    int fd;
+    bdaddr_t addr;
+    uint8_t status = 0;
+    struct pollfd pfd;
+
+    if (handle_out) {
+        *handle_out = 0;
+    }
+    if (str_to_bdaddr_local(addr_str, &addr) < 0) {
+        perror("str_to_bdaddr_local");
+        return 1;
+    }
+
+    memcpy(payload, addr.b, 6);
+    payload[6] = 0x18;
+    payload[7] = 0xcc;
+    payload[8] = 0x01;
+    payload[9] = 0x00;
+    payload[10] = 0x00;
+    payload[11] = 0x00;
+    payload[12] = 0x01;
+
+    fd = hci_open_event_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_write_cmd_fd(fd, HCI_OPCODE(OGF_LINK_CTL, OCF_CREATE_CONN), payload, sizeof(payload)) < 0) {
+        perror("write(HCI Create Connection)");
+        close(fd);
+        return 1;
+    }
+    if (hci_wait_cmd_status_ex(fd, HCI_OPCODE(OGF_LINK_CTL, OCF_CREATE_CONN), &status) < 0) {
+        if (status == 0x0b || status == 0x0c) {
+            fprintf(stderr,
+                    "[iap2-mini] HCI create ACL status=0x%02x for %s, assuming link already exists or controller refuses duplicate create\n",
+                    status, addr_str);
+            close(fd);
+            return 0;
+        }
+        perror("HCI Create Connection status");
+        fprintf(stderr, "[iap2-mini] HCI create ACL failed status=0x%02x peer=%s\n", status, addr_str);
+        close(fd);
+        return 1;
+    }
+    fprintf(stderr, "[iap2-mini] HCI create ACL started peer=%s\n", addr_str);
+
+    for (;;) {
+        uint8_t buf[260];
+        ssize_t n;
+
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        if (poll(&pfd, 1, 8000) <= 0) {
+            errno = ETIMEDOUT;
+            perror("HCI Create Connection complete");
+            close(fd);
+            return 1;
+        }
+        n = read(fd, buf, sizeof(buf));
+        if (n < 0) {
+            perror("read(HCI create connection)");
+            close(fd);
+            return 1;
+        }
+        if (n < 3 || buf[0] != HCI_EVENT_PKT || buf[1] != EVT_CONN_COMPLETE) {
+            continue;
+        }
+        if (n < 14) {
+            errno = EPROTO;
+            perror("HCI Connection Complete short reply");
+            close(fd);
+            return 1;
+        }
+        if (memcmp(buf + 6, addr.b, 6) != 0) {
+            continue;
+        }
+        status = buf[3];
+        if (status != 0x00) {
+            fprintf(stderr, "[iap2-mini] HCI ACL connect complete status=0x%02x peer=%s\n", status, addr_str);
+            close(fd);
+            return 1;
+        }
+        if (handle_out) {
+            *handle_out = (uint16_t)(buf[4] | ((buf[5] & 0x0f) << 8));
+        }
+        fprintf(stderr, "[iap2-mini] HCI ACL up peer=%s handle=0x%04x link_type=0x%02x\n",
+                addr_str, handle_out ? *handle_out : 0, buf[12]);
         close(fd);
         return 0;
     }
@@ -2218,6 +2329,7 @@ static int rfcomm_client_connect(const char *addr_str, int channel) {
         perror("socket(AF_BLUETOOTH/RFCOMM client)");
         return -1;
     }
+    bt_require_high_security(fd, "RFCOMM client");
     memset(&addr, 0, sizeof(addr));
     addr.rc_family = AF_BLUETOOTH;
     addr.rc_channel = (uint8_t)channel;
@@ -2274,6 +2386,7 @@ static int l2cap_client_connect(const char *addr_str, uint16_t psm) {
         perror("socket(AF_BLUETOOTH/L2CAP client)");
         return -1;
     }
+    bt_require_high_security(fd, "L2CAP client");
     memset(&addr, 0, sizeof(addr));
     addr.l2_family = AF_BLUETOOTH;
     addr.l2_psm = psm;
@@ -2542,9 +2655,19 @@ static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[
     return channel;
 }
 
-static int run_cafe_connect(const char *addr_str) {
+static int run_cafe_connect(int hci_dev, const char *addr_str) {
     int channel;
     int fd;
+    uint16_t handle = 0;
+
+    if (getenv("CARTHING_IAP2_SKIP_ACL_CREATE") == NULL) {
+        if (hci_create_acl_link(hci_dev, addr_str, &handle) != 0) {
+            return 1;
+        }
+        fprintf(stderr, "[iap2-mini] waiting for classic ACL settle peer=%s handle=0x%04x\n",
+                addr_str, handle);
+        sleep(2);
+    }
 
     channel = sdp_discover_rfcomm_channel(addr_str, SDP_UUID_CAFE);
     if (channel <= 0) {
@@ -2750,6 +2873,7 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini transport-daemon\n"
         "  carthing-iap2-mini hci-read-bdaddr\n"
         "  carthing-iap2-mini hci-inquiry\n"
+        "  carthing-iap2-mini hci-create-acl <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini hci-remote-name <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini hci-read-name\n"
         "  carthing-iap2-mini hci-write-name <name>\n"
@@ -2765,7 +2889,8 @@ static void usage(FILE *out) {
         "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n"
         "  CARTHING_IAP2_L2CAP_PSM=0x0001\n"
         "  CARTHING_IAP2_HCI_DEV=0\n"
-        "  CARTHING_IAP2_CLASS_OF_DEVICE=0x240420\n");
+        "  CARTHING_IAP2_CLASS_OF_DEVICE=0x240420\n"
+        "  CARTHING_IAP2_SKIP_ACL_CREATE=1\n");
 }
 
 int main(int argc, char **argv) {
@@ -2808,7 +2933,7 @@ int main(int argc, char **argv) {
             usage(stderr);
             return 2;
         }
-        return run_cafe_connect(argv[2]);
+        return run_cafe_connect(hci_dev, argv[2]);
     }
 
     if (strcmp(argv[1], "transport-daemon") == 0) {
@@ -2828,6 +2953,19 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "hci-inquiry") == 0) {
         return hci_inquiry_scan(hci_dev, 0x08);
+    }
+
+    if (strcmp(argv[1], "hci-create-acl") == 0) {
+        uint16_t handle = 0;
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        if (hci_create_acl_link(hci_dev, argv[2], &handle) != 0) {
+            return 1;
+        }
+        printf("0x%04x\n", handle);
+        return 0;
     }
 
     if (strcmp(argv[1], "hci-remote-name") == 0) {
