@@ -1,5 +1,7 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <linux/i2c-dev.h>
+#include <linux/i2c.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,6 +10,8 @@
 #include <unistd.h>
 
 #define MFI_DEVICE "/dev/apple_mfi"
+#define MFI_I2C_DEVICE "/dev/i2c-3"
+#define MFI_I2C_ADDR 0x10
 
 struct mfi_buf {
     uint32_t len;
@@ -28,6 +32,66 @@ static int mfi_ioctl_wrap(int fd, unsigned long req, void *buf, size_t len) {
     mb.len = (uint32_t)len;
     mb.ptr = (uint64_t)(uintptr_t)buf;
     return ioctl(fd, req, &mb);
+}
+
+static int i2c_rdwr_retry(int fd, struct i2c_rdwr_ioctl_data *rdwr) {
+    int attempt;
+    for (attempt = 0; attempt < 3; attempt++) {
+        if (ioctl(fd, I2C_RDWR, rdwr) >= 0) {
+            return 0;
+        }
+        if (errno != ENXIO && errno != EREMOTEIO && errno != EIO) {
+            return -1;
+        }
+        usleep(50000);
+    }
+    return -1;
+}
+
+static int i2c_reg_read(int fd, uint8_t reg, uint8_t *buf, uint16_t len) {
+    struct i2c_msg msgs[2];
+    struct i2c_rdwr_ioctl_data rdwr;
+
+    msgs[0].addr = MFI_I2C_ADDR;
+    msgs[0].flags = 0;
+    msgs[0].len = 1;
+    msgs[0].buf = &reg;
+
+    msgs[1].addr = MFI_I2C_ADDR;
+    msgs[1].flags = I2C_M_RD;
+    msgs[1].len = len;
+    msgs[1].buf = buf;
+
+    rdwr.msgs = msgs;
+    rdwr.nmsgs = 2;
+    return i2c_rdwr_retry(fd, &rdwr);
+}
+
+static int i2c_reg_write(int fd, uint8_t reg, const uint8_t *buf, uint16_t len) {
+    uint8_t *tmp;
+    struct i2c_msg msg;
+    struct i2c_rdwr_ioctl_data rdwr;
+    int rc;
+
+    tmp = calloc(1, (size_t)len + 1);
+    if (!tmp) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    tmp[0] = reg;
+    memcpy(tmp + 1, buf, len);
+
+    msg.addr = MFI_I2C_ADDR;
+    msg.flags = 0;
+    msg.len = len + 1;
+    msg.buf = tmp;
+
+    rdwr.msgs = &msg;
+    rdwr.nmsgs = 1;
+    rc = i2c_rdwr_retry(fd, &rdwr);
+    free(tmp);
+    return rc;
 }
 
 static void hex_write(FILE *out, const uint8_t *buf, size_t len) {
@@ -63,10 +127,15 @@ static void usage(FILE *out) {
         "  carthing-mfi-probe serial\n"
         "  carthing-mfi-probe response > pkcs7.bin\n"
         "  carthing-mfi-probe sign <challenge_hex>\n"
+        "  carthing-mfi-probe raw-info\n"
+        "  carthing-mfi-probe raw-sign <challenge_hex>\n"
         "\n"
         "notes:\n"
         "  - response writes raw ioctl nr5 bytes to stdout\n"
-        "  - sign accepts up to 32 challenge bytes as hex and pads to 32\n");
+        "  - sign accepts up to 32 challenge bytes as hex and pads to 32\n"
+        "  - raw-* talks directly to %s at 0x%02x via i2c-dev\n",
+        MFI_I2C_DEVICE,
+        MFI_I2C_ADDR);
 }
 
 int main(int argc, char **argv) {
@@ -79,6 +148,93 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         usage(stderr);
         return 2;
+    }
+
+    if (strcmp(argv[1], "raw-info") == 0) {
+        uint8_t reg21 = 0;
+        uint8_t reg00 = 0;
+        uint8_t certlen_raw[2] = {0, 0};
+        uint16_t raw_certlen = 0;
+
+        fd = open(MFI_I2C_DEVICE, O_RDWR);
+        if (fd < 0) {
+            perror("open /dev/i2c-3");
+            return 1;
+        }
+
+        if (i2c_reg_read(fd, 0x21, &reg21, 1) < 0) {
+            perror("i2c read reg 0x21");
+            close(fd);
+            return 1;
+        }
+        if (i2c_reg_read(fd, 0x00, &reg00, 1) < 0) {
+            perror("i2c read reg 0x00");
+            close(fd);
+            return 1;
+        }
+
+        printf("device=%s\n", MFI_I2C_DEVICE);
+        printf("addr=0x%02x\n", MFI_I2C_ADDR);
+        printf("reg21=0x%02x\n", reg21);
+        printf("reg00=0x%02x\n", reg00);
+
+        if (i2c_reg_read(fd, 0x30, certlen_raw, sizeof(certlen_raw)) == 0) {
+            raw_certlen = (uint16_t)((certlen_raw[0] << 8) | certlen_raw[1]);
+            printf("certlen=%u\n", raw_certlen);
+        } else {
+            printf("certlen=unavailable\n");
+        }
+
+        close(fd);
+        return 0;
+    }
+
+    if (strcmp(argv[1], "raw-sign") == 0) {
+        uint8_t challenge[32];
+        uint8_t signature[64];
+        uint8_t reg21 = 0;
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+
+        fd = open(MFI_I2C_DEVICE, O_RDWR);
+        if (fd < 0) {
+            perror("open /dev/i2c-3");
+            return 1;
+        }
+
+        if (i2c_reg_write(fd, 0x4E, challenge, sizeof(challenge)) < 0) {
+            perror("i2c write reg 0x4E");
+            close(fd);
+            return 1;
+        }
+
+        if (i2c_reg_read(fd, 0x21, &reg21, 1) < 0) {
+            perror("i2c read reg 0x21");
+            close(fd);
+            return 1;
+        }
+        fprintf(stderr, "challenge-len=0x%02x\n", reg21);
+
+        memset(signature, 0, sizeof(signature));
+        if (i2c_reg_read(fd, 0x12, signature, sizeof(signature)) < 0) {
+            perror("i2c read reg 0x12");
+            close(fd);
+            return 1;
+        }
+
+        hex_write(stdout, signature, sizeof(signature));
+        close(fd);
+        return 0;
     }
 
     fd = open(MFI_DEVICE, O_RDWR);

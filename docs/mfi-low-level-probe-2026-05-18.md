@@ -10,6 +10,9 @@ Purpose:
 Tool:
 
 - `carthing-mfi-probe`
+- direct fallback commands:
+  - `carthing-mfi-probe raw-info`
+  - `carthing-mfi-probe raw-sign <challenge_hex>`
 
 Commands:
 
@@ -39,11 +42,17 @@ Current live blocker on the 2026-05-18 working image:
 - `/proc/modules` has no `apple_mfi*`
 - `/proc/devices` has no `apple_mfi_ioctl`
 - `/lib/modules/$(uname -r)` has no `apple_mfi*` files or aliases
+- `/dev/i2c-3` can talk to `0x10` directly, but raw reads return only zero-state
+  values without the original driver-side prepare/wake sequence
 
 Meaning:
 
 - device-tree presence is not the blocker anymore
 - the blocker is missing driver binding / missing module path for `apple_mfi_auth`
+- direct userspace I2C is possible, so a clean-room rewrite does not need to
+  rediscover the bus wiring
+- the next missing piece is the driver-side prepare/wake behavior before cert
+  and signature registers become meaningful
 - the right next step is to recover only the low-level MFi device path
 - once that exists, `carthing-mfi-probe` becomes the first honest live test
   before any new iAP2 implementation is attempted
@@ -59,3 +68,21 @@ ssh root@172.16.42.77 '
   grep apple_mfi /proc/modules /proc/devices 2>/dev/null || true
 '
 ```
+
+Minimal raw-I2C proof collected on the working image:
+
+```sh
+ssh root@172.16.42.77 '
+  i2cdetect -y 3
+  i2ctransfer -f -y 3 w1@0x10 0x21 r1
+  i2ctransfer -f -y 3 w1@0x10 0x12 r8
+'
+```
+
+Observed state:
+
+- address `0x10` is present on bus `3`
+- direct `0x21` read returns `0x00`
+- direct `0x12` read returns all zero bytes
+- direct `0x30` certlen path is not yet usable without the original
+  prepare/wake logic
