@@ -947,3 +947,35 @@ Updated frontier after this correction:
 - the next meaningful iAP2 step is no longer "more CoD/SSP tweaks", but the
   higher-profile `CAFE` / reconnect / profile-semantics layer from the old
   working reference
+
+## 2026-05-18: first clean-room `CAFE` active-connect path added
+
+The next layer from the old working reference is now represented directly in
+the new codebase.
+
+`carthing-iap2-mini` now has a new command:
+
+```text
+carthing-iap2-mini cafe-connect <AA:BB:CC:DD:EE:FF>
+```
+
+What it does:
+
+- connects to the peer over SDP (`L2CAP PSM 0x0001`)
+- sends a `ServiceSearchAttributeRequest` for the `CAFE` UUID
+- extracts the peer RFCOMM channel from `ProtocolDescriptorList`
+- falls back to `CAFF`, then finally to channel `1`
+- opens an outbound RFCOMM client socket
+- enters client-mode iAP2 link bring-up by sending the initial `SYN`
+
+This is the first clean-room equivalent of the old `active connect` fallback
+logic. It does not reintroduce BlueZ profile registration; it only adds the
+outbound `CAFE` discovery/connect leg that was missing from the raw server-only
+experiments.
+
+Status:
+
+- both host and target builds pass with this new mode
+- no live iPhone-side proof yet in this turn
+- the next step is to feed it a real peer BD_ADDR from the already working
+  HID-paired phone and observe whether the iPhone exposes `CAFE` at all

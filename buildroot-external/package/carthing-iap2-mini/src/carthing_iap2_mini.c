@@ -167,6 +167,10 @@ static const uint8_t SDP_UUID_CAFF[16] = {
     0x00, 0x00, 0x00, 0x00, 0xde, 0xca, 0xfa, 0xde,
     0xde, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xca, 0xff
 };
+static const uint8_t SDP_UUID_CAFE[16] = {
+    0x00, 0x00, 0x00, 0x00, 0xde, 0xca, 0xfa, 0xde,
+    0xde, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xca, 0xfe
+};
 static const uint8_t EIR_UUID_CAFF_LE[16] = {
     0xff, 0xca, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xde,
     0xde, 0xfa, 0xca, 0xde, 0x00, 0x00, 0x00, 0x00
@@ -313,6 +317,22 @@ static void bdaddr_to_str(const bdaddr_t *addr, char out[18]) {
     snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
              addr->b[5], addr->b[4], addr->b[3],
              addr->b[2], addr->b[1], addr->b[0]);
+}
+
+static int str_to_bdaddr_local(const char *str, bdaddr_t *addr) {
+    unsigned int b0, b1, b2, b3, b4, b5;
+    if (sscanf(str, "%02x:%02x:%02x:%02x:%02x:%02x",
+               &b0, &b1, &b2, &b3, &b4, &b5) != 6) {
+        errno = EINVAL;
+        return -1;
+    }
+    addr->b[5] = (uint8_t)b0;
+    addr->b[4] = (uint8_t)b1;
+    addr->b[3] = (uint8_t)b2;
+    addr->b[2] = (uint8_t)b3;
+    addr->b[1] = (uint8_t)b4;
+    addr->b[0] = (uint8_t)b5;
+    return 0;
 }
 
 static int sdp_de_parse_header(const uint8_t *buf, size_t len,
@@ -1636,6 +1656,15 @@ static int write_link_ack_only(struct link_state *state, uint8_t ack_seq) {
     return write_link_pkt(IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq, NULL, 0);
 }
 
+static int write_link_syn(struct link_state *state) {
+    static const uint8_t syn_payload[14] = {
+        0x01, 0x07, 0x08, 0x00, 0x00, 0xFA, 0x00, 0x19,
+        0x03, 0x01, 0x01, 0x00, 0x00, 0x01
+    };
+    return write_link_pkt(IAP2_CTL_SYN, IAP2_SID_CTL, state->tx_seq++, 0,
+                          syn_payload, sizeof(syn_payload));
+}
+
 static int write_link_synack(struct link_state *state, uint8_t ack_seq) {
     static const uint8_t syn_payload[14] = {
         0x01, 0x07, 0x08, 0x00, 0x00, 0xFA, 0x00, 0x19,
@@ -1712,9 +1741,17 @@ static int handle_link_control_msg(struct link_state *state, uint8_t rx_seq,
     return 0;
 }
 
-static int loop_link_messages(void) {
+static int loop_link_messages_mode(int initiator) {
     struct link_state state;
     memset(&state, 0, sizeof(state));
+
+    if (initiator) {
+        fprintf(stderr, "[iap2-mini] -> link SYN (client mode)\n");
+        if (write_link_syn(&state) < 0) {
+            perror("write link SYN");
+            return 1;
+        }
+    }
 
     for (;;) {
         uint8_t header[9];
@@ -1781,7 +1818,13 @@ static int loop_link_messages(void) {
             fprintf(stderr, "[iap2-mini] <- link SYN ctl=0x%02x seq=%u\n", ctl, seq);
             free(payload);
             if (ctl & IAP2_CTL_ACK) {
-                return write_link_ack_only(&state, seq) < 0 ? 1 : 0;
+                if (write_link_ack_only(&state, seq) < 0) {
+                    return 1;
+                }
+                if (initiator) {
+                    continue;
+                }
+                return 0;
             }
             if (write_link_synack(&state, seq) < 0) {
                 return 1;
@@ -1815,6 +1858,10 @@ static int loop_link_messages(void) {
         fprintf(stderr, "[iap2-mini] ignoring non-control link packet ctl=0x%02x sid=%u\n", ctl, sid);
         free(payload);
     }
+}
+
+static int loop_link_messages(void) {
+    return loop_link_messages_mode(0);
 }
 
 static int rfcomm_listen_socket(int channel) {
@@ -1894,6 +1941,36 @@ static int serve_rfcomm_forever(int channel) {
     return 0;
 }
 
+static int rfcomm_client_connect(const char *addr_str, int channel) {
+    int fd;
+    struct sockaddr_rc_local addr;
+    char peer_str[18];
+
+    fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/RFCOMM client)");
+        return -1;
+    }
+    bt_require_high_security(fd, "RFCOMM client");
+    memset(&addr, 0, sizeof(addr));
+    addr.rc_family = AF_BLUETOOTH;
+    addr.rc_channel = (uint8_t)channel;
+    if (str_to_bdaddr_local(addr_str, &addr.rc_bdaddr) < 0) {
+        perror("str_to_bdaddr_local");
+        close(fd);
+        return -1;
+    }
+    bdaddr_to_str(&addr.rc_bdaddr, peer_str);
+    fprintf(stderr, "[iap2-mini] RFCOMM connect peer=%s ch=%d\n", peer_str, channel);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("connect(RFCOMM client)");
+        close(fd);
+        return -1;
+    }
+    bt_require_high_security(fd, "RFCOMM connected");
+    return fd;
+}
+
 static int l2cap_listen_socket(uint16_t psm) {
     int fd;
     struct sockaddr_l2_local addr;
@@ -1919,6 +1996,36 @@ static int l2cap_listen_socket(uint16_t psm) {
         return -1;
     }
     fprintf(stderr, "[iap2-mini] L2CAP listen psm=0x%04x\n", psm);
+    return fd;
+}
+
+static int l2cap_client_connect(const char *addr_str, uint16_t psm) {
+    int fd;
+    struct sockaddr_l2_local addr;
+    char peer_str[18];
+
+    fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/L2CAP client)");
+        return -1;
+    }
+    bt_require_high_security(fd, "L2CAP client");
+    memset(&addr, 0, sizeof(addr));
+    addr.l2_family = AF_BLUETOOTH;
+    addr.l2_psm = psm;
+    if (str_to_bdaddr_local(addr_str, &addr.l2_bdaddr) < 0) {
+        perror("str_to_bdaddr_local");
+        close(fd);
+        return -1;
+    }
+    bdaddr_to_str(&addr.l2_bdaddr, peer_str);
+    fprintf(stderr, "[iap2-mini] L2CAP connect peer=%s psm=0x%04x\n", peer_str, psm);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("connect(L2CAP client)");
+        close(fd);
+        return -1;
+    }
+    bt_require_high_security(fd, "L2CAP connected");
     return fd;
 }
 
@@ -1998,6 +2105,207 @@ static int serve_l2cap_forever(uint16_t psm) {
         }
     }
     return 0;
+}
+
+static int sdp_extract_rfcomm_channel_from_pdl(const uint8_t *value, size_t value_len) {
+    uint8_t type;
+    size_t hdr_len;
+    size_t val_len;
+    size_t off;
+
+    if (sdp_de_parse_header(value, value_len, &type, &hdr_len, &val_len) < 0 || type != 6) {
+        return -1;
+    }
+    off = hdr_len;
+    while (off < hdr_len + val_len) {
+        const uint8_t *elem = value + off;
+        size_t remain = hdr_len + val_len - off;
+        uint8_t et;
+        size_t eh;
+        size_t ev;
+        size_t sub_off;
+        uint16_t proto_uuid = 0;
+
+        if (sdp_de_parse_header(elem, remain, &et, &eh, &ev) < 0 || et != 6) {
+            return -1;
+        }
+        sub_off = eh;
+        while (sub_off < eh + ev) {
+            const uint8_t *sub = elem + sub_off;
+            size_t sub_remain = eh + ev - sub_off;
+            uint8_t st;
+            size_t sh;
+            size_t sv;
+            if (sdp_de_parse_header(sub, sub_remain, &st, &sh, &sv) < 0) {
+                return -1;
+            }
+            if (proto_uuid == 0 && st == 3 && sv == 2) {
+                proto_uuid = (uint16_t)((sub[sh] << 8) | sub[sh + 1]);
+            } else if (proto_uuid == 0x0003 && st == 1 && sv == 1) {
+                return sub[sh];
+            }
+            sub_off += sh + sv;
+        }
+        off += eh + ev;
+    }
+    return -1;
+}
+
+static int sdp_extract_rfcomm_channel_from_attr_list(const uint8_t *attr_list, size_t attr_list_len) {
+    uint8_t type;
+    size_t hdr_len;
+    size_t val_len;
+    size_t off;
+
+    if (sdp_de_parse_header(attr_list, attr_list_len, &type, &hdr_len, &val_len) < 0 || type != 6) {
+        return -1;
+    }
+    off = hdr_len;
+    while (off < hdr_len + val_len) {
+        const uint8_t *id_de = attr_list + off;
+        size_t remain = hdr_len + val_len - off;
+        uint8_t id_type;
+        size_t id_hdr;
+        size_t id_val;
+        const uint8_t *value_de;
+        uint8_t value_type;
+        size_t value_hdr;
+        size_t value_val;
+        uint16_t attr_id;
+
+        if (sdp_de_parse_header(id_de, remain, &id_type, &id_hdr, &id_val) < 0 || id_type != 1 || id_val != 2) {
+            return -1;
+        }
+        attr_id = (uint16_t)((id_de[id_hdr] << 8) | id_de[id_hdr + 1]);
+        off += id_hdr + id_val;
+        if (off >= hdr_len + val_len) {
+            return -1;
+        }
+        value_de = attr_list + off;
+        remain = hdr_len + val_len - off;
+        if (sdp_de_parse_header(value_de, remain, &value_type, &value_hdr, &value_val) < 0) {
+            return -1;
+        }
+        if (attr_id == 0x0004) {
+            return sdp_extract_rfcomm_channel_from_pdl(value_de, value_hdr + value_val);
+        }
+        off += value_hdr + value_val;
+    }
+    return -1;
+}
+
+static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[16]) {
+    int fd;
+    uint8_t req[64];
+    uint8_t rsp_hdr[5];
+    uint8_t rsp[2048];
+    size_t req_len = 0;
+    uint16_t txn_id = 1;
+    uint16_t param_len;
+    uint16_t attr_bytes;
+    int channel = -1;
+
+    fd = l2cap_client_connect(addr_str, L2CAP_PSM_SDP);
+    if (fd < 0) {
+        return -1;
+    }
+
+    req[req_len++] = SDP_PDU_SERVICE_SEARCH_ATTR_REQUEST;
+    req[req_len++] = (uint8_t)(txn_id >> 8);
+    req[req_len++] = (uint8_t)(txn_id & 0xff);
+    req_len += 2;
+
+    req[req_len++] = 0x35;
+    req[req_len++] = 0x11;
+    req[req_len++] = 0x1C;
+    memcpy(req + req_len, uuid, 16);
+    req_len += 16;
+    req[req_len++] = 0x02;
+    req[req_len++] = 0x00;
+    req[req_len++] = 0x35;
+    req[req_len++] = 0x05;
+    req[req_len++] = 0x0A;
+    req[req_len++] = 0x00;
+    req[req_len++] = 0x00;
+    req[req_len++] = 0xFF;
+    req[req_len++] = 0xFF;
+    req[req_len++] = 0x00;
+
+    req[3] = (uint8_t)(((req_len - 5) >> 8) & 0xff);
+    req[4] = (uint8_t)((req_len - 5) & 0xff);
+
+    if (write_all_fd(fd, req, req_len) < 0) {
+        perror("write SDP query");
+        close(fd);
+        return -1;
+    }
+    if (read_exact_fd(fd, rsp_hdr, sizeof(rsp_hdr)) != 0) {
+        perror("read SDP rsp hdr");
+        close(fd);
+        return -1;
+    }
+    if (rsp_hdr[0] != SDP_PDU_SERVICE_SEARCH_ATTR_RESP) {
+        fprintf(stderr, "[iap2-mini] unexpected SDP rsp pdu=0x%02x\n", rsp_hdr[0]);
+        close(fd);
+        return -1;
+    }
+    param_len = (uint16_t)((rsp_hdr[3] << 8) | rsp_hdr[4]);
+    if (param_len > sizeof(rsp)) {
+        errno = EOVERFLOW;
+        perror("SDP response too large");
+        close(fd);
+        return -1;
+    }
+    if (read_exact_fd(fd, rsp, param_len) != 0) {
+        perror("read SDP rsp body");
+        close(fd);
+        return -1;
+    }
+    close(fd);
+
+    if (param_len < 3) {
+        errno = EPROTO;
+        perror("SDP short response");
+        return -1;
+    }
+    attr_bytes = (uint16_t)((rsp[0] << 8) | rsp[1]);
+    if ((size_t)(2 + attr_bytes + 1) > param_len) {
+        errno = EPROTO;
+        perror("SDP invalid attr byte count");
+        return -1;
+    }
+    channel = sdp_extract_rfcomm_channel_from_attr_list(rsp + 2, attr_bytes);
+    fprintf(stderr, "[iap2-mini] SDP discovered RFCOMM channel=%d for peer=%s\n", channel, addr_str);
+    return channel;
+}
+
+static int run_cafe_connect(const char *addr_str) {
+    int channel;
+    int fd;
+
+    channel = sdp_discover_rfcomm_channel(addr_str, SDP_UUID_CAFE);
+    if (channel <= 0) {
+        fprintf(stderr, "[iap2-mini] CAFE discovery failed, trying CAFF fallback\n");
+        channel = sdp_discover_rfcomm_channel(addr_str, SDP_UUID_CAFF);
+    }
+    if (channel <= 0) {
+        channel = 1;
+        fprintf(stderr, "[iap2-mini] SDP fallback channel=%d\n", channel);
+    }
+
+    fd = rfcomm_client_connect(addr_str, channel);
+    if (fd < 0) {
+        return 1;
+    }
+    if (dup2(fd, STDIN_FILENO) < 0 || dup2(fd, STDOUT_FILENO) < 0) {
+        perror("dup2(RFCOMM client)");
+        close(fd);
+        return 1;
+    }
+    if (fd > STDERR_FILENO) {
+        close(fd);
+    }
+    return loop_link_messages_mode(1);
 }
 
 static int loop_raw_messages(void) {
@@ -2175,6 +2483,7 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini sdp-loop\n"
         "  carthing-iap2-mini rfcomm-listen\n"
         "  carthing-iap2-mini sdp-listen\n"
+        "  carthing-iap2-mini cafe-connect <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini transport-daemon\n"
         "  carthing-iap2-mini hci-read-bdaddr\n"
         "  carthing-iap2-mini hci-read-name\n"
@@ -2227,6 +2536,14 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "sdp-listen") == 0) {
         return serve_l2cap_once((uint16_t)env_u8("CARTHING_IAP2_L2CAP_PSM",
                                                  L2CAP_PSM_SDP, 1, 0xffff));
+    }
+
+    if (strcmp(argv[1], "cafe-connect") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return run_cafe_connect(argv[2]);
     }
 
     if (strcmp(argv[1], "transport-daemon") == 0) {
