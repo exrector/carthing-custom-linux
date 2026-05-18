@@ -282,3 +282,32 @@ Meaning:
   - polish the helper
   - expose this as the clean-room auth backend
   - build our own higher MFi/iAP2 layer on top of the proven cert+sign path
+
+New reusable userspace building block:
+
+- `carthing-mfi-probe aa03 <challenge_hex>`
+- this command now:
+  - signs through the proven raw ACP3 path on the live auth chip
+  - wraps the 64-byte signature into a ready iAP2 control-session payload for
+    `AA03 AuthenticationChallengeResponse`
+
+Live proof:
+
+- output length: `74` bytes
+- first bytes:
+  - `40 40` = iAP2 control-session start
+  - `00 4a` = total CSM length
+  - `aa 03` = `AuthenticationChallengeResponse`
+  - `00 44 00 00` = param header for 64-byte signature
+
+Example head from live `aa03` output:
+
+```text
+4040004aaa0300440000d63cd9ffb787b5780b9cac69cdfe...
+```
+
+Practical meaning:
+
+- we no longer only have "raw cert bytes" and "raw signature bytes"
+- we already have the first directly reusable iAP2 auth message builder for the
+  new stack
