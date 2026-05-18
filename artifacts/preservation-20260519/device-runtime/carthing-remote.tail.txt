@@ -1,0 +1,400 @@
+2015-01-01 14:48:51,017 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:48:51,018 INFO HB: GATT ping...
+2015-01-01 14:48:51,346 INFO HB: ping OK — коннект жив
+2015-01-01 14:49:01,357 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:49:11,368 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:49:21,378 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:49:31,386 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:49:41,390 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:49:51,401 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:49:51,402 INFO HB: GATT ping...
+2015-01-01 14:49:51,586 INFO HB: ping OK — коннект жив
+2015-01-01 14:50:01,597 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:50:11,607 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:50:21,612 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:50:31,623 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:50:41,634 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:50:51,636 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:50:51,636 INFO HB: GATT ping...
+2015-01-01 14:50:51,811 INFO HB: ping OK — коннект жив
+2015-01-01 14:51:01,822 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:51:11,833 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:51:21,844 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:51:31,855 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:51:41,865 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:51:51,876 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:51:51,877 INFO HB: GATT ping...
+2015-01-01 14:51:52,216 INFO HB: ping OK — коннект жив
+2015-01-01 14:52:02,224 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:52:12,235 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:52:22,245 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:52:32,256 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:52:42,267 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:52:52,278 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:52:52,278 INFO HB: GATT ping...
+2015-01-01 14:52:52,681 INFO HB: ping OK — коннект жив
+2015-01-01 14:53:02,692 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:53:12,703 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:53:22,713 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:53:32,721 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:53:42,731 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:53:52,742 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:53:52,743 INFO HB: GATT ping...
+2015-01-01 14:53:53,146 INFO HB: ping OK — коннект жив
+2015-01-01 14:54:03,157 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:54:13,168 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:54:23,178 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:54:33,187 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:54:43,198 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:54:53,208 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:54:53,209 INFO HB: GATT ping...
+2015-01-01 14:54:53,702 INFO HB: ping OK — коннект жив
+2015-01-01 14:55:03,712 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:55:13,723 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:55:23,734 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:55:33,744 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:55:43,750 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:55:53,761 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:55:53,761 INFO HB: GATT ping...
+2015-01-01 14:55:54,197 INFO HB: ping OK — коннект жив
+2015-01-01 14:56:04,205 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:56:14,216 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:56:24,227 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:56:34,238 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:56:44,248 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:56:54,259 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:56:54,260 INFO HB: GATT ping...
+2015-01-01 14:56:54,723 INFO HB: ping OK — коннект жив
+2015-01-01 14:57:04,734 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:57:14,744 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:57:24,755 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:57:34,762 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:57:44,773 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:57:54,784 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:57:54,784 INFO HB: GATT ping...
+2015-01-01 14:57:55,203 INFO HB: ping OK — коннект жив
+2015-01-01 14:58:05,214 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:58:15,225 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:58:25,236 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:58:35,243 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:58:45,254 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:58:55,256 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:58:55,256 INFO HB: GATT ping...
+2015-01-01 14:58:55,429 INFO HB: ping OK — коннект жив
+2015-01-01 14:59:05,440 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 14:59:15,444 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 14:59:25,450 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 14:59:35,460 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 14:59:45,471 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 14:59:55,482 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 14:59:55,482 INFO HB: GATT ping...
+2015-01-01 14:59:55,819 INFO HB: ping OK — коннект жив
+2015-01-01 15:00:05,830 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:00:15,841 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:00:25,852 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:00:35,862 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:00:45,870 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:00:55,881 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:00:55,882 INFO HB: GATT ping...
+2015-01-01 15:00:56,284 INFO HB: ping OK — коннект жив
+2015-01-01 15:01:06,295 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:01:16,306 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:01:26,307 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:01:36,318 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:01:46,319 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:01:56,325 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:01:56,326 INFO HB: GATT ping...
+2015-01-01 15:01:56,509 INFO HB: ping OK — коннект жив
+2015-01-01 15:02:06,520 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:02:16,522 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:02:26,533 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:02:36,543 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:02:46,549 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:02:56,560 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:02:56,560 INFO HB: GATT ping...
+2015-01-01 15:02:56,734 INFO HB: ping OK — коннект жив
+2015-01-01 15:03:06,745 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:03:16,748 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:03:26,749 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:03:36,760 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:03:46,771 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:03:56,782 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:03:56,782 INFO HB: GATT ping...
+2015-01-01 15:03:57,184 INFO HB: ping OK — коннект жив
+2015-01-01 15:04:07,195 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:04:17,206 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:04:27,217 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:04:37,227 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:04:47,238 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:04:57,246 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:04:57,246 INFO HB: GATT ping...
+2015-01-01 15:04:57,440 INFO HB: ping OK — коннект жив
+2015-01-01 15:05:07,451 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:05:17,462 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:05:27,464 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:05:37,475 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:05:47,485 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:05:57,496 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:05:57,497 INFO HB: GATT ping...
+2015-01-01 15:05:57,830 INFO HB: ping OK — коннект жив
+2015-01-01 15:06:07,841 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:06:17,852 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:06:27,863 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:06:37,869 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:06:47,880 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:06:57,891 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:06:57,891 INFO HB: GATT ping...
+2015-01-01 15:06:58,386 INFO HB: ping OK — коннект жив
+2015-01-01 15:07:08,397 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:07:18,408 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:07:28,419 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:07:38,431 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:07:48,441 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:07:58,452 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:07:58,453 INFO HB: GATT ping...
+2015-01-01 15:07:58,882 INFO HB: ping OK — коннект жив
+2015-01-01 15:08:08,893 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:08:18,903 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:08:28,914 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:08:38,923 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:08:48,933 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:08:58,944 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:08:58,945 INFO HB: GATT ping...
+2015-01-01 15:08:59,407 INFO HB: ping OK — коннект жив
+2015-01-01 15:09:09,418 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:09:19,429 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:09:29,440 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:09:39,451 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:09:49,457 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:09:59,468 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:09:59,468 INFO HB: GATT ping...
+2015-01-01 15:09:59,918 INFO HB: ping OK — коннект жив
+2015-01-01 15:10:09,929 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:10:19,940 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:10:29,951 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:10:39,959 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:10:49,970 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:10:59,972 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:10:59,973 INFO HB: GATT ping...
+2015-01-01 15:11:00,144 INFO HB: ping OK — коннект жив
+2015-01-01 15:11:10,155 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:11:20,166 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:11:30,177 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:11:40,181 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:11:50,192 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:12:00,203 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:12:00,203 INFO HB: GATT ping...
+2015-01-01 15:12:00,609 INFO HB: ping OK — коннект жив
+2015-01-01 15:12:10,620 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:12:20,631 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:12:30,642 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:12:40,650 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:12:50,661 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:13:00,672 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:13:00,673 INFO HB: GATT ping...
+2015-01-01 15:13:01,000 INFO HB: ping OK — коннект жив
+2015-01-01 15:13:11,011 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:13:21,022 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:13:31,032 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:13:41,042 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:13:51,052 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:14:01,063 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:14:01,064 INFO HB: GATT ping...
+2015-01-01 15:14:01,540 INFO HB: ping OK — коннект жив
+2015-01-01 15:14:11,551 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:14:21,562 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:14:31,572 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:14:41,583 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:14:51,594 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:15:01,605 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:15:01,605 INFO HB: GATT ping...
+2015-01-01 15:15:02,005 INFO HB: ping OK — коннект жив
+2015-01-01 15:15:12,016 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:15:22,027 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:15:32,038 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:15:42,046 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:15:52,051 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:16:02,055 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:16:02,055 INFO HB: GATT ping...
+2015-01-01 15:16:02,230 INFO HB: ping OK — коннект жив
+2015-01-01 15:16:12,242 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:16:22,252 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:16:32,263 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:16:42,274 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:16:52,285 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:17:02,296 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:17:02,296 INFO HB: GATT ping...
+2015-01-01 15:17:02,440 INFO HB: ping OK — коннект жив
+2015-01-01 15:17:12,448 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:17:22,459 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:17:32,470 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:17:42,480 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:17:52,491 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:18:02,502 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:18:02,502 INFO HB: GATT ping...
+2015-01-01 15:18:02,950 INFO HB: ping OK — коннект жив
+2015-01-01 15:18:12,961 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:18:21,190 INFO AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2015-01-01 15:18:21,191 INFO AMS player: Подкасты
+2015-01-01 15:18:21,191 INFO State: ⏸  —  [0/105s] vol=33%
+2015-01-01 15:18:21,191 INFO State: ⏸  —  [0/105s] vol=32%
+2015-01-01 15:18:21,211 INFO AMS raw notification: 000100312c2c
+2015-01-01 15:18:21,211 INFO State: ▶  —  [0/105s] vol=33%
+2015-01-01 15:18:21,211 INFO State: ▶  —  [0/105s] vol=32%
+2015-01-01 15:18:21,231 INFO AMS raw notification: 000100302c302e302c32332e353539
+2015-01-01 15:18:21,231 INFO State: ⏸  —  [24/105s] vol=33%
+2015-01-01 15:18:21,232 INFO State: ⏸  —  [23/105s] vol=32%
+2015-01-01 15:18:21,251 INFO AMS raw notification: 020000d0a1d098d09dd0a2d095d0a2d098d09a
+2015-01-01 15:18:21,252 INFO State: ⏸  — СИНТЕТИК [24/105s] vol=33%
+2015-01-01 15:18:21,252 INFO State: ⏸  — СИНТЕТИК [23/105s] vol=32%
+2015-01-01 15:18:21,273 INFO AMS raw notification: 0203003834322e363834
+2015-01-01 15:18:21,273 INFO State: ⏸  — СИНТЕТИК [24/843s] vol=33%
+2015-01-01 15:18:21,274 INFO State: ⏸  — СИНТЕТИК [23/842s] vol=32%
+2015-01-01 15:18:21,295 INFO AMS raw notification: 020200d090d0bdd182d0b8d0b4d0b5d0bfd180d0b5d181d181d0b0d0bdd182d18b20d0b820d0bed0bfd0b8d0bed0b8d0b4d18b20d0b220d0b3d0bed180d0bed0b4d181d0bad0b8d18520d180d0b5d0bad0b0d185
+2015-01-01 15:18:21,295 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [24/843s] vol=33%
+2015-01-01 15:18:21,295 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [23/842s] vol=32%
+2015-01-01 15:18:21,324 INFO AMS raw notification: 020100313820d0bcd0b0d18f2032303236e280afd0b32e
+2015-01-01 15:18:21,324 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [24/843s] vol=33%
+2015-01-01 15:18:21,324 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [23/842s] vol=32%
+2015-01-01 15:18:21,353 INFO AMS raw notification: 000100312c312e302c32332e353832
+2015-01-01 15:18:21,353 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [24/843s] vol=33%
+2015-01-01 15:18:21,353 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [23/842s] vol=32%
+2015-01-01 15:18:22,900 INFO AMS raw notification: 000100312c312e302c32352e323635
+2015-01-01 15:18:22,901 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:18:22,901 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:18:22,962 INFO HB: connections=1 advertising=False silent=0s
+2015-01-01 15:18:23,065 INFO AMS raw notification: 000100302c302e302c32352e313934
+2015-01-01 15:18:23,066 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:18:23,066 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:18:32,973 INFO HB: connections=1 advertising=False silent=9s
+2015-01-01 15:18:42,984 INFO HB: connections=1 advertising=False silent=19s
+2015-01-01 15:18:52,995 INFO HB: connections=1 advertising=False silent=29s
+2015-01-01 15:19:03,005 INFO HB: connections=1 advertising=False silent=39s
+2015-01-01 15:19:03,006 INFO HB: GATT ping...
+2015-01-01 15:19:03,176 INFO HB: ping OK — коннект жив
+2015-01-01 15:19:05,351 INFO AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2015-01-01 15:19:05,351 INFO AMS player: Музыка
+2015-01-01 15:19:05,351 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:19:05,351 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:19:05,380 INFO AMS raw notification: 000100302c2c
+2015-01-01 15:19:05,381 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [0/843s] vol=33%
+2015-01-01 15:19:05,381 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [0/842s] vol=32%
+2015-01-01 15:19:05,409 INFO AMS raw notification: 020000
+2015-01-01 15:19:05,410 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках —  [0/843s] vol=33%
+2015-01-01 15:19:05,410 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках —  [0/842s] vol=32%
+2015-01-01 15:19:05,437 INFO AMS raw notification: 020300
+2015-01-01 15:19:05,437 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках —  [0/843s] vol=33%
+2015-01-01 15:19:05,438 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках —  [0/842s] vol=32%
+2015-01-01 15:19:05,464 INFO AMS raw notification: 020200
+2015-01-01 15:19:05,465 INFO State: ⏸  —  [0/843s] vol=33%
+2015-01-01 15:19:05,465 INFO State: ⏸  —  [0/842s] vol=32%
+2015-01-01 15:19:05,485 INFO AMS raw notification: 020100
+2015-01-01 15:19:05,485 INFO State: ⏸  —  [0/843s] vol=33%
+2015-01-01 15:19:05,486 INFO State: ⏸  —  [0/842s] vol=32%
+2015-01-01 15:19:13,186 INFO HB: connections=1 advertising=False silent=7s
+2015-01-01 15:19:23,191 INFO HB: connections=1 advertising=False silent=17s
+2015-01-01 15:19:33,196 INFO HB: connections=1 advertising=False silent=27s
+2015-01-01 15:19:34,001 INFO Encoder press → TogglePlayPause
+2015-01-01 15:19:34,046 INFO AMS: command 0x02 sent OK
+2015-01-01 15:19:34,961 INFO AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2015-01-01 15:19:34,961 INFO AMS player: Подкасты
+2015-01-01 15:19:34,962 INFO State: ⏸  —  [0/843s] vol=33%
+2015-01-01 15:19:34,962 INFO State: ⏸  —  [0/842s] vol=32%
+2015-01-01 15:19:34,982 INFO AMS raw notification: 000100312c2c
+2015-01-01 15:19:34,982 INFO State: ▶  —  [0/843s] vol=33%
+2015-01-01 15:19:34,982 INFO State: ▶  —  [0/842s] vol=32%
+2015-01-01 15:19:35,002 INFO AMS raw notification: 000100312c312e302c32352e323139
+2015-01-01 15:19:35,003 INFO State: ▶  —  [25/843s] vol=33%
+2015-01-01 15:19:35,003 INFO State: ▶  —  [25/842s] vol=32%
+2015-01-01 15:19:35,022 INFO AMS raw notification: 020000d0a1d098d09dd0a2d095d0a2d098d09a
+2015-01-01 15:19:35,023 INFO State: ▶  — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:19:35,023 INFO State: ▶  — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:19:35,044 INFO AMS raw notification: 0203003834322e363834
+2015-01-01 15:19:35,044 INFO State: ▶  — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:19:35,045 INFO State: ▶  — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:19:35,066 INFO AMS raw notification: 020200d090d0bdd182d0b8d0b4d0b5d0bfd180d0b5d181d181d0b0d0bdd182d18b20d0b820d0bed0bfd0b8d0bed0b8d0b4d18b20d0b220d0b3d0bed180d0bed0b4d181d0bad0b8d18520d180d0b5d0bad0b0d185
+2015-01-01 15:19:35,066 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:19:35,067 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:19:35,095 INFO AMS raw notification: 020100313820d0bcd0b0d18f2032303236e280afd0b32e
+2015-01-01 15:19:35,095 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/843s] vol=33%
+2015-01-01 15:19:35,095 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [25/842s] vol=32%
+2015-01-01 15:19:39,238 INFO Encoder press → TogglePlayPause
+2015-01-01 15:19:39,266 INFO AMS: command 0x02 sent OK
+2015-01-01 15:19:39,371 INFO AMS raw notification: 000100312c312e302c32392e363439
+2015-01-01 15:19:39,371 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/843s] vol=33%
+2015-01-01 15:19:39,372 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [29/842s] vol=32%
+2015-01-01 15:19:39,461 INFO AMS raw notification: 000100302c302e302c32392e353734
+2015-01-01 15:19:39,461 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/843s] vol=33%
+2015-01-01 15:19:39,462 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [29/842s] vol=32%
+2015-01-01 15:19:41,702 INFO Encoder press → TogglePlayPause
+2015-01-01 15:19:41,726 INFO AMS: command 0x02 sent OK
+2015-01-01 15:19:41,891 INFO AMS raw notification: 000100312c312e302c32392e353932
+2015-01-01 15:19:41,891 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/843s] vol=33%
+2015-01-01 15:19:41,892 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [29/842s] vol=32%
+2015-01-01 15:19:43,199 INFO HB: connections=1 advertising=False silent=1s
+2015-01-01 15:19:43,329 INFO Encoder press → TogglePlayPause
+2015-01-01 15:19:43,361 INFO AMS: command 0x02 sent OK
+2015-01-01 15:19:43,376 INFO AMS raw notification: 000100312c312e302c33312e313734
+2015-01-01 15:19:43,376 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=33%
+2015-01-01 15:19:43,377 INFO State: ▶ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/842s] vol=32%
+2015-01-01 15:19:43,541 INFO AMS raw notification: 000100302c302e302c33302e383939
+2015-01-01 15:19:43,541 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=33%
+2015-01-01 15:19:43,542 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=32%
+2015-01-01 15:19:44,313 INFO Encoder -1 → cmd 0x06
+2015-01-01 15:19:44,336 INFO AMS: command 0x06 sent OK
+2015-01-01 15:19:44,351 INFO AMS raw notification: 000200302e32363530323339
+2015-01-01 15:19:44,351 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=27%
+2015-01-01 15:19:44,351 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=26%
+2015-01-01 15:19:44,403 INFO Encoder -1 → cmd 0x06
+2015-01-01 15:19:44,426 INFO AMS: command 0x06 sent OK
+2015-01-01 15:19:44,441 INFO AMS raw notification: 000200302e32303235323339
+2015-01-01 15:19:44,441 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=20%
+2015-01-01 15:19:44,441 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=20%
+2015-01-01 15:19:44,517 INFO Encoder -1 → cmd 0x06
+2015-01-01 15:19:44,546 INFO AMS: command 0x06 sent OK
+2015-01-01 15:19:44,561 INFO AMS raw notification: 000200302e31343030323339
+2015-01-01 15:19:44,561 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=14%
+2015-01-01 15:19:44,562 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=14%
+2015-01-01 15:19:44,802 INFO Encoder +1 → cmd 0x05
+2015-01-01 15:19:44,831 INFO AMS: command 0x05 sent OK
+2015-01-01 15:19:44,846 INFO AMS raw notification: 000200302e32303235323339
+2015-01-01 15:19:44,846 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=20%
+2015-01-01 15:19:44,846 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=20%
+2015-01-01 15:19:44,891 INFO Encoder +1 → cmd 0x05
+2015-01-01 15:19:44,921 INFO AMS: command 0x05 sent OK
+2015-01-01 15:19:44,936 INFO AMS raw notification: 000200302e32363530323339
+2015-01-01 15:19:44,936 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=27%
+2015-01-01 15:19:44,936 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=26%
+2015-01-01 15:19:44,986 INFO Encoder +1 → cmd 0x05
+2015-01-01 15:19:45,011 INFO AMS: command 0x05 sent OK
+2015-01-01 15:19:45,026 INFO AMS raw notification: 000200302e33323735323339
+2015-01-01 15:19:45,026 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=33%
+2015-01-01 15:19:45,026 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=32%
+2015-01-01 15:19:45,118 INFO Encoder +1 → cmd 0x05
+2015-01-01 15:19:45,146 INFO AMS: command 0x05 sent OK
+2015-01-01 15:19:45,161 INFO AMS raw notification: 000200302e33393030323339
+2015-01-01 15:19:45,161 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [31/843s] vol=39%
+2015-01-01 15:19:45,161 INFO State: ⏸ Антидепрессанты и опиоиды в городских реках — СИНТЕТИК [30/842s] vol=39%
+2015-01-01 15:19:53,208 INFO HB: connections=1 advertising=False silent=8s
+2015-01-01 15:20:03,219 INFO HB: connections=1 advertising=False silent=18s
+2015-01-01 15:20:13,230 INFO HB: connections=1 advertising=False silent=28s
+2015-01-01 15:20:23,239 INFO HB: connections=1 advertising=False silent=38s
+2015-01-01 15:20:23,240 INFO HB: GATT ping...
+2015-01-01 15:20:23,397 INFO HB: ping OK — коннект жив
+2015-01-01 15:20:33,408 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:20:43,419 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:20:53,429 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:21:03,439 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:21:13,444 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:21:23,454 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:21:23,455 INFO HB: GATT ping...
+2015-01-01 15:21:23,922 INFO HB: ping OK — коннект жив
+2015-01-01 15:21:33,930 INFO HB: connections=1 advertising=False silent=10s
+2015-01-01 15:21:43,941 INFO HB: connections=1 advertising=False silent=20s
+2015-01-01 15:21:53,952 INFO HB: connections=1 advertising=False silent=30s
+2015-01-01 15:22:03,963 INFO HB: connections=1 advertising=False silent=40s
+2015-01-01 15:22:13,974 INFO HB: connections=1 advertising=False silent=50s
+2015-01-01 15:22:23,984 INFO HB: connections=1 advertising=False silent=60s
+2015-01-01 15:22:23,985 INFO HB: GATT ping...
+2015-01-01 15:22:24,328 INFO HB: ping OK — коннект жив
+2015-01-01 15:22:34,339 INFO HB: connections=1 advertising=False silent=10s

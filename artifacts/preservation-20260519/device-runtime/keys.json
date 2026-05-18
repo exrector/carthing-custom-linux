@@ -1,0 +1,15 @@
+{
+    "CarThing": {
+        "10:A2:D3:83:82:50/P": {
+            "address_type": 0,
+            "irk": {
+                "authenticated": false,
+                "value": "1580b713deabea59e3de1c62e4e4db21"
+            },
+            "ltk": {
+                "authenticated": false,
+                "value": "bef705f91ef2361e9f4163d5304dd283"
+            }
+        }
+    }
+}

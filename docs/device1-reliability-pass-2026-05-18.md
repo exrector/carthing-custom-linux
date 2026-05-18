@@ -46,8 +46,9 @@ Update later on 2026-05-18:
   re-pairing
 - this also passed a longer manual disconnect window of about `2 minutes`
   followed by automatic reconnect after Bluetooth was enabled again
+- this later also passed an approximately `10 minute` airplane-mode disconnect
+  window followed by automatic reconnect
 - longer soak cases are still pending:
-  - `5-10` minute disconnect
   - out-of-range return
   - phone reboot with the device left running
 

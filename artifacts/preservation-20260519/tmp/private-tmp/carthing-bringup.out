@@ -1,0 +1,15 @@
+host_bsd_name: en14
+host_assign_ip: 172.16.42.1/255.255.255.0
+en14: flags=8863<UP,BROADCAST,SMART,RUNNING,SIMPLEX,MULTICAST> mtu 1500
+	options=404<VLAN_MTU,CHANNEL_IO>
+	ether 5a:06:17:a3:15:62
+	inet 172.16.42.1 netmask 0xffffff00 broadcast 172.16.42.255
+	media: autoselect (100baseTX <full-duplex>)
+	status: active
+route_pin_verified: 1
+route_172.16.42.2_interface: en14
+route_172.16.42.77_interface: en14
+ping_172.16.42.2: fail
+ping_172.16.42.77: ok
+arp_172.16.42.2: (incomplete)
+arp_172.16.42.77: d6:83:b7:13:39:39

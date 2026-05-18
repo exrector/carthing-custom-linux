@@ -1,0 +1,220 @@
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <poll.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#define IAP2_CSM_START          0x4040
+#define IAP2_RAW_SOF            0xFF5A
+#define IAP2_CTL_SYN            0x80
+#define IAP2_CTL_ACK            0x40
+#define IAP2_CTL_EAK            0x20
+#define IAP2_CTL_DATA           0x00
+#define IAP2_SID_CTL            0x00
+#define IAP2_MSG_AUTH_CERT_REQ  0xAA00
+#define IAP2_MSG_AUTH_CERT_RESP 0xAA01
+#define IAP2_MSG_AUTH_CHAL_REQ  0xAA02
+#define IAP2_MSG_AUTH_CHAL_RESP 0xAA03
+#define IAP2_MSG_AUTH_FAILED    0xAA04
+#define IAP2_MSG_AUTH_OK        0xAA05
+
+#define IAP2_MSG_ID_START       0x1D00
+#define IAP2_MSG_ID_INFO        0x1D01
+#define IAP2_MSG_ID_ACCEPTED    0x1D02
+#define IAP2_MSG_ID_REJECTED    0x1D03
+
+#define SDP_PDU_ERROR_RESPONSE              0x01
+#define SDP_PDU_SERVICE_SEARCH_REQUEST      0x02
+#define SDP_PDU_SERVICE_SEARCH_RESPONSE     0x03
+#define SDP_PDU_SERVICE_ATTRIBUTE_REQUEST   0x04
+#define SDP_PDU_SERVICE_ATTRIBUTE_RESPONSE  0x05
+#define SDP_PDU_SERVICE_SEARCH_ATTR_REQUEST 0x06
+#define SDP_PDU_SERVICE_SEARCH_ATTR_RESP    0x07
+
+#define SDP_ERR_INVALID_HANDLE              0x0002
+#define SDP_ERR_INVALID_SYNTAX              0x0003
+#define SDP_ERR_INVALID_PDU_SIZE            0x0004
+#define SDP_ERR_INVALID_CONT_STATE          0x0005
+
+#define HELPER_PATH_DEFAULT "/usr/bin/carthing-mfi-probe"
+#define RFCOMM_CHANNEL_DEFAULT 3
+#define L2CAP_PSM_SDP 0x0001
+#define SDP_RECORD_HANDLE 0x00010000U
+#define HCI_DEV_DEFAULT 0
+#define CLASS_OF_DEVICE_CAR_AUDIO 0x240420U
+
+#ifndef BTPROTO_HCI
+#define BTPROTO_HCI 1
+#endif
+
+#define HCI_CHANNEL_RAW 0
+#define HCI_COMMAND_PKT 0x01
+#define HCI_EVENT_PKT   0x04
+#define BT_H4_EVT_PKT   0x04
+#define EVT_AUTH_COMPLETE 0x06
+#define EVT_CMD_COMPLETE 0x0E
+#define EVT_PIN_CODE_REQ 0x16
+#define EVT_LINK_KEY_REQ 0x17
+#define EVT_LINK_KEY_NOTIFY 0x18
+#define EVT_IO_CAPABILITY_REQUEST 0x31
+#define EVT_IO_CAPABILITY_RESPONSE 0x32
+#define EVT_USER_CONFIRMATION_REQUEST 0x33
+#define EVT_USER_PASSKEY_REQUEST 0x34
+#define EVT_SIMPLE_PAIRING_COMPLETE 0x36
+#define OGF_LINK_CTL    0x01
+#define OGF_HOST_CTL    0x03
+#define OGF_INFO_PARAM  0x04
+#define OCF_SET_EVENT_MASK 0x0001
+#define OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY 0x000C
+#define OCF_PIN_CODE_REQUEST_NEGATIVE_REPLY 0x000E
+#define OCF_IO_CAPABILITY_REQUEST_REPLY 0x002B
+#define OCF_USER_CONFIRMATION_REQUEST_REPLY 0x002C
+#define OCF_USER_CONFIRMATION_REQUEST_NEGATIVE_REPLY 0x002D
+#define OCF_USER_PASSKEY_REQUEST_NEGATIVE_REPLY 0x0033
+#define OCF_WRITE_LOCAL_NAME  0x0013
+#define OCF_READ_LOCAL_NAME   0x0014
+#define OCF_READ_SCAN_ENABLE  0x0019
+#define OCF_WRITE_SCAN_ENABLE 0x001A
+#define OCF_READ_CLASS_OF_DEV  0x0023
+#define OCF_WRITE_CLASS_OF_DEV 0x0024
+#define OCF_WRITE_INQUIRY_MODE 0x0045
+#define OCF_READ_BD_ADDR      0x0009
+#define OCF_WRITE_EXTENDED_INQUIRY_RESPONSE 0x0052
+#define OCF_WRITE_SIMPLE_PAIRING_MODE 0x0056
+#define HCI_OPCODE(ogf, ocf) ((uint16_t)((ocf) | ((ogf) << 10)))
+#define SOL_HCI 0
+#define HCI_FILTER 2
+
+#define HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT 0x03
+#define HCI_OOB_DATA_NOT_PRESENT 0x00
+#define HCI_AUTH_REQ_GENERAL_BONDING_NO_MITM 0x04
+
+#ifndef AF_BLUETOOTH
+#define AF_BLUETOOTH 31
+#endif
+
+#ifndef BTPROTO_L2CAP
+#define BTPROTO_L2CAP 0
+#endif
+
+#ifndef BTPROTO_RFCOMM
+#define BTPROTO_RFCOMM 3
+#endif
+
+#ifndef SOL_BLUETOOTH
+#define SOL_BLUETOOTH 274
+#endif
+
+#ifndef BT_SECURITY
+#define BT_SECURITY 4
+#endif
+
+#define BT_SECURITY_HIGH 3
+
+typedef struct {
+    uint8_t b[6];
+} bdaddr_t;
+
+struct sockaddr_rc_local {
+    sa_family_t rc_family;
+    bdaddr_t rc_bdaddr;
+    uint8_t rc_channel;
+};
+
+struct sockaddr_l2_local {
+    sa_family_t l2_family;
+    uint16_t l2_psm;
+    bdaddr_t l2_bdaddr;
+    uint16_t l2_cid;
+    uint8_t l2_bdaddr_type;
+};
+
+struct sockaddr_hci_local {
+    sa_family_t hci_family;
+    uint16_t hci_dev;
+    uint16_t hci_channel;
+};
+
+struct bt_security_local {
+    uint8_t level;
+    uint8_t key_size;
+};
+
+struct hci_filter_local {
+    uint32_t type_mask;
+    uint32_t event_mask[2];
+    uint16_t opcode;
+};
+
+enum output_mode {
+    OUTPUT_CONTROL = 0,
+    OUTPUT_RAW = 1,
+};
+
+struct link_state {
+    uint8_t tx_seq;
+    int auth_ok;
+};
+
+static const uint8_t SDP_UUID_CAFF[16] = {
+    0x00, 0x00, 0x00, 0x00, 0xde, 0xca, 0xfa, 0xde,
+    0xde, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xca, 0xff
+};
+static const uint8_t EIR_UUID_CAFF_LE[16] = {
+    0xff, 0xca, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xde,
+    0xde, 0xfa, 0xca, 0xde, 0x00, 0x00, 0x00, 0x00
+};
+
+static const uint8_t SDP_ATTR_HANDLE[] = { 0x0A, 0x00, 0x01, 0x00, 0x00 };
+static const uint8_t SDP_ATTR_SERVICE_CLASS_ID_LIST[] = {
+    0x35, 0x11, 0x1C,
+    0x00, 0x00, 0x00, 0x00, 0xde, 0xca, 0xfa, 0xde,
+    0xde, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xca, 0xff
+};
+static const uint8_t SDP_ATTR_SERVICE_RECORD_STATE[] = { 0x0A, 0x00, 0x00, 0x00, 0x00 };
+static const uint8_t SDP_ATTR_PROTOCOL_DESCRIPTOR_LIST[] = {
+    0x35, 0x0C,
+      0x35, 0x03, 0x19, 0x01, 0x00,
+      0x35, 0x05, 0x19, 0x00, 0x03, 0x08, 0x03
+};
+static const uint8_t SDP_ATTR_BROWSE_GROUP_LIST[] = { 0x35, 0x03, 0x19, 0x10, 0x02 };
+static const uint8_t SDP_ATTR_LANGUAGE_BASE[] = {
+    0x35, 0x24,
+      0x09, 0x65, 0x6E, 0x09, 0x00, 0x6A, 0x09, 0x01, 0x00,
+      0x09, 0x66, 0x72, 0x09, 0x00, 0x6A, 0x09, 0x01, 0x10,
+      0x09, 0x64, 0x65, 0x09, 0x00, 0x6A, 0x09, 0x01, 0x20,
+      0x09, 0x6A, 0x61, 0x09, 0x00, 0x6A, 0x09, 0x01, 0x30
+};
+static const uint8_t SDP_ATTR_SERVICE_AVAILABILITY[] = { 0x08, 0xFF };
+static const uint8_t SDP_ATTR_PROFILE_DESCRIPTOR_LIST[] = {
+    0x35, 0x08,
+      0x35, 0x06, 0x19, 0x11, 0x01, 0x09, 0x01, 0x00
+};
+static const uint8_t SDP_ATTR_SERVICE_NAME[] = {
+    0x25, 0x0C, 'W', 'i', 'r', 'e', 'l', 'e', 's', 's', ' ', 'i', 'A', 'P'
+};
+
+static int capture_helper_aa03(const uint8_t challenge[32], size_t challenge_len,
+                               uint8_t **out, size_t *out_len);
+
+static int write_all_fd(int fd, const uint8_t *buf, size_t len) {
+    size_t off = 0;
+    while (off < len) {
+        ssize_t n = write(fd, buf + off, len - off);
+        if (n < 0) {
+            return -1;
+        }
+        off += (size_t)n;
+    }
+    return 0;
+}
+
+static int append_buf(uint8_t *buf, size_t cap, size_t *off, const void *src, size_t len) {
+    if (*off + len > cap) {

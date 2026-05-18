@@ -1,0 +1,15 @@
+3f35243 Checkpoint record 2-minute BLE reconnect proof
+0313c26 Checkpoint add bonded-only BLE reconnect path
+5957d3a Checkpoint record clean re-pair reset and classic inquiry proof
+18013c4 Checkpoint add clean-room CAFE active connect path
+0bdc997 Checkpoint split HID pairing boundary from iAP2 transport
+295b60b Checkpoint set classic iAP2 identity and scan policy
+b2824fd Checkpoint enable classic transport daemon for iAP2 mini
+58ae2c5 Checkpoint prove minimal clean-room SDP responder
+e256276 Checkpoint prove local SDP socket path for iAP2 mini
+c7fe058 Checkpoint add RFCOMM transport wrapper for iAP2 mini
+493ecf0 Checkpoint prove minimal iAP2 link-layer daemon
+9331b09 Checkpoint add raw iAP2 framing to mini session daemon
+3229ca1 Checkpoint add minimal clean-room iAP2 session daemon
+fc09f21 Checkpoint add live AA01 and auth responder backend
+16ca256 Checkpoint add iAP2 AA03 auth payload builder

@@ -1,0 +1,5 @@
+  214 root     dropbear -F -E -p 22 -P /run/carthing/dropbear.pid -r /run/dropbear/dropbear_rsa_host_key
+  229 root     python3 -B /usr/libexec/carthing/reverse-agent.py
+  251 root     /usr/bin/carthing-btattach-mini /dev/ttyS1 115200
+ 2262 root     python3 /usr/lib/carthing/media_remote.py
+ 2289 root     dropbear -F -E -p 22 -P /run/carthing/dropbear.pid -r /run/dropbear/dropbear_rsa_host_key
