@@ -141,3 +141,44 @@ Current narrow blocker after the raw cert breakthrough:
   the expected 64-byte signature stream still stayed zero
 - this means the frontier is now the challenge/signature command path, not bus
   discovery and not certificate retrieval
+
+Useful disasm clues from the preserved kernel modules:
+
+- `apple_mfi_auth_i2c_prepare` exists as a distinct step before the old kernel
+  cert/sign helpers
+- `apple_mfi_smbus_read_cert_len` and `apple_mfi_smbus_read_cert` both call
+  `apple_mfi_auth_i2c_prepare(...)` and then sleep before reading
+- the old ioctl path clearly writes the 32-byte challenge through command
+  `0x4E`
+- the old challenge path then polls command `0x10` and expects byte `0x10`
+  before continuing
+
+Live mismatch against that old sign-path expectation:
+
+```sh
+ssh root@172.16.42.77 '
+  i2ctransfer -f -y 3 w33@0x10 \
+    0x4e \
+    0x00 0x01 0x02 0x03 0x04 0x05 0x06 0x07 \
+    0x08 0x09 0x0a 0x0b 0x0c 0x0d 0x0e 0x0f \
+    0x10 0x11 0x12 0x13 0x14 0x15 0x16 0x17 \
+    0x18 0x19 0x1a 0x1b 0x1c 0x1d 0x1e 0x1f
+  i2cset -f -y 3 0x10 0x10
+  sleep 1
+  i2ctransfer -f -y 3 w1@0x10 0x10 r1
+'
+```
+
+Observed result:
+
+- the challenge write does affect state
+- after the later `0x10` trigger, the chip returns `0x80`
+- `0x11` and `0x12` still read as zero-padded data instead of a 64-byte
+  signature
+
+Practical implication:
+
+- the old kernel contract around signing was richer than "write `0x4E`, then
+  read `0x12`"
+- the remaining clean-room task is to recover that exact intermediate
+  prepare/trigger/poll sequence
