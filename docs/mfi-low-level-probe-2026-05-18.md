@@ -1083,3 +1083,51 @@ That means the new frontier is even narrower:
 - iPhone is the side terminating the link after attach attempts
 - the remaining blocker is therefore in the higher classic attach contract
   above raw ACL creation and below a successful iAP2 `SDP/RFCOMM` session
+
+## 2026-05-19: `transport-active` proved classic auth is now the blocker, not reachability
+
+The next meaningful upgrade was to stop testing outbound `CAFE` in isolation
+and instead run it together with the clean-room server-side classic transport:
+
+- `HCIDEVUP` support was added so `carthing-iap2-mini` can bring `hci0` up by
+  itself after the BLE runtime is stopped
+- a new mode was added:
+
+```text
+carthing-iap2-mini transport-active <AA:BB:CC:DD:EE:FF>
+```
+
+This mode now does all of the following in one process:
+
+- bring `hci0` up
+- set `CoD`, `EIR`, `event mask`, `SSP`, and `scan enable`
+- start the clean-room `SSP` agent
+- start local `SDP` and `RFCOMM` listeners
+- then run outbound `CAFE`/`CAFF` attach attempts to the peer
+
+Live result against the real iPhone classic address:
+
+```text
+[iap2-mini] HCI dev hci0 up
+[iap2-mini] transport-active up: class=0x240420 scan=0x03 ssp=on sdp_psm=0x0001 rfcomm_ch=3 peer=10:A2:D3:83:82:50
+[iap2-mini] HCI ACL up peer=10:A2:D3:83:82:50 handle=0x000c link_type=0x01
+[iap2-mini] SSP LINK_KEY_REQ from 10:A2:D3:83:82:50 -> negative
+[iap2-mini] SSP IO_CAP_REQ from 10:A2:D3:83:82:50
+[iap2-mini] SSP USER_CONFIRM_REQ from 10:A2:D3:83:82:50
+[iap2-mini] SSP COMPLETE status=0x05 peer=10:A2:D3:83:82:50
+[iap2-mini] AUTH COMPLETE status=0x05 handle=0x000c
+connect(L2CAP client): Connection refused
+...
+connect(RFCOMM client): Connection refused
+[iap2-mini] peer-watch DISCONN_COMPLETE handle=0x000c status=0x00 reason=0x16
+```
+
+This is a major narrowing step:
+
+- the old `Network is down` condition is gone
+- the old `No route to host` condition is gone in this integrated mode
+- the iPhone and Car Thing do reach the classic auth phase
+- the current blocker is now classic authentication / pairing policy itself
+
+In other words, the next step is no longer "make the transport exist" but
+"understand why classic auth ends with status `0x05` and a refused attach".

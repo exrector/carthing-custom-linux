@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <poll.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -101,6 +102,10 @@
 #define HCI_OPCODE(ogf, ocf) ((uint16_t)((ocf) | ((ogf) << 10)))
 #define SOL_HCI 0
 #define HCI_FILTER 2
+
+#ifndef HCIDEVUP
+#define HCIDEVUP _IOW('H', 201, int)
+#endif
 
 #define HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT 0x03
 #define HCI_OOB_DATA_NOT_PRESENT 0x00
@@ -703,6 +708,26 @@ static int hci_open_raw(int dev_id) {
         return -1;
     }
     return fd;
+}
+
+static int hci_dev_up(int dev_id) {
+    int fd;
+
+    fd = socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/HCI devup)");
+        return 1;
+    }
+    if (ioctl(fd, HCIDEVUP, dev_id) < 0) {
+        if (errno != EALREADY) {
+            perror("ioctl(HCIDEVUP)");
+            close(fd);
+            return 1;
+        }
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI dev hci%d up\n", dev_id);
+    return 0;
 }
 
 static int hci_open_event_raw(int dev_id) {
@@ -2947,6 +2972,9 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
         eir_name = "Car Thing-0346";
     }
 
+    if (hci_dev_up(hci_dev) != 0) {
+        return 1;
+    }
     if (hci_write_class_of_dev(hci_dev, class_of_dev) != 0) {
         return 1;
     }
@@ -3014,6 +3042,89 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     return 0;
 }
 
+static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable,
+                                        uint32_t class_of_dev, const char *peer_addr) {
+    static const uint8_t classic_event_mask[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f };
+    const char *eir_name = getenv("CARTHING_IAP2_EIR_NAME");
+    pid_t sdp_pid;
+    pid_t rf_pid;
+    pid_t ssp_pid;
+    int rc;
+
+    if (!eir_name || !*eir_name) {
+        eir_name = "Car Thing-0346";
+    }
+
+    if (hci_dev_up(hci_dev) != 0) {
+        return 1;
+    }
+    if (hci_write_class_of_dev(hci_dev, class_of_dev) != 0) {
+        return 1;
+    }
+    if (hci_write_inquiry_mode(hci_dev, 0x02) != 0) {
+        return 1;
+    }
+    if (hci_write_eir_iap2(hci_dev, eir_name) != 0) {
+        return 1;
+    }
+    if (hci_write_event_mask(hci_dev, classic_event_mask) != 0) {
+        return 1;
+    }
+    if (hci_write_simple_pairing_mode(hci_dev, 1) != 0) {
+        return 1;
+    }
+    if (hci_write_scan_enable(hci_dev, scan_enable) != 0) {
+        return 1;
+    }
+
+    ssp_pid = fork();
+    if (ssp_pid < 0) {
+        perror("fork ssp");
+        return 1;
+    }
+    if (ssp_pid == 0) {
+        _exit(hci_ssp_agent_loop(hci_dev));
+    }
+
+    sdp_pid = fork();
+    if (sdp_pid < 0) {
+        perror("fork sdp");
+        kill(ssp_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
+        return 1;
+    }
+    if (sdp_pid == 0) {
+        _exit(serve_l2cap_forever(psm));
+    }
+
+    rf_pid = fork();
+    if (rf_pid < 0) {
+        perror("fork rfcomm");
+        kill(ssp_pid, SIGTERM);
+        kill(sdp_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
+        waitpid(sdp_pid, NULL, 0);
+        return 1;
+    }
+    if (rf_pid == 0) {
+        _exit(serve_rfcomm_forever(channel));
+    }
+
+    fprintf(stderr,
+            "[iap2-mini] transport-active up: class=0x%06x scan=0x%02x ssp=on sdp_psm=0x%04x rfcomm_ch=%d peer=%s\n",
+            class_of_dev & 0xffffffu, scan_enable, psm, channel, peer_addr);
+    sleep(1);
+    rc = run_cafe_connect(hci_dev, peer_addr);
+
+    kill(ssp_pid, SIGTERM);
+    kill(sdp_pid, SIGTERM);
+    kill(rf_pid, SIGTERM);
+    waitpid(ssp_pid, NULL, 0);
+    waitpid(sdp_pid, NULL, 0);
+    waitpid(rf_pid, NULL, 0);
+    return rc;
+}
+
 static void usage(FILE *out) {
     fprintf(out,
         "usage:\n"
@@ -3025,6 +3136,7 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini sdp-listen\n"
         "  carthing-iap2-mini cafe-connect <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini transport-daemon\n"
+        "  carthing-iap2-mini transport-active <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini hci-read-bdaddr\n"
         "  carthing-iap2-mini hci-inquiry\n"
         "  carthing-iap2-mini hci-create-acl <AA:BB:CC:DD:EE:FF>\n"
@@ -3099,6 +3211,22 @@ int main(int argc, char **argv) {
                                     0x03,
                                     env_u24("CARTHING_IAP2_CLASS_OF_DEVICE",
                                             CLASS_OF_DEVICE_CAR_AUDIO));
+    }
+
+    if (strcmp(argv[1], "transport-active") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return run_transport_active_connect(hci_dev,
+                                            env_u8("CARTHING_IAP2_RFCOMM_CHANNEL",
+                                                   RFCOMM_CHANNEL_DEFAULT, 1, 30),
+                                            (uint16_t)env_u8("CARTHING_IAP2_L2CAP_PSM",
+                                                             L2CAP_PSM_SDP, 1, 0xffff),
+                                            0x03,
+                                            env_u24("CARTHING_IAP2_CLASS_OF_DEVICE",
+                                                    CLASS_OF_DEVICE_CAR_AUDIO),
+                                            argv[2]);
     }
 
     if (strcmp(argv[1], "hci-read-bdaddr") == 0) {
