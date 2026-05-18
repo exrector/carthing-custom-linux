@@ -1,3 +1,4 @@
 source "$BR2_EXTERNAL_CARTHING_CUSTOM_LINUX_PATH/package/carthing-bt-fwload/Config.in"
 source "$BR2_EXTERNAL_CARTHING_CUSTOM_LINUX_PATH/package/carthing-btattach-mini/Config.in"
+source "$BR2_EXTERNAL_CARTHING_CUSTOM_LINUX_PATH/package/carthing-iap2-mini/Config.in"
 source "$BR2_EXTERNAL_CARTHING_CUSTOM_LINUX_PATH/package/carthing-mfi-probe/Config.in"

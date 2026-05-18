@@ -353,3 +353,75 @@ Meaning:
 - it is already a live iAP2 auth responder backed directly by the chip
 - the next layer is now transport/session integration, not more auth-chip
   archaeology
+
+Next session-layer milestone:
+
+- a separate new binary now exists: `carthing-iap2-mini`
+- it is not old Spotify userspace and not BlueZ glue
+- it is only a tiny clean-room control/session layer on top of our own
+  `carthing-mfi-probe`
+
+What it does:
+
+- forwards `AA00` to `carthing-mfi-probe aa01-live`
+- forwards `AA02` to `carthing-mfi-probe aa03 <challenge>`
+- remembers `AA05`
+- answers `0x1D00 StartIdentification` with a minimal `0x1D01
+  IdentificationInformation`
+
+Current minimal IdentificationInformation policy:
+
+- include only:
+  - `0x0000` AccessoryName
+  - `0x0001` ModelName
+  - `0x0002` Manufacturer
+  - `0x0003` SerialNumber
+  - `0x0004` FirmwareVersion
+  - `0x0005` HardwareVersion
+  - `0x0006` empty
+  - `0x0007` empty
+  - `0x0008` PowerCapability
+  - `0x0009` MaxCurrent
+- omit:
+  - `0x000A`
+  - `0x000B`
+
+Live proof:
+
+```sh
+printf '\x40\x40\x00\x06\xaa\x00' | \
+  CARTHING_MFI_HELPER=/run/carthing-mfi-probe-test \
+  /run/carthing-iap2-mini-test loop | wc -c
+```
+
+Observed result:
+
+- `618`
+
+Live `AA02` proof:
+
+```text
+[iap2-mini] <- AA02
+poll[1]=nack
+poll[2]=0x10
+error-code=0x00
+signature-len=0x0040
+```
+
+Observed result:
+
+- output length `74`
+
+Live `AA05 + 1D00` proof:
+
+```text
+[iap2-mini] <- AA05 auth success
+[iap2-mini] <- 1D00 StartIdentification
+40 40 00 75 1d 01 ...
+```
+
+Meaning:
+
+- auth is no longer the only proven layer
+- we now also have the first clean-room iAP2 control/session responder above it
+- the next work frontier is transport integration and then `1D02/1D03`
