@@ -311,3 +311,45 @@ Practical meaning:
 - we no longer only have "raw cert bytes" and "raw signature bytes"
 - we already have the first directly reusable iAP2 auth message builder for the
   new stack
+
+Next clean-room auth milestone proven later on the same image:
+
+- `aa01` no longer has to depend on an externally staged `pkcs7.bin`
+- the helper can now extract PKCS#7 live from the auth chip and wrap it as
+  `AA01`
+- the helper can also answer `AA00` and `AA02` directly from stdin using only
+  the live chip
+
+New commands:
+
+- `carthing-mfi-probe aa01-live`
+- `carthing-mfi-probe auth-reply-live`
+- `carthing-mfi-probe auth-loop-live`
+
+Live proof:
+
+```sh
+/run/carthing-mfi-probe-test aa01-live | wc -c
+printf '\x40\x40\x00\x06\xaa\x00' | \
+  /run/carthing-mfi-probe-test auth-reply-live | wc -c
+python3 make_aa02.py | /run/carthing-mfi-probe-test auth-reply-live | wc -c
+```
+
+Observed results:
+
+- `aa01-live` returns `618` bytes, matching the known-good `AA01` envelope
+- `auth-reply-live` on synthetic `AA00` also returns `618` bytes
+- `auth-reply-live` on synthetic `AA02` returns `74` bytes and drives the live
+  ACP3 sign path:
+  - `poll[1]=nack`
+  - `poll[2]=nack`
+  - `poll[3]=0x10`
+  - `error-code=0x00`
+  - `signature-len=0x0040`
+
+Meaning:
+
+- the clean-room backend is no longer "file + helper"
+- it is already a live iAP2 auth responder backed directly by the chip
+- the next layer is now transport/session integration, not more auth-chip
+  archaeology
