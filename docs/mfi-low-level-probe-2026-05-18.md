@@ -425,3 +425,57 @@ Meaning:
 - auth is no longer the only proven layer
 - we now also have the first clean-room iAP2 control/session responder above it
 - the next work frontier is transport integration and then `1D02/1D03`
+
+Next transport milestone:
+
+- `carthing-iap2-mini` now also speaks raw iAP2 `FF 5A` framing
+- this is still not the old link-layer stack and not RFCOMM orchestration
+- it is just the next clean-room transport step above the already proven
+  control/session logic
+
+New commands:
+
+- `carthing-iap2-mini raw-loop`
+- `carthing-iap2-mini identify-raw`
+
+Live raw-iAP2 proof:
+
+```sh
+printf '\xff\x5a\x00\x06\xaa\x00' | \
+  CARTHING_MFI_HELPER=/run/carthing-mfi-probe-test \
+  /run/carthing-iap2-mini-test raw-loop | wc -c
+```
+
+Observed result:
+
+- `618`
+
+Live raw `AA02` proof:
+
+```text
+[iap2-mini] <- AA02
+poll[1]=nack
+poll[2]=0x10
+error-code=0x00
+signature-len=0x0040
+```
+
+Observed result:
+
+- output length `74`
+
+Live raw `AA05 + 1D00` proof:
+
+```text
+[iap2-mini] <- AA05 auth success
+[iap2-mini] <- 1D00 StartIdentification
+ff 5a 00 75 1d 01 ...
+```
+
+Meaning:
+
+- we now have both:
+  - bare control-session responder
+  - raw iAP2 `FF 5A` responder
+- the next real frontier is no longer auth or identification TLV shape
+- it is full link-layer / real Bluetooth transport attachment

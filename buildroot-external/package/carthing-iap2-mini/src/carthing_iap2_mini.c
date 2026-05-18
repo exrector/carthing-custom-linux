@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #define IAP2_CSM_START          0x4040
+#define IAP2_RAW_SOF            0xFF5A
 #define IAP2_MSG_AUTH_CERT_REQ  0xAA00
 #define IAP2_MSG_AUTH_CERT_RESP 0xAA01
 #define IAP2_MSG_AUTH_CHAL_REQ  0xAA02
@@ -22,6 +23,11 @@
 #define IAP2_MSG_ID_REJECTED    0x1D03
 
 #define HELPER_PATH_DEFAULT "/usr/bin/carthing-mfi-probe"
+
+enum output_mode {
+    OUTPUT_CONTROL = 0,
+    OUTPUT_RAW = 1,
+};
 
 static int write_all_fd(int fd, const uint8_t *buf, size_t len) {
     size_t off = 0;
@@ -240,6 +246,32 @@ static int write_control_msg(uint16_t msg_id, const uint8_t *payload, size_t pay
     return 0;
 }
 
+static int write_raw_msg(uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
+    uint8_t header[6];
+    uint16_t total = (uint16_t)(6 + payload_len);
+
+    header[0] = 0xFF;
+    header[1] = 0x5A;
+    header[2] = (uint8_t)((total >> 8) & 0xff);
+    header[3] = (uint8_t)(total & 0xff);
+    header[4] = (uint8_t)((msg_id >> 8) & 0xff);
+    header[5] = (uint8_t)(msg_id & 0xff);
+    if (write_all_fd(STDOUT_FILENO, header, sizeof(header)) < 0) {
+        return -1;
+    }
+    if (payload_len > 0 && write_all_fd(STDOUT_FILENO, payload, payload_len) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int write_iap2_msg(enum output_mode mode, uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
+    if (mode == OUTPUT_RAW) {
+        return write_raw_msg(msg_id, payload, payload_len);
+    }
+    return write_control_msg(msg_id, payload, payload_len);
+}
+
 static void challenge_to_hex(const uint8_t *buf, size_t len, char *hex_out) {
     static const char hexdig[] = "0123456789abcdef";
     size_t i;
@@ -312,7 +344,7 @@ static int forward_helper_aa03(const uint8_t challenge[32], size_t challenge_len
     return rc;
 }
 
-static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payload_len, int *auth_ok) {
+static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payload_len, int *auth_ok, enum output_mode mode) {
     uint8_t idbuf[512];
     size_t idlen = 0;
     uint8_t challenge[32];
@@ -346,7 +378,7 @@ static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payloa
                 perror("build identification");
                 return -1;
             }
-            return write_control_msg(IAP2_MSG_ID_INFO, idbuf, idlen);
+            return write_iap2_msg(mode, IAP2_MSG_ID_INFO, idbuf, idlen);
         case IAP2_MSG_ID_ACCEPTED:
             fprintf(stderr, "[iap2-mini] <- 1D02 IdentificationAccepted\n");
             return 0;
@@ -363,7 +395,7 @@ static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payloa
     }
 }
 
-static int loop_messages(void) {
+static int loop_control_messages(void) {
     int auth_ok = 0;
 
     for (;;) {
@@ -407,7 +439,59 @@ static int loop_messages(void) {
             }
         }
 
-        rc = handle_message(msg_id, payload, payload_len, &auth_ok);
+        rc = handle_message(msg_id, payload, payload_len, &auth_ok, OUTPUT_CONTROL);
+        free(payload);
+        if (rc != 0) {
+            return 1;
+        }
+    }
+}
+
+static int loop_raw_messages(void) {
+    int auth_ok = 0;
+
+    for (;;) {
+        uint8_t header[6];
+        uint16_t start;
+        uint16_t total;
+        uint16_t msg_id;
+        uint8_t *payload = NULL;
+        size_t payload_len = 0;
+        int rc;
+
+        rc = read_exact_fd(STDIN_FILENO, header, sizeof(header));
+        if (rc == 1) {
+            return 0;
+        }
+        if (rc < 0) {
+            perror("read raw header");
+            return 1;
+        }
+
+        start = (uint16_t)((header[0] << 8) | header[1]);
+        total = (uint16_t)((header[2] << 8) | header[3]);
+        msg_id = (uint16_t)((header[4] << 8) | header[5]);
+        if (start != IAP2_RAW_SOF || total < 6) {
+            fprintf(stderr, "[iap2-mini] bad raw header start=0x%04x len=%u\n", start, total);
+            return 1;
+        }
+
+        payload_len = (size_t)total - 6;
+        if (payload_len > 0) {
+            payload = calloc(1, payload_len);
+            if (!payload) {
+                perror("calloc");
+                return 1;
+            }
+            rc = read_exact_fd(STDIN_FILENO, payload, payload_len);
+            if (rc != 0) {
+                perror("read raw payload");
+                free(payload);
+                return 1;
+            }
+        }
+
+        rc = handle_message(msg_id, payload, payload_len, &auth_ok, OUTPUT_RAW);
         free(payload);
         if (rc != 0) {
             return 1;
@@ -419,7 +503,9 @@ static void usage(FILE *out) {
     fprintf(out,
         "usage:\n"
         "  carthing-iap2-mini loop\n"
+        "  carthing-iap2-mini raw-loop\n"
         "  carthing-iap2-mini identify\n"
+        "  carthing-iap2-mini identify-raw\n"
         "\n"
         "env:\n"
         "  CARTHING_MFI_HELPER=/path/to/carthing-mfi-probe\n");
@@ -432,7 +518,11 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "loop") == 0) {
-        return loop_messages();
+        return loop_control_messages();
+    }
+
+    if (strcmp(argv[1], "raw-loop") == 0) {
+        return loop_raw_messages();
     }
 
     if (strcmp(argv[1], "identify") == 0) {
@@ -443,6 +533,20 @@ int main(int argc, char **argv) {
             return 1;
         }
         if (write_control_msg(IAP2_MSG_ID_INFO, buf, len) < 0) {
+            perror("write stdout");
+            return 1;
+        }
+        return 0;
+    }
+
+    if (strcmp(argv[1], "identify-raw") == 0) {
+        uint8_t buf[512];
+        size_t len = 0;
+        if (build_identification_params(buf, sizeof(buf), &len) < 0) {
+            perror("build identification");
+            return 1;
+        }
+        if (write_raw_msg(IAP2_MSG_ID_INFO, buf, len) < 0) {
             perror("write stdout");
             return 1;
         }
