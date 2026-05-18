@@ -182,3 +182,61 @@ Practical implication:
   read `0x12`"
 - the remaining clean-room task is to recover that exact intermediate
   prepare/trigger/poll sequence
+
+External working-case corrections gathered after the first raw sign attempts:
+
+- one public reverse-engineering write-up for an Apple auth coprocessor shows
+  the challenge path as:
+  - write challenge to `0x21`
+  - write start flag `0x01` to control/status `0x10`
+  - poll `0x10` until it becomes `0x10`
+  - read response length from `0x11`
+  - read response bytes from `0x12`
+- another public Linux+i2c-dev example for the same family uses the same ACP
+  3.0 register map:
+  - `0x10` control/status
+  - `0x11` challenge response length
+  - `0x12` challenge response data
+  - `0x20` challenge data length
+  - `0x21` challenge data
+  - `0x4E` device certificate serial number
+
+Why this matters for our clean-room track:
+
+- our old local fallback code treated `0x4E` as the challenge write register
+- that is very likely wrong for the ACP 3.0 style contract
+- the live phase bytes we already saw (`07 01 03 00`) also fit ACP 3.0 much
+  better than ACP 2.0C:
+  - device version `0x07`
+  - auth revision `0x01`
+  - protocol major `0x03`
+  - protocol minor `0x00`
+
+Live result after switching to the corrected ACP 3.0 challenge map:
+
+```sh
+ssh root@172.16.42.77 '
+  i2cset -f -y 3 0x10 0x00
+  i2cset -f -y 3 0x10 0x01
+  i2ctransfer -f -y 3 w33@0x10 0x21 ...32 challenge bytes...
+  i2cset -f -y 3 0x10 0x10 0x01 b
+  i2ctransfer -f -y 3 w1@0x10 0x10 r1
+  i2ctransfer -f -y 3 w1@0x10 0x11 r2
+  i2ctransfer -f -y 3 w1@0x10 0x12 r16
+'
+```
+
+Observed result:
+
+- the corrected contiguous write to `0x21` is accepted
+- after `0x10=0x01`, the chip no longer goes to the older `0x80` state from
+  the `0x4E` experiments
+- instead, it stays at `0x00`, with `0x11 = 0x0000` and no signature bytes
+- `error_code` at `0x05` also stays `0x00`
+
+Current narrow conclusion:
+
+- the register map is now much less ambiguous
+- the remaining blocker is not "wrong register family" anymore
+- it is the still-missing ACP 3.0 sign-side prepare/arming sequence before
+  `0x10` starts producing `0x10` and valid `0x11/0x12` output
