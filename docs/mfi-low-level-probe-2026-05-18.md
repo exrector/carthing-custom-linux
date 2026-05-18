@@ -240,3 +240,45 @@ Current narrow conclusion:
 - the remaining blocker is not "wrong register family" anymore
 - it is the still-missing ACP 3.0 sign-side prepare/arming sequence before
   `0x10` starts producing `0x10` and valid `0x11/0x12` output
+
+Final breakthrough from the plain `open/write/read` ACP3 transport:
+
+```sh
+/run/carthing-mfi-probe-test raw-sign \
+  000102030405060708090a0b0c0d0e0f\
+101112131415161718191a1b1c1d1e1f
+```
+
+Observed live result:
+
+- `short write 0x01` may still NACK on this bus and is not required for success
+- the critical steps are:
+  - contiguous write `0x21 + 32 challenge bytes`
+  - contiguous write `0x10 0x01`
+  - poll through plain `write(reg) + read()` transport, not through the old
+    repeated-start helper
+- the real status sequence on the working image was:
+  - `poll[1]=nack`
+  - `poll[2]=nack`
+  - `poll[3]=0x10`
+- then:
+  - `error-code=0x00`
+  - `signature-len=0x0040`
+  - full 64-byte signature returned successfully
+
+Example live signature for challenge `00..1f`:
+
+```text
+0164d52a60fb39e316c1cbbe77fafaa7ad73b6b91f160437323674835d5157d5
+42313191b26ad4ae1843949151fad417d86dc9f497a43dd563ad2374da3a12fc
+```
+
+Meaning:
+
+- the sign path is now also proven on the live device
+- the old local `0x4E -> 0x12` fallback was wrong for the active chip path
+- the remaining work is no longer "can we talk to the auth chip at all?"
+- it is now:
+  - polish the helper
+  - expose this as the clean-room auth backend
+  - build our own higher MFi/iAP2 layer on top of the proven cert+sign path

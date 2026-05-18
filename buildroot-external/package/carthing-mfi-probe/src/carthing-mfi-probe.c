@@ -100,6 +100,26 @@ static int i2c_write_byte_data(int fd, uint8_t command, uint8_t value) {
     return i2c_smbus_xfer(fd, I2C_SMBUS_WRITE, command, I2C_SMBUS_BYTE_DATA, &data);
 }
 
+static int acp_write(int fd, const uint8_t *buf, size_t len) {
+    ssize_t written;
+    usleep(2000);
+    written = write(fd, buf, len);
+    usleep(2000);
+    return (written == (ssize_t)len) ? 0 : -1;
+}
+
+static int acp_reg_read(int fd, uint8_t reg, uint8_t *buf, size_t len) {
+    if (acp_write(fd, &reg, 1) < 0) {
+        return -1;
+    }
+    usleep(1000);
+    if (read(fd, buf, len) != (ssize_t)len) {
+        return -1;
+    }
+    usleep(2000);
+    return 0;
+}
+
 static int i2c_reg_read(int fd, uint8_t reg, uint8_t *buf, uint16_t len) {
     struct i2c_msg msgs[2];
     struct i2c_rdwr_ioctl_data rdwr;
@@ -276,10 +296,10 @@ int main(int argc, char **argv) {
         uint8_t signature[64];
         uint8_t status = 0;
         uint8_t err_code = 0;
+        uint8_t start_cmd[2] = {0x10, 0x01};
+        uint8_t challenge_cmd[33];
         uint8_t siglen_buf[2] = {0, 0};
-        uint8_t challen_buf[2] = {0, 0};
         uint16_t siglen = 0;
-        uint16_t challenge_len = 0;
         int attempt;
         int nbytes;
 
@@ -305,50 +325,43 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        if (i2c_short_write(fd, 0x00) < 0) {
-            perror("short write 0x00");
-        }
         if (i2c_short_write(fd, 0x01) < 0) {
             perror("short write 0x01");
         }
 
-        if (i2c_reg_write(fd, 0x21, challenge, sizeof(challenge)) < 0) {
-            perror("i2c write reg 0x21");
+        challenge_cmd[0] = 0x21;
+        memcpy(challenge_cmd + 1, challenge, sizeof(challenge));
+        if (acp_write(fd, challenge_cmd, sizeof(challenge_cmd)) < 0) {
+            perror("acp write challenge 0x21");
             close(fd);
             return 1;
         }
 
-        memset(challen_buf, 0, sizeof(challen_buf));
-        if (i2c_reg_read(fd, 0x20, challen_buf, sizeof(challen_buf)) == 0) {
-            challenge_len = (uint16_t)((challen_buf[0] << 8) | challen_buf[1]);
-            fprintf(stderr, "challenge-len=0x%04x\n", challenge_len);
-        } else {
-            fprintf(stderr, "challenge-len=unavailable\n");
-        }
-
-        if (i2c_write_byte_data(fd, 0x10, 0x01) < 0) {
-            perror("i2c write reg 0x10");
+        if (acp_write(fd, start_cmd, sizeof(start_cmd)) < 0) {
+            perror("acp write start 0x10");
             close(fd);
             return 1;
         }
 
         status = 0;
-        for (attempt = 0; attempt < 12; attempt++) {
-            usleep(1000 * 1000);
-            if (i2c_reg_read(fd, 0x10, &status, 1) == 0) {
+        for (attempt = 0; attempt < 30; attempt++) {
+            usleep(200 * 1000);
+            if (acp_reg_read(fd, 0x10, &status, 1) == 0) {
                 fprintf(stderr, "poll[%d]=0x%02x\n", attempt + 1, status);
                 if (status == 0x10) {
                     break;
                 }
+            } else {
+                fprintf(stderr, "poll[%d]=nack\n", attempt + 1);
             }
         }
 
-        if (i2c_reg_read(fd, 0x05, &err_code, 1) == 0) {
+        if (acp_reg_read(fd, 0x05, &err_code, 1) == 0) {
             fprintf(stderr, "error-code=0x%02x\n", err_code);
         }
 
         memset(siglen_buf, 0, sizeof(siglen_buf));
-        if (i2c_reg_read(fd, 0x11, siglen_buf, sizeof(siglen_buf)) == 0) {
+        if (acp_reg_read(fd, 0x11, siglen_buf, sizeof(siglen_buf)) == 0) {
             siglen = (uint16_t)((siglen_buf[0] << 8) | siglen_buf[1]);
             fprintf(stderr, "signature-len=0x%04x\n", siglen);
         } else {
@@ -356,7 +369,7 @@ int main(int argc, char **argv) {
         }
 
         memset(signature, 0, sizeof(signature));
-        if (i2c_reg_read(fd, 0x12, signature, sizeof(signature)) < 0) {
+        if (acp_reg_read(fd, 0x12, signature, sizeof(signature)) < 0) {
             perror("i2c read reg 0x12");
             close(fd);
             return 1;
