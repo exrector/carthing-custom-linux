@@ -48,6 +48,58 @@ static int i2c_rdwr_retry(int fd, struct i2c_rdwr_ioctl_data *rdwr) {
     return -1;
 }
 
+static int i2c_smbus_xfer(int fd, char rw, uint8_t command, int size, union i2c_smbus_data *data) {
+    struct i2c_smbus_ioctl_data args;
+    memset(&args, 0, sizeof(args));
+    args.read_write = rw;
+    args.command = command;
+    args.size = size;
+    args.data = data;
+    return ioctl(fd, I2C_SMBUS, &args);
+}
+
+static int i2c_select_addr(int fd) {
+    if (ioctl(fd, I2C_SLAVE, MFI_I2C_ADDR) == 0) {
+        return 0;
+    }
+    return ioctl(fd, I2C_SLAVE_FORCE, MFI_I2C_ADDR);
+}
+
+static int i2c_short_write(int fd, uint8_t command) {
+    ssize_t written;
+    usleep(2000);
+    written = write(fd, &command, 1);
+    usleep(2000);
+    return (written == 1) ? 0 : -1;
+}
+
+static int i2c_read_byte_data(int fd, uint8_t command, uint8_t *value) {
+    union i2c_smbus_data data;
+    memset(&data, 0, sizeof(data));
+    if (i2c_smbus_xfer(fd, I2C_SMBUS_READ, command, I2C_SMBUS_BYTE_DATA, &data) < 0) {
+        return -1;
+    }
+    *value = data.byte & 0xff;
+    return 0;
+}
+
+static int i2c_read_word_data(int fd, uint8_t command, uint16_t *value) {
+    union i2c_smbus_data data;
+    memset(&data, 0, sizeof(data));
+    if (i2c_smbus_xfer(fd, I2C_SMBUS_READ, command, I2C_SMBUS_WORD_DATA, &data) < 0) {
+        return -1;
+    }
+    *value = data.word & 0xffff;
+    return 0;
+}
+
+static int i2c_write_byte_data(int fd, uint8_t command, uint8_t value) {
+    union i2c_smbus_data data;
+    memset(&data, 0, sizeof(data));
+    data.byte = value;
+    return i2c_smbus_xfer(fd, I2C_SMBUS_WRITE, command, I2C_SMBUS_BYTE_DATA, &data);
+}
+
 static int i2c_reg_read(int fd, uint8_t reg, uint8_t *buf, uint16_t len) {
     struct i2c_msg msgs[2];
     struct i2c_rdwr_ioctl_data rdwr;
@@ -133,6 +185,7 @@ static void usage(FILE *out) {
         "notes:\n"
         "  - response writes raw ioctl nr5 bytes to stdout\n"
         "  - sign accepts up to 32 challenge bytes as hex and pads to 32\n"
+        "  - raw-sign is experimental and reports ACP3-style sign state\n"
         "  - raw-* talks directly to %s at 0x%02x via i2c-dev\n",
         MFI_I2C_DEVICE,
         MFI_I2C_ADDR);
@@ -151,39 +204,68 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "raw-info") == 0) {
-        uint8_t reg21 = 0;
-        uint8_t reg00 = 0;
-        uint8_t certlen_raw[2] = {0, 0};
-        uint16_t raw_certlen = 0;
+        uint8_t phase0_b0 = 0;
+        uint8_t phase1_b0 = 0;
+        uint8_t phase0_b21 = 0;
+        uint8_t phase1_b21 = 0;
+        uint16_t phase0_w30 = 0;
+        uint16_t phase1_w30 = 0;
+        uint8_t raw4[4] = {0};
 
         fd = open(MFI_I2C_DEVICE, O_RDWR);
         if (fd < 0) {
             perror("open /dev/i2c-3");
             return 1;
         }
-
-        if (i2c_reg_read(fd, 0x21, &reg21, 1) < 0) {
-            perror("i2c read reg 0x21");
-            close(fd);
-            return 1;
-        }
-        if (i2c_reg_read(fd, 0x00, &reg00, 1) < 0) {
-            perror("i2c read reg 0x00");
+        if (i2c_select_addr(fd) < 0) {
+            perror("ioctl I2C_SLAVE");
             close(fd);
             return 1;
         }
 
         printf("device=%s\n", MFI_I2C_DEVICE);
         printf("addr=0x%02x\n", MFI_I2C_ADDR);
-        printf("reg21=0x%02x\n", reg21);
-        printf("reg00=0x%02x\n", reg00);
 
-        if (i2c_reg_read(fd, 0x30, certlen_raw, sizeof(certlen_raw)) == 0) {
-            raw_certlen = (uint16_t)((certlen_raw[0] << 8) | certlen_raw[1]);
-            printf("certlen=%u\n", raw_certlen);
-        } else {
-            printf("certlen=unavailable\n");
+        if (i2c_short_write(fd, 0x00) < 0) {
+            perror("short write 0x00");
         }
+
+        if (i2c_read_byte_data(fd, 0x00, &phase0_b0) < 0) {
+            fprintf(stderr, "byte read phase0 reg0x00 failed\n");
+        }
+        if (i2c_read_byte_data(fd, 0x21, &phase0_b21) < 0) {
+            fprintf(stderr, "byte read phase0 reg0x21 failed\n");
+        }
+        if (i2c_read_word_data(fd, 0x30, &phase0_w30) < 0) {
+            fprintf(stderr, "word read phase0 reg0x30 failed\n");
+        }
+        if (i2c_reg_read(fd, 0x00, raw4, sizeof(raw4)) < 0) {
+            memset(raw4, 0, sizeof(raw4));
+        }
+        printf("phase0_reg00=0x%02x\n", phase0_b0);
+        printf("phase0_reg21=0x%02x\n", phase0_b21);
+        printf("phase0_reg30w=0x%04x\n", phase0_w30);
+        printf("phase0_raw4=%02x%02x%02x%02x\n", raw4[0], raw4[1], raw4[2], raw4[3]);
+
+        if (i2c_short_write(fd, 0x01) < 0) {
+            perror("short write 0x01");
+        }
+        if (i2c_read_byte_data(fd, 0x00, &phase1_b0) < 0) {
+            fprintf(stderr, "byte read phase1 reg0x00 failed\n");
+        }
+        if (i2c_read_byte_data(fd, 0x21, &phase1_b21) < 0) {
+            fprintf(stderr, "byte read phase1 reg0x21 failed\n");
+        }
+        if (i2c_read_word_data(fd, 0x30, &phase1_w30) < 0) {
+            fprintf(stderr, "word read phase1 reg0x30 failed\n");
+        }
+        if (i2c_reg_read(fd, 0x00, raw4, sizeof(raw4)) < 0) {
+            memset(raw4, 0, sizeof(raw4));
+        }
+        printf("phase1_reg00=0x%02x\n", phase1_b0);
+        printf("phase1_reg21=0x%02x\n", phase1_b21);
+        printf("phase1_reg30w=0x%04x\n", phase1_w30);
+        printf("phase1_raw4=%02x%02x%02x%02x\n", raw4[0], raw4[1], raw4[2], raw4[3]);
 
         close(fd);
         return 0;
@@ -192,7 +274,13 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "raw-sign") == 0) {
         uint8_t challenge[32];
         uint8_t signature[64];
-        uint8_t reg21 = 0;
+        uint8_t status = 0;
+        uint8_t err_code = 0;
+        uint8_t siglen_buf[2] = {0, 0};
+        uint8_t challen_buf[2] = {0, 0};
+        uint16_t siglen = 0;
+        uint16_t challenge_len = 0;
+        int attempt;
         int nbytes;
 
         if (argc != 3) {
@@ -211,19 +299,61 @@ int main(int argc, char **argv) {
             perror("open /dev/i2c-3");
             return 1;
         }
-
-        if (i2c_reg_write(fd, 0x4E, challenge, sizeof(challenge)) < 0) {
-            perror("i2c write reg 0x4E");
+        if (i2c_select_addr(fd) < 0) {
+            perror("ioctl I2C_SLAVE");
             close(fd);
             return 1;
         }
 
-        if (i2c_reg_read(fd, 0x21, &reg21, 1) < 0) {
-            perror("i2c read reg 0x21");
+        if (i2c_short_write(fd, 0x00) < 0) {
+            perror("short write 0x00");
+        }
+        if (i2c_short_write(fd, 0x01) < 0) {
+            perror("short write 0x01");
+        }
+
+        if (i2c_reg_write(fd, 0x21, challenge, sizeof(challenge)) < 0) {
+            perror("i2c write reg 0x21");
             close(fd);
             return 1;
         }
-        fprintf(stderr, "challenge-len=0x%02x\n", reg21);
+
+        memset(challen_buf, 0, sizeof(challen_buf));
+        if (i2c_reg_read(fd, 0x20, challen_buf, sizeof(challen_buf)) == 0) {
+            challenge_len = (uint16_t)((challen_buf[0] << 8) | challen_buf[1]);
+            fprintf(stderr, "challenge-len=0x%04x\n", challenge_len);
+        } else {
+            fprintf(stderr, "challenge-len=unavailable\n");
+        }
+
+        if (i2c_write_byte_data(fd, 0x10, 0x01) < 0) {
+            perror("i2c write reg 0x10");
+            close(fd);
+            return 1;
+        }
+
+        status = 0;
+        for (attempt = 0; attempt < 12; attempt++) {
+            usleep(1000 * 1000);
+            if (i2c_reg_read(fd, 0x10, &status, 1) == 0) {
+                fprintf(stderr, "poll[%d]=0x%02x\n", attempt + 1, status);
+                if (status == 0x10) {
+                    break;
+                }
+            }
+        }
+
+        if (i2c_reg_read(fd, 0x05, &err_code, 1) == 0) {
+            fprintf(stderr, "error-code=0x%02x\n", err_code);
+        }
+
+        memset(siglen_buf, 0, sizeof(siglen_buf));
+        if (i2c_reg_read(fd, 0x11, siglen_buf, sizeof(siglen_buf)) == 0) {
+            siglen = (uint16_t)((siglen_buf[0] << 8) | siglen_buf[1]);
+            fprintf(stderr, "signature-len=0x%04x\n", siglen);
+        } else {
+            fprintf(stderr, "signature-len=unavailable\n");
+        }
 
         memset(signature, 0, sizeof(signature));
         if (i2c_reg_read(fd, 0x12, signature, sizeof(signature)) < 0) {
@@ -234,7 +364,7 @@ int main(int argc, char **argv) {
 
         hex_write(stdout, signature, sizeof(signature));
         close(fd);
-        return 0;
+        return (status == 0x10 && siglen != 0) ? 0 : 1;
     }
 
     fd = open(MFI_DEVICE, O_RDWR);
