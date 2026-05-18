@@ -9,7 +9,7 @@ from runtime_paths import ensure_runtime_paths
 ensure_runtime_paths()
 
 from bumble.core import UUID
-from bumble.device import AdvertisingData, Connection, Device, OwnAddressType
+from bumble.device import AdvertisingData, AdvertisingType, Connection, Device, OwnAddressType
 from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
@@ -34,6 +34,8 @@ ui: NowPlayingUI | None = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
+_last_peer_address = None
+_reconnect_fallback_task: asyncio.Task | None = None
 _ams_starting: set[int] = set()
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
@@ -160,8 +162,12 @@ def on_state_update(s: MediaState):
 
 
 async def on_connection(connection: Connection):
-    global _last_activity
+    global _last_activity, _last_peer_address, _reconnect_fallback_task
     _last_activity = time.monotonic()
+    _last_peer_address = connection.peer_address
+    if _reconnect_fallback_task is not None:
+        _reconnect_fallback_task.cancel()
+        _reconnect_fallback_task = None
     logger.info(
         "iPhone подключился: %s handle=%d encrypted=%s",
         connection.peer_address,
@@ -172,6 +178,7 @@ async def on_connection(connection: Connection):
     connection.on("pairing", lambda keys: on_pairing(connection, keys))
     connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
     connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
+    connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
 
     if connection.is_encrypted:
         await maybe_start_ams(connection, "connected-encrypted")
@@ -228,9 +235,8 @@ async def on_disconnection(connection: Connection, reason: int):
     _active_conn = None
     try:
         await asyncio.sleep(0.3)
-        if _device and not _device.is_advertising:
-            logger.info("Re-advertising после disconnect")
-            await start_advertising(_device)
+        if _device:
+            await start_reconnect_advertising(_device, connection.peer_address)
     except Exception as e:
         logger.error("Re-advertise error: %s", e)
 
@@ -254,6 +260,41 @@ async def start_advertising(device: Device):
         auto_restart=True,
     )
     logger.info("Реклама запущена")
+
+
+async def _generic_advertising_fallback(delay_s: float):
+    global _reconnect_fallback_task
+    try:
+        await asyncio.sleep(delay_s)
+        if _device and len(_device.connections) == 0:
+            logger.info("Directed reconnect timeout -> generic HID advertising")
+            await start_advertising(_device)
+    except asyncio.CancelledError:
+        return
+    except Exception as e:
+        logger.error("Reconnect fallback error: %s", e)
+    finally:
+        _reconnect_fallback_task = None
+
+
+async def start_reconnect_advertising(device: Device, target):
+    global _reconnect_fallback_task
+    if _reconnect_fallback_task is not None:
+        _reconnect_fallback_task.cancel()
+        _reconnect_fallback_task = None
+
+    try:
+        logger.info("Directed reconnect advertising to bonded peer: %s", target)
+        await device.start_advertising(
+            advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
+            target=target,
+            own_address_type=OwnAddressType.PUBLIC,
+            auto_restart=False,
+        )
+        _reconnect_fallback_task = asyncio.create_task(_generic_advertising_fallback(12.0))
+    except Exception as e:
+        logger.warning("Directed reconnect advertising failed: %s", e)
+        await start_advertising(device)
 
 
 async def gatt_ping(connection: Connection) -> bool:
@@ -332,8 +373,6 @@ async def main():
     _device = device
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))
-    device.on("disconnection", lambda conn, reason: asyncio.ensure_future(on_disconnection(conn, reason)))
-
     await start_advertising(device)
     logger.info("Car Thing Media Remote запущен.")
 
