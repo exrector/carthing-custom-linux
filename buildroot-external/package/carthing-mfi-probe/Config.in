@@ -1,0 +1,8 @@
+config BR2_PACKAGE_CARTHING_MFI_PROBE
+	bool "carthing-mfi-probe"
+	help
+	  Minimal low-level probe for the Apple MFi auth device path.
+
+	  This tool talks directly to /dev/apple_mfi via ioctl and does
+	  not depend on BlueZ, bluetoothd, D-Bus, or the old Spotify
+	  userspace stack.
