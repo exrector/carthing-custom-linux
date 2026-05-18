@@ -44,6 +44,12 @@ Update later on 2026-05-18:
   - then bonded-only HID advertising through the controller filter accept list
 - this passed at least one real iPhone Bluetooth off/on cycle without manual
   re-pairing
+- this also passed a longer manual disconnect window of about `2 minutes`
+  followed by automatic reconnect after Bluetooth was enabled again
+- longer soak cases are still pending:
+  - `5-10` minute disconnect
+  - out-of-range return
+  - phone reboot with the device left running
 
 ### Phone Reboot
 
