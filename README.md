@@ -62,8 +62,6 @@ failure be considered.
 - `reference/legacy-mfi-iap2/`
   - curated archive of the old MFi / iAP2 reverse-engineering notes and one representative `slot_a` code snapshot
   - preserved so the large legacy Car Thing trees can be deleted without losing the useful archaeology
-  - this is a separate Apple-oriented stack, not an extension of the current
-    Bumble/HID/AMS baseline
 
 - `buildroot-external/`
   - first Buildroot `br2-external` tree for the custom rootfs
@@ -107,21 +105,6 @@ failure be considered.
 ## Current Design Choice
 
 The first replacement contract does not depend on `systemd`, `bluetoothd`, or `bluez5_utils` in the target image.
-
-There is now a separate revival track for the older Apple-oriented stack:
-
-- `buildroot-external/package/carthing-iap2-agent/`
-- `docs/mfi-iap2-revival-2026-05-18.md`
-
-That track assumes a different target contract:
-
-- `bluez5_utils`
-- `dbus`
-- `glib2`
-- restored `/dev/apple_mfi` path from the inherited kernel/userspace side
-
-It must stay isolated from the current known-good BLE baseline until it is
-proven live.
 
 The Bluetooth bring-up path is now explicitly ours:
 
