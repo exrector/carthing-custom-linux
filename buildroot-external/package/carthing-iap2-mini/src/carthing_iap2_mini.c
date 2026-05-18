@@ -10,6 +10,11 @@
 
 #define IAP2_CSM_START          0x4040
 #define IAP2_RAW_SOF            0xFF5A
+#define IAP2_CTL_SYN            0x80
+#define IAP2_CTL_ACK            0x40
+#define IAP2_CTL_EAK            0x20
+#define IAP2_CTL_DATA           0x00
+#define IAP2_SID_CTL            0x00
 #define IAP2_MSG_AUTH_CERT_REQ  0xAA00
 #define IAP2_MSG_AUTH_CERT_RESP 0xAA01
 #define IAP2_MSG_AUTH_CHAL_REQ  0xAA02
@@ -28,6 +33,14 @@ enum output_mode {
     OUTPUT_CONTROL = 0,
     OUTPUT_RAW = 1,
 };
+
+struct link_state {
+    uint8_t tx_seq;
+    int auth_ok;
+};
+
+static int capture_helper_aa03(const uint8_t challenge[32], size_t challenge_len,
+                               uint8_t **out, size_t *out_len);
 
 static int write_all_fd(int fd, const uint8_t *buf, size_t len) {
     size_t off = 0;
@@ -265,6 +278,39 @@ static int write_raw_msg(uint16_t msg_id, const uint8_t *payload, size_t payload
     return 0;
 }
 
+static uint8_t iap2_cksum(const uint8_t *buf, size_t n) {
+    uint8_t s = 0;
+    size_t i;
+    for (i = 0; i < n; i++) {
+        s = (uint8_t)(s + buf[i]);
+    }
+    return (uint8_t)((~s) + 1);
+}
+
+static int build_control_msg_buf(uint16_t msg_id, const uint8_t *payload, size_t payload_len,
+                                 uint8_t **out_buf, size_t *out_len) {
+    uint8_t *buf;
+    uint16_t total = (uint16_t)(6 + payload_len);
+
+    buf = calloc(1, total);
+    if (!buf) {
+        errno = ENOMEM;
+        return -1;
+    }
+    buf[0] = (uint8_t)((IAP2_CSM_START >> 8) & 0xff);
+    buf[1] = (uint8_t)(IAP2_CSM_START & 0xff);
+    buf[2] = (uint8_t)((total >> 8) & 0xff);
+    buf[3] = (uint8_t)(total & 0xff);
+    buf[4] = (uint8_t)((msg_id >> 8) & 0xff);
+    buf[5] = (uint8_t)(msg_id & 0xff);
+    if (payload_len > 0) {
+        memcpy(buf + 6, payload, payload_len);
+    }
+    *out_buf = buf;
+    *out_len = total;
+    return 0;
+}
+
 static int write_iap2_msg(enum output_mode mode, uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
     if (mode == OUTPUT_RAW) {
         return write_raw_msg(msg_id, payload, payload_len);
@@ -304,13 +350,11 @@ static int parse_challenge_param(const uint8_t *params, size_t params_len, uint8
 }
 
 static int forward_helper_noinput(const char *subcmd) {
-    const char *helper = mfi_helper_path();
-    const char *argv[] = {helper, subcmd, NULL};
     uint8_t *out = NULL;
     size_t out_len = 0;
     int rc;
 
-    rc = run_helper_capture(argv, NULL, 0, &out, &out_len);
+    rc = run_helper_capture((const char *const[]){mfi_helper_path(), subcmd, NULL}, NULL, 0, &out, &out_len);
     if (rc < 0) {
         perror("run helper");
         return -1;
@@ -320,21 +364,18 @@ static int forward_helper_noinput(const char *subcmd) {
     return rc;
 }
 
-static int forward_helper_aa03(const uint8_t challenge[32], size_t challenge_len) {
+static int capture_helper_noinput(const char *subcmd, uint8_t **out, size_t *out_len) {
     const char *helper = mfi_helper_path();
-    char hex[65];
-    const char *argv[4];
+    const char *argv[] = {helper, subcmd, NULL};
+    return run_helper_capture(argv, NULL, 0, out, out_len);
+}
+
+static int forward_helper_aa03(const uint8_t challenge[32], size_t challenge_len) {
     uint8_t *out = NULL;
     size_t out_len = 0;
     int rc;
 
-    challenge_to_hex(challenge, challenge_len, hex);
-    argv[0] = helper;
-    argv[1] = "aa03";
-    argv[2] = hex;
-    argv[3] = NULL;
-
-    rc = run_helper_capture(argv, NULL, 0, &out, &out_len);
+    rc = capture_helper_aa03(challenge, challenge_len, &out, &out_len);
     if (rc < 0) {
         perror("run helper");
         return -1;
@@ -342,6 +383,28 @@ static int forward_helper_aa03(const uint8_t challenge[32], size_t challenge_len
     rc = write_all_fd(STDOUT_FILENO, out, out_len);
     free(out);
     return rc;
+}
+
+static int capture_helper_aa03(const uint8_t challenge[32], size_t challenge_len,
+                               uint8_t **out, size_t *out_len) {
+    const char *helper = mfi_helper_path();
+    char hex[65];
+    const char *argv[4];
+
+    challenge_to_hex(challenge, challenge_len, hex);
+    argv[0] = helper;
+    argv[1] = "aa03";
+    argv[2] = hex;
+    argv[3] = NULL;
+    return run_helper_capture(argv, NULL, 0, out, out_len);
+}
+
+static int capture_identification_msg(uint8_t **out, size_t *out_len) {
+    uint8_t params[512];
+    size_t params_len = 0;
+    return build_identification_params(params, sizeof(params), &params_len) < 0
+        ? -1
+        : build_control_msg_buf(IAP2_MSG_ID_INFO, params, params_len, out, out_len);
 }
 
 static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payload_len, int *auth_ok, enum output_mode mode) {
@@ -447,6 +510,222 @@ static int loop_control_messages(void) {
     }
 }
 
+static int write_link_pkt(uint8_t ctl, uint8_t sid, uint8_t seq, uint8_t ack,
+                          const uint8_t *payload, size_t payload_len) {
+    uint8_t header[9];
+    uint8_t *buf;
+    size_t total = 9 + payload_len + (payload_len > 0 ? 1 : 0);
+    int rc;
+
+    buf = calloc(1, total);
+    if (!buf) {
+        errno = ENOMEM;
+        return -1;
+    }
+    header[0] = 0xFF;
+    header[1] = 0x5A;
+    header[2] = (uint8_t)((total >> 8) & 0xff);
+    header[3] = (uint8_t)(total & 0xff);
+    header[4] = ctl;
+    header[5] = seq;
+    header[6] = ack;
+    header[7] = sid;
+    header[8] = iap2_cksum(header, 8);
+    memcpy(buf, header, sizeof(header));
+    if (payload_len > 0) {
+        memcpy(buf + 9, payload, payload_len);
+        buf[9 + payload_len] = iap2_cksum(payload, payload_len);
+    }
+    rc = write_all_fd(STDOUT_FILENO, buf, total);
+    free(buf);
+    return rc;
+}
+
+static int write_link_ack_only(struct link_state *state, uint8_t ack_seq) {
+    return write_link_pkt(IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq, NULL, 0);
+}
+
+static int write_link_synack(struct link_state *state, uint8_t ack_seq) {
+    static const uint8_t syn_payload[14] = {
+        0x01, 0x07, 0x08, 0x00, 0x00, 0xFA, 0x00, 0x19,
+        0x03, 0x01, 0x01, 0x00, 0x00, 0x01
+    };
+    return write_link_pkt(IAP2_CTL_SYN | IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq,
+                          syn_payload, sizeof(syn_payload));
+}
+
+static int write_link_reply(struct link_state *state, uint8_t ack_seq, const uint8_t *payload, size_t payload_len) {
+    return write_link_pkt(IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq, payload, payload_len);
+}
+
+static int handle_link_control_msg(struct link_state *state, uint8_t rx_seq,
+                                   uint16_t msg_id, const uint8_t *payload, size_t payload_len) {
+    uint8_t *reply = NULL;
+    size_t reply_len = 0;
+    uint8_t challenge[32];
+    size_t challenge_len = 0;
+
+    switch (msg_id) {
+        case IAP2_MSG_AUTH_CERT_REQ:
+            fprintf(stderr, "[iap2-mini] <- link AA00\n");
+            if (capture_helper_noinput("aa01-live", &reply, &reply_len) < 0) {
+                perror("helper aa01-live");
+                return -1;
+            }
+            break;
+        case IAP2_MSG_AUTH_CHAL_REQ:
+            fprintf(stderr, "[iap2-mini] <- link AA02\n");
+            if (parse_challenge_param(payload, payload_len, challenge, &challenge_len) < 0) {
+                fprintf(stderr, "[iap2-mini] malformed link AA02 param\n");
+                return -1;
+            }
+            if (capture_helper_aa03(challenge, challenge_len, &reply, &reply_len) < 0) {
+                perror("helper aa03");
+                return -1;
+            }
+            break;
+        case IAP2_MSG_AUTH_OK:
+            fprintf(stderr, "[iap2-mini] <- link AA05 auth success\n");
+            state->auth_ok = 1;
+            return write_link_ack_only(state, rx_seq);
+        case IAP2_MSG_AUTH_FAILED:
+            fprintf(stderr, "[iap2-mini] <- link AA04 auth failure\n");
+            return -1;
+        case IAP2_MSG_ID_START:
+            fprintf(stderr, "[iap2-mini] <- link 1D00 StartIdentification\n");
+            if (!state->auth_ok) {
+                fprintf(stderr, "[iap2-mini] link identification before AA05\n");
+                return -1;
+            }
+            if (capture_identification_msg(&reply, &reply_len) < 0) {
+                perror("build link identification");
+                return -1;
+            }
+            break;
+        case IAP2_MSG_ID_ACCEPTED:
+            fprintf(stderr, "[iap2-mini] <- link 1D02 IdentificationAccepted\n");
+            return write_link_ack_only(state, rx_seq);
+        case IAP2_MSG_ID_REJECTED:
+            fprintf(stderr, "[iap2-mini] <- link 1D03 IdentificationRejected\n");
+            return -1;
+        default:
+            fprintf(stderr, "[iap2-mini] ignoring unsupported link msg 0x%04x\n", msg_id);
+            return write_link_ack_only(state, rx_seq);
+    }
+
+    if (write_link_reply(state, rx_seq, reply, reply_len) < 0) {
+        free(reply);
+        return -1;
+    }
+    free(reply);
+    return 0;
+}
+
+static int loop_link_messages(void) {
+    struct link_state state;
+    memset(&state, 0, sizeof(state));
+
+    for (;;) {
+        uint8_t header[9];
+        uint16_t start;
+        uint16_t total;
+        uint8_t ctl;
+        uint8_t seq;
+        uint8_t sid;
+        uint8_t *payload = NULL;
+        size_t payload_len = 0;
+        uint8_t payload_cksum = 0;
+        int rc;
+
+        rc = read_exact_fd(STDIN_FILENO, header, sizeof(header));
+        if (rc == 1) {
+            return 0;
+        }
+        if (rc < 0) {
+            perror("read link header");
+            return 1;
+        }
+
+        start = (uint16_t)((header[0] << 8) | header[1]);
+        total = (uint16_t)((header[2] << 8) | header[3]);
+        ctl = header[4];
+        seq = header[5];
+        sid = header[7];
+        if (start != IAP2_RAW_SOF || total < 9) {
+            fprintf(stderr, "[iap2-mini] bad link header start=0x%04x len=%u\n", start, total);
+            return 1;
+        }
+        if (iap2_cksum(header, 8) != header[8]) {
+            fprintf(stderr, "[iap2-mini] bad link header checksum\n");
+            return 1;
+        }
+
+        if (total > 9) {
+            payload_len = (size_t)total - 10;
+            payload = calloc(1, payload_len + 1);
+            if (!payload) {
+                perror("calloc");
+                return 1;
+            }
+            rc = read_exact_fd(STDIN_FILENO, payload, payload_len);
+            if (rc != 0) {
+                perror("read link payload");
+                free(payload);
+                return 1;
+            }
+            rc = read_exact_fd(STDIN_FILENO, &payload_cksum, 1);
+            if (rc != 0) {
+                perror("read link payload checksum");
+                free(payload);
+                return 1;
+            }
+            if (iap2_cksum(payload, payload_len) != payload_cksum) {
+                fprintf(stderr, "[iap2-mini] bad link payload checksum\n");
+                free(payload);
+                return 1;
+            }
+        }
+
+        if (ctl & IAP2_CTL_SYN) {
+            fprintf(stderr, "[iap2-mini] <- link SYN ctl=0x%02x seq=%u\n", ctl, seq);
+            free(payload);
+            if (ctl & IAP2_CTL_ACK) {
+                return write_link_ack_only(&state, seq) < 0 ? 1 : 0;
+            }
+            if (write_link_synack(&state, seq) < 0) {
+                return 1;
+            }
+            continue;
+        }
+
+        if (ctl & IAP2_CTL_EAK) {
+            fprintf(stderr, "[iap2-mini] <- link EAK ignored\n");
+            free(payload);
+            continue;
+        }
+
+        if (payload_len >= 6 && sid == IAP2_SID_CTL) {
+            uint16_t csm = (uint16_t)((payload[0] << 8) | payload[1]);
+            uint16_t csm_total = (uint16_t)((payload[2] << 8) | payload[3]);
+            uint16_t msg_id = (uint16_t)((payload[4] << 8) | payload[5]);
+            if (csm != IAP2_CSM_START || csm_total > payload_len || csm_total < 6) {
+                fprintf(stderr, "[iap2-mini] malformed link control payload\n");
+                free(payload);
+                return 1;
+            }
+            rc = handle_link_control_msg(&state, seq, msg_id, payload + 6, csm_total - 6);
+            free(payload);
+            if (rc != 0) {
+                return 1;
+            }
+            continue;
+        }
+
+        fprintf(stderr, "[iap2-mini] ignoring non-control link packet ctl=0x%02x sid=%u\n", ctl, sid);
+        free(payload);
+    }
+}
+
 static int loop_raw_messages(void) {
     int auth_ok = 0;
 
@@ -504,6 +783,7 @@ static void usage(FILE *out) {
         "usage:\n"
         "  carthing-iap2-mini loop\n"
         "  carthing-iap2-mini raw-loop\n"
+        "  carthing-iap2-mini link-loop\n"
         "  carthing-iap2-mini identify\n"
         "  carthing-iap2-mini identify-raw\n"
         "\n"
@@ -523,6 +803,10 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "raw-loop") == 0) {
         return loop_raw_messages();
+    }
+
+    if (strcmp(argv[1], "link-loop") == 0) {
+        return loop_link_messages();
     }
 
     if (strcmp(argv[1], "identify") == 0) {

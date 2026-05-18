@@ -479,3 +479,86 @@ Meaning:
   - raw iAP2 `FF 5A` responder
 - the next real frontier is no longer auth or identification TLV shape
 - it is full link-layer / real Bluetooth transport attachment
+
+Next link-layer milestone:
+
+- `carthing-iap2-mini` now also has `link-loop`
+- this handles the minimal real iAP2 packet format:
+  - `SYN`
+  - `SYN+ACK`
+  - `ACK`
+  - control-session `DATA/ACK` on `sid=0`
+- checksums are verified and responses are emitted as real iAP2 link packets,
+  not just raw `FF 5A` messages
+
+Synthetic live proof on the device:
+
+1. Incoming `SYN`:
+
+```text
+[iap2-mini] <- link SYN ctl=0x80 seq=17
+ff 5a 00 18 c0 00 11 00 ...
+```
+
+Meaning:
+
+- the daemon accepts a real link-layer `SYN`
+- it emits a real `SYN+ACK`
+
+2. Incoming `SYN + AA00` stream:
+
+```text
+[iap2-mini] <- link SYN ctl=0x80 seq=17
+[iap2-mini] <- link AA00
+```
+
+Observed result:
+
+- total output `652` bytes
+- head:
+
+```text
+ff5a0018c0001100...
+ff5a027440011200...4040026aaa010264...
+```
+
+Meaning:
+
+- packet 1 = `SYN+ACK`
+- packet 2 = link-layer `ACK+DATA`
+- payload inside packet 2 is a real `AA01`
+
+3. Incoming `SYN + AA05 + 1D00` stream:
+
+```text
+[iap2-mini] <- link SYN ctl=0x80 seq=17
+[iap2-mini] <- link AA05 auth success
+[iap2-mini] <- link 1D00 StartIdentification
+```
+
+Observed result:
+
+- total output `160` bytes
+- head:
+
+```text
+ff5a0018c0001100...
+ff5a000940011200...
+ff5a007f40021300...404000751d01...
+```
+
+Meaning:
+
+- packet 1 = `SYN+ACK`
+- packet 2 = bare `ACK` for `AA05`
+- packet 3 = link-layer `ACK+DATA`
+- payload inside packet 3 is a real `1D01 IdentificationInformation`
+
+Current frontier after this proof:
+
+- auth backend is proven
+- session layer is proven
+- raw transport is proven
+- link-layer framing is proven
+- the next missing piece is only the real Bluetooth transport attachment to the
+  iPhone path
