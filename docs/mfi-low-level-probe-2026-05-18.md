@@ -740,3 +740,67 @@ Updated frontier after this proof:
 - the next missing layer is no longer SDP syntax; it is now:
   - BR/EDR discoverability/connectability policy
   - real iPhone-initiated classic attach into this new RFCOMM+iAP2 daemon
+
+## 2026-05-18: BR/EDR scan policy proven and transport daemon brought up
+
+What changed:
+
+- `carthing-iap2-mini` now also has:
+  - `hci-read-scan`
+  - `hci-write-scan`
+  - `transport-daemon`
+- these modes are still clean-room and do not pull back BlueZ userspace
+- they use raw `HCI` sockets plus the already proven local transport pieces
+
+Live HCI facts on the real device:
+
+1. Before any change, classic scan policy was off:
+
+```text
+[iap2-mini] HCI scan enable=0x00
+0x00
+```
+
+Meaning:
+
+- the previous classic transport frontier was blocked lower than SDP
+- BR/EDR discoverability/connectability was simply disabled on the controller
+
+2. Writing `both` and reading it back now works:
+
+```text
+[iap2-mini] HCI wrote scan enable=0x03
+[iap2-mini] HCI scan enable=0x03
+0x03
+```
+
+Meaning:
+
+- our new stack can now explicitly enable both inquiry scan and page scan
+- the clean-room path is no longer blocked on hidden controller policy
+
+3. The combined transport daemon was then started live on the device:
+
+```text
+[iap2-mini] HCI wrote scan enable=0x03
+[iap2-mini] transport daemon up: scan=0x03 sdp_psm=0x0001 rfcomm_ch=3
+[iap2-mini] RFCOMM listen ch=3
+[iap2-mini] L2CAP listen psm=0x0001
+```
+
+Meaning:
+
+- the new clean-room classic path is now alive as one coherent runtime:
+  - BR/EDR scans enabled
+  - SDP responder listening on `PSM 0x0001`
+  - iAP2 RFCOMM endpoint listening on channel `3`
+
+Updated frontier after this proof:
+
+- auth chip backend is proven
+- iAP2 control/session/link layer is proven
+- minimal SDP responder is proven
+- BR/EDR scan policy is proven and controllable
+- transport daemon is live
+- the next missing step is finally the first real external classic attach from
+  the iPhone into this new stack

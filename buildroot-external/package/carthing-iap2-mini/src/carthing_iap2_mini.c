@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -46,6 +47,23 @@
 #define RFCOMM_CHANNEL_DEFAULT 3
 #define L2CAP_PSM_SDP 0x0001
 #define SDP_RECORD_HANDLE 0x00010000U
+#define HCI_DEV_DEFAULT 0
+
+#ifndef BTPROTO_HCI
+#define BTPROTO_HCI 1
+#endif
+
+#define HCI_CHANNEL_RAW 0
+#define HCI_COMMAND_PKT 0x01
+#define HCI_EVENT_PKT   0x04
+#define BT_H4_EVT_PKT   0x04
+#define EVT_CMD_COMPLETE 0x0E
+#define OGF_HOST_CTL    0x03
+#define OCF_READ_SCAN_ENABLE  0x0019
+#define OCF_WRITE_SCAN_ENABLE 0x001A
+#define HCI_OPCODE(ogf, ocf) ((uint16_t)((ocf) | ((ogf) << 10)))
+#define SOL_HCI 0
+#define HCI_FILTER 2
 
 #ifndef AF_BLUETOOTH
 #define AF_BLUETOOTH 31
@@ -75,6 +93,18 @@ struct sockaddr_l2_local {
     bdaddr_t l2_bdaddr;
     uint16_t l2_cid;
     uint8_t l2_bdaddr_type;
+};
+
+struct sockaddr_hci_local {
+    sa_family_t hci_family;
+    uint16_t hci_dev;
+    uint16_t hci_channel;
+};
+
+struct hci_filter_local {
+    uint32_t type_mask;
+    uint32_t event_mask[2];
+    uint16_t opcode;
 };
 
 enum output_mode {
@@ -562,6 +592,147 @@ static int sdp_handle_request_fd(int out_fd, uint8_t pdu_id,
     }
 
     return sdp_write_error_fd(out_fd, txn_id, SDP_ERR_INVALID_SYNTAX);
+}
+
+static int hci_open_raw(int dev_id) {
+    int fd;
+    struct sockaddr_hci_local addr;
+    struct hci_filter_local flt;
+
+    fd = socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/HCI)");
+        return -1;
+    }
+    memset(&addr, 0, sizeof(addr));
+    addr.hci_family = AF_BLUETOOTH;
+    addr.hci_dev = (uint16_t)dev_id;
+    addr.hci_channel = HCI_CHANNEL_RAW;
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind(HCI)");
+        close(fd);
+        return -1;
+    }
+    memset(&flt, 0, sizeof(flt));
+    flt.type_mask = (uint32_t)(1u << BT_H4_EVT_PKT);
+    flt.event_mask[0] = 0xffffffffu;
+    flt.event_mask[1] = 0xffffffffu;
+    if (setsockopt(fd, SOL_HCI, HCI_FILTER, &flt, sizeof(flt)) < 0) {
+        perror("setsockopt(HCI_FILTER)");
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
+static int hci_cmd_complete(int fd, uint16_t opcode, const uint8_t *payload, size_t payload_len,
+                            uint8_t *resp, size_t resp_cap, size_t *resp_len) {
+    uint8_t cmd[260];
+    struct pollfd pfd;
+    int rc;
+
+    if (payload_len > 255 || 4 + payload_len > sizeof(cmd)) {
+        errno = EINVAL;
+        return -1;
+    }
+    cmd[0] = HCI_COMMAND_PKT;
+    cmd[1] = (uint8_t)(opcode & 0xff);
+    cmd[2] = (uint8_t)(opcode >> 8);
+    cmd[3] = (uint8_t)payload_len;
+    if (payload_len > 0) {
+        memcpy(cmd + 4, payload, payload_len);
+    }
+    if (write_all_fd(fd, cmd, 4 + payload_len) < 0) {
+        perror("write(HCI cmd)");
+        return -1;
+    }
+
+    for (;;) {
+        uint8_t buf[260];
+        ssize_t n;
+        uint16_t evt_opcode;
+        size_t out_len;
+
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        rc = poll(&pfd, 1, 2000);
+        if (rc <= 0) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+        n = read(fd, buf, sizeof(buf));
+        if (n < 0) {
+            return -1;
+        }
+        if (n < 7 || buf[0] != HCI_EVENT_PKT || buf[1] != EVT_CMD_COMPLETE) {
+            continue;
+        }
+        evt_opcode = (uint16_t)(buf[4] | (buf[5] << 8));
+        if (evt_opcode != opcode) {
+            continue;
+        }
+        if (buf[6] != 0x00) {
+            errno = EIO;
+            return -1;
+        }
+        out_len = (size_t)n - 7;
+        if (out_len > resp_cap) {
+            errno = ENOSPC;
+            return -1;
+        }
+        memcpy(resp, buf + 7, out_len);
+        *resp_len = out_len;
+        return 0;
+    }
+}
+
+static int hci_read_scan_enable(int dev_id) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+    uint8_t scan_enable;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_READ_SCAN_ENABLE),
+                         NULL, 0, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Read Scan Enable");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    if (resp_len < 1) {
+        errno = EPROTO;
+        perror("HCI Read Scan Enable short reply");
+        return 1;
+    }
+    scan_enable = resp[0];
+    fprintf(stderr, "[iap2-mini] HCI scan enable=0x%02x\n", scan_enable);
+    printf("0x%02x\n", scan_enable);
+    return 0;
+}
+
+static int hci_write_scan_enable(int dev_id, uint8_t scan_enable) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_WRITE_SCAN_ENABLE),
+                         &scan_enable, 1, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Write Scan Enable");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote scan enable=0x%02x\n", scan_enable);
+    return 0;
 }
 
 static const char *mfi_helper_path(void) {
@@ -1249,6 +1420,16 @@ static int serve_rfcomm_once(int channel) {
     return loop_link_messages();
 }
 
+static int serve_rfcomm_forever(int channel) {
+    for (;;) {
+        int rc = serve_rfcomm_once(channel);
+        if (rc != 0) {
+            sleep(1);
+        }
+    }
+    return 0;
+}
+
 static int l2cap_listen_socket(uint16_t psm) {
     int fd;
     struct sockaddr_l2_local addr;
@@ -1343,6 +1524,16 @@ static int serve_l2cap_once(uint16_t psm) {
     }
 }
 
+static int serve_l2cap_forever(uint16_t psm) {
+    for (;;) {
+        int rc = serve_l2cap_once(psm);
+        if (rc != 0) {
+            sleep(1);
+        }
+    }
+    return 0;
+}
+
 static int loop_raw_messages(void) {
     int auth_ok = 0;
 
@@ -1429,6 +1620,47 @@ static int loop_sdp_messages(void) {
     }
 }
 
+static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable) {
+    pid_t sdp_pid;
+    pid_t rf_pid;
+    int status;
+
+    if (hci_write_scan_enable(hci_dev, scan_enable) != 0) {
+        return 1;
+    }
+
+    sdp_pid = fork();
+    if (sdp_pid < 0) {
+        perror("fork sdp");
+        return 1;
+    }
+    if (sdp_pid == 0) {
+        _exit(serve_l2cap_forever(psm));
+    }
+
+    rf_pid = fork();
+    if (rf_pid < 0) {
+        perror("fork rfcomm");
+        kill(sdp_pid, SIGTERM);
+        waitpid(sdp_pid, NULL, 0);
+        return 1;
+    }
+    if (rf_pid == 0) {
+        _exit(serve_rfcomm_forever(channel));
+    }
+
+    fprintf(stderr, "[iap2-mini] transport daemon up: scan=0x%02x sdp_psm=0x%04x rfcomm_ch=%d\n",
+            scan_enable, psm, channel);
+
+    if (wait(&status) > 0) {
+        kill(sdp_pid, SIGTERM);
+        kill(rf_pid, SIGTERM);
+        waitpid(sdp_pid, NULL, 0);
+        waitpid(rf_pid, NULL, 0);
+    }
+    return 0;
+}
+
 static void usage(FILE *out) {
     fprintf(out,
         "usage:\n"
@@ -1438,19 +1670,24 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini sdp-loop\n"
         "  carthing-iap2-mini rfcomm-listen\n"
         "  carthing-iap2-mini sdp-listen\n"
+        "  carthing-iap2-mini transport-daemon\n"
+        "  carthing-iap2-mini hci-read-scan\n"
+        "  carthing-iap2-mini hci-write-scan <off|page|both|0xNN>\n"
         "  carthing-iap2-mini identify\n"
         "  carthing-iap2-mini identify-raw\n"
         "\n"
         "env:\n"
         "  CARTHING_MFI_HELPER=/path/to/carthing-mfi-probe\n"
         "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n"
-        "  CARTHING_IAP2_L2CAP_PSM=0x0001\n");
+        "  CARTHING_IAP2_L2CAP_PSM=0x0001\n"
+        "  CARTHING_IAP2_HCI_DEV=0\n");
 }
 
 int main(int argc, char **argv) {
+    int hci_dev = env_u8("CARTHING_IAP2_HCI_DEV", HCI_DEV_DEFAULT, 0, 255);
     signal(SIGPIPE, SIG_IGN);
 
-    if (argc != 2) {
+    if (argc < 2 || argc > 3) {
         usage(stderr);
         return 2;
     }
@@ -1479,6 +1716,42 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "sdp-listen") == 0) {
         return serve_l2cap_once((uint16_t)env_u8("CARTHING_IAP2_L2CAP_PSM",
                                                  L2CAP_PSM_SDP, 1, 0xffff));
+    }
+
+    if (strcmp(argv[1], "transport-daemon") == 0) {
+        return run_transport_daemon(hci_dev,
+                                    env_u8("CARTHING_IAP2_RFCOMM_CHANNEL",
+                                           RFCOMM_CHANNEL_DEFAULT, 1, 30),
+                                    (uint16_t)env_u8("CARTHING_IAP2_L2CAP_PSM",
+                                                     L2CAP_PSM_SDP, 1, 0xffff),
+                                    0x03);
+    }
+
+    if (strcmp(argv[1], "hci-read-scan") == 0) {
+        return hci_read_scan_enable(hci_dev);
+    }
+
+    if (strcmp(argv[1], "hci-write-scan") == 0) {
+        uint8_t v;
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        if (strcmp(argv[2], "off") == 0) v = 0x00;
+        else if (strcmp(argv[2], "page") == 0) v = 0x02;
+        else if (strcmp(argv[2], "both") == 0) v = 0x03;
+        else v = (uint8_t)env_u8("CARTHING_IAP2_SCAN_VALUE", 0xff, 0, 255);
+        if (v == 0xff && strcmp(argv[2], "off") != 0 &&
+            strcmp(argv[2], "page") != 0 && strcmp(argv[2], "both") != 0) {
+            char *end = NULL;
+            long n = strtol(argv[2], &end, 0);
+            if (!end || *end != '\0' || n < 0 || n > 255) {
+                usage(stderr);
+                return 2;
+            }
+            v = (uint8_t)n;
+        }
+        return hci_write_scan_enable(hci_dev, v);
     }
 
     if (strcmp(argv[1], "identify") == 0) {
