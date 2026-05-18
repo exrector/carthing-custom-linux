@@ -650,3 +650,93 @@ Updated frontier after this proof:
   - a minimal SDP responder / service-record exposure for the iAP2 UUID and
     RFCOMM channel
   - then real iPhone-initiated classic attach into `carthing-iap2-mini`
+
+## 2026-05-18: minimal clean-room SDP responder proven
+
+What changed:
+
+- `carthing-iap2-mini` now also has `sdp-loop`
+- `sdp-listen` is no longer only a passive bind/listen proof; it now runs the
+  same responder over a real accepted `L2CAP PSM 0x0001` socket
+- the responder is still intentionally minimal:
+  - `ServiceSearchRequest`
+  - `ServiceAttributeRequest`
+  - `ServiceSearchAttributeRequest`
+- it serves one clean-room service record for:
+  - service UUID `00000000-deca-fade-deca-deafdecacaff`
+  - RFCOMM channel `3`
+  - service name `Wireless iAP`
+
+Implemented record attributes:
+
+- `0x0000` ServiceRecordHandle = `0x00010000`
+- `0x0001` ServiceClassIDList = `caff`
+- `0x0002` ServiceRecordState = `0`
+- `0x0004` ProtocolDescriptorList = `L2CAP + RFCOMM ch 3`
+- `0x0005` BrowseGroupList = `PublicBrowseGroup`
+- `0x0006` LanguageBaseAttributeIDList
+- `0x0008` ServiceAvailability = `0xff`
+- `0x0009` BluetoothProfileDescriptorList
+- `0x0100` ServiceName = `Wireless iAP`
+
+Local synthetic proof on the host build:
+
+1. `ServiceSearchRequest` for `caff`
+
+Observed response:
+
+```text
+03 00 01 00 09 00 01 00 01 00 01 00 00 00 00
+```
+
+Meaning:
+
+- one matching service exists
+- handle returned is `0x00010000`
+
+2. `ServiceSearchAttributeRequest` for `caff` with attr range `0x0000-0xffff`
+
+Observed response head:
+
+```text
+07 00 02 00 92 00 8f 35 8d 35 8b 09 00 00 0a 00 01 00 00 ...
+```
+
+Meaning:
+
+- response PDU is correct `0x07`
+- returned attribute list contains the clean-room record with our handle,
+  `caff`, and RFCOMM channel `3`
+
+3. `ServiceAttributeRequest` for handle `0x00010000`
+
+Observed response head:
+
+```text
+05 00 03 00 90 00 8d 35 8b 09 00 00 0a 00 01 00 00 ...
+```
+
+Meaning:
+
+- handle lookup by attribute request also works
+
+Live proof on the real device:
+
+- the rebuilt target binary was pushed to `/run/carthing-iap2-mini-test`
+- `sdp-loop` on the target returned the same `ServiceSearchAttributeResponse`
+  bytes for the synthetic `caff` query:
+
+```text
+07 00 02 00 92 00 8f 35 8d 35 8b 09 00 00 0a 00 01 00 00 ...
+```
+
+Updated frontier after this proof:
+
+- auth backend is proven
+- iAP2 control/session/link layer is proven
+- local RFCOMM server endpoint is proven
+- local SDP socket endpoint is proven
+- minimal SDP responder is proven
+- the next missing layer is no longer SDP syntax; it is now:
+  - BR/EDR discoverability/connectability policy
+  - real iPhone-initiated classic attach into this new RFCOMM+iAP2 daemon
