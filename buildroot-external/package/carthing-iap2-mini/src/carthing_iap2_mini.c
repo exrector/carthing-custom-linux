@@ -1,9 +1,11 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -28,6 +30,25 @@
 #define IAP2_MSG_ID_REJECTED    0x1D03
 
 #define HELPER_PATH_DEFAULT "/usr/bin/carthing-mfi-probe"
+#define RFCOMM_CHANNEL_DEFAULT 3
+
+#ifndef AF_BLUETOOTH
+#define AF_BLUETOOTH 31
+#endif
+
+#ifndef BTPROTO_RFCOMM
+#define BTPROTO_RFCOMM 3
+#endif
+
+typedef struct {
+    uint8_t b[6];
+} bdaddr_t;
+
+struct sockaddr_rc_local {
+    sa_family_t rc_family;
+    bdaddr_t rc_bdaddr;
+    uint8_t rc_channel;
+};
 
 enum output_mode {
     OUTPUT_CONTROL = 0,
@@ -104,6 +125,26 @@ static int read_fd_all(int fd, uint8_t **buf_out, size_t *len_out) {
     *buf_out = buf;
     *len_out = len;
     return 0;
+}
+
+static int env_u8(const char *name, int defv, int minv, int maxv) {
+    const char *v = getenv(name);
+    char *end = NULL;
+    long n;
+    if (!v || !*v) {
+        return defv;
+    }
+    n = strtol(v, &end, 0);
+    if (!end || *end != '\0' || n < minv || n > maxv) {
+        return defv;
+    }
+    return (int)n;
+}
+
+static void bdaddr_to_str(const bdaddr_t *addr, char out[18]) {
+    snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+             addr->b[5], addr->b[4], addr->b[3],
+             addr->b[2], addr->b[1], addr->b[0]);
 }
 
 static const char *mfi_helper_path(void) {
@@ -726,6 +767,71 @@ static int loop_link_messages(void) {
     }
 }
 
+static int rfcomm_listen_socket(int channel) {
+    int fd;
+    struct sockaddr_rc_local addr;
+
+    fd = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/RFCOMM)");
+        return -1;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.rc_family = AF_BLUETOOTH;
+    addr.rc_channel = (uint8_t)channel;
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind(RFCOMM)");
+        close(fd);
+        return -1;
+    }
+    if (listen(fd, 1) < 0) {
+        perror("listen(RFCOMM)");
+        close(fd);
+        return -1;
+    }
+    fprintf(stderr, "[iap2-mini] RFCOMM listen ch=%d\n", channel);
+    return fd;
+}
+
+static int serve_rfcomm_once(int channel) {
+    int listen_fd;
+    int conn_fd;
+    socklen_t peer_len;
+    struct sockaddr_rc_local peer;
+    char peer_str[18];
+
+    listen_fd = rfcomm_listen_socket(channel);
+    if (listen_fd < 0) {
+        return 1;
+    }
+
+    memset(&peer, 0, sizeof(peer));
+    peer_len = sizeof(peer);
+    conn_fd = accept(listen_fd, (struct sockaddr *)&peer, &peer_len);
+    if (conn_fd < 0) {
+        perror("accept(RFCOMM)");
+        close(listen_fd);
+        return 1;
+    }
+    close(listen_fd);
+
+    bdaddr_to_str(&peer.rc_bdaddr, peer_str);
+    fprintf(stderr, "[iap2-mini] RFCOMM accepted peer=%s ch=%u\n",
+            peer_str, (unsigned)peer.rc_channel);
+
+    if (dup2(conn_fd, STDIN_FILENO) < 0 || dup2(conn_fd, STDOUT_FILENO) < 0) {
+        perror("dup2(RFCOMM)");
+        close(conn_fd);
+        return 1;
+    }
+    if (conn_fd > STDERR_FILENO) {
+        close(conn_fd);
+    }
+
+    return loop_link_messages();
+}
+
 static int loop_raw_messages(void) {
     int auth_ok = 0;
 
@@ -784,14 +890,18 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini loop\n"
         "  carthing-iap2-mini raw-loop\n"
         "  carthing-iap2-mini link-loop\n"
+        "  carthing-iap2-mini rfcomm-listen\n"
         "  carthing-iap2-mini identify\n"
         "  carthing-iap2-mini identify-raw\n"
         "\n"
         "env:\n"
-        "  CARTHING_MFI_HELPER=/path/to/carthing-mfi-probe\n");
+        "  CARTHING_MFI_HELPER=/path/to/carthing-mfi-probe\n"
+        "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n");
 }
 
 int main(int argc, char **argv) {
+    signal(SIGPIPE, SIG_IGN);
+
     if (argc != 2) {
         usage(stderr);
         return 2;
@@ -807,6 +917,11 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "link-loop") == 0) {
         return loop_link_messages();
+    }
+
+    if (strcmp(argv[1], "rfcomm-listen") == 0) {
+        return serve_rfcomm_once(env_u8("CARTHING_IAP2_RFCOMM_CHANNEL",
+                                        RFCOMM_CHANNEL_DEFAULT, 1, 30));
     }
 
     if (strcmp(argv[1], "identify") == 0) {

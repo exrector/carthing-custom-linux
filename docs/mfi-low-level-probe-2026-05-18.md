@@ -562,3 +562,49 @@ Current frontier after this proof:
 - link-layer framing is proven
 - the next missing piece is only the real Bluetooth transport attachment to the
   iPhone path
+
+## 2026-05-18: RFCOMM server wrapper proven around the new link layer
+
+What changed:
+
+- `carthing-iap2-mini` now also has `rfcomm-listen`
+- this is not a new protocol layer; it is a narrow transport wrapper around the
+  already-proven `link-loop`
+- it binds an RFCOMM server socket on channel `3`, accepts one peer, then hands
+  the accepted socket straight into the same minimal clean-room iAP2 link loop
+
+Implementation notes:
+
+- no BlueZ headers or runtime were added
+- the wrapper uses raw Linux Bluetooth socket constants and a local
+  `sockaddr_rc` definition
+- channel is controlled by `CARTHING_IAP2_RFCOMM_CHANNEL`, default `3`
+- `SIGPIPE` is ignored so a remote close does not kill the process before the
+  iAP2 state machine can unwind cleanly
+
+Live proof on the device:
+
+- the rebuilt binary was copied to the target through plain `ssh + cat`
+  because this minimal rootfs does not ship `sftp-server`
+- on the real device the new binary printed:
+
+```text
+[iap2-mini] RFCOMM listen ch=3
+```
+
+Meaning:
+
+- the current custom kernel/userspace can already host the local classic
+  RFCOMM server endpoint we need for iAP2
+- the new transport path is no longer blocked on auth, no longer blocked on
+  control/session logic, and no longer blocked on iAP2 framing
+
+Updated frontier after this proof:
+
+- `carthing-mfi-probe` proves live cert/sign against the auth chip
+- `carthing-iap2-mini link-loop` proves minimal real iAP2 framing
+- `carthing-iap2-mini rfcomm-listen` proves the local RFCOMM server endpoint
+- the next missing layer is now narrower:
+  - BR/EDR discoverability/connectability policy
+  - SDP exposure of the iAP2 service UUID and RFCOMM channel
+  - then a real iPhone-initiated attach into this new daemon
