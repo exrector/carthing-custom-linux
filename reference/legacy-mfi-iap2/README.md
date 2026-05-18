@@ -9,6 +9,12 @@ Purpose:
 - keep one representative low-level integration file
 - avoid keeping multi-gigabyte legacy trees just to preserve a few important files
 
+Important boundary:
+
+- this archive is a specification and reverse-engineering source
+- it is not a target architecture for the current custom Linux userspace
+- do not reintroduce the old Spotify userspace stack from here into the active baseline
+
 What is preserved here:
 
 - `docs/`

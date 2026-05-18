@@ -62,6 +62,8 @@ failure be considered.
 - `reference/legacy-mfi-iap2/`
   - curated archive of the old MFi / iAP2 reverse-engineering notes and one representative `slot_a` code snapshot
   - preserved so the large legacy Car Thing trees can be deleted without losing the useful archaeology
+  - used only as a protocol and reverse-engineering reference
+  - not a license to reintroduce the old Spotify userspace, `bluez`, `bluetoothd`, `dbus`, or other inherited runtime pieces into the current baseline
 
 - `buildroot-external/`
   - first Buildroot `br2-external` tree for the custom rootfs
