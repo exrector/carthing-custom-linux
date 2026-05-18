@@ -82,6 +82,7 @@
 #define OCF_SET_EVENT_MASK 0x0001
 #define OCF_INQUIRY 0x0001
 #define OCF_CREATE_CONN 0x0005
+#define OCF_LINK_KEY_REQUEST_REPLY 0x000B
 #define OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY 0x000C
 #define OCF_PIN_CODE_REQUEST_NEGATIVE_REPLY 0x000E
 #define OCF_REMOTE_NAME_REQUEST 0x0019
@@ -110,6 +111,9 @@
 #define HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT 0x03
 #define HCI_OOB_DATA_NOT_PRESENT 0x00
 #define HCI_AUTH_REQ_GENERAL_BONDING_NO_MITM 0x04
+
+#define LINK_KEY_PATH_DEFAULT "/run/carthing-state/carthing/iap2-link-keys.txt"
+#define LINK_KEY_MAX_ENTRIES 16
 
 #ifndef AF_BLUETOOTH
 #define AF_BLUETOOTH 31
@@ -161,6 +165,16 @@ struct bt_security_local {
     uint8_t level;
     uint8_t key_size;
 };
+
+struct link_key_entry {
+    bdaddr_t addr;
+    uint8_t key[16];
+    uint8_t type;
+    int valid;
+};
+
+static struct link_key_entry g_link_keys[LINK_KEY_MAX_ENTRIES];
+static int g_link_keys_loaded = 0;
 
 struct hci_filter_local {
     uint32_t type_mask;
@@ -1500,6 +1514,149 @@ static void bdaddr_event_to_str(const uint8_t *addr_le, char out[18]) {
              addr_le[5], addr_le[4], addr_le[3], addr_le[2], addr_le[1], addr_le[0]);
 }
 
+static const char *link_key_store_path(void) {
+    const char *path = getenv("CARTHING_IAP2_LINK_KEYS");
+    if (!path || !*path) {
+        path = LINK_KEY_PATH_DEFAULT;
+    }
+    return path;
+}
+
+static void link_key_to_hex(const uint8_t key[16], char out[33]) {
+    static const char hex[] = "0123456789abcdef";
+    int i;
+    for (i = 0; i < 16; i++) {
+        out[i * 2] = hex[(key[i] >> 4) & 0x0f];
+        out[i * 2 + 1] = hex[key[i] & 0x0f];
+    }
+    out[32] = '\0';
+}
+
+static int hex_to_nybble(int c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static int hex_to_link_key(const char *hex, uint8_t key[16]) {
+    int i;
+    for (i = 0; i < 16; i++) {
+        int hi = hex_to_nybble((unsigned char)hex[i * 2]);
+        int lo = hex_to_nybble((unsigned char)hex[i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return -1;
+        }
+        key[i] = (uint8_t)((hi << 4) | lo);
+    }
+    return 0;
+}
+
+static void load_link_keys(void) {
+    const char *path = link_key_store_path();
+    FILE *fp;
+    char line[128];
+
+    if (g_link_keys_loaded) {
+        return;
+    }
+    g_link_keys_loaded = 1;
+    memset(g_link_keys, 0, sizeof(g_link_keys));
+
+    fp = fopen(path, "r");
+    if (!fp) {
+        return;
+    }
+    while (fgets(line, sizeof(line), fp)) {
+        char addr_str[32];
+        char key_hex[64];
+        unsigned type = 0;
+        bdaddr_t addr;
+        uint8_t key[16];
+        int slot;
+
+        if (sscanf(line, "%31s %63s %x", addr_str, key_hex, &type) != 3) {
+            continue;
+        }
+        if (strlen(key_hex) != 32) {
+            continue;
+        }
+        if (str_to_bdaddr_local(addr_str, &addr) < 0) {
+            continue;
+        }
+        if (hex_to_link_key(key_hex, key) < 0) {
+            continue;
+        }
+        for (slot = 0; slot < LINK_KEY_MAX_ENTRIES; slot++) {
+            if (!g_link_keys[slot].valid) {
+                g_link_keys[slot].addr = addr;
+                memcpy(g_link_keys[slot].key, key, 16);
+                g_link_keys[slot].type = (uint8_t)type;
+                g_link_keys[slot].valid = 1;
+                break;
+            }
+        }
+    }
+    fclose(fp);
+}
+
+static void save_link_keys(void) {
+    const char *path = link_key_store_path();
+    FILE *fp;
+    int i;
+
+    fp = fopen(path, "w");
+    if (!fp) {
+        fprintf(stderr, "[iap2-mini] failed to save link keys to %s: %s\n", path, strerror(errno));
+        return;
+    }
+    for (i = 0; i < LINK_KEY_MAX_ENTRIES; i++) {
+        char addr_str[18];
+        char key_hex[33];
+        if (!g_link_keys[i].valid) {
+            continue;
+        }
+        bdaddr_to_str(&g_link_keys[i].addr, addr_str);
+        link_key_to_hex(g_link_keys[i].key, key_hex);
+        fprintf(fp, "%s %s %02x\n", addr_str, key_hex, g_link_keys[i].type);
+    }
+    fclose(fp);
+}
+
+static struct link_key_entry *find_link_key_entry(const bdaddr_t *addr) {
+    int i;
+    load_link_keys();
+    for (i = 0; i < LINK_KEY_MAX_ENTRIES; i++) {
+        if (g_link_keys[i].valid && memcmp(g_link_keys[i].addr.b, addr->b, 6) == 0) {
+            return &g_link_keys[i];
+        }
+    }
+    return NULL;
+}
+
+static void remember_link_key(const bdaddr_t *addr, const uint8_t key[16], uint8_t type) {
+    struct link_key_entry *entry = find_link_key_entry(addr);
+    int i;
+
+    if (!entry) {
+        for (i = 0; i < LINK_KEY_MAX_ENTRIES; i++) {
+            if (!g_link_keys[i].valid) {
+                entry = &g_link_keys[i];
+                break;
+            }
+        }
+        if (!entry) {
+            entry = &g_link_keys[0];
+        }
+    }
+
+    entry->addr = *addr;
+    memcpy(entry->key, key, 16);
+    entry->type = type;
+    entry->valid = 1;
+    save_link_keys();
+}
+
 static pid_t hci_spawn_peer_watch(int dev_id, const char *addr_str, uint16_t handle, unsigned timeout_secs) {
     pid_t pid = fork();
     if (pid != 0) {
@@ -1716,18 +1873,45 @@ static int hci_ssp_agent_loop(int dev_id) {
                 }
                 break;
             case EVT_LINK_KEY_REQ:
-                bdaddr_event_to_str(p, addr);
-                fprintf(stderr, "[iap2-mini] SSP LINK_KEY_REQ from %s -> negative\n", addr);
-                if (hci_cmd_status_only(dev_id,
-                        HCI_OPCODE(OGF_LINK_CTL, OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY),
-                        p, 6) < 0) {
-                    perror("HCI Link Key Negative Reply");
+                {
+                    struct link_key_entry *entry;
+                    bdaddr_t bdaddr;
+                    uint8_t payload[22];
+
+                    memcpy(bdaddr.b, p, 6);
+                    bdaddr_event_to_str(p, addr);
+                    entry = find_link_key_entry(&bdaddr);
+                    if (entry) {
+                        memcpy(payload, p, 6);
+                        memcpy(payload + 6, entry->key, 16);
+                        fprintf(stderr, "[iap2-mini] SSP LINK_KEY_REQ from %s -> cached reply type=0x%02x\n",
+                                addr, entry->type);
+                        if (hci_cmd_status_only(dev_id,
+                                HCI_OPCODE(OGF_LINK_CTL, OCF_LINK_KEY_REQUEST_REPLY),
+                                payload, sizeof(payload)) < 0) {
+                            perror("HCI Link Key Request Reply");
+                        }
+                    } else {
+                        fprintf(stderr, "[iap2-mini] SSP LINK_KEY_REQ from %s -> negative\n", addr);
+                        if (hci_cmd_status_only(dev_id,
+                                HCI_OPCODE(OGF_LINK_CTL, OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY),
+                                p, 6) < 0) {
+                            perror("HCI Link Key Negative Reply");
+                        }
+                    }
                 }
                 break;
             case EVT_LINK_KEY_NOTIFY:
-                bdaddr_event_to_str(p, addr);
-                fprintf(stderr, "[iap2-mini] SSP LINK_KEY_NOTIFY from %s type=0x%02x\n",
-                        addr, plen >= 23 ? p[22] : 0xff);
+                {
+                    bdaddr_t bdaddr;
+                    memcpy(bdaddr.b, p, 6);
+                    bdaddr_event_to_str(p, addr);
+                    fprintf(stderr, "[iap2-mini] SSP LINK_KEY_NOTIFY from %s type=0x%02x\n",
+                            addr, plen >= 23 ? p[22] : 0xff);
+                    if (plen >= 23) {
+                        remember_link_key(&bdaddr, p + 6, p[22]);
+                    }
+                }
                 break;
             case EVT_IO_CAPABILITY_RESPONSE:
                 bdaddr_event_to_str(p, addr);
