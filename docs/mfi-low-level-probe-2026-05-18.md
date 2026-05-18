@@ -608,3 +608,45 @@ Updated frontier after this proof:
   - BR/EDR discoverability/connectability policy
   - SDP exposure of the iAP2 service UUID and RFCOMM channel
   - then a real iPhone-initiated attach into this new daemon
+
+## 2026-05-18: local L2CAP SDP socket path proven
+
+What changed:
+
+- `carthing-iap2-mini` now also has `sdp-listen`
+- this does not implement SDP responses yet; it only proves that our new stack
+  can host the local classic Bluetooth `L2CAP` endpoint for `PSM 0x0001`
+  without any BlueZ userspace runtime
+
+Implementation notes:
+
+- the listener uses raw Linux Bluetooth socket constants and a local
+  `sockaddr_l2` definition
+- `CARTHING_IAP2_L2CAP_PSM` defaults to `0x0001`, the classic SDP PSM
+
+Live proof on the device:
+
+- the rebuilt target binary was pushed through `ssh + cat`
+- on the real device the new binary printed:
+
+```text
+[iap2-mini] L2CAP listen psm=0x0001
+```
+
+Meaning:
+
+- the current custom kernel/userspace can already host both local transport
+  sockets that matter for the clean-room iAP2 path:
+  - RFCOMM channel `3`
+  - L2CAP PSM `0x0001`
+
+Updated frontier after this proof:
+
+- auth chip access is proven
+- iAP2 control/session/link framing is proven
+- RFCOMM server bind/listen is proven
+- SDP L2CAP socket bind/listen is proven
+- the next missing layer is now even narrower:
+  - a minimal SDP responder / service-record exposure for the iAP2 UUID and
+    RFCOMM channel
+  - then real iPhone-initiated classic attach into `carthing-iap2-mini`

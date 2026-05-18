@@ -31,9 +31,14 @@
 
 #define HELPER_PATH_DEFAULT "/usr/bin/carthing-mfi-probe"
 #define RFCOMM_CHANNEL_DEFAULT 3
+#define L2CAP_PSM_SDP 0x0001
 
 #ifndef AF_BLUETOOTH
 #define AF_BLUETOOTH 31
+#endif
+
+#ifndef BTPROTO_L2CAP
+#define BTPROTO_L2CAP 0
 #endif
 
 #ifndef BTPROTO_RFCOMM
@@ -48,6 +53,14 @@ struct sockaddr_rc_local {
     sa_family_t rc_family;
     bdaddr_t rc_bdaddr;
     uint8_t rc_channel;
+};
+
+struct sockaddr_l2_local {
+    sa_family_t l2_family;
+    uint16_t l2_psm;
+    bdaddr_t l2_bdaddr;
+    uint16_t l2_cid;
+    uint8_t l2_bdaddr_type;
 };
 
 enum output_mode {
@@ -832,6 +845,62 @@ static int serve_rfcomm_once(int channel) {
     return loop_link_messages();
 }
 
+static int l2cap_listen_socket(uint16_t psm) {
+    int fd;
+    struct sockaddr_l2_local addr;
+
+    fd = socket(AF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/L2CAP)");
+        return -1;
+    }
+
+    memset(&addr, 0, sizeof(addr));
+    addr.l2_family = AF_BLUETOOTH;
+    addr.l2_psm = psm;
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind(L2CAP)");
+        close(fd);
+        return -1;
+    }
+    if (listen(fd, 1) < 0) {
+        perror("listen(L2CAP)");
+        close(fd);
+        return -1;
+    }
+    fprintf(stderr, "[iap2-mini] L2CAP listen psm=0x%04x\n", psm);
+    return fd;
+}
+
+static int serve_l2cap_once(uint16_t psm) {
+    int listen_fd;
+    int conn_fd;
+    socklen_t peer_len;
+    struct sockaddr_l2_local peer;
+    char peer_str[18];
+
+    listen_fd = l2cap_listen_socket(psm);
+    if (listen_fd < 0) {
+        return 1;
+    }
+
+    memset(&peer, 0, sizeof(peer));
+    peer_len = sizeof(peer);
+    conn_fd = accept(listen_fd, (struct sockaddr *)&peer, &peer_len);
+    if (conn_fd < 0) {
+        perror("accept(L2CAP)");
+        close(listen_fd);
+        return 1;
+    }
+    close(listen_fd);
+
+    bdaddr_to_str(&peer.l2_bdaddr, peer_str);
+    fprintf(stderr, "[iap2-mini] L2CAP accepted peer=%s psm=0x%04x cid=0x%04x\n",
+            peer_str, peer.l2_psm, peer.l2_cid);
+    close(conn_fd);
+    return 0;
+}
+
 static int loop_raw_messages(void) {
     int auth_ok = 0;
 
@@ -891,12 +960,14 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini raw-loop\n"
         "  carthing-iap2-mini link-loop\n"
         "  carthing-iap2-mini rfcomm-listen\n"
+        "  carthing-iap2-mini sdp-listen\n"
         "  carthing-iap2-mini identify\n"
         "  carthing-iap2-mini identify-raw\n"
         "\n"
         "env:\n"
         "  CARTHING_MFI_HELPER=/path/to/carthing-mfi-probe\n"
-        "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n");
+        "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n"
+        "  CARTHING_IAP2_L2CAP_PSM=0x0001\n");
 }
 
 int main(int argc, char **argv) {
@@ -922,6 +993,11 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "rfcomm-listen") == 0) {
         return serve_rfcomm_once(env_u8("CARTHING_IAP2_RFCOMM_CHANNEL",
                                         RFCOMM_CHANNEL_DEFAULT, 1, 30));
+    }
+
+    if (strcmp(argv[1], "sdp-listen") == 0) {
+        return serve_l2cap_once((uint16_t)env_u8("CARTHING_IAP2_L2CAP_PSM",
+                                                 L2CAP_PSM_SDP, 1, 0xffff));
     }
 
     if (strcmp(argv[1], "identify") == 0) {
