@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #define IAP2_CSM_START          0x4040
@@ -59,6 +60,7 @@
 #define HCI_EVENT_PKT   0x04
 #define BT_H4_EVT_PKT   0x04
 #define EVT_CONN_COMPLETE 0x03
+#define EVT_DISCONN_COMPLETE 0x05
 #define EVT_AUTH_COMPLETE 0x06
 #define EVT_REMOTE_NAME_REQ_COMPLETE 0x07
 #define EVT_CMD_COMPLETE 0x0E
@@ -1473,6 +1475,146 @@ static void bdaddr_event_to_str(const uint8_t *addr_le, char out[18]) {
              addr_le[5], addr_le[4], addr_le[3], addr_le[2], addr_le[1], addr_le[0]);
 }
 
+static pid_t hci_spawn_peer_watch(int dev_id, const char *addr_str, uint16_t handle, unsigned timeout_secs) {
+    pid_t pid = fork();
+    if (pid != 0) {
+        return pid;
+    }
+
+    {
+        int fd;
+        bdaddr_t peer;
+        time_t deadline = time(NULL) + (time_t)timeout_secs;
+
+        setvbuf(stderr, NULL, _IONBF, 0);
+        if (str_to_bdaddr_local(addr_str, &peer) < 0) {
+            perror("str_to_bdaddr_local");
+            _exit(1);
+        }
+        fd = hci_open_event_raw(dev_id);
+        if (fd < 0) {
+            _exit(1);
+        }
+        fprintf(stderr, "[iap2-mini] peer-watch start peer=%s handle=0x%04x timeout=%us\n",
+                addr_str, handle, timeout_secs);
+
+        for (;;) {
+            struct pollfd pfd;
+            long ms_left;
+            uint8_t buf[260];
+            ssize_t n;
+            uint8_t event_code;
+            const uint8_t *p;
+            char ev_addr[18];
+
+            ms_left = (long)((deadline - time(NULL)) * 1000);
+            if (ms_left <= 0) {
+                break;
+            }
+            pfd.fd = fd;
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+            if (poll(&pfd, 1, (int)ms_left) <= 0) {
+                break;
+            }
+            n = read(fd, buf, sizeof(buf));
+            if (n < 3 || buf[0] != HCI_EVENT_PKT) {
+                continue;
+            }
+            event_code = buf[1];
+            p = buf + 3;
+
+            switch (event_code) {
+            case EVT_CONN_COMPLETE:
+                if (n >= 14 && memcmp(p + 3, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p + 3, ev_addr);
+                    fprintf(stderr,
+                            "[iap2-mini] peer-watch CONN_COMPLETE peer=%s status=0x%02x handle=0x%04x link_type=0x%02x enc=0x%02x\n",
+                            ev_addr, p[0], (uint16_t)(p[1] | ((p[2] & 0x0f) << 8)), p[9], p[10]);
+                }
+                break;
+            case EVT_DISCONN_COMPLETE:
+                if (n >= 7) {
+                    uint16_t ev_handle = (uint16_t)(p[1] | ((p[2] & 0x0f) << 8));
+                    if (handle != 0 && ev_handle == handle) {
+                        fprintf(stderr,
+                                "[iap2-mini] peer-watch DISCONN_COMPLETE handle=0x%04x status=0x%02x reason=0x%02x\n",
+                                ev_handle, p[0], p[3]);
+                    }
+                }
+                break;
+            case EVT_AUTH_COMPLETE:
+                if (n >= 6) {
+                    uint16_t ev_handle = (uint16_t)(p[1] | ((p[2] & 0x0f) << 8));
+                    if (handle != 0 && ev_handle == handle) {
+                        fprintf(stderr,
+                                "[iap2-mini] peer-watch AUTH_COMPLETE handle=0x%04x status=0x%02x\n",
+                                ev_handle, p[0]);
+                    }
+                }
+                break;
+            case EVT_LINK_KEY_REQ:
+                if (n >= 9 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch LINK_KEY_REQ peer=%s\n", ev_addr);
+                }
+                break;
+            case EVT_LINK_KEY_NOTIFY:
+                if (n >= 26 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch LINK_KEY_NOTIFY peer=%s type=0x%02x\n",
+                            ev_addr, p[22]);
+                }
+                break;
+            case EVT_PIN_CODE_REQ:
+                if (n >= 9 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch PIN_CODE_REQ peer=%s\n", ev_addr);
+                }
+                break;
+            case EVT_IO_CAPABILITY_REQUEST:
+                if (n >= 9 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch IO_CAPABILITY_REQUEST peer=%s\n", ev_addr);
+                }
+                break;
+            case EVT_IO_CAPABILITY_RESPONSE:
+                if (n >= 12 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr,
+                            "[iap2-mini] peer-watch IO_CAPABILITY_RESPONSE peer=%s io_cap=0x%02x auth=0x%02x\n",
+                            ev_addr, p[6], p[8]);
+                }
+                break;
+            case EVT_USER_CONFIRMATION_REQUEST:
+                if (n >= 13 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch USER_CONFIRMATION_REQUEST peer=%s\n", ev_addr);
+                }
+                break;
+            case EVT_USER_PASSKEY_REQUEST:
+                if (n >= 9 && memcmp(p, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch USER_PASSKEY_REQUEST peer=%s\n", ev_addr);
+                }
+                break;
+            case EVT_SIMPLE_PAIRING_COMPLETE:
+                if (n >= 10 && memcmp(p + 1, peer.b, 6) == 0) {
+                    bdaddr_event_to_str(p + 1, ev_addr);
+                    fprintf(stderr, "[iap2-mini] peer-watch SIMPLE_PAIRING_COMPLETE peer=%s status=0x%02x\n",
+                            ev_addr, p[0]);
+                }
+                break;
+            default:
+                break;
+            }
+        }
+        fprintf(stderr, "[iap2-mini] peer-watch done peer=%s handle=0x%04x\n", addr_str, handle);
+        close(fd);
+    }
+    _exit(0);
+}
+
 static int hci_ssp_agent_loop(int dev_id) {
     int fd;
 
@@ -2659,6 +2801,7 @@ static int run_cafe_connect(int hci_dev, const char *addr_str) {
     int channel;
     int fd;
     uint16_t handle = 0;
+    pid_t watch_pid = -1;
 
     if (getenv("CARTHING_IAP2_SKIP_ACL_CREATE") == NULL) {
         if (hci_create_acl_link(hci_dev, addr_str, &handle) != 0) {
@@ -2668,6 +2811,7 @@ static int run_cafe_connect(int hci_dev, const char *addr_str) {
                 addr_str, handle);
         sleep(2);
     }
+    watch_pid = hci_spawn_peer_watch(hci_dev, addr_str, handle, 12);
 
     channel = sdp_discover_rfcomm_channel(addr_str, SDP_UUID_CAFE);
     if (channel <= 0) {
@@ -2681,15 +2825,25 @@ static int run_cafe_connect(int hci_dev, const char *addr_str) {
 
     fd = rfcomm_client_connect(addr_str, channel);
     if (fd < 0) {
+        if (watch_pid > 0) {
+            waitpid(watch_pid, NULL, 0);
+        }
         return 1;
     }
     if (dup2(fd, STDIN_FILENO) < 0 || dup2(fd, STDOUT_FILENO) < 0) {
         perror("dup2(RFCOMM client)");
         close(fd);
+        if (watch_pid > 0) {
+            waitpid(watch_pid, NULL, 0);
+        }
         return 1;
     }
     if (fd > STDERR_FILENO) {
         close(fd);
+    }
+    if (watch_pid > 0) {
+        kill(watch_pid, SIGTERM);
+        waitpid(watch_pid, NULL, 0);
     }
     return loop_link_messages_mode(1);
 }

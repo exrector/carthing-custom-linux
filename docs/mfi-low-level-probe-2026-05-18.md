@@ -1053,3 +1053,33 @@ This narrows the frontier sharply:
 So the next layer to investigate is no longer basic HCI reachability, but the
 classic attach contract itself: service availability, authorization, or iPhone
 policy on top of an already-up ACL.
+
+## 2026-05-19: peer-side disconnect reason after classic attach attempts
+
+The next live probe added a short HCI peer-watch around `cafe-connect`.
+
+That produced the first concrete post-ACL failure reason:
+
+```text
+[iap2-mini] HCI ACL up peer=10:A2:D3:83:82:50 handle=0x000c link_type=0x01
+[iap2-mini] L2CAP connect peer=10:A2:D3:83:82:50 psm=0x0001
+connect(L2CAP client): No route to host
+[iap2-mini] RFCOMM connect peer=10:A2:D3:83:82:50 ch=1
+connect(RFCOMM client): No route to host
+[iap2-mini] peer-watch DISCONN_COMPLETE handle=0x000c status=0x00 reason=0x14
+```
+
+`0x14` is the standard HCI disconnect reason
+`Remote Device Terminated Connection Due To Low Resources`.
+
+In practical terms for this project, the key point is not the wording itself,
+but that the disconnect now clearly comes from the iPhone side after our
+outbound classic attach attempts, not from an inability to establish the ACL.
+
+That means the new frontier is even narrower:
+
+- classic discovery and the iPhone classic address are real
+- classic ACL creation is real
+- iPhone is the side terminating the link after attach attempts
+- the remaining blocker is therefore in the higher classic attach contract
+  above raw ACL creation and below a successful iAP2 `SDP/RFCOMM` session
