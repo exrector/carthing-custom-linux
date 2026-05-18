@@ -48,6 +48,7 @@
 #define L2CAP_PSM_SDP 0x0001
 #define SDP_RECORD_HANDLE 0x00010000U
 #define HCI_DEV_DEFAULT 0
+#define CLASS_OF_DEVICE_CAR_AUDIO 0x240420U
 
 #ifndef BTPROTO_HCI
 #define BTPROTO_HCI 1
@@ -59,8 +60,14 @@
 #define BT_H4_EVT_PKT   0x04
 #define EVT_CMD_COMPLETE 0x0E
 #define OGF_HOST_CTL    0x03
+#define OGF_INFO_PARAM  0x04
+#define OCF_WRITE_LOCAL_NAME  0x0013
+#define OCF_READ_LOCAL_NAME   0x0014
 #define OCF_READ_SCAN_ENABLE  0x0019
 #define OCF_WRITE_SCAN_ENABLE 0x001A
+#define OCF_READ_CLASS_OF_DEV  0x0023
+#define OCF_WRITE_CLASS_OF_DEV 0x0024
+#define OCF_READ_BD_ADDR      0x0009
 #define HCI_OPCODE(ogf, ocf) ((uint16_t)((ocf) | ((ogf) << 10)))
 #define SOL_HCI 0
 #define HCI_FILTER 2
@@ -733,6 +740,145 @@ static int hci_write_scan_enable(int dev_id, uint8_t scan_enable) {
     close(fd);
     fprintf(stderr, "[iap2-mini] HCI wrote scan enable=0x%02x\n", scan_enable);
     return 0;
+}
+
+static int hci_read_local_name(int dev_id) {
+    int fd;
+    uint8_t resp[256];
+    size_t resp_len = 0;
+    size_t nlen;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return 1;
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_READ_LOCAL_NAME),
+                         NULL, 0, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Read Local Name");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    nlen = resp_len;
+    while (nlen > 0 && resp[nlen - 1] == '\0') nlen--;
+    fprintf(stderr, "[iap2-mini] HCI local name len=%zu\n", nlen);
+    fwrite(resp, 1, nlen, stdout);
+    fputc('\n', stdout);
+    return 0;
+}
+
+static int hci_write_local_name(int dev_id, const char *name) {
+    int fd;
+    uint8_t payload[248];
+    uint8_t resp[8];
+    size_t resp_len = 0;
+    size_t len = strlen(name);
+
+    if (len >= sizeof(payload)) {
+        errno = EINVAL;
+        perror("HCI Write Local Name");
+        return 1;
+    }
+    memset(payload, 0, sizeof(payload));
+    memcpy(payload, name, len);
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return 1;
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_WRITE_LOCAL_NAME),
+                         payload, sizeof(payload), resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Write Local Name");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote local name=%s\n", name);
+    return 0;
+}
+
+static int hci_read_class_of_dev(int dev_id) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return 1;
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_READ_CLASS_OF_DEV),
+                         NULL, 0, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Read Class Of Device");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    if (resp_len < 3) {
+        errno = EPROTO;
+        perror("HCI Read Class Of Device short reply");
+        return 1;
+    }
+    fprintf(stderr, "[iap2-mini] HCI class of device=0x%02x%02x%02x\n",
+            resp[2], resp[1], resp[0]);
+    printf("0x%02x%02x%02x\n", resp[2], resp[1], resp[0]);
+    return 0;
+}
+
+static int hci_write_class_of_dev(int dev_id, uint32_t cod) {
+    int fd;
+    uint8_t payload[3];
+    uint8_t resp[8];
+    size_t resp_len = 0;
+
+    payload[0] = (uint8_t)(cod & 0xff);
+    payload[1] = (uint8_t)((cod >> 8) & 0xff);
+    payload[2] = (uint8_t)((cod >> 16) & 0xff);
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return 1;
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_WRITE_CLASS_OF_DEV),
+                         payload, sizeof(payload), resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Write Class Of Device");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote class of device=0x%06x\n", cod & 0xffffffu);
+    return 0;
+}
+
+static int hci_read_bd_addr(int dev_id) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+    char out[18];
+    bdaddr_t addr;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return 1;
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_INFO_PARAM, OCF_READ_BD_ADDR),
+                         NULL, 0, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Read BD_ADDR");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    if (resp_len < 6) {
+        errno = EPROTO;
+        perror("HCI Read BD_ADDR short reply");
+        return 1;
+    }
+    memcpy(addr.b, resp, 6);
+    bdaddr_to_str(&addr, out);
+    fprintf(stderr, "[iap2-mini] HCI bdaddr=%s\n", out);
+    printf("%s\n", out);
+    return 0;
+}
+
+static uint32_t env_u24(const char *name, uint32_t defv) {
+    const char *v = getenv(name);
+    char *end = NULL;
+    unsigned long n;
+    if (!v || !*v) {
+        return defv;
+    }
+    n = strtoul(v, &end, 0);
+    if (!end || *end != '\0' || n > 0xfffffful) {
+        return defv;
+    }
+    return (uint32_t)n;
 }
 
 static const char *mfi_helper_path(void) {
@@ -1620,11 +1766,15 @@ static int loop_sdp_messages(void) {
     }
 }
 
-static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable) {
+static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable,
+                                uint32_t class_of_dev) {
     pid_t sdp_pid;
     pid_t rf_pid;
     int status;
 
+    if (hci_write_class_of_dev(hci_dev, class_of_dev) != 0) {
+        return 1;
+    }
     if (hci_write_scan_enable(hci_dev, scan_enable) != 0) {
         return 1;
     }
@@ -1649,8 +1799,9 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
         _exit(serve_rfcomm_forever(channel));
     }
 
-    fprintf(stderr, "[iap2-mini] transport daemon up: scan=0x%02x sdp_psm=0x%04x rfcomm_ch=%d\n",
-            scan_enable, psm, channel);
+    fprintf(stderr,
+            "[iap2-mini] transport daemon up: class=0x%06x scan=0x%02x sdp_psm=0x%04x rfcomm_ch=%d\n",
+            class_of_dev & 0xffffffu, scan_enable, psm, channel);
 
     if (wait(&status) > 0) {
         kill(sdp_pid, SIGTERM);
@@ -1671,6 +1822,11 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini rfcomm-listen\n"
         "  carthing-iap2-mini sdp-listen\n"
         "  carthing-iap2-mini transport-daemon\n"
+        "  carthing-iap2-mini hci-read-bdaddr\n"
+        "  carthing-iap2-mini hci-read-name\n"
+        "  carthing-iap2-mini hci-write-name <name>\n"
+        "  carthing-iap2-mini hci-read-class\n"
+        "  carthing-iap2-mini hci-write-class <0xNNNNNN>\n"
         "  carthing-iap2-mini hci-read-scan\n"
         "  carthing-iap2-mini hci-write-scan <off|page|both|0xNN>\n"
         "  carthing-iap2-mini identify\n"
@@ -1680,7 +1836,8 @@ static void usage(FILE *out) {
         "  CARTHING_MFI_HELPER=/path/to/carthing-mfi-probe\n"
         "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n"
         "  CARTHING_IAP2_L2CAP_PSM=0x0001\n"
-        "  CARTHING_IAP2_HCI_DEV=0\n");
+        "  CARTHING_IAP2_HCI_DEV=0\n"
+        "  CARTHING_IAP2_CLASS_OF_DEVICE=0x240420\n");
 }
 
 int main(int argc, char **argv) {
@@ -1724,7 +1881,44 @@ int main(int argc, char **argv) {
                                            RFCOMM_CHANNEL_DEFAULT, 1, 30),
                                     (uint16_t)env_u8("CARTHING_IAP2_L2CAP_PSM",
                                                      L2CAP_PSM_SDP, 1, 0xffff),
-                                    0x03);
+                                    0x03,
+                                    env_u24("CARTHING_IAP2_CLASS_OF_DEVICE",
+                                            CLASS_OF_DEVICE_CAR_AUDIO));
+    }
+
+    if (strcmp(argv[1], "hci-read-bdaddr") == 0) {
+        return hci_read_bd_addr(hci_dev);
+    }
+
+    if (strcmp(argv[1], "hci-read-name") == 0) {
+        return hci_read_local_name(hci_dev);
+    }
+
+    if (strcmp(argv[1], "hci-write-name") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return hci_write_local_name(hci_dev, argv[2]);
+    }
+
+    if (strcmp(argv[1], "hci-read-class") == 0) {
+        return hci_read_class_of_dev(hci_dev);
+    }
+
+    if (strcmp(argv[1], "hci-write-class") == 0) {
+        char *end = NULL;
+        unsigned long cod;
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        cod = strtoul(argv[2], &end, 0);
+        if (!end || *end != '\0' || cod > 0xfffffful) {
+            usage(stderr);
+            return 2;
+        }
+        return hci_write_class_of_dev(hci_dev, (uint32_t)cod);
     }
 
     if (strcmp(argv[1], "hci-read-scan") == 0) {

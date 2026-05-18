@@ -804,3 +804,66 @@ Updated frontier after this proof:
 - transport daemon is live
 - the next missing step is finally the first real external classic attach from
   the iPhone into this new stack
+
+## 2026-05-18: classic identity frontier narrowed to CoD and fixed live
+
+What changed:
+
+- `carthing-iap2-mini` now also has:
+  - `hci-read-bdaddr`
+  - `hci-read-name`
+  - `hci-write-name`
+  - `hci-read-class`
+  - `hci-write-class`
+- `transport-daemon` now sets a default `Class of Device` before enabling
+  classic scans
+
+Live controller identity on the real device before the fix:
+
+```text
+[iap2-mini] HCI bdaddr=30:E3:D6:04:C3:42
+30:E3:D6:04:C3:42
+[iap2-mini] HCI local name len=14
+Car Thing-0346
+[iap2-mini] HCI class of device=0x000000
+0x000000
+```
+
+Meaning:
+
+- local classic address is stable and readable
+- local classic name is not empty
+- but `Class of Device` was completely unset
+
+This matters because a working external iAP case explicitly notes that Apple
+visibility on classic Bluetooth depends on CoD being set to an Apple-friendly
+device class, and lists `Car Audio = 0x240420` as one valid value for
+`Wireless iAP` visibility.
+
+Live fix:
+
+```text
+[iap2-mini] HCI wrote class of device=0x240420
+[iap2-mini] HCI class of device=0x240420
+0x240420
+```
+
+Then the transport daemon was restarted with that default:
+
+```text
+[iap2-mini] HCI wrote class of device=0x240420
+[iap2-mini] HCI wrote scan enable=0x03
+[iap2-mini] transport daemon up: class=0x240420 scan=0x03 sdp_psm=0x0001 rfcomm_ch=3
+[iap2-mini] RFCOMM listen ch=3
+[iap2-mini] L2CAP listen psm=0x0001
+```
+
+Updated frontier after this proof:
+
+- auth backend is proven
+- iAP2 control/session/link layer is proven
+- SDP responder is proven
+- BR/EDR scan policy is proven
+- classic CoD is now explicitly set to `0x240420`
+- the next missing step is now the real external iPhone attach into this live
+  classic path
