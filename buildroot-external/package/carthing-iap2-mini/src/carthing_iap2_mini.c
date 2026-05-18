@@ -59,10 +59,14 @@
 #define HCI_EVENT_PKT   0x04
 #define BT_H4_EVT_PKT   0x04
 #define EVT_AUTH_COMPLETE 0x06
+#define EVT_REMOTE_NAME_REQ_COMPLETE 0x07
 #define EVT_CMD_COMPLETE 0x0E
+#define EVT_CMD_STATUS 0x0F
 #define EVT_PIN_CODE_REQ 0x16
 #define EVT_LINK_KEY_REQ 0x17
 #define EVT_LINK_KEY_NOTIFY 0x18
+#define EVT_INQUIRY_RESULT_WITH_RSSI 0x22
+#define EVT_EXTENDED_INQUIRY_RESULT 0x2F
 #define EVT_IO_CAPABILITY_REQUEST 0x31
 #define EVT_IO_CAPABILITY_RESPONSE 0x32
 #define EVT_USER_CONFIRMATION_REQUEST 0x33
@@ -72,8 +76,10 @@
 #define OGF_HOST_CTL    0x03
 #define OGF_INFO_PARAM  0x04
 #define OCF_SET_EVENT_MASK 0x0001
+#define OCF_INQUIRY 0x0001
 #define OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY 0x000C
 #define OCF_PIN_CODE_REQUEST_NEGATIVE_REPLY 0x000E
+#define OCF_REMOTE_NAME_REQUEST 0x0019
 #define OCF_IO_CAPABILITY_REQUEST_REPLY 0x002B
 #define OCF_USER_CONFIRMATION_REQUEST_REPLY 0x002C
 #define OCF_USER_CONFIRMATION_REQUEST_NEGATIVE_REPLY 0x002D
@@ -726,6 +732,107 @@ static int hci_open_event_raw(int dev_id) {
     return fd;
 }
 
+static int hci_write_cmd_fd(int fd, uint16_t opcode, const uint8_t *payload, size_t payload_len) {
+    uint8_t cmd[260];
+
+    if (payload_len > 255 || 4 + payload_len > sizeof(cmd)) {
+        errno = EINVAL;
+        return -1;
+    }
+    cmd[0] = HCI_COMMAND_PKT;
+    cmd[1] = (uint8_t)(opcode & 0xff);
+    cmd[2] = (uint8_t)(opcode >> 8);
+    cmd[3] = (uint8_t)payload_len;
+    if (payload_len > 0) {
+        memcpy(cmd + 4, payload, payload_len);
+    }
+    return write_all_fd(fd, cmd, 4 + payload_len);
+}
+
+static int hci_wait_cmd_status(int fd, uint16_t opcode) {
+    for (;;) {
+        uint8_t buf[260];
+        ssize_t n;
+        struct pollfd pfd;
+
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        if (poll(&pfd, 1, 5000) <= 0) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+        n = read(fd, buf, sizeof(buf));
+        if (n < 0) {
+            return -1;
+        }
+        if (n < 3 || buf[0] != HCI_EVENT_PKT) {
+            continue;
+        }
+        if (buf[1] == EVT_CMD_STATUS) {
+            uint16_t evt_opcode;
+            if (n < 7) {
+                continue;
+            }
+            evt_opcode = (uint16_t)(buf[5] | (buf[6] << 8));
+            if (evt_opcode != opcode) {
+                continue;
+            }
+            if (buf[3] != 0x00) {
+                errno = EIO;
+                return -1;
+            }
+            return 0;
+        }
+        if (buf[1] == EVT_CMD_COMPLETE) {
+            uint16_t evt_opcode;
+            if (n < 7) {
+                continue;
+            }
+            evt_opcode = (uint16_t)(buf[4] | (buf[5] << 8));
+            if (evt_opcode != opcode) {
+                continue;
+            }
+            if (buf[6] != 0x00) {
+                errno = EIO;
+                return -1;
+            }
+            return 0;
+        }
+    }
+}
+
+static size_t eir_extract_name(const uint8_t *eir, size_t eir_len, char *out, size_t out_cap) {
+    size_t off = 0;
+    if (out_cap == 0) {
+        return 0;
+    }
+    out[0] = '\0';
+    while (off < eir_len) {
+        uint8_t field_len = eir[off];
+        uint8_t field_type;
+        size_t copy_len;
+        if (field_len == 0) {
+            break;
+        }
+        if (off + 1 + field_len > eir_len || field_len < 1) {
+            break;
+        }
+        field_type = eir[off + 1];
+        if (field_type == 0x08 || field_type == 0x09) {
+            copy_len = field_len - 1;
+            if (copy_len >= out_cap) {
+                copy_len = out_cap - 1;
+            }
+            memcpy(out, eir + off + 2, copy_len);
+            out[copy_len] = '\0';
+            return copy_len;
+        }
+        off += 1 + field_len;
+    }
+    return 0;
+}
+
 static int hci_cmd_complete(int fd, uint16_t opcode, const uint8_t *payload, size_t payload_len,
                             uint8_t *resp, size_t resp_cap, size_t *resp_len) {
     uint8_t cmd[260];
@@ -1073,6 +1180,166 @@ static int hci_read_bd_addr(int dev_id) {
     fprintf(stderr, "[iap2-mini] HCI bdaddr=%s\n", out);
     printf("%s\n", out);
     return 0;
+}
+
+static int hci_inquiry_scan(int dev_id, uint8_t inquiry_len) {
+    static const uint8_t giac[3] = { 0x33, 0x8b, 0x9e };
+    uint8_t payload[5];
+    int fd;
+    int seen = 0;
+
+    payload[0] = giac[0];
+    payload[1] = giac[1];
+    payload[2] = giac[2];
+    payload[3] = inquiry_len;
+    payload[4] = 0x00;
+
+    fd = hci_open_event_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_write_cmd_fd(fd, HCI_OPCODE(OGF_LINK_CTL, OCF_INQUIRY), payload, sizeof(payload)) < 0) {
+        perror("write(HCI Inquiry)");
+        close(fd);
+        return 1;
+    }
+    if (hci_wait_cmd_status(fd, HCI_OPCODE(OGF_LINK_CTL, OCF_INQUIRY)) < 0) {
+        perror("HCI Inquiry status");
+        close(fd);
+        return 1;
+    }
+    fprintf(stderr, "[iap2-mini] HCI inquiry started len=0x%02x\n", inquiry_len);
+
+    for (;;) {
+        uint8_t buf[260];
+        ssize_t n = read(fd, buf, sizeof(buf));
+        if (n < 0) {
+            perror("read(HCI inquiry)");
+            close(fd);
+            return 1;
+        }
+        if (n < 3 || buf[0] != HCI_EVENT_PKT) {
+            continue;
+        }
+        if (buf[1] == 0x01) {
+            uint8_t status = (n >= 4) ? buf[3] : 0xff;
+            fprintf(stderr, "[iap2-mini] HCI inquiry complete status=0x%02x seen=%d\n", status, seen);
+            close(fd);
+            return status == 0x00 ? 0 : 1;
+        }
+        if (buf[1] == EVT_INQUIRY_RESULT_WITH_RSSI) {
+            uint8_t count;
+            int i;
+            if (n < 4) {
+                continue;
+            }
+            count = buf[3];
+            for (i = 0; i < count; i++) {
+                size_t base = 4 + (size_t)i * 14;
+                bdaddr_t addr;
+                char addr_str[18];
+                uint32_t cod;
+                int8_t rssi;
+                if ((size_t)n < base + 14) {
+                    break;
+                }
+                memcpy(addr.b, buf + base, 6);
+                bdaddr_to_str(&addr, addr_str);
+                cod = (uint32_t)buf[base + 8] | ((uint32_t)buf[base + 9] << 8) | ((uint32_t)buf[base + 10] << 16);
+                rssi = (int8_t)buf[base + 13];
+                printf("%s\tcod=0x%06x\trssi=%d\n", addr_str, cod & 0xffffffu, (int)rssi);
+                seen++;
+            }
+            continue;
+        }
+        if (buf[1] == EVT_EXTENDED_INQUIRY_RESULT) {
+            bdaddr_t addr;
+            char addr_str[18];
+            char name[249];
+            uint32_t cod;
+            int8_t rssi;
+            if (n < 3 + 255) {
+                continue;
+            }
+            memcpy(addr.b, buf + 4, 6);
+            bdaddr_to_str(&addr, addr_str);
+            cod = (uint32_t)buf[12] | ((uint32_t)buf[13] << 8) | ((uint32_t)buf[14] << 16);
+            rssi = (int8_t)buf[17];
+            eir_extract_name(buf + 18, (size_t)n - 18, name, sizeof(name));
+            printf("%s\tcod=0x%06x\trssi=%d\tname=%s\n", addr_str, cod & 0xffffffu, (int)rssi, name[0] ? name : "-");
+            seen++;
+            continue;
+        }
+    }
+}
+
+static int hci_remote_name_request(int dev_id, const char *addr_str) {
+    uint8_t payload[10];
+    int fd;
+    bdaddr_t addr;
+
+    if (str_to_bdaddr_local(addr_str, &addr) < 0) {
+        perror("str_to_bdaddr_local");
+        return 1;
+    }
+    memcpy(payload, addr.b, 6);
+    payload[6] = 0x01;
+    payload[7] = 0x00;
+    payload[8] = 0x00;
+    payload[9] = 0x00;
+
+    fd = hci_open_event_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_write_cmd_fd(fd, HCI_OPCODE(OGF_LINK_CTL, OCF_REMOTE_NAME_REQUEST), payload, sizeof(payload)) < 0) {
+        perror("write(HCI Remote Name Request)");
+        close(fd);
+        return 1;
+    }
+    if (hci_wait_cmd_status(fd, HCI_OPCODE(OGF_LINK_CTL, OCF_REMOTE_NAME_REQUEST)) < 0) {
+        perror("HCI Remote Name Request status");
+        close(fd);
+        return 1;
+    }
+    fprintf(stderr, "[iap2-mini] HCI remote name request peer=%s\n", addr_str);
+
+    for (;;) {
+        uint8_t buf[260];
+        ssize_t n = read(fd, buf, sizeof(buf));
+        char name[249];
+        if (n < 0) {
+            perror("read(HCI remote name)");
+            close(fd);
+            return 1;
+        }
+        if (n < 3 || buf[0] != HCI_EVENT_PKT || buf[1] != EVT_REMOTE_NAME_REQ_COMPLETE) {
+            continue;
+        }
+        if (n < 10) {
+            errno = EPROTO;
+            perror("HCI Remote Name Request short reply");
+            close(fd);
+            return 1;
+        }
+        if (buf[3] != 0x00) {
+            fprintf(stderr, "[iap2-mini] HCI remote name status=0x%02x\n", buf[3]);
+            close(fd);
+            return 1;
+        }
+        memset(name, 0, sizeof(name));
+        if (n > 10) {
+            size_t copy_len = (size_t)n - 10;
+            if (copy_len >= sizeof(name)) {
+                copy_len = sizeof(name) - 1;
+            }
+            memcpy(name, buf + 10, copy_len);
+            name[copy_len] = '\0';
+        }
+        printf("%s\n", name);
+        close(fd);
+        return 0;
+    }
 }
 
 static int hci_cmd_status_only(int dev_id, uint16_t opcode, const uint8_t *payload, size_t payload_len) {
@@ -1951,7 +2218,6 @@ static int rfcomm_client_connect(const char *addr_str, int channel) {
         perror("socket(AF_BLUETOOTH/RFCOMM client)");
         return -1;
     }
-    bt_require_high_security(fd, "RFCOMM client");
     memset(&addr, 0, sizeof(addr));
     addr.rc_family = AF_BLUETOOTH;
     addr.rc_channel = (uint8_t)channel;
@@ -1967,7 +2233,6 @@ static int rfcomm_client_connect(const char *addr_str, int channel) {
         close(fd);
         return -1;
     }
-    bt_require_high_security(fd, "RFCOMM connected");
     return fd;
 }
 
@@ -2009,7 +2274,6 @@ static int l2cap_client_connect(const char *addr_str, uint16_t psm) {
         perror("socket(AF_BLUETOOTH/L2CAP client)");
         return -1;
     }
-    bt_require_high_security(fd, "L2CAP client");
     memset(&addr, 0, sizeof(addr));
     addr.l2_family = AF_BLUETOOTH;
     addr.l2_psm = psm;
@@ -2025,7 +2289,6 @@ static int l2cap_client_connect(const char *addr_str, uint16_t psm) {
         close(fd);
         return -1;
     }
-    bt_require_high_security(fd, "L2CAP connected");
     return fd;
 }
 
@@ -2486,6 +2749,8 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini cafe-connect <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini transport-daemon\n"
         "  carthing-iap2-mini hci-read-bdaddr\n"
+        "  carthing-iap2-mini hci-inquiry\n"
+        "  carthing-iap2-mini hci-remote-name <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini hci-read-name\n"
         "  carthing-iap2-mini hci-write-name <name>\n"
         "  carthing-iap2-mini hci-read-class\n"
@@ -2559,6 +2824,18 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "hci-read-bdaddr") == 0) {
         return hci_read_bd_addr(hci_dev);
+    }
+
+    if (strcmp(argv[1], "hci-inquiry") == 0) {
+        return hci_inquiry_scan(hci_dev, 0x08);
+    }
+
+    if (strcmp(argv[1], "hci-remote-name") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return hci_remote_name_request(hci_dev, argv[2]);
     }
 
     if (strcmp(argv[1], "hci-read-name") == 0) {

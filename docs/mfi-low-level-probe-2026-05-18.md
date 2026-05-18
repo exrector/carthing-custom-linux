@@ -258,6 +258,31 @@ Observed live result:
   - poll through plain `write(reg) + read()` transport, not through the old
     repeated-start helper
 - the real status sequence on the working image was:
+
+Classic transport checkpoint collected later on the same working image:
+
+```sh
+ssh root@172.16.42.77 '
+  /run/carthing-iap2-inquiry-test hci-inquiry
+  /run/carthing-iap2-inquiry-test hci-remote-name 10:A2:D3:83:82:50
+'
+```
+
+Observed result:
+
+- classic inquiry does see the iPhone as:
+  - `10:A2:D3:83:82:50 cod=0x7a020c rssi=-35 name=iPhone`
+- `Remote Name Request` to that address succeeds
+- outbound `L2CAP`/`RFCOMM` active-connect from our clean-room `CAFE` path still
+  fails with `No route to host`
+
+Practical implication:
+
+- the iPhone is visible to classic inquiry and paging
+- the current blocker is narrower than discovery
+- the next missing piece on the clean-room iAP2 side is not `CoD`, not `EIR`,
+  and not name discovery; it is the active classic attach contract that the old
+  `CAFE`/profile path used after discovery
   - `poll[1]=nack`
   - `poll[2]=nack`
   - `poll[3]=0x10`

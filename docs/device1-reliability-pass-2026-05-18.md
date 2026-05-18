@@ -30,6 +30,13 @@ With the device already booted:
 3. turn Bluetooth back on
 4. confirm reconnect without re-pairing
 
+Current status on 2026-05-18:
+
+- cold boot reconnect is proven
+- full re-pair after a clean bond reset is proven
+- auto-reconnect after some iPhone Bluetooth toggle scenarios is still a known
+  issue and must not be treated as solved
+
 ### Phone Reboot
 
 1. leave the device powered on
@@ -54,6 +61,12 @@ On the Mac:
   - check `mmcblk0p1` mount and `keys.json`
 - if iPhone reconnect fails but pairing still exists:
   - check HID path before AMS path
+- if iPhone says `Forget This Device` was done but the next pairing attempt is
+  flaky or inconsistent:
+  - treat it as a dirty split-bond state
+  - delete device-side `keys.json`
+  - restart the HID/BLE runtime
+  - only then retry pairing from iPhone
 - if the device works on Bluetooth but Mac cannot reach `172.16.42.77`:
   - check for stale host-route drift on macOS before blaming the device
 

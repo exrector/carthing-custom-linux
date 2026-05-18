@@ -29,6 +29,14 @@ device `№1`.
 - the encoder works
 - USB ingress can still be recovered on macOS after normal boot
 
+## Known Open Reliability Gap
+
+- the device does not yet "stick" to the iPhone across every Bluetooth toggle
+  scenario
+- this is a reconnect-policy problem, not a cold-boot pairing problem
+- if the user presses `Forget This Device` on iPhone, the device-side
+  `keys.json` must also be cleared before expecting a clean new pair
+
 ## Canonical Artifact
 
 - bundle directory:
