@@ -146,6 +146,10 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - attach -> `hci0` -> Bumble `hci-socket:0` is now live-proven on device `№1`
 - runtime is now configured to autostart with writable `/run/carthing` logs and persistent bond storage on `mmcblk0p1`
 - iPhone pairing requires the HID profile layer first; AMS alone is not sufficient for discovery in iOS Settings
+- the user-facing Bluetooth pairing contract remains the HID identity exposed by the
+  working BLE runtime; the clean-room classic `carthing-iap2-mini` track is a
+  separate experimental transport effort and is not the replacement for the
+  Settings-level pairing flow
 - a real cold boot with the permanent flashed image is now proven:
   - the iPhone pair survives reboot
   - the device auto-reconnects

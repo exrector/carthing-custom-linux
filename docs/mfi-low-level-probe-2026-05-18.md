@@ -867,3 +867,83 @@ Updated frontier after this proof:
 - classic CoD is now explicitly set to `0x240420`
 - the next missing step is now the real external iPhone attach into this live
   classic path
+
+## 2026-05-18: classic iAP2 transport now carries EIR, SSP event mask, and socket security
+
+What changed in the clean-room daemon:
+
+- `transport-daemon` now also writes:
+  - `Inquiry Mode = 0x02` (extended inquiry)
+  - an `EIR` block with the local name and `CAFF`
+  - the controller event mask before the SSP loop starts
+- the local classic sockets now request `BT_SECURITY_HIGH` on:
+  - RFCOMM listen/accepted sockets
+  - L2CAP listen/accepted sockets
+
+Live startup proof on the real device:
+
+```text
+[iap2-mini] HCI wrote class of device=0x240420
+[iap2-mini] HCI wrote inquiry mode=0x02
+[iap2-mini] HCI wrote EIR name=Car Thing-0346 uuid=caff
+[iap2-mini] HCI wrote event mask=3fffffffffffffff
+[iap2-mini] HCI wrote simple pairing mode=1
+[iap2-mini] HCI wrote scan enable=0x03
+[iap2-mini] transport daemon up: class=0x240420 scan=0x03 ssp=on sdp_psm=0x0001 rfcomm_ch=3
+[iap2-mini] RFCOMM listen BT_SECURITY_HIGH set
+[iap2-mini] RFCOMM listen ch=3
+[iap2-mini] L2CAP listen BT_SECURITY_HIGH set
+[iap2-mini] L2CAP listen psm=0x0001
+[iap2-mini] SSP agent listening on hci0
+```
+
+This proves the controller-side classic identity is now much closer to the
+old working MFi Bluetooth contract than the first raw RFCOMM experiments were.
+
+## 2026-05-18: user-facing iPhone Settings pairing is a HID contract, not the raw iAP2 transport
+
+The old preserved notes were the decisive clue here.
+
+When the iPhone shows:
+
+```text
+Pairing Unsuccessful
+Not Supported
+```
+
+that is not the same failure mode as "RF transport is dead" or "SSP is broken".
+It means the iPhone saw the accessory, but rejected the advertised accessory
+contract before it ever attached to the new clean-room iAP2 transport.
+
+The preserved working notes point to a strict separation:
+
+- the user-facing Settings pairing flow belongs to the HID identity
+- the old "not supported" failure appeared when Car Thing looked like
+  phone/audio/MFi instead of HID
+- the clean-room classic iAP2 path is therefore not a drop-in replacement for
+  the HID pairing identity in the iPhone Bluetooth UI
+
+This matches the live evidence from the new daemon:
+
+- after repeated `Not Supported` failures, there were still no incoming
+  `SSP`, `L2CAP accepted`, or `RFCOMM accepted` lines
+- meaning the iPhone rejected the accessory before entering the raw classic
+  transport we built
+
+So the boundary is now explicit:
+
+- keep the proven BLE HID runtime as the user-facing pairing path
+- keep `carthing-iap2-mini` as a separate clean-room MFi/iAP2 transport track
+- do not treat a Bluetooth Settings pair attempt as the main validation path for
+  the raw classic iAP2 daemon
+
+Updated frontier after this correction:
+
+- low-level MFi auth is proven
+- iAP2 control/session/link/RFCOMM/SDP are proven locally
+- controller identity, EIR, SSP, and socket security are proven locally
+- but the clean-room daemon still lacks the higher external contract that made
+  the old classic path acceptable to iPhone
+- the next meaningful iAP2 step is no longer "more CoD/SSP tweaks", but the
+  higher-profile `CAFE` / reconnect / profile-semantics layer from the old
+  working reference

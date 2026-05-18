@@ -58,19 +58,43 @@
 #define HCI_COMMAND_PKT 0x01
 #define HCI_EVENT_PKT   0x04
 #define BT_H4_EVT_PKT   0x04
+#define EVT_AUTH_COMPLETE 0x06
 #define EVT_CMD_COMPLETE 0x0E
+#define EVT_PIN_CODE_REQ 0x16
+#define EVT_LINK_KEY_REQ 0x17
+#define EVT_LINK_KEY_NOTIFY 0x18
+#define EVT_IO_CAPABILITY_REQUEST 0x31
+#define EVT_IO_CAPABILITY_RESPONSE 0x32
+#define EVT_USER_CONFIRMATION_REQUEST 0x33
+#define EVT_USER_PASSKEY_REQUEST 0x34
+#define EVT_SIMPLE_PAIRING_COMPLETE 0x36
+#define OGF_LINK_CTL    0x01
 #define OGF_HOST_CTL    0x03
 #define OGF_INFO_PARAM  0x04
+#define OCF_SET_EVENT_MASK 0x0001
+#define OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY 0x000C
+#define OCF_PIN_CODE_REQUEST_NEGATIVE_REPLY 0x000E
+#define OCF_IO_CAPABILITY_REQUEST_REPLY 0x002B
+#define OCF_USER_CONFIRMATION_REQUEST_REPLY 0x002C
+#define OCF_USER_CONFIRMATION_REQUEST_NEGATIVE_REPLY 0x002D
+#define OCF_USER_PASSKEY_REQUEST_NEGATIVE_REPLY 0x0033
 #define OCF_WRITE_LOCAL_NAME  0x0013
 #define OCF_READ_LOCAL_NAME   0x0014
 #define OCF_READ_SCAN_ENABLE  0x0019
 #define OCF_WRITE_SCAN_ENABLE 0x001A
 #define OCF_READ_CLASS_OF_DEV  0x0023
 #define OCF_WRITE_CLASS_OF_DEV 0x0024
+#define OCF_WRITE_INQUIRY_MODE 0x0045
 #define OCF_READ_BD_ADDR      0x0009
+#define OCF_WRITE_EXTENDED_INQUIRY_RESPONSE 0x0052
+#define OCF_WRITE_SIMPLE_PAIRING_MODE 0x0056
 #define HCI_OPCODE(ogf, ocf) ((uint16_t)((ocf) | ((ogf) << 10)))
 #define SOL_HCI 0
 #define HCI_FILTER 2
+
+#define HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT 0x03
+#define HCI_OOB_DATA_NOT_PRESENT 0x00
+#define HCI_AUTH_REQ_GENERAL_BONDING_NO_MITM 0x04
 
 #ifndef AF_BLUETOOTH
 #define AF_BLUETOOTH 31
@@ -83,6 +107,16 @@
 #ifndef BTPROTO_RFCOMM
 #define BTPROTO_RFCOMM 3
 #endif
+
+#ifndef SOL_BLUETOOTH
+#define SOL_BLUETOOTH 274
+#endif
+
+#ifndef BT_SECURITY
+#define BT_SECURITY 4
+#endif
+
+#define BT_SECURITY_HIGH 3
 
 typedef struct {
     uint8_t b[6];
@@ -108,6 +142,11 @@ struct sockaddr_hci_local {
     uint16_t hci_channel;
 };
 
+struct bt_security_local {
+    uint8_t level;
+    uint8_t key_size;
+};
+
 struct hci_filter_local {
     uint32_t type_mask;
     uint32_t event_mask[2];
@@ -127,6 +166,10 @@ struct link_state {
 static const uint8_t SDP_UUID_CAFF[16] = {
     0x00, 0x00, 0x00, 0x00, 0xde, 0xca, 0xfa, 0xde,
     0xde, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xca, 0xff
+};
+static const uint8_t EIR_UUID_CAFF_LE[16] = {
+    0xff, 0xca, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xde,
+    0xde, 0xfa, 0xca, 0xde, 0x00, 0x00, 0x00, 0x00
 };
 
 static const uint8_t SDP_ATTR_HANDLE[] = { 0x0A, 0x00, 0x01, 0x00, 0x00 };
@@ -632,6 +675,37 @@ static int hci_open_raw(int dev_id) {
     return fd;
 }
 
+static int hci_open_event_raw(int dev_id) {
+    int fd;
+    struct sockaddr_hci_local addr;
+    struct hci_filter_local flt;
+
+    fd = socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
+    if (fd < 0) {
+        perror("socket(AF_BLUETOOTH/HCI events)");
+        return -1;
+    }
+    memset(&addr, 0, sizeof(addr));
+    addr.hci_family = AF_BLUETOOTH;
+    addr.hci_dev = (uint16_t)dev_id;
+    addr.hci_channel = HCI_CHANNEL_RAW;
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind(HCI events)");
+        close(fd);
+        return -1;
+    }
+    memset(&flt, 0, sizeof(flt));
+    flt.type_mask = (uint32_t)(1u << BT_H4_EVT_PKT);
+    flt.event_mask[0] = 0xffffffffu;
+    flt.event_mask[1] = 0xffffffffu;
+    if (setsockopt(fd, SOL_HCI, HCI_FILTER, &flt, sizeof(flt)) < 0) {
+        perror("setsockopt(HCI_FILTER events)");
+        close(fd);
+        return -1;
+    }
+    return fd;
+}
+
 static int hci_cmd_complete(int fd, uint16_t opcode, const uint8_t *payload, size_t payload_len,
                             uint8_t *resp, size_t resp_cap, size_t *resp_len) {
     uint8_t cmd[260];
@@ -740,6 +814,120 @@ static int hci_write_scan_enable(int dev_id, uint8_t scan_enable) {
     close(fd);
     fprintf(stderr, "[iap2-mini] HCI wrote scan enable=0x%02x\n", scan_enable);
     return 0;
+}
+
+static int hci_write_simple_pairing_mode(int dev_id, uint8_t enabled) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return 1;
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_WRITE_SIMPLE_PAIRING_MODE),
+                         &enabled, 1, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Write Simple Pairing Mode");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote simple pairing mode=%u\n", enabled);
+    return 0;
+}
+
+static int hci_write_event_mask(int dev_id, const uint8_t mask[8]) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_SET_EVENT_MASK),
+                         mask, 8, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Set Event Mask");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote event mask=%02x%02x%02x%02x%02x%02x%02x%02x\n",
+            mask[7], mask[6], mask[5], mask[4], mask[3], mask[2], mask[1], mask[0]);
+    return 0;
+}
+
+static int hci_write_inquiry_mode(int dev_id, uint8_t mode) {
+    int fd;
+    uint8_t resp[8];
+    size_t resp_len = 0;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_WRITE_INQUIRY_MODE),
+                         &mode, 1, resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Write Inquiry Mode");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote inquiry mode=0x%02x\n", mode);
+    return 0;
+}
+
+static int hci_write_eir_iap2(int dev_id, const char *name) {
+    int fd;
+    uint8_t payload[241];
+    uint8_t resp[8];
+    size_t resp_len = 0;
+    size_t name_len = strlen(name);
+    size_t off = 0;
+
+    if (name_len > 32) {
+        name_len = 32;
+    }
+    memset(payload, 0, sizeof(payload));
+    payload[0] = 0x00;
+    off = 1;
+
+    if (name_len > 0) {
+        payload[off++] = (uint8_t)(name_len + 1);
+        payload[off++] = 0x09;
+        memcpy(payload + off, name, name_len);
+        off += name_len;
+    }
+
+    payload[off++] = 17;
+    payload[off++] = 0x07;
+    memcpy(payload + off, EIR_UUID_CAFF_LE, sizeof(EIR_UUID_CAFF_LE));
+    off += sizeof(EIR_UUID_CAFF_LE);
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    if (hci_cmd_complete(fd, HCI_OPCODE(OGF_HOST_CTL, OCF_WRITE_EXTENDED_INQUIRY_RESPONSE),
+                         payload, sizeof(payload), resp, sizeof(resp), &resp_len) < 0) {
+        perror("HCI Write Extended Inquiry Response");
+        close(fd);
+        return 1;
+    }
+    close(fd);
+    fprintf(stderr, "[iap2-mini] HCI wrote EIR name=%s uuid=caff\n", name);
+    return 0;
+}
+
+static void bt_require_high_security(int fd, const char *what) {
+    struct bt_security_local sec;
+
+    memset(&sec, 0, sizeof(sec));
+    sec.level = BT_SECURITY_HIGH;
+    sec.key_size = 0;
+    if (setsockopt(fd, SOL_BLUETOOTH, BT_SECURITY, &sec, sizeof(sec)) < 0) {
+        fprintf(stderr, "[iap2-mini] %s BT_SECURITY_HIGH failed: %s\n", what, strerror(errno));
+    } else {
+        fprintf(stderr, "[iap2-mini] %s BT_SECURITY_HIGH set\n", what);
+    }
 }
 
 static int hci_read_local_name(int dev_id) {
@@ -865,6 +1053,134 @@ static int hci_read_bd_addr(int dev_id) {
     fprintf(stderr, "[iap2-mini] HCI bdaddr=%s\n", out);
     printf("%s\n", out);
     return 0;
+}
+
+static int hci_cmd_status_only(int dev_id, uint16_t opcode, const uint8_t *payload, size_t payload_len) {
+    int fd;
+    uint8_t resp[32];
+    size_t resp_len = 0;
+
+    fd = hci_open_raw(dev_id);
+    if (fd < 0) return -1;
+    if (hci_cmd_complete(fd, opcode, payload, payload_len, resp, sizeof(resp), &resp_len) < 0) {
+        close(fd);
+        return -1;
+    }
+    close(fd);
+    return 0;
+}
+
+static void bdaddr_event_to_str(const uint8_t *addr_le, char out[18]) {
+    snprintf(out, 18, "%02X:%02X:%02X:%02X:%02X:%02X",
+             addr_le[5], addr_le[4], addr_le[3], addr_le[2], addr_le[1], addr_le[0]);
+}
+
+static int hci_ssp_agent_loop(int dev_id) {
+    int fd;
+
+    fd = hci_open_event_raw(dev_id);
+    if (fd < 0) {
+        return 1;
+    }
+    fprintf(stderr, "[iap2-mini] SSP agent listening on hci%d\n", dev_id);
+
+    for (;;) {
+        uint8_t buf[260];
+        ssize_t n = read(fd, buf, sizeof(buf));
+        uint8_t event_code;
+        uint8_t plen;
+        const uint8_t *p;
+        char addr[18];
+
+        if (n < 0) {
+            perror("read(HCI events)");
+            close(fd);
+            return 1;
+        }
+        if (n < 3 || buf[0] != HCI_EVENT_PKT) {
+            continue;
+        }
+        event_code = buf[1];
+        plen = buf[2];
+        if ((size_t)n < (size_t)(3 + plen)) {
+            continue;
+        }
+        p = buf + 3;
+
+        switch (event_code) {
+            case EVT_IO_CAPABILITY_REQUEST: {
+                uint8_t payload[9];
+                memcpy(payload, p, 6);
+                payload[6] = HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT;
+                payload[7] = HCI_OOB_DATA_NOT_PRESENT;
+                payload[8] = HCI_AUTH_REQ_GENERAL_BONDING_NO_MITM;
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP IO_CAP_REQ from %s\n", addr);
+                if (hci_cmd_status_only(dev_id,
+                        HCI_OPCODE(OGF_LINK_CTL, OCF_IO_CAPABILITY_REQUEST_REPLY),
+                        payload, sizeof(payload)) < 0) {
+                    perror("HCI IO Capability Request Reply");
+                }
+                break;
+            }
+            case EVT_USER_CONFIRMATION_REQUEST:
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP USER_CONFIRM_REQ from %s\n", addr);
+                if (hci_cmd_status_only(dev_id,
+                        HCI_OPCODE(OGF_LINK_CTL, OCF_USER_CONFIRMATION_REQUEST_REPLY),
+                        p, 6) < 0) {
+                    perror("HCI User Confirmation Reply");
+                }
+                break;
+            case EVT_USER_PASSKEY_REQUEST:
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP USER_PASSKEY_REQ from %s -> negative\n", addr);
+                if (hci_cmd_status_only(dev_id,
+                        HCI_OPCODE(OGF_LINK_CTL, OCF_USER_PASSKEY_REQUEST_NEGATIVE_REPLY),
+                        p, 6) < 0) {
+                    perror("HCI User Passkey Negative Reply");
+                }
+                break;
+            case EVT_PIN_CODE_REQ:
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP PIN_CODE_REQ from %s -> negative\n", addr);
+                if (hci_cmd_status_only(dev_id,
+                        HCI_OPCODE(OGF_LINK_CTL, OCF_PIN_CODE_REQUEST_NEGATIVE_REPLY),
+                        p, 6) < 0) {
+                    perror("HCI PIN Code Negative Reply");
+                }
+                break;
+            case EVT_LINK_KEY_REQ:
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP LINK_KEY_REQ from %s -> negative\n", addr);
+                if (hci_cmd_status_only(dev_id,
+                        HCI_OPCODE(OGF_LINK_CTL, OCF_LINK_KEY_REQUEST_NEGATIVE_REPLY),
+                        p, 6) < 0) {
+                    perror("HCI Link Key Negative Reply");
+                }
+                break;
+            case EVT_LINK_KEY_NOTIFY:
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP LINK_KEY_NOTIFY from %s type=0x%02x\n",
+                        addr, plen >= 23 ? p[22] : 0xff);
+                break;
+            case EVT_IO_CAPABILITY_RESPONSE:
+                bdaddr_event_to_str(p, addr);
+                fprintf(stderr, "[iap2-mini] SSP IO_CAP_RSP from %s io=0x%02x auth=0x%02x\n",
+                        addr, plen >= 8 ? p[6] : 0xff, plen >= 8 ? p[8] : 0xff);
+                break;
+            case EVT_SIMPLE_PAIRING_COMPLETE:
+                bdaddr_event_to_str(p + 1, addr);
+                fprintf(stderr, "[iap2-mini] SSP COMPLETE status=0x%02x peer=%s\n", p[0], addr);
+                break;
+            case EVT_AUTH_COMPLETE:
+                fprintf(stderr, "[iap2-mini] AUTH COMPLETE status=0x%02x handle=0x%02x%02x\n",
+                        plen >= 1 ? p[0] : 0xff, plen >= 3 ? p[2] : 0xff, plen >= 2 ? p[1] : 0xff);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
 static uint32_t env_u24(const char *name, uint32_t defv) {
@@ -1510,6 +1826,7 @@ static int rfcomm_listen_socket(int channel) {
         perror("socket(AF_BLUETOOTH/RFCOMM)");
         return -1;
     }
+    bt_require_high_security(fd, "RFCOMM listen");
 
     memset(&addr, 0, sizeof(addr));
     addr.rc_family = AF_BLUETOOTH;
@@ -1548,6 +1865,7 @@ static int serve_rfcomm_once(int channel) {
         close(listen_fd);
         return 1;
     }
+    bt_require_high_security(conn_fd, "RFCOMM accepted");
     close(listen_fd);
 
     bdaddr_to_str(&peer.rc_bdaddr, peer_str);
@@ -1585,6 +1903,7 @@ static int l2cap_listen_socket(uint16_t psm) {
         perror("socket(AF_BLUETOOTH/L2CAP)");
         return -1;
     }
+    bt_require_high_security(fd, "L2CAP listen");
 
     memset(&addr, 0, sizeof(addr));
     addr.l2_family = AF_BLUETOOTH;
@@ -1623,6 +1942,7 @@ static int serve_l2cap_once(uint16_t psm) {
         close(listen_fd);
         return 1;
     }
+    bt_require_high_security(conn_fd, "L2CAP accepted");
     close(listen_fd);
 
     bdaddr_to_str(&peer.l2_bdaddr, peer_str);
@@ -1768,20 +2088,50 @@ static int loop_sdp_messages(void) {
 
 static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable,
                                 uint32_t class_of_dev) {
+    static const uint8_t classic_event_mask[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f };
+    const char *eir_name = getenv("CARTHING_IAP2_EIR_NAME");
     pid_t sdp_pid;
     pid_t rf_pid;
+    pid_t ssp_pid;
     int status;
 
+    if (!eir_name || !*eir_name) {
+        eir_name = "Car Thing-0346";
+    }
+
     if (hci_write_class_of_dev(hci_dev, class_of_dev) != 0) {
+        return 1;
+    }
+    if (hci_write_inquiry_mode(hci_dev, 0x02) != 0) {
+        return 1;
+    }
+    if (hci_write_eir_iap2(hci_dev, eir_name) != 0) {
+        return 1;
+    }
+    if (hci_write_event_mask(hci_dev, classic_event_mask) != 0) {
+        return 1;
+    }
+    if (hci_write_simple_pairing_mode(hci_dev, 1) != 0) {
         return 1;
     }
     if (hci_write_scan_enable(hci_dev, scan_enable) != 0) {
         return 1;
     }
 
+    ssp_pid = fork();
+    if (ssp_pid < 0) {
+        perror("fork ssp");
+        return 1;
+    }
+    if (ssp_pid == 0) {
+        _exit(hci_ssp_agent_loop(hci_dev));
+    }
+
     sdp_pid = fork();
     if (sdp_pid < 0) {
         perror("fork sdp");
+        kill(ssp_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
         return 1;
     }
     if (sdp_pid == 0) {
@@ -1791,7 +2141,9 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     rf_pid = fork();
     if (rf_pid < 0) {
         perror("fork rfcomm");
+        kill(ssp_pid, SIGTERM);
         kill(sdp_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
         waitpid(sdp_pid, NULL, 0);
         return 1;
     }
@@ -1800,12 +2152,14 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     }
 
     fprintf(stderr,
-            "[iap2-mini] transport daemon up: class=0x%06x scan=0x%02x sdp_psm=0x%04x rfcomm_ch=%d\n",
+            "[iap2-mini] transport daemon up: class=0x%06x scan=0x%02x ssp=on sdp_psm=0x%04x rfcomm_ch=%d\n",
             class_of_dev & 0xffffffu, scan_enable, psm, channel);
 
     if (wait(&status) > 0) {
+        kill(ssp_pid, SIGTERM);
         kill(sdp_pid, SIGTERM);
         kill(rf_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
         waitpid(sdp_pid, NULL, 0);
         waitpid(rf_pid, NULL, 0);
     }
