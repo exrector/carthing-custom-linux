@@ -189,6 +189,8 @@ async def on_connection(connection: Connection):
 
 def on_pairing(connection: Connection, keys):
     logger.info("SMP: bonding complete handle=%d keys=%s", connection.handle, keys)
+    if _device:
+        asyncio.create_task(refresh_accept_list(_device))
     if connection.is_encrypted:
         asyncio.create_task(maybe_start_ams(connection, "pairing-complete"))
 
@@ -233,6 +235,17 @@ async def on_disconnection(connection: Connection, reason: int):
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
     ams = None
     _active_conn = None
+    state.title = "Lost Contact"
+    state.artist = "Awaiting Deep Space Relay"
+    state.album = ""
+    state.duration = 0.0
+    state.position = 0.0
+    state.playing = False
+    if ui:
+        try:
+            ui.render(state)
+        except Exception as e:
+            logger.error("UI disconnect render error: %s", e)
     try:
         await asyncio.sleep(0.3)
         if _device:
@@ -262,19 +275,35 @@ async def start_advertising(device: Device):
     logger.info("Реклама запущена")
 
 
-async def _generic_advertising_fallback(delay_s: float):
-    global _reconnect_fallback_task
+async def refresh_accept_list(device: Device):
     try:
-        await asyncio.sleep(delay_s)
-        if _device and len(_device.connections) == 0:
-            logger.info("Directed reconnect timeout -> generic HID advertising")
-            await start_advertising(_device)
-    except asyncio.CancelledError:
-        return
+        await device.refresh_filter_accept_list()
+        logger.info("Filter accept list refreshed from bonded keys")
     except Exception as e:
-        logger.error("Reconnect fallback error: %s", e)
-    finally:
-        _reconnect_fallback_task = None
+        logger.warning("Filter accept list refresh failed: %s", e)
+
+
+async def start_bonded_only_advertising(device: Device):
+    device.advertising_data = bytes(
+        AdvertisingData(
+            [
+                (AdvertisingData.FLAGS, bytes([0x06])),
+                (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
+                (
+                    AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
+                    struct.pack("<H", 0x1812),
+                ),
+                (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+            ]
+        )
+    )
+    await refresh_accept_list(device)
+    await device.start_advertising(
+        own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+        auto_restart=True,
+        advertising_filter_policy=0x03,
+    )
+    logger.info("Bonded-only HID advertising started")
 
 
 async def start_reconnect_advertising(device: Device, target):
@@ -283,18 +312,30 @@ async def start_reconnect_advertising(device: Device, target):
         _reconnect_fallback_task.cancel()
         _reconnect_fallback_task = None
 
-    try:
-        logger.info("Directed reconnect advertising to bonded peer: %s", target)
-        await device.start_advertising(
-            advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
-            target=target,
-            own_address_type=OwnAddressType.PUBLIC,
-            auto_restart=False,
-        )
-        _reconnect_fallback_task = asyncio.create_task(_generic_advertising_fallback(12.0))
-    except Exception as e:
-        logger.warning("Directed reconnect advertising failed: %s", e)
-        await start_advertising(device)
+    async def reconnect_sequence():
+        try:
+            logger.info("Directed reconnect advertising to bonded peer: %s", target)
+            await device.start_advertising(
+                advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_HIGH_DUTY,
+                target=target,
+                own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                auto_restart=False,
+            )
+            await asyncio.sleep(1.6)
+            if _device and len(_device.connections) > 0:
+                return
+
+            logger.info("Directed reconnect window ended -> bonded-only HID advertising")
+            await start_bonded_only_advertising(device)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.warning("Directed reconnect advertising failed: %s", e)
+        finally:
+            global _reconnect_fallback_task
+            _reconnect_fallback_task = None
+
+    _reconnect_fallback_task = asyncio.create_task(reconnect_sequence())
 
 
 async def gatt_ping(connection: Connection) -> bool:
@@ -337,11 +378,14 @@ async def heartbeat():
             logger.info("HB: connections=%d advertising=%s silent=%ds", n_conn, adv, silent_for)
 
             if n_conn == 0 and adv is False:
-                logger.warning("HB: 0 conn + no adv — start_advertising")
+                logger.warning("HB: 0 conn + no adv — restart reconnect advertising")
                 try:
-                    await start_advertising(_device)
+                    if _last_peer_address is not None:
+                        await start_reconnect_advertising(_device, _last_peer_address)
+                    else:
+                        await start_advertising(_device)
                 except Exception as e:
-                    logger.error("HB start_advertising failed: %s", e)
+                    logger.error("HB advertising restart failed: %s", e)
                 continue
 
             now = time.monotonic()

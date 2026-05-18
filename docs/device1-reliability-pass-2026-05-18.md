@@ -37,6 +37,14 @@ Current status on 2026-05-18:
 - auto-reconnect after some iPhone Bluetooth toggle scenarios is still a known
   issue and must not be treated as solved
 
+Update later on 2026-05-18:
+
+- a live reconnect fix was validated on the running device:
+  - short directed reconnect window first
+  - then bonded-only HID advertising through the controller filter accept list
+- this passed at least one real iPhone Bluetooth off/on cycle without manual
+  re-pairing
+
 ### Phone Reboot
 
 1. leave the device powered on
