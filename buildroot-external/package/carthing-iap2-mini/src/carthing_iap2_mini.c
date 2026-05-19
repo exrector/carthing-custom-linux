@@ -114,6 +114,7 @@
 
 #define LINK_KEY_PATH_DEFAULT "/run/carthing-state/carthing/iap2-link-keys.txt"
 #define LINK_KEY_MAX_ENTRIES 16
+#define IAP2_TEST_NAME_DEFAULT "CarThing iAP2"
 
 #ifndef AF_BLUETOOTH
 #define AF_BLUETOOTH 31
@@ -276,6 +277,37 @@ static int append_be32(uint8_t *buf, size_t cap, size_t *off, uint32_t v) {
     return append_buf(buf, cap, off, tmp, sizeof(tmp));
 }
 
+static void hex_preview_bytes(const uint8_t *buf, size_t len, char *out, size_t out_len) {
+    size_t off = 0;
+    size_t i;
+
+    if (out_len == 0) {
+        return;
+    }
+    out[0] = '\0';
+    for (i = 0; i < len; ++i) {
+        int n;
+        if (off + 3 >= out_len) {
+            break;
+        }
+        n = snprintf(out + off, out_len - off, "%02x", buf[i]);
+        if (n < 0 || (size_t)n >= out_len - off) {
+            break;
+        }
+        off += (size_t)n;
+        if (i + 1 < len) {
+            if (off + 2 >= out_len) {
+                break;
+            }
+            out[off++] = ' ';
+            out[off] = '\0';
+        }
+    }
+    if (i < len && off + 4 < out_len) {
+        snprintf(out + off, out_len - off, " ...");
+    }
+}
+
 static int read_exact_fd(int fd, uint8_t *buf, size_t len) {
     size_t off = 0;
     while (off < len) {
@@ -289,6 +321,26 @@ static int read_exact_fd(int fd, uint8_t *buf, size_t len) {
         }
         off += (size_t)n;
     }
+    return 0;
+}
+
+static int read_exact_count_fd(int fd, uint8_t *buf, size_t len, size_t *read_out) {
+    size_t off = 0;
+
+    while (off < len) {
+        ssize_t n = read(fd, buf + off, len - off);
+        if (n < 0) {
+            if (read_out) *read_out = off;
+            return -1;
+        }
+        if (n == 0) {
+            errno = 0;
+            if (read_out) *read_out = off;
+            return 1;
+        }
+        off += (size_t)n;
+    }
+    if (read_out) *read_out = off;
     return 0;
 }
 
@@ -549,6 +601,40 @@ static int sdp_write_response_fd(int out_fd, uint8_t pdu_id, uint16_t txn_id,
 static int sdp_write_error_fd(int out_fd, uint16_t txn_id, uint16_t err_code) {
     uint8_t params[2] = { (uint8_t)(err_code >> 8), (uint8_t)(err_code & 0xff) };
     return sdp_write_response_fd(out_fd, SDP_PDU_ERROR_RESPONSE, txn_id, params, sizeof(params));
+}
+
+static const char *iap2_local_name(void) {
+    const char *name = getenv("CARTHING_IAP2_LOCAL_NAME");
+
+    if (name && *name) {
+        return name;
+    }
+    name = getenv("CARTHING_IAP2_EIR_NAME");
+    if (name && *name) {
+        return name;
+    }
+    return IAP2_TEST_NAME_DEFAULT;
+}
+
+static const char *sdp_pdu_name(uint8_t pdu_id) {
+    switch (pdu_id) {
+    case SDP_PDU_ERROR_RESPONSE:
+        return "ERROR_RESPONSE";
+    case SDP_PDU_SERVICE_SEARCH_REQUEST:
+        return "SERVICE_SEARCH_REQUEST";
+    case SDP_PDU_SERVICE_SEARCH_RESPONSE:
+        return "SERVICE_SEARCH_RESPONSE";
+    case SDP_PDU_SERVICE_ATTRIBUTE_REQUEST:
+        return "SERVICE_ATTRIBUTE_REQUEST";
+    case SDP_PDU_SERVICE_ATTRIBUTE_RESPONSE:
+        return "SERVICE_ATTRIBUTE_RESPONSE";
+    case SDP_PDU_SERVICE_SEARCH_ATTR_REQUEST:
+        return "SERVICE_SEARCH_ATTR_REQUEST";
+    case SDP_PDU_SERVICE_SEARCH_ATTR_RESP:
+        return "SERVICE_SEARCH_ATTR_RESPONSE";
+    default:
+        return "UNKNOWN";
+    }
 }
 
 static int sdp_handle_request_fd(int out_fd, uint8_t pdu_id,
@@ -2789,10 +2875,19 @@ static int serve_l2cap_once(uint16_t psm) {
             uint8_t params[1024];
             uint16_t txn_id;
             uint16_t param_len;
+            char preview[193];
+            size_t got = 0;
             int rr;
 
-            rr = read_exact_fd(conn_fd, hdr, sizeof(hdr));
+            rr = read_exact_count_fd(conn_fd, hdr, sizeof(hdr), &got);
             if (rr == 1) {
+                if (got > 0) {
+                    hex_preview_bytes(hdr, got, preview, sizeof(preview));
+                    fprintf(stderr,
+                            "[iap2-mini] SDP eof reading header got=%zu/%zu preview=%s\n",
+                            got, sizeof(hdr), preview);
+                    rc = 1;
+                }
                 break;
             }
             if (rr < 0) {
@@ -2802,22 +2897,43 @@ static int serve_l2cap_once(uint16_t psm) {
             }
             txn_id = (uint16_t)((hdr[1] << 8) | hdr[2]);
             param_len = (uint16_t)((hdr[3] << 8) | hdr[4]);
+            fprintf(stderr,
+                    "[iap2-mini] SDP rx hdr pdu=0x%02x(%s) txn=0x%04x param_len=%u\n",
+                    hdr[0], sdp_pdu_name(hdr[0]), txn_id, param_len);
             if (param_len > sizeof(params)) {
+                fprintf(stderr,
+                        "[iap2-mini] SDP param_len too large=%u cap=%zu\n",
+                        param_len, sizeof(params));
                 sdp_write_error_fd(conn_fd, txn_id, SDP_ERR_INVALID_PDU_SIZE);
                 rc = 1;
                 break;
             }
-            rr = read_exact_fd(conn_fd, params, param_len);
+            rr = read_exact_count_fd(conn_fd, params, param_len, &got);
             if (rr != 0) {
-                perror("read SDP params");
+                if (got > 0) {
+                    hex_preview_bytes(params, got < 48 ? got : 48, preview, sizeof(preview));
+                } else {
+                    preview[0] = '\0';
+                }
+                fprintf(stderr,
+                        "[iap2-mini] SDP read params incomplete rr=%d got=%zu/%u preview=%s\n",
+                        rr, got, param_len, got > 0 ? preview : "<none>");
+                if (rr < 0) {
+                    perror("read SDP params");
+                }
                 rc = 1;
                 break;
             }
+            hex_preview_bytes(params, param_len < 48 ? param_len : 48, preview, sizeof(preview));
+            fprintf(stderr, "[iap2-mini] SDP rx params len=%u preview=%s\n",
+                    param_len, param_len > 0 ? preview : "<empty>");
             if (sdp_handle_request_fd(conn_fd, hdr[0], txn_id, params, param_len) < 0) {
                 perror("write SDP response");
                 rc = 1;
                 break;
             }
+            fprintf(stderr, "[iap2-mini] SDP tx ok pdu=0x%02x(%s) txn=0x%04x\n",
+                    hdr[0], sdp_pdu_name(hdr[0]), txn_id);
         }
         close(conn_fd);
         return rc;
@@ -3146,15 +3262,11 @@ static int loop_sdp_messages(void) {
 static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable,
                                 uint32_t class_of_dev) {
     static const uint8_t classic_event_mask[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f };
-    const char *eir_name = getenv("CARTHING_IAP2_EIR_NAME");
+    const char *eir_name = iap2_local_name();
     pid_t sdp_pid;
     pid_t rf_pid;
     pid_t ssp_pid;
     int status;
-
-    if (!eir_name || !*eir_name) {
-        eir_name = "CarThing";
-    }
 
     if (hci_dev_up(hci_dev) != 0) {
         return 1;
@@ -3215,8 +3327,8 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     }
 
     fprintf(stderr,
-            "[iap2-mini] transport daemon up: class=0x%06x scan=0x%02x ssp=on sdp_psm=0x%04x rfcomm_ch=%d\n",
-            class_of_dev & 0xffffffu, scan_enable, psm, channel);
+            "[iap2-mini] transport daemon up: name=%s class=0x%06x scan=0x%02x ssp=on sdp_psm=0x%04x rfcomm_ch=%d\n",
+            eir_name, class_of_dev & 0xffffffu, scan_enable, psm, channel);
 
     if (wait(&status) > 0) {
         kill(ssp_pid, SIGTERM);
@@ -3232,15 +3344,11 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
 static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, uint8_t scan_enable,
                                         uint32_t class_of_dev, const char *peer_addr) {
     static const uint8_t classic_event_mask[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x3f };
-    const char *eir_name = getenv("CARTHING_IAP2_EIR_NAME");
+    const char *eir_name = iap2_local_name();
     pid_t sdp_pid;
     pid_t rf_pid;
     pid_t ssp_pid;
     int rc;
-
-    if (!eir_name || !*eir_name) {
-        eir_name = "CarThing";
-    }
 
     if (hci_dev_up(hci_dev) != 0) {
         return 1;
@@ -3301,8 +3409,8 @@ static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, 
     }
 
     fprintf(stderr,
-            "[iap2-mini] transport-active up: class=0x%06x scan=0x%02x ssp=on sdp_psm=0x%04x rfcomm_ch=%d peer=%s\n",
-            class_of_dev & 0xffffffu, scan_enable, psm, channel, peer_addr);
+            "[iap2-mini] transport-active up: name=%s class=0x%06x scan=0x%02x ssp=on sdp_psm=0x%04x rfcomm_ch=%d peer=%s\n",
+            eir_name, class_of_dev & 0xffffffu, scan_enable, psm, channel, peer_addr);
     sleep(1);
     rc = run_cafe_connect(hci_dev, peer_addr);
 
@@ -3345,6 +3453,7 @@ static void usage(FILE *out) {
         "  CARTHING_IAP2_RFCOMM_CHANNEL=3\n"
         "  CARTHING_IAP2_L2CAP_PSM=0x0001\n"
         "  CARTHING_IAP2_HCI_DEV=0\n"
+        "  CARTHING_IAP2_LOCAL_NAME='CarThing iAP2'\n"
         "  CARTHING_IAP2_CLASS_OF_DEVICE=0x240420\n"
         "  CARTHING_IAP2_SKIP_ACL_CREATE=1\n");
 }
