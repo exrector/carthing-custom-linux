@@ -1131,3 +1131,23 @@ This is a major narrowing step:
 
 In other words, the next step is no longer "make the transport exist" but
 "understand why classic auth ends with status `0x05` and a refused attach".
+
+## 2026-05-19: classic test identity normalized to avoid duplicate trusted devices on iPhone
+
+One practical side effect of the early classic experiments was that the clean-room
+daemon exposed itself as `Car Thing-0346` while the normal BLE/HID runtime stayed
+visible as `CarThing`.
+
+That created an unwanted user-facing split on iPhone:
+
+- `CarThing`
+- `Car Thing-0346`
+
+To stop polluting the trusted-device list, the clean-room classic path now uses
+the same visible name as the working BLE/HID runtime:
+
+- default classic local name: `CarThing`
+- default classic EIR name: `CarThing`
+
+So future integrated classic tests should no longer create an obviously separate
+human-facing Bluetooth identity just because the transport path is different.

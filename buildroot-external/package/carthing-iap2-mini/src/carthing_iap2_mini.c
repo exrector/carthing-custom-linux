@@ -3153,10 +3153,13 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     int status;
 
     if (!eir_name || !*eir_name) {
-        eir_name = "Car Thing-0346";
+        eir_name = "CarThing";
     }
 
     if (hci_dev_up(hci_dev) != 0) {
+        return 1;
+    }
+    if (hci_write_local_name(hci_dev, eir_name) != 0) {
         return 1;
     }
     if (hci_write_class_of_dev(hci_dev, class_of_dev) != 0) {
@@ -3236,10 +3239,13 @@ static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, 
     int rc;
 
     if (!eir_name || !*eir_name) {
-        eir_name = "Car Thing-0346";
+        eir_name = "CarThing";
     }
 
     if (hci_dev_up(hci_dev) != 0) {
+        return 1;
+    }
+    if (hci_write_local_name(hci_dev, eir_name) != 0) {
         return 1;
     }
     if (hci_write_class_of_dev(hci_dev, class_of_dev) != 0) {
