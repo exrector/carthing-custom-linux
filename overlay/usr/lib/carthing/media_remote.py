@@ -59,6 +59,7 @@ REPORT_REFERENCE_UUID = UUID.from_16_bits(0x2908)
 
 HID_REPORT_MAP = bytes(
     [
+        # Collection 1 — Consumer Control (Report ID 1)
         0x05, 0x0C,
         0x09, 0x01,
         0xA1, 0x01,
@@ -76,9 +77,35 @@ HID_REPORT_MAP = bytes(
         0x95, 0x03,
         0x81, 0x03,
         0xC0,
+        # Collection 2 — Keyboard (Report ID 2): 8 modifier bits + reserved + 6 keys
+        0x05, 0x01,
+        0x09, 0x06,
+        0xA1, 0x01,
+        0x85, 0x02,
+        0x05, 0x07,
+        0x19, 0xE0,
+        0x29, 0xE7,
+        0x15, 0x00,
+        0x25, 0x01,
+        0x75, 0x01,
+        0x95, 0x08,
+        0x81, 0x02,
+        0x95, 0x01,
+        0x75, 0x08,
+        0x81, 0x01,
+        0x95, 0x06,
+        0x75, 0x08,
+        0x15, 0x00,
+        0x25, 0x65,
+        0x05, 0x07,
+        0x19, 0x00,
+        0x29, 0x65,
+        0x81, 0x00,
+        0xC0,
     ]
 )
 HID_INFORMATION = struct.pack("<HBB", 0x0111, 0x00, 0x03)
+KEYBOARD_REPORT_ID = 0x02
 
 
 def install_hid_pairing_profile(device: Device):
@@ -90,6 +117,16 @@ def install_hid_pairing_profile(device: Device):
         descriptors=[
             Descriptor(CCCD_UUID, Descriptor.READABLE | Descriptor.WRITEABLE, bytes([0x00, 0x00])),
             Descriptor(REPORT_REFERENCE_UUID, Descriptor.READABLE, bytes([0x01, 0x01])),
+        ],
+    )
+    kbd_report_char = Characteristic(
+        REPORT_UUID,
+        Characteristic.READ | Characteristic.NOTIFY,
+        Characteristic.READABLE,
+        bytes([0, 0, 0, 0, 0, 0, 0, 0]),
+        descriptors=[
+            Descriptor(CCCD_UUID, Descriptor.READABLE | Descriptor.WRITEABLE, bytes([0x00, 0x00])),
+            Descriptor(REPORT_REFERENCE_UUID, Descriptor.READABLE, bytes([KEYBOARD_REPORT_ID, 0x01])),
         ],
     )
 
@@ -135,6 +172,7 @@ def install_hid_pairing_profile(device: Device):
                     bytes([0x01]),
                 ),
                 report_char,
+                kbd_report_char,
                 Characteristic(
                     HID_CONTROL_POINT_UUID,
                     Characteristic.WRITE_WITHOUT_RESPONSE,
@@ -144,7 +182,8 @@ def install_hid_pairing_profile(device: Device):
             ],
         )
     )
-    logger.info("HID pairing profile installed")
+    device.kbd_report_char = kbd_report_char
+    logger.info("HID pairing profile installed (consumer + keyboard collections)")
 
 
 def on_state_update(s: MediaState):
