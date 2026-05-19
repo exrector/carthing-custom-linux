@@ -15,6 +15,7 @@ from bumble.smp import PairingConfig
 
 from ams_client import AMSClient, MediaState
 from ancs_client import ANCSClient, Notification
+from cts_client import CTSClient, CurrentTime
 from ble_transport import init_ble
 from drm_display import DRMDisplay
 from input_handler import start as start_input
@@ -32,12 +33,14 @@ logger = logging.getLogger(__name__)
 state = MediaState()
 ams: AMSClient | None = None
 ancs: ANCSClient | None = None
+cts: CTSClient | None = None
 ui: NowPlayingUI | None = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
 _ams_starting: set[int] = set()
 _ancs_starting: set[int] = set()
+_cts_starting: set[int] = set()
 _preferred_mtu = 247
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
@@ -218,6 +221,7 @@ async def negotiate_mtu(connection: Connection):
 async def start_clients(connection: Connection, reason: str):
     await maybe_start_ams(connection, reason)
     await maybe_start_ancs(connection, reason)
+    await maybe_start_cts(connection, reason)
 
 
 async def maybe_start_ams(connection: Connection, reason: str):
@@ -286,11 +290,41 @@ def on_notification_removed(uid: int):
     logger.info("📨 cleared #%d", uid)
 
 
+async def maybe_start_cts(connection: Connection, reason: str):
+    global cts
+    if not connection.is_encrypted:
+        return
+    if cts is not None:
+        return
+    if connection.handle in _cts_starting:
+        return
+
+    _cts_starting.add(connection.handle)
+    try:
+        logger.info("CTS setup start: handle=%d reason=%s", connection.handle, reason)
+        candidate = CTSClient(on_update=on_time_update)
+        ok = await candidate.setup(connection)
+        if ok:
+            cts = candidate
+            logger.info("CTS готов")
+        else:
+            logger.warning("CTS не найден на этом устройстве")
+    except Exception as exc:
+        logger.exception("CTS setup error: %s", exc)
+    finally:
+        _cts_starting.discard(connection.handle)
+
+
+def on_time_update(current: CurrentTime):
+    logger.info("🕒 %s", current)
+
+
 async def on_disconnection(connection: Connection, reason: int):
-    global ams, ancs, _active_conn
+    global ams, ancs, cts, _active_conn
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
     ams = None
     ancs = None
+    cts = None
     _active_conn = None
     try:
         await asyncio.sleep(0.3)
