@@ -147,10 +147,38 @@ in_voltage0..in_voltage7  raw and mean
 in_voltage_scale: 439.453125  (mV per raw unit, scaled)
 ```
 
-Channel-to-signal mapping is **not** in this probe; resolving requires
-reading the device tree (`/sys/firmware/devicetree/base/...`). Typical
-candidates on Amlogic platforms: NTC thermistor, battery monitor pin,
-boot mode strap.
+Device tree node `/sys/firmware/devicetree/base/saradc`:
+- compatible: `amlogic,meson-g12a-saradc`
+- reg: `0xff809000`, length `0x48`
+- status: okay
+- phandle: `0x44`
+
+### Channel assignments (from DT `io-channels` refs)
+
+Searched all DT nodes for `io-channels` pointing at phandle `0x44`:
+
+| ADC ch | Client DT node             | Client driver           |
+|--------|---------------------------|-------------------------|
+| 0      | `thermal-sensor@0`        | `generic-adc-thermal`   |
+| 1      | *(no client)*             | unbound                 |
+| 2      | `thermal-sensor@2`        | `generic-adc-thermal`   |
+| 3      | `thermal-sensor@3`        | `generic-adc-thermal`   |
+| 4      | *(no client)*             | unbound                 |
+| 5      | *(no client)*             | unbound                 |
+| 6      | *(no client)*             | unbound                 |
+| 7      | *(no client)*             | unbound                 |
+
+Three of the five thermal zones reported by the kernel (`soc_thermal`,
+`ddr_thermal`, `dram_thermal`) are SoC-internal sensors and do **not**
+route through the SAR ADC. The other two zones (`bluetooth_thermal`,
+`pcb_thermal`) plus one more come from these three `generic-adc-thermal`
+nodes via channels 0/2/3 — the specific mapping (which thermal-sensor
+is which physical NTC) requires reading the `thermal-zones` DT section,
+which is not captured here.
+
+Channels 1, 4, 5, 6, 7 have **no DT-declared client** in this firmware.
+Their raw values are still readable from `iio:device1` but the
+electrical signal on each pin is not documented in this probe.
 
 ## LEDs
 
