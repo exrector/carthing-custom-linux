@@ -43,10 +43,49 @@ unused.
 
 ## /dev/input/event3 — `tlsc6x_dbg`
 
-Touchscreen controller (TouchLink SC6x). Reports `BTN_TOUCH` (330) plus
-absolute-axis events (`EV_ABS`) for X/Y/pressure/slot — not captured in
-this initial probe. Use a follow-up scan with EV_ABS support to
-characterise the panel (resolution, multitouch slots).
+Touchscreen controller (TouchLink TLSC6x). Multi-Touch Protocol B.
+
+### Supported axes (from EVIOCGABS)
+
+| Axis                 | range   | notes |
+| -------------------- | ------- | ----- |
+| `ABS_MT_SLOT`        | 0..1    | **max 2 simultaneous contacts** (hardware limit) |
+| `ABS_MT_POSITION_X`  | 0..480  | matches display width 1:1 |
+| `ABS_MT_POSITION_Y`  | 0..800  | matches display height 1:1 |
+| `ABS_MT_PRESSURE`    | 0..127  | **always reports 13** — driver constant, do not use |
+| `ABS_MT_TOUCH_MAJOR` | 0..15   | contact patch size |
+| `ABS_MT_TRACKING_ID` | 0..65535 | unique id per contact, `-1` on lift |
+
+`BTN_TOUCH` is emitted on first contact down / last contact up.
+
+Coordinate frame is in raw display orientation (480×800 portrait).
+Userspace that renders landscape (800×480 rotated 90° before blit) must
+apply the inverse mapping: `landscape_x = panel_y`, `landscape_y = panel_max_x - panel_x`.
+
+### Captured behaviour — 2026-05-19
+
+| Gesture           | Duration | Sampling | Notes |
+| ----------------- | -------- | -------- | ----- |
+| Single tap        | ~55 ms   | DOWN + 1 snapshot + UP | new tracking id each tap |
+| Double tap        | 35 + 35 ms, ~220 ms gap | as above ×2 | adjacent tracking ids |
+| Long press        | 2438 ms  | DOWN + 1 snapshot + UP — **no intermediate samples while finger stays still** | implement long-press as a wall-clock timer from DOWN |
+| Two-finger tap    | 330 ms   | both slots active concurrently with different tracking ids | second finger arrives 13 ms after first |
+| Vertical swipe    | ~1.0 s   | ~12 ms between snapshots → **~83 Hz** | smooth, ±1 px noise |
+| Horizontal swipe  | ~1.0 s   | same cadence | smooth |
+| Pinch (open)      | ~1.5 s   | both slots track independently, diverging | works as expected |
+
+### Implementation notes
+
+- **Pressure is useless** — driver hardcodes 13. Don't gate gestures on
+  pressure thresholds.
+- **No move events on hold** — a stationary finger generates one
+  `SYN_REPORT` at touch-down and then silence until lift. Long-press
+  detection must use a timer scheduled at DOWN, cancelled on UP or on
+  any movement larger than ~10 px.
+- **Sampling rate ~83 Hz** during motion. Adequate for swipe/pinch UI;
+  do not expect higher.
+- **2 contacts is the hardware ceiling.** Three-finger gestures will
+  not register at all — the driver discards the third contact.
 
 ---
 
