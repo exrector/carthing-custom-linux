@@ -14,6 +14,7 @@ from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
 from ams_client import AMSClient, MediaState
+from ancs_client import ANCSClient, Notification
 from ble_transport import init_ble
 from drm_display import DRMDisplay
 from input_handler import start as start_input
@@ -30,11 +31,14 @@ logger = logging.getLogger(__name__)
 
 state = MediaState()
 ams: AMSClient | None = None
+ancs: ANCSClient | None = None
 ui: NowPlayingUI | None = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
 _ams_starting: set[int] = set()
+_ancs_starting: set[int] = set()
+_preferred_mtu = 247
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
 BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
@@ -173,8 +177,10 @@ async def on_connection(connection: Connection):
     connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
     connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
 
+    asyncio.create_task(negotiate_mtu(connection))
+
     if connection.is_encrypted:
-        await maybe_start_ams(connection, "connected-encrypted")
+        await start_clients(connection, "connected-encrypted")
     else:
         logger.info("Requesting pairing for handle=%d", connection.handle)
         connection.request_pairing()
@@ -183,7 +189,7 @@ async def on_connection(connection: Connection):
 def on_pairing(connection: Connection, keys):
     logger.info("SMP: bonding complete handle=%d keys=%s", connection.handle, keys)
     if connection.is_encrypted:
-        asyncio.create_task(maybe_start_ams(connection, "pairing-complete"))
+        asyncio.create_task(start_clients(connection, "pairing-complete"))
 
 
 def on_connection_encryption_change(connection: Connection):
@@ -193,7 +199,25 @@ def on_connection_encryption_change(connection: Connection):
         connection.is_encrypted,
     )
     if connection.is_encrypted:
-        asyncio.create_task(maybe_start_ams(connection, "link-encrypted"))
+        asyncio.create_task(start_clients(connection, "link-encrypted"))
+
+
+async def negotiate_mtu(connection: Connection):
+    try:
+        client = connection.gatt_client
+        if client is None:
+            from bumble.gatt_client import Client
+            client = Client(connection)
+            connection.gatt_client = client
+        result = await client.request_mtu(_preferred_mtu)
+        logger.info("MTU negotiated handle=%d mtu=%s", connection.handle, result)
+    except Exception as exc:
+        logger.warning("MTU negotiation failed handle=%d: %s", connection.handle, exc)
+
+
+async def start_clients(connection: Connection, reason: str):
+    await maybe_start_ams(connection, reason)
+    await maybe_start_ancs(connection, reason)
 
 
 async def maybe_start_ams(connection: Connection, reason: str):
@@ -221,10 +245,52 @@ async def maybe_start_ams(connection: Connection, reason: str):
         _ams_starting.discard(connection.handle)
 
 
+async def maybe_start_ancs(connection: Connection, reason: str):
+    global ancs
+    if not connection.is_encrypted:
+        return
+    if ancs is not None:
+        return
+    if connection.handle in _ancs_starting:
+        return
+
+    _ancs_starting.add(connection.handle)
+    try:
+        logger.info("ANCS setup start: handle=%d reason=%s", connection.handle, reason)
+        candidate = ANCSClient(
+            on_event=on_notification_event,
+            on_fetched=on_notification_fetched,
+            on_removed=on_notification_removed,
+        )
+        ok = await candidate.setup(connection)
+        if ok:
+            ancs = candidate
+            logger.info("ANCS готов — жду уведомления")
+        else:
+            logger.warning("ANCS не найден на этом устройстве")
+    except Exception as exc:
+        logger.exception("ANCS setup error: %s", exc)
+    finally:
+        _ancs_starting.discard(connection.handle)
+
+
+def on_notification_event(notif: Notification):
+    logger.info("📨 preview: %s", notif)
+
+
+def on_notification_fetched(notif: Notification):
+    logger.info("📨 %s/%s — %s: %s", notif.app_id, notif.category, notif.title, notif.message)
+
+
+def on_notification_removed(uid: int):
+    logger.info("📨 cleared #%d", uid)
+
+
 async def on_disconnection(connection: Connection, reason: int):
-    global ams, _active_conn
+    global ams, ancs, _active_conn
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
     ams = None
+    ancs = None
     _active_conn = None
     try:
         await asyncio.sleep(0.3)
