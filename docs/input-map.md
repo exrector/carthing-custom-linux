@@ -58,10 +58,6 @@ Touchscreen controller (TouchLink TLSC6x). Multi-Touch Protocol B.
 
 `BTN_TOUCH` is emitted on first contact down / last contact up.
 
-Coordinate frame is in raw display orientation (480×800 portrait).
-Userspace that renders landscape (800×480 rotated 90° before blit) must
-apply the inverse mapping: `landscape_x = panel_y`, `landscape_y = panel_max_x - panel_x`.
-
 ### Captured behaviour — 2026-05-19
 
 | Gesture           | Duration | Sampling | Notes |
@@ -74,18 +70,13 @@ apply the inverse mapping: `landscape_x = panel_y`, `landscape_y = panel_max_x -
 | Horizontal swipe  | ~1.0 s   | same cadence | smooth |
 | Pinch (open)      | ~1.5 s   | both slots track independently, diverging | works as expected |
 
-### Implementation notes
+### Observed driver behaviour
 
-- **Pressure is useless** — driver hardcodes 13. Don't gate gestures on
-  pressure thresholds.
-- **No move events on hold** — a stationary finger generates one
-  `SYN_REPORT` at touch-down and then silence until lift. Long-press
-  detection must use a timer scheduled at DOWN, cancelled on UP or on
-  any movement larger than ~10 px.
-- **Sampling rate ~83 Hz** during motion. Adequate for swipe/pinch UI;
-  do not expect higher.
-- **2 contacts is the hardware ceiling.** Three-finger gestures will
-  not register at all — the driver discards the third contact.
+- `ABS_MT_PRESSURE` reports the constant value 13 in every sample.
+- A stationary finger emits one `SYN_REPORT` at touch-down and nothing
+  more until lift.
+- Coordinates are emitted in panel orientation (480 wide × 800 tall),
+  matching `ABS_MT_POSITION_X`/`Y` ranges.
 
 ---
 
