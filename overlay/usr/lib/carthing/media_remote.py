@@ -336,10 +336,32 @@ async def maybe_start_ancs(connection: Connection, reason: str):
 
 def on_notification_event(notif: Notification):
     logger.info("📨 preview: %s", notif)
+    if ui is not None and not notif.silent:
+        try:
+            ui.show_notification(
+                category=notif.category,
+                app_id=notif.app_id,
+                title=notif.title or notif.category,
+                message=notif.message or notif.subtitle or "",
+            )
+            ui.render()
+        except Exception as exc:
+            logger.warning("UI preview render failed: %s", exc)
 
 
 def on_notification_fetched(notif: Notification):
     logger.info("📨 %s/%s — %s: %s", notif.app_id, notif.category, notif.title, notif.message)
+    if ui is not None and not notif.silent:
+        try:
+            ui.show_notification(
+                category=notif.category,
+                app_id=notif.app_id,
+                title=notif.title or notif.category,
+                message=notif.message or notif.subtitle or "",
+            )
+            ui.render()
+        except Exception as exc:
+            logger.warning("UI detail render failed: %s", exc)
 
 
 def on_notification_removed(uid: int):
@@ -373,6 +395,29 @@ async def maybe_start_cts(connection: Connection, reason: str):
 
 def on_time_update(current: CurrentTime):
     logger.info("🕒 %s", current)
+    if ui is not None:
+        try:
+            ui.set_clock(f"{current.hour:02d}:{current.minute:02d}")
+            ui.render()
+        except Exception as exc:
+            logger.warning("UI clock update failed: %s", exc)
+
+
+async def clock_tick_loop():
+    """Refresh the clock + age out notifications once a second."""
+    while True:
+        await asyncio.sleep(1.0)
+        if ui is None:
+            continue
+        try:
+            import datetime
+            now = datetime.datetime.now()
+            ui.set_clock(f"{now.hour:02d}:{now.minute:02d}")
+            needs_repaint = ui.tick()
+            if needs_repaint:
+                ui.render()
+        except Exception as exc:
+            logger.warning("clock tick error: %s", exc)
 
 
 async def on_disconnection(connection: Connection, reason: int):
@@ -494,6 +539,7 @@ async def main():
     logger.info("Car Thing Media Remote запущен.")
 
     asyncio.create_task(heartbeat())
+    asyncio.create_task(clock_tick_loop())
 
     loop = asyncio.get_event_loop()
 
