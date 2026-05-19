@@ -15,6 +15,7 @@ from bumble.smp import PairingConfig
 
 from ams_client import AMSClient, MediaState
 from ancs_client import ANCSClient, Notification
+from carthing_link import CarThingLink
 from cts_client import CTSClient, CurrentTime
 from ble_transport import init_ble
 from drm_display import DRMDisplay
@@ -183,7 +184,23 @@ def install_hid_pairing_profile(device: Device):
         )
     )
     device.kbd_report_char = kbd_report_char
-    logger.info("HID pairing profile installed (consumer + keyboard collections)")
+
+    link = CarThingLink()
+    link.install(device)
+    link.add_listener(_link_default_handler)
+    device.carthing_link = link
+
+    logger.info("HID pairing profile installed (consumer + keyboard collections + link)")
+
+
+async def _link_default_handler(payload: bytes):
+    """Minimal built-in handler so the link is observable from day one."""
+    text = payload.decode("utf-8", errors="replace").strip()
+    if text in ("ping", '{"cmd":"ping"}'):
+        return b'{"reply":"pong"}'
+    if text == "state":
+        return f'{{"reply":"state","title":"{state.title}","artist":"{state.artist}"}}'.encode("utf-8")
+    return None
 
 
 def on_state_update(s: MediaState):
