@@ -1794,3 +1794,62 @@ Meaning:
    custom service.
 3. The next rational frontier is to probe classic Bluetooth profile / SDP space
    instead of continuing to guess at generic BLE alert services.
+
+## 2026-05-20: external Apple evidence now supports the negative Clock timer/alarm result
+
+After the BLE-adjacent probe, an external source pass was added so the current
+negative timer/alarm result would not rely only on our own device logs.
+
+Relevant Apple-side evidence:
+
+- The archived ANCS specification still describes a generic path for iOS
+  notifications:
+  - add / modify / remove events on `Notification Source`
+  - optional attribute fetches on `Data Source`
+  - category-based classification
+- But the same specification also states that:
+  - ANCS is not guaranteed to always be present
+  - it is not a complete synchronization service
+  - it only reflects iOS notifications that the system actually exposes in the
+    current session
+
+- A fresh Apple Developer Forums thread (`787123`) is especially relevant to our
+  exact frontier:
+  - the developer reports that ANCS delivery of system Clock alarm notifications
+    worked through iPhone 13, but stopped on iPhone 14+ while still on iOS 18.x
+  - the reported app identity is `com.apple.mobiletimer`
+  - Apple DTS does not point to a documented replacement path; instead it asks
+    for a bug report, Bluetooth logs, and a double-check that the notification
+    is not arriving under a different category
+
+- Apple’s current modern forwarding stack points somewhere else entirely:
+  - `Accessory Notifications` is a new framework for forwarded iOS
+    notifications on accessories
+  - `Accessory Live Activities` layers Live Activity forwarding on top of that
+  - both depend on an iPhone-side extension model and companion-app style
+    transport/security plumbing
+  - `Accessory Notifications` is currently documented as iPhone-only, companion
+    app driven, introduced in iOS 26.5, and limited for customer use to EU
+    devices/accounts at this stage
+
+- Apple’s `ActivityKit` documentation still describes Live Activities as an
+  app-owned surface shown on:
+  - Lock Screen
+  - Dynamic Island
+  - CarPlay
+  - a paired Mac or Apple Watch
+  It does not describe a generic no-app accessory path for the built-in Clock
+  app.
+
+Practical meaning for this project:
+
+1. Our negative autonomous result for system timer/alarm is now externally
+   plausible, not just locally suspicious.
+2. The missing Clock signal on the current CarThing path may be an Apple
+   platform behavior change on newer iPhones, not merely a bug in our BLE code.
+3. For a strict no-companion-app architecture, standard Clock timer/alarm
+   mirroring should no longer be treated as a dependable Apple-supported target.
+4. Apple Watch almost certainly reaches those alerts through a different Apple
+   stack than the public autonomous ANCS path available to this project.
+5. No Apple-documented accessory forwarding path was found for Stopwatch state
+   as a first-class mirrored object.
