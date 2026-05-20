@@ -9,7 +9,7 @@ from runtime_paths import ensure_runtime_paths
 ensure_runtime_paths()
 
 from bumble.core import UUID
-from bumble.device import AdvertisingData, Connection, Device, OwnAddressType
+from bumble.device import AdvertisingData, AdvertisingType, Connection, Device, OwnAddressType
 from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
@@ -34,18 +34,13 @@ ui: NowPlayingUI | None = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
+_last_peer_address = None
+_reconnect_fallback_task: asyncio.Task | None = None
 _ams_starting: set[int] = set()
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
 BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
 HID_SERVICE_UUID = UUID.from_16_bits(0x1812)
-
-# Apple Notification Center Service (ANCS) UUID. Advertised as a 128-bit
-# *service solicitation* (not service class) so iOS re-initiates the connection
-# to this bonded accessory after a Bluetooth toggle / out-of-range / reboot.
-# See: Apple Bluetooth Accessory Design Guidelines, "Advertising" — an accessory
-# that solicits ANCS/AMS prompts the iOS Central to connect back to it.
-ANCS_SOLICITATION_UUID = UUID("7905F431-B5CE-4E99-A40F-4B1E122D00D0")
 
 BATTERY_LEVEL_UUID = UUID.from_16_bits(0x2A19)
 HID_INFORMATION_UUID = UUID.from_16_bits(0x2A4A)
@@ -167,8 +162,12 @@ def on_state_update(s: MediaState):
 
 
 async def on_connection(connection: Connection):
-    global _last_activity
+    global _last_activity, _last_peer_address, _reconnect_fallback_task
     _last_activity = time.monotonic()
+    _last_peer_address = connection.peer_address
+    if _reconnect_fallback_task is not None:
+        _reconnect_fallback_task.cancel()
+        _reconnect_fallback_task = None
     logger.info(
         "iPhone подключился: %s handle=%d encrypted=%s",
         connection.peer_address,
@@ -179,6 +178,7 @@ async def on_connection(connection: Connection):
     connection.on("pairing", lambda keys: on_pairing(connection, keys))
     connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
     connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
+    connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
 
     if connection.is_encrypted:
         await maybe_start_ams(connection, "connected-encrypted")
@@ -189,6 +189,8 @@ async def on_connection(connection: Connection):
 
 def on_pairing(connection: Connection, keys):
     logger.info("SMP: bonding complete handle=%d keys=%s", connection.handle, keys)
+    if _device:
+        asyncio.create_task(refresh_accept_list(_device))
     if connection.is_encrypted:
         asyncio.create_task(maybe_start_ams(connection, "pairing-complete"))
 
@@ -233,10 +235,6 @@ async def on_disconnection(connection: Connection, reason: int):
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
     ams = None
     _active_conn = None
-    # Disconnect placeholder: without this the DRM display keeps the last
-    # rendered track frozen on screen even though BLE is gone and no more AMS
-    # updates arrive (ui.render is only driven by on_state_update). Mutate the
-    # shared MediaState to the placeholder and repaint once.
     state.title = "Lost Contact"
     state.artist = "Awaiting Deep Space Relay"
     state.album = ""
@@ -250,39 +248,17 @@ async def on_disconnection(connection: Connection, reason: int):
             logger.error("UI disconnect render error: %s", e)
     try:
         await asyncio.sleep(0.3)
-        if _device and not _device.is_advertising:
-            logger.info("Re-advertising после disconnect")
-            await start_advertising(_device)
+        if _device:
+            await start_reconnect_advertising(_device, connection.peer_address)
     except Exception as e:
         logger.error("Re-advertise error: %s", e)
 
 
 async def start_advertising(device: Device):
-    # 31-byte advertising PDU budget forces a split between the primary
-    # advertising data and the scan response:
-    #
-    #   adv data       = FLAGS (3) + 128-bit ANCS solicitation (18) = 21 bytes
-    #   scan response  = APPEARANCE (4) + HID 16-bit UUID (4) + name (10) = 18 bytes
-    #
-    # The ANCS solicitation MUST live in the primary adv data (not the scan
-    # response) because iOS acts on solicitation seen during passive scan to
-    # decide whether to connect back. A 128-bit solicitation alone (18B) plus
-    # FLAGS (3B) does not leave room for the name/appearance/HID UUID, hence the
-    # split. bytes(UUID) yields the little-endian (Bluetooth byte order) form.
     device.advertising_data = bytes(
         AdvertisingData(
             [
                 (AdvertisingData.FLAGS, bytes([0x06])),
-                (
-                    AdvertisingData.LIST_OF_128_BIT_SERVICE_SOLICITATION_UUIDS,
-                    bytes(ANCS_SOLICITATION_UUID),
-                ),
-            ]
-        )
-    )
-    device.scan_response_data = bytes(
-        AdvertisingData(
-            [
                 (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
                 (
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
@@ -296,7 +272,70 @@ async def start_advertising(device: Device):
         own_address_type=OwnAddressType.PUBLIC,
         auto_restart=True,
     )
-    logger.info("Реклама запущена (adv=FLAGS+ANCS-solicit, scan_rsp=name+HID)")
+    logger.info("Реклама запущена")
+
+
+async def refresh_accept_list(device: Device):
+    try:
+        await device.refresh_filter_accept_list()
+        logger.info("Filter accept list refreshed from bonded keys")
+    except Exception as e:
+        logger.warning("Filter accept list refresh failed: %s", e)
+
+
+async def start_bonded_only_advertising(device: Device):
+    device.advertising_data = bytes(
+        AdvertisingData(
+            [
+                (AdvertisingData.FLAGS, bytes([0x06])),
+                (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
+                (
+                    AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
+                    struct.pack("<H", 0x1812),
+                ),
+                (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+            ]
+        )
+    )
+    await refresh_accept_list(device)
+    await device.start_advertising(
+        own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+        auto_restart=True,
+        advertising_filter_policy=0x03,
+    )
+    logger.info("Bonded-only HID advertising started")
+
+
+async def start_reconnect_advertising(device: Device, target):
+    global _reconnect_fallback_task
+    if _reconnect_fallback_task is not None:
+        _reconnect_fallback_task.cancel()
+        _reconnect_fallback_task = None
+
+    async def reconnect_sequence():
+        try:
+            logger.info("Directed reconnect advertising to bonded peer: %s", target)
+            await device.start_advertising(
+                advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_HIGH_DUTY,
+                target=target,
+                own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                auto_restart=False,
+            )
+            await asyncio.sleep(1.6)
+            if _device and len(_device.connections) > 0:
+                return
+
+            logger.info("Directed reconnect window ended -> bonded-only HID advertising")
+            await start_bonded_only_advertising(device)
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.warning("Directed reconnect advertising failed: %s", e)
+        finally:
+            global _reconnect_fallback_task
+            _reconnect_fallback_task = None
+
+    _reconnect_fallback_task = asyncio.create_task(reconnect_sequence())
 
 
 async def gatt_ping(connection: Connection) -> bool:
@@ -339,11 +378,14 @@ async def heartbeat():
             logger.info("HB: connections=%d advertising=%s silent=%ds", n_conn, adv, silent_for)
 
             if n_conn == 0 and adv is False:
-                logger.warning("HB: 0 conn + no adv — start_advertising")
+                logger.warning("HB: 0 conn + no adv — restart reconnect advertising")
                 try:
-                    await start_advertising(_device)
+                    if _last_peer_address is not None:
+                        await start_reconnect_advertising(_device, _last_peer_address)
+                    else:
+                        await start_advertising(_device)
                 except Exception as e:
-                    logger.error("HB start_advertising failed: %s", e)
+                    logger.error("HB advertising restart failed: %s", e)
                 continue
 
             now = time.monotonic()
@@ -375,8 +417,6 @@ async def main():
     _device = device
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))
-    device.on("disconnection", lambda conn, reason: asyncio.ensure_future(on_disconnection(conn, reason)))
-
     await start_advertising(device)
     logger.info("Car Thing Media Remote запущен.")
 
