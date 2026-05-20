@@ -1912,3 +1912,55 @@ Practical next order after this proof:
 2. PBAP attribute/channel discovery and then a minimal browse attempt.
 3. MAP session bring-up after PBAP.
 4. AVRCP/A2DP only as auxiliary signal paths, not as the main alert frontier.
+
+## 2026-05-20: reusable classic profile probe added to the repo
+
+To stop relying on ad-hoc shell heredocs for every classic test, a new reusable
+probe script now exists in the repo:
+
+- `overlay/usr/lib/carthing/classic_profile_probe.py`
+
+What it does:
+
+- `sdp-sweep`
+  - opens a classic controller transport
+  - connects to a trusted BR/EDR peer
+  - queries the main profile records we care about for the current frontier:
+    - HFP
+    - PBAP
+    - MAP
+    - AVRCP
+    - A2DP
+  - prints SDP attributes plus any RFCOMM channel parsed from the
+    `ProtocolDescriptorList`
+
+- `hfp`
+  - looks up the HFP Audio Gateway service through SDP
+  - opens RFCOMM to the advertised channel
+  - runs the bundled Bumble `HfpProtocol.initialize_service()` handshake
+  - optionally sends extra AT commands and logs returned lines
+
+Why this matters:
+
+1. It turns the classic frontier into a first-class repo artifact, not a memory
+   of one successful shell probe.
+2. It gives future agents one place to extend toward PBAP/MAP after HFP.
+3. It preserves the exact current test strategy in code on the test branch.
+
+Current limitation observed during live validation:
+
+- the new script passes local syntax validation
+- on-device execution currently reaches:
+  - transport open
+  - then stalls/fails during Bumble `device.power_on()` when attempting to take
+    over the controller in the current attached-controller state
+- this means the immediate blocker for reusing the probe live is now the
+  controller handoff path (`serial` vs `hci-socket`, plus attach ownership),
+  not the SDP/HFP probe logic itself
+
+Practical implication:
+
+- the classic test branch now has a reusable HFP/SDP probe artifact
+- the next narrow work item is to make Bumble attach cleanly to the already-live
+  controller state on the target, or to fold the same logic into the existing C
+  toolchain that already manages HCI ownership successfully
