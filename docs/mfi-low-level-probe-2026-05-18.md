@@ -2464,3 +2464,167 @@ Practical consequence:
 - do not pivot the project toward Spotify-specific behavior
 - keep the main research focus on autonomous no-app surfaces and on the exact
   `0x0006/0x0007` boundary that governs what can be advertised safely in `1D01`
+
+## 2026-05-21: the accepted `EA02` shim is extremely narrow
+
+To stop hardcoding one-off message-set variants, the probe was extended with two
+generic environment overrides:
+
+- `CARTHING_IAP2_ID_MSGSET_SENT_IDS`
+- `CARTHING_IAP2_ID_MSGSET_RECV_IDS`
+
+They accept comma-separated 16-bit message IDs and directly populate:
+
+- `0x0006 MessagesSentByAccessory`
+- `0x0007 MessagesReceivedFromDevice`
+
+This made it possible to run a clean acceptance matrix without patching the code
+for every hypothesis.
+
+### Matrix 1: separate sent vs recv sides
+
+All passes used:
+
+- `CARTHING_IAP2_POST_ID_MODE=none`
+- trusted classic link key
+- live MFi auth (`AA00 -> AA02 -> AA05`)
+- normal `1D00 StartIdentification`
+
+#### Case: `0x0006 = { EA02 }`, `0x0007 = empty`
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET_SENT_IDS='0xEA02'`
+- `CARTHING_IAP2_ID_MSGSET_RECV_IDS=''`
+
+Result:
+
+- accepted
+- `[iap2-mini] <- link 1D02 IdentificationAccepted`
+
+This matches the earlier Spotify app-launch proof.
+
+#### Case: `0x0006 = { 40C8, 40C9 }`, `0x0007 = empty`
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET_SENT_IDS='0x40C8,0x40C9'`
+- `CARTHING_IAP2_ID_MSGSET_RECV_IDS=''`
+
+Result:
+
+- rejected
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=8 preview=00 08 00 06 40 c8 40 c9`
+- `[iap2-mini] 1D03 rejected param id=0x0006`
+
+#### Case: `0x0006 = { 6800 }`, `0x0007 = empty`
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET_SENT_IDS='0x6800'`
+- `CARTHING_IAP2_ID_MSGSET_RECV_IDS=''`
+
+Result:
+
+- rejected
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=8 preview=00 04 00 06 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+#### Case: `0x0006 = empty`, `0x0007 = { 4800 }`
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET_SENT_IDS=''`
+- `CARTHING_IAP2_ID_MSGSET_RECV_IDS='0x4800'`
+
+Result:
+
+- rejected
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=6 preview=00 06 00 07 48 00`
+- `[iap2-mini] 1D03 rejected param id=0x0007`
+
+This is the cleanest live proof so far that non-empty `0x0007` is toxic on the
+current path.
+
+#### Case: `0x0006 = empty`, `0x0007 = { EA00, EA01 }`
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET_SENT_IDS=''`
+- `CARTHING_IAP2_ID_MSGSET_RECV_IDS='0xEA00,0xEA01'`
+
+Result:
+
+- rejected
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=8 preview=00 04 00 06 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+### Matrix 2: enrich the accepted `EA02` shim on the sent side
+
+The next question was whether the accepted shim was flexible, or whether it only
+worked as the single bare ID `EA02`.
+
+#### Case: `0x0006 = { EA02, 40C8, 40C9 }`, `0x0007 = empty`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=8 preview=00 08 00 06 40 c8 40 c9`
+- `[iap2-mini] 1D03 rejected param id=0x0006`
+
+#### Case: `0x0006 = { EA02, 6800 }`, `0x0007 = empty`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=8 preview=00 04 00 06 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+#### Case: `0x0006 = { EA02, 40C8, 6800 }`, `0x0007 = empty`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=10 preview=00 06 00 06 40 c8 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+### Meaning
+
+This gives the current boundary much sharper shape:
+
+1. The currently accepted non-empty message-set is **not** "EA-like messages in
+   general".
+2. It is much narrower:
+   - `0x0006 = { EA02 }`
+   - `0x0007 = empty`
+3. `0x0007` remains the strongest live rejection boundary.
+4. `NowPlaying` declarations in `0x0006` are rejected even with `0x0007` empty.
+5. `HID` declarations in `0x0006` are also rejected.
+6. Adding `NowPlaying` or `HID` to the accepted `EA02` shim breaks acceptance
+   again.
+
+So the accepted app-launch path is now best understood as an extremely narrow
+compatibility shim:
+
+- useful for avoiding errors and keeping the protocol path open
+- useful as a user-visible proof that authenticated app launch exists
+- **not** a general license to advertise richer control-session surfaces
+
+Practical consequence:
+
+- keep the bare `EA02` shim available as a protocol-safe placeholder
+- keep `0x0007` empty unless a future live proof shows otherwise
+- do not assume `NowPlaying` or `HID` can be made acceptable just by moving them
+  to the sent side

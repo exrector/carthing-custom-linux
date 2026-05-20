@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <stdint.h>
@@ -2403,6 +2404,55 @@ static const char *app_launch_bundle_id(void) {
     return (v && v[0]) ? v : NULL;
 }
 
+static int parse_message_id_list_env(const char *name, uint8_t *buf, size_t maxlen,
+                                     size_t *out_len, int *was_set) {
+    const char *v = getenv(name);
+    size_t off = 0;
+
+    *out_len = 0;
+    *was_set = 0;
+    if (!v) {
+        return 0;
+    }
+    *was_set = 1;
+
+    while (*v) {
+        char *end = NULL;
+        unsigned long msg_id;
+
+        while (*v && (isspace((unsigned char)*v) || *v == ',' || *v == ';')) {
+            v++;
+        }
+        if (!*v) {
+            break;
+        }
+        errno = 0;
+        msg_id = strtoul(v, &end, 0);
+        if (end == v || errno != 0 || msg_id > 0xfffful) {
+            return -1;
+        }
+        if (off + 2 > maxlen) {
+            errno = ENOSPC;
+            return -1;
+        }
+        buf[off++] = (uint8_t)((msg_id >> 8) & 0xff);
+        buf[off++] = (uint8_t)(msg_id & 0xff);
+        v = end;
+        while (*v && isspace((unsigned char)*v)) {
+            v++;
+        }
+        if (*v == ',' || *v == ';') {
+            v++;
+        } else if (*v != '\0') {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+
+    *out_len = off;
+    return 0;
+}
+
 static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_len) {
     size_t off = 0;
     size_t btc_off = 0;
@@ -2413,11 +2463,29 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
     uint8_t mac[6] = {0};
     uint8_t power = 0x00;
     uint8_t current[2] = {0x00, 0x64};
+    uint8_t sent_ids_custom[64];
+    uint8_t recv_ids_custom[64];
+    size_t sent_ids_custom_len = 0;
+    size_t recv_ids_custom_len = 0;
+    int sent_ids_custom_set = 0;
+    int recv_ids_custom_set = 0;
     enum identification_msgset msgset = identification_msgset();
     const char *protocol = ea_protocol_name();
     const char *bundle_seed = preferred_bundle_seed_identifier();
 
     read_serial(serial, sizeof(serial));
+    if (parse_message_id_list_env("CARTHING_IAP2_ID_MSGSET_SENT_IDS",
+                                  sent_ids_custom, sizeof(sent_ids_custom),
+                                  &sent_ids_custom_len, &sent_ids_custom_set) < 0) {
+        perror("parse CARTHING_IAP2_ID_MSGSET_SENT_IDS");
+        return -1;
+    }
+    if (parse_message_id_list_env("CARTHING_IAP2_ID_MSGSET_RECV_IDS",
+                                  recv_ids_custom, sizeof(recv_ids_custom),
+                                  &recv_ids_custom_len, &recv_ids_custom_set) < 0) {
+        perror("parse CARTHING_IAP2_ID_MSGSET_RECV_IDS");
+        return -1;
+    }
 
     if (append_tlv_cstr(buf, maxlen, &off, 0x0000, "Spotify Car Thing") < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0001, "Car Thing") < 0) return -1;
@@ -2425,51 +2493,60 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
     if (append_tlv_cstr(buf, maxlen, &off, 0x0003, serial) < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0004, "1.0.0") < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0005, "1.0") < 0) return -1;
-    switch (msgset) {
-        case ID_MSGSET_EA02_ONLY:
-        {
-            static const uint8_t sent_ids[] = {0xEA, 0x02};
-            static const uint8_t recv_ids[] = {0xEA, 0x00, 0xEA, 0x01};
-            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
-            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
-            break;
+    if (sent_ids_custom_set || recv_ids_custom_set) {
+        if (append_tlv(buf, maxlen, &off, 0x0006,
+                       sent_ids_custom_set ? sent_ids_custom : NULL,
+                       sent_ids_custom_set ? sent_ids_custom_len : 0) < 0) return -1;
+        if (append_tlv(buf, maxlen, &off, 0x0007,
+                       recv_ids_custom_set ? recv_ids_custom : NULL,
+                       recv_ids_custom_set ? recv_ids_custom_len : 0) < 0) return -1;
+    } else {
+        switch (msgset) {
+            case ID_MSGSET_EA02_ONLY:
+            {
+                static const uint8_t sent_ids[] = {0xEA, 0x02};
+                static const uint8_t recv_ids[] = {0xEA, 0x00, 0xEA, 0x01};
+                if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+                if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+                break;
+            }
+            case ID_MSGSET_EA02_SENT_ONLY:
+            {
+                static const uint8_t sent_ids[] = {0xEA, 0x02};
+                if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+                if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
+                break;
+            }
+            case ID_MSGSET_NOWPLAYING_ONLY:
+            {
+                static const uint8_t sent_ids[] = {0x40, 0xC8, 0x40, 0xC9};
+                static const uint8_t recv_ids[] = {0x48, 0x00};
+                if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+                if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+                break;
+            }
+            case ID_MSGSET_HID_NOWPLAYING:
+            {
+                static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00};
+                static const uint8_t recv_ids[] = {0x48, 0x00};
+                if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+                if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+                break;
+            }
+            case ID_MSGSET_HID_NOWPLAYING_EA02:
+            {
+                static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00, 0xEA, 0x02};
+                static const uint8_t recv_ids[] = {0x48, 0x00, 0xEA, 0x00, 0xEA, 0x01};
+                if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+                if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+                break;
+            }
+            case ID_MSGSET_EMPTY:
+            default:
+                if (append_tlv(buf, maxlen, &off, 0x0006, NULL, 0) < 0) return -1;
+                if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
+                break;
         }
-        case ID_MSGSET_EA02_SENT_ONLY:
-        {
-            static const uint8_t sent_ids[] = {0xEA, 0x02};
-            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
-            if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
-            break;
-        }
-        case ID_MSGSET_NOWPLAYING_ONLY:
-        {
-            static const uint8_t sent_ids[] = {0x40, 0xC8, 0x40, 0xC9};
-            static const uint8_t recv_ids[] = {0x48, 0x00};
-            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
-            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
-            break;
-        }
-        case ID_MSGSET_HID_NOWPLAYING:
-        {
-            static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00};
-            static const uint8_t recv_ids[] = {0x48, 0x00};
-            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
-            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
-            break;
-        }
-        case ID_MSGSET_HID_NOWPLAYING_EA02:
-        {
-            static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00, 0xEA, 0x02};
-            static const uint8_t recv_ids[] = {0x48, 0x00, 0xEA, 0x00, 0xEA, 0x01};
-            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
-            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
-            break;
-        }
-        case ID_MSGSET_EMPTY:
-        default:
-            if (append_tlv(buf, maxlen, &off, 0x0006, NULL, 0) < 0) return -1;
-            if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
-            break;
     }
     if (append_tlv(buf, maxlen, &off, 0x0008, &power, 1) < 0) return -1;
     if (append_tlv(buf, maxlen, &off, 0x0009, current, sizeof(current)) < 0) return -1;
@@ -4332,7 +4409,9 @@ static void usage(FILE *out) {
         "  CARTHING_IAP2_HCI_DEV=0\n"
         "  CARTHING_IAP2_LOCAL_NAME='CarThing iAP2'\n"
         "  CARTHING_IAP2_CLASS_OF_DEVICE=0x240420\n"
-        "  CARTHING_IAP2_SKIP_ACL_CREATE=1\n");
+        "  CARTHING_IAP2_SKIP_ACL_CREATE=1\n"
+        "  CARTHING_IAP2_ID_MSGSET_SENT_IDS='0xEA02,0x40C8'\n"
+        "  CARTHING_IAP2_ID_MSGSET_RECV_IDS='0xEA00,0x4800'\n");
 }
 
 int main(int argc, char **argv) {
