@@ -1743,3 +1743,54 @@ Practical meaning:
 3. It does support the narrower and project-relevant conclusion that the current
    no-app CarThing runtime does not receive them as first-class objects in the
    same way it receives ordinary notifications.
+
+## 2026-05-20: BLE-adjacent alert profile probe narrowed the timer/alarm frontier further
+
+Because the timer/alarm still did not appear through ANCS, the next check was to
+probe neighboring BLE service paths rather than assume ANCS was the whole story.
+
+Fresh BLE service dump result against the real iPhone:
+
+- `1800` Generic Access
+- `1801` Generic Attribute
+- `180A` Device Information
+- `180F` Battery
+- `1805` Current Time
+- `7905F431-B5CE-4E99-A40F-4B1E122D00D0` ANCS
+- `89D3502B-0F36-433A-8EF4-C502AD55F8DC` AMS
+- `D0611E78-BBB4-4591-A5F8-487910AE4366` (custom)
+- `9FA480E0-4967-4542-9390-D343DC5D04AE` (custom)
+
+Important negative result:
+
+- the iPhone did **not** expose either of the obvious standard BLE alert
+  candidates:
+  - `180E` Phone Alert Status
+  - `1811` Alert Notification
+
+Follow-up notify probe result:
+
+- subscribed successfully to:
+  - `AF0BADB1-5B99-43CD-917A-A77BC549E3CC`
+  - `2A2B` Current Time
+- read/subscribe to the other custom characteristic showed a stronger gate:
+  - `8667556C-9A37-4C91-84ED-54EE27D90049`
+  - read: `ATT_READ_NOT_PERMITTED_ERROR`
+  - subscribe: `ATT_INSUFFICIENT_AUTHENTICATION_ERROR`
+
+Live timer/alarm observation on the armed probe window:
+
+- no useful notify traffic arrived on the subscribed custom characteristic
+- no useful notify traffic arrived on `Current Time`
+- no BLE-side signal emerged that could explain the missing timer/alarm on the
+  accessory
+
+Meaning:
+
+1. The timer/alarm signal is not simply hiding in a standard neighboring BLE
+   alert profile on this iPhone.
+2. The remaining BLE-adjacent candidates are now narrow and specific, not broad:
+   one auth-gated custom Apple service and one currently silent subscribable
+   custom service.
+3. The next rational frontier is to probe classic Bluetooth profile / SDP space
+   instead of continuing to guess at generic BLE alert services.
