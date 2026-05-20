@@ -16,7 +16,10 @@ import json
 import os
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import mac_music   # native Apple Music capture/control (tools/, dev-Mac only)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "overlay", "usr", "lib", "carthing")))
@@ -55,19 +58,17 @@ state.iphone.artist = "СИНТЕТИК"
 state.iphone.duration = 757
 state.iphone.position = 192
 state.iphone.playing = True
-# Mac: connected, has a track but stopped (start it to see mutual exclusion)
-state.mac.connected = True
-state.mac.title = "Пальма-де-Майорка"
-state.mac.artist = "Шуфутинский Михаил"
-state.mac.duration = 257
-state.mac.playing = False
+# Mac: LIVE from real Apple Music on this Mac (filled by the poller below)
+state.mac.connected = False
 
 
-def _log_cmd(src, cmd):
+def _on_command(src, cmd):
     print(f"[device] {src} <- {cmd}", flush=True)
+    if src == "mac":
+        mac_music.control(cmd)        # actually drive Apple Music on this Mac
 
 
-dispatcher = Dispatcher(state, on_command=_log_cmd)
+dispatcher = Dispatcher(state, on_command=_on_command)
 
 comp = Compositor(
     sink,
@@ -76,6 +77,28 @@ comp = Compositor(
      SettingsScreen(on_select=lambda key: dispatcher.dispatch("settings_select", key))],
     status_bar=StatusBar(), anim=anim, state=state, on_intent=dispatcher.dispatch)
 comp.broadcast_state(state)
+
+
+def _poll_music():
+    """Reflect real Apple Music into the Mac session (D2) every ~2s."""
+    while True:
+        info = mac_music.read()
+        with _lock:
+            m = state.mac
+            if info.get("connected"):
+                m.connected = True
+                m.title = info.get("title", "")
+                m.artist = info.get("artist", "")
+                m.album = info.get("album", "")
+                m.duration = info.get("duration", 0)
+                m.position = info.get("position", 0)
+                m.playing = info.get("playing", False)
+            else:
+                m.connected = False
+        time.sleep(2)
+
+
+threading.Thread(target=_poll_music, daemon=True).start()
 
 
 def _overlay_calib(img):
