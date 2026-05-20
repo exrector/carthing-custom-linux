@@ -1853,3 +1853,62 @@ Practical meaning for this project:
    stack than the public autonomous ANCS path available to this project.
 5. No Apple-documented accessory forwarding path was found for Stopwatch state
    as a first-class mirrored object.
+
+## 2026-05-20: classic SDP probe proved the iPhone exposes HFP, PBAP, MAP, AVRCP, and A2DP services
+
+After narrowing the BLE side, the next live step was a classic Bluetooth SDP
+probe against the trusted iPhone address (`10:A2:D3:83:82:50`).
+
+Important setup facts from the same session:
+
+- classic inquiry does not currently reveal the iPhone as discoverable, which is
+  expected and not a blocker once the address is already known
+- `Remote Name Request` to `10:A2:D3:83:82:50` still returns `iPhone`
+- the target toolchain had to be re-staged temporarily in `/run` as
+  `/run/carthing-iap2-mini-probe`
+- outbound SDP probing worked most reliably through direct Bumble access to the
+  controller over `serial:/dev/ttyS1,3000000` after temporarily stopping the
+  attach helper, then restoring `S20-bt-init`
+
+Live SDP service-search result:
+
+- `HFP_AG` `0x111F` -> handle `0x4f49111f`
+- `HFP_HF` `0x111E` -> handle `0x4f49111f`
+- `HEADSET_AG` `0x1112` -> not found
+- `HEADSET` `0x1108` -> not found
+- `PBAP_PSE` `0x112F` -> handle `0x4f49112f`
+- `PBAP` `0x1130` -> handle `0x4f49112f`
+- `MAP_MAS` `0x1132` -> handle `0x4f491132`
+- `MAP_MNS` `0x1133` -> not found
+- `MAP` `0x1134` -> handle `0x4f491132`
+- `AVRCP_TARGET` `0x110C` -> handle `0x4f49110c`
+- `AVRCP` `0x110E` -> handles `0x4f49110e`, `0x4f49110c`
+- `AVRCP_CONTROLLER` `0x110F` -> handle `0x4f49110e`
+- `A2DP` `0x110D` -> handle `0x4f49110a`
+- `AUDIO_SOURCE` `0x110A` -> handle `0x4f49110a`
+- `AUDIO_SINK` `0x110B` -> not found
+
+Meaning:
+
+1. The current iPhone pairing mode does expose a rich classic accessory surface;
+   this is no longer speculative.
+2. The strongest no-app classic candidates are now confirmed by live SDP, not
+   just by protocol folklore:
+   - HFP for calls / ring / call-state
+   - PBAP for contacts / caller identity / recents
+   - MAP for message access behavior
+3. The iPhone presents itself as the expected media side too:
+   - AVRCP target + controller
+   - A2DP / audio source
+4. The absence of Headset profile records makes plain HSP a lower-value branch
+   than HFP.
+5. The absence of `MAP_MNS` while `MAP_MAS` is present suggests that the next MAP
+   work should start from message-access semantics rather than expecting a
+   separate notification server role.
+
+Practical next order after this proof:
+
+1. HFP session bring-up and indicator/event logging.
+2. PBAP attribute/channel discovery and then a minimal browse attempt.
+3. MAP session bring-up after PBAP.
+4. AVRCP/A2DP only as auxiliary signal paths, not as the main alert frontier.
