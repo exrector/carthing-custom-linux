@@ -2628,3 +2628,110 @@ Practical consequence:
 - keep `0x0007` empty unless a future live proof shows otherwise
 - do not assume `NowPlaying` or `HID` can be made acceptable just by moving them
   to the sent side
+
+### Matrix 3: single sent-side IDs around the accepted shim
+
+To determine whether `EA02` was just one member of a larger accepted family, or
+whether it was uniquely tolerated, a single-ID sweep was run with:
+
+- `0x0007 = empty`
+- one sent-side message ID at a time in `0x0006`
+
+#### Case: `0x0006 = { EA01 }`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=6 preview=00 06 00 06 ea 01`
+- `[iap2-mini] 1D03 rejected param id=0x0006`
+
+#### Case: `0x0006 = { 40C8 }`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=6 preview=00 06 00 06 40 c8`
+- `[iap2-mini] 1D03 rejected param id=0x0006`
+
+#### Case: `0x0006 = { 40C9 }`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=6 preview=00 06 00 06 40 c9`
+- `[iap2-mini] 1D03 rejected param id=0x0006`
+
+#### Case: `0x0006 = { 6801 }`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=6 preview=00 06 00 06 68 01`
+- `[iap2-mini] 1D03 rejected param id=0x0006`
+
+#### Case: `0x0006 = { 6803 }`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=8 preview=00 04 00 06 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+### Matrix 4: can `EA03` join the accepted shim?
+
+Because `EA03` is the accessory-side EA status message, it was the next most
+important candidate to test alongside `EA02`.
+
+#### Case: `0x0006 = { EA03 }`, `0x0007 = empty`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=4 preview=00 04 00 07`
+- `[iap2-mini] 1D03 rejected param id=0x0007`
+
+#### Case: `0x0006 = { EA02, EA03 }`, `0x0007 = empty`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=4 preview=00 04 00 07`
+- `[iap2-mini] 1D03 rejected param id=0x0007`
+
+#### Case: `0x0006 = { EA03, 40C8, 40C9 }`, `0x0007 = empty`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=12 preview=00 08 00 06 40 c8 40 c9 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+#### Case: `0x0006 = { EA02, EA03 }`, `0x0007 = { EA00 }`
+
+Result:
+
+- rejected
+- `[iap2-mini] 1D03 params len=4 preview=00 04 00 07`
+- `[iap2-mini] 1D03 rejected param id=0x0007`
+
+### Updated meaning
+
+The accepted shim now looks even narrower than before:
+
+1. `EA02` is not merely the "best" tested non-empty ID so far.
+2. It is the **only** tested single sent-side ID in the current `EA` /
+   `NowPlaying` / `HID` family that survives identification.
+3. `EA03` cannot currently be advertised safely, even next to the accepted
+   `EA02`.
+4. This means the safe placeholder is not just "some small EA family surface";
+   it is specifically:
+   - `0x0006 = { EA02 }`
+   - `0x0007 = empty`
+
+So for the current live iPhone path, `EA02` should be treated as an almost
+unique compatibility token, not as the first step of an openly expandable EA
+message-set.
