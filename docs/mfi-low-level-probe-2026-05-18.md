@@ -2037,3 +2037,61 @@ What this means now:
      succeed earlier
    - or move the classic profile probing lower, into the existing C toolchain
      that already manages HCI ownership more reliably than Bumble on this target
+
+## 2026-05-21: raw HCI socket over kernel-owned hci0 is now a proven fourth state
+
+The next live pass changed the controller picture again in an important way.
+
+What was tested:
+
+- `classic_profile_probe.py` was tried on `hci-socket:0` without detaching the
+  UART from the kernel
+- that path still hit `OSError: [Errno 16] Device or resource busy`, so Bumble
+  on `HCI_CHANNEL_USER` remains sensitive to current controller ownership
+- a separate lower-level check was then run through the existing
+  `/run/carthing-iap2-mini-probe` helper, but still against the live `hci0`
+  device rather than detached raw UART
+
+Important distinction:
+
+- immediately after a plain fresh attach, `hci0` can exist while raw HCI
+  commands still fail with:
+  - `write(HCI cmd): Network is down`
+  - `HCI Read Scan Enable: Invalid argument`
+- this confirms again that mere existence of `/sys/class/bluetooth/hci0` is not
+  the same as an operational classic-ready controller state
+
+The decisive recovery step:
+
+- running `carthing-iap2-mini-probe transport-daemon` on that fresh `hci0`
+  brought the controller into the fully operational state
+- after that, the same helper successfully completed:
+  - `hci-read-scan` -> `0x03`
+  - `hci-remote-name 10:A2:D3:83:82:50` -> `iPhone`
+  - `hci-create-acl 10:A2:D3:83:82:50` -> ACL up, handle `0x000c`
+- the paired kernel log also completed the expected BCM init sequence:
+  - `BCM20703A2 (001.002.011) build 0000`
+  - then `BCM (001.002.011) build 0353`
+
+Meaning:
+
+1. The current blocker is no longer best described as "classic is broken on this
+   hardware" or even "kernel attach is broken".
+2. The target now has a proven **fourth** meaningful controller state:
+   - kernel-owned `hci0`
+   - fully brought up via `transport-daemon`
+   - accessible through raw HCI socket helpers
+   - working for classic primitives without `TIOCSETD -> 0`
+3. This is materially different from the failing detached-UART path:
+   - raw UART + Bumble still times out on `HCI_Create_Connection`
+   - raw HCI socket on live `hci0` succeeds once `HCIDEVUP` / classic init has
+     been completed
+4. The most promising next path is now clearer:
+   - do **not** center the next implementation on raw UART takeover
+   - instead, reuse the existing C-level HCI socket helpers on top of the
+     kernel-owned controller, and only then bridge upward toward SDP / RFCOMM /
+     HFP probing
+5. Bumble is still useful at the service-logic layer, but the evidence now says
+   the reliable controller boundary on this target is lower:
+   - kernel attach + operational `hci0`
+   - raw HCI socket / existing C helper path
