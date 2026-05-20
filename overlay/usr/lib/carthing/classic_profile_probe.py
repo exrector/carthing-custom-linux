@@ -124,9 +124,13 @@ async def run_sdp_sweep(args):
     )
     async with transport as (source, sink):
         device = make_device(source, sink)
-        LOG.info("Powering on probe device")
-        await asyncio.wait_for(device.power_on(), timeout=args.power_on_timeout)
-        LOG.info("Probe device ON at %s", device.public_address)
+        if args.skip_power_on:
+            device.powered_on = True
+            LOG.info("Skipping device.power_on(); assuming controller is already configured")
+        else:
+            LOG.info("Powering on probe device")
+            await asyncio.wait_for(device.power_on(), timeout=args.power_on_timeout)
+            LOG.info("Probe device ON at %s", device.public_address)
         connection = await asyncio.wait_for(
             open_classic_connection(device, args.peer, args.authenticate),
             timeout=args.connect_timeout,
@@ -167,9 +171,13 @@ async def run_hfp_probe(args):
     )
     async with transport as (source, sink):
         device = make_device(source, sink)
-        LOG.info("Powering on probe device")
-        await asyncio.wait_for(device.power_on(), timeout=args.power_on_timeout)
-        LOG.info("Probe device ON at %s", device.public_address)
+        if args.skip_power_on:
+            device.powered_on = True
+            LOG.info("Skipping device.power_on(); assuming controller is already configured")
+        else:
+            LOG.info("Powering on probe device")
+            await asyncio.wait_for(device.power_on(), timeout=args.power_on_timeout)
+            LOG.info("Probe device ON at %s", device.public_address)
         connection = await asyncio.wait_for(
             open_classic_connection(device, args.peer, args.authenticate),
             timeout=args.connect_timeout,
@@ -263,6 +271,11 @@ def parse_args():
         type=float,
         default=30.0,
         help="Seconds to wait for the BR/EDR connection",
+    )
+    parser.add_argument(
+        "--skip-power-on",
+        action="store_true",
+        help="Assume the controller is already configured and skip Bumble device.power_on()",
     )
     parser.add_argument(
         "--log-level",

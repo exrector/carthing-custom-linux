@@ -1964,3 +1964,76 @@ Practical implication:
 - the next narrow work item is to make Bumble attach cleanly to the already-live
   controller state on the target, or to fold the same logic into the existing C
   toolchain that already manages HCI ownership successfully
+
+## 2026-05-20: controller ownership states are now much better characterized
+
+Follow-up live tests narrowed the controller handoff problem more precisely than
+the earlier generic "device.power_on() times out" summary.
+
+Important stale-state discovery:
+
+- `/run/carthing-btattach.pid` can point to an exited helper while
+  `/sys/class/bluetooth/hci0` still exists
+- in that state:
+  - no live `carthing-btattach-mini` process is visible in `ps`
+  - `S20-bt-init` tries to reattach and the helper log shows:
+    - `line discipline: 15 -> 15`
+    - `HCIUARTSETFLAGS: Device or resource busy`
+- this means the current blocker is not just "helper still running"; it can also
+  be a stale `N_HCI` ownership state on `/dev/ttyS1`
+
+Direct detach proof:
+
+- a manual Python ioctl sequence on the target:
+  - `TIOCGETD`
+  - `TIOCSETD -> 0`
+  successfully changed the line discipline back to the normal TTY one
+- after that:
+  - the old line discipline was confirmed as `15` (`N_HCI`)
+  - `/sys/class/bluetooth/hci0` disappeared immediately
+
+New probe capability added:
+
+- `classic_profile_probe.py` now also has a `--skip-power-on` mode
+- this is meant for experiments on an already-configured `hci0`, where a full
+  Bumble `device.power_on()` reset is undesirable or impossible
+
+Live ownership-matrix results:
+
+1. **Raw UART after manual `TIOCSETD -> 0`**
+   - `hci0` disappears, so the UART is genuinely detached from the kernel stack
+   - but Bumble still cannot complete `device.power_on()` over serial in the
+     current controller state
+   - tried transport specs:
+     - `serial:/dev/ttyS1,3000000`
+     - `serial:/dev/ttyS1,3000000,rtscts`
+     - `serial:/dev/ttyS1,115200`
+     - `serial:/dev/ttyS1,115200,rtscts`
+   - all timed out at `device.power_on()`
+
+2. **Fresh manual `carthing-btattach-mini` still alive**
+   - a direct manual helper launch can recreate `/sys/class/bluetooth/hci0`
+   - but in that fresh state Bumble `open_transport_or_link('hci-socket:0')`
+     fails with:
+     - `OSError: [Errno 16] Device or resource busy`
+
+3. **Already-present `hci0` with `--skip-power-on`**
+   - `classic_profile_probe.py --transport hci-socket:0 --skip-power-on ...`
+     can open the transport in some states
+   - but then `HCI_Create_Connection` itself times out during classic connect
+   - this means "skip reset and just connect" is not yet enough by itself
+
+What this means now:
+
+1. The controller handoff bug is no longer vague.
+2. There are at least three distinct ownership states that matter:
+   - stale `hci0` with no live helper
+   - fresh `hci0` with a live helper
+   - raw detached UART with no `hci0`
+3. None of the three states yet gives a clean reusable path for Bumble-based
+   classic probing.
+4. The most promising next direction is no longer random transport retry:
+   - either reproduce the exact good state that made the one-off serial SDP sweep
+     succeed earlier
+   - or move the classic profile probing lower, into the existing C toolchain
+     that already manages HCI ownership more reliably than Bumble on this target
