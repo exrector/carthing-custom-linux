@@ -2327,6 +2327,7 @@ enum identification_msgset {
     ID_MSGSET_EA02_ONLY,
     ID_MSGSET_NOWPLAYING_ONLY,
     ID_MSGSET_HID_NOWPLAYING,
+    ID_MSGSET_HID_NOWPLAYING_EA02,
 };
 
 enum post_identification_mode {
@@ -2348,6 +2349,10 @@ static enum identification_msgset identification_msgset(void) {
     }
     if (strcmp(v, "nowplaying") == 0 || strcmp(v, "nowplaying-only") == 0 || strcmp(v, "np") == 0) {
         return ID_MSGSET_NOWPLAYING_ONLY;
+    }
+    if (strcmp(v, "all") == 0 || strcmp(v, "hid-nowplaying-ea02") == 0 ||
+        strcmp(v, "hybrid") == 0 || strcmp(v, "ea02-hid-nowplaying") == 0) {
+        return ID_MSGSET_HID_NOWPLAYING_EA02;
     }
     if (strcmp(v, "hid-nowplaying") == 0 || strcmp(v, "legacy") == 0) {
         return ID_MSGSET_HID_NOWPLAYING;
@@ -2393,18 +2398,6 @@ static const char *app_launch_bundle_id(void) {
     return (v && v[0]) ? v : NULL;
 }
 
-static const char *app_launch_uti(void) {
-    const char *v = getenv("CARTHING_IAP2_APP_LAUNCH_UTI");
-    if (v && v[0]) {
-        return v;
-    }
-    v = ea_protocol_name();
-    if (v && v[0]) {
-        return v;
-    }
-    return app_launch_bundle_id();
-}
-
 static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_len) {
     size_t off = 0;
     size_t btc_off = 0;
@@ -2448,6 +2441,14 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
         {
             static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00};
             static const uint8_t recv_ids[] = {0x48, 0x00};
+            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+            break;
+        }
+        case ID_MSGSET_HID_NOWPLAYING_EA02:
+        {
+            static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00, 0xEA, 0x02};
+            static const uint8_t recv_ids[] = {0x48, 0x00, 0xEA, 0x00, 0xEA, 0x01};
             if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
             if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
             break;
@@ -2690,13 +2691,13 @@ static int capture_request_app_launch_msg(uint8_t **out, size_t *out_len) {
     uint8_t params[256];
     size_t off = 0;
     uint8_t method = (uint8_t)env_u8("CARTHING_IAP2_APP_LAUNCH_METHOD", 0, 0, 255);
-    const char *uti = app_launch_uti();
+    const char *bundle_id = app_launch_bundle_id();
 
-    if (!uti || !uti[0]) {
+    if (!bundle_id || !bundle_id[0]) {
         errno = ENOENT;
         return -1;
     }
-    if (append_tlv_cstr(params, sizeof(params), &off, 0x0000, uti) < 0) {
+    if (append_tlv_cstr(params, sizeof(params), &off, 0x0000, bundle_id) < 0) {
         return -1;
     }
     if (append_tlv(params, sizeof(params), &off, 0x0001, &method, sizeof(method)) < 0) {
@@ -2722,6 +2723,21 @@ static int tlv_find_param(const uint8_t *params, size_t params_len, uint16_t wan
         off += plen;
     }
     return -1;
+}
+
+static void log_rejected_param_ids(const char *prefix, const uint8_t *params, size_t params_len) {
+    size_t off = 0;
+
+    while (off + 4 <= params_len) {
+        uint16_t plen = (uint16_t)((params[off] << 8) | params[off + 1]);
+        uint16_t pid = (uint16_t)((params[off + 2] << 8) | params[off + 3]);
+        if (plen < 4 || off + plen > params_len) {
+            fprintf(stderr, "[iap2-mini] %s malformed rejected-param TLV at off=%zu\n", prefix, off);
+            return;
+        }
+        fprintf(stderr, "[iap2-mini] %s rejected param id=0x%04x\n", prefix, pid);
+        off += plen;
+    }
 }
 
 static int parse_ea_session_handles(const uint8_t *params, size_t params_len,
@@ -2846,8 +2862,8 @@ static int write_post_identification_raw(void) {
             return 0;
         }
         rc = write_all_fd(STDOUT_FILENO, msg, msg_len);
-        fprintf(stderr, "[iap2-mini] -> EA02 RequestAppLaunch len=%zu uti=%s\n",
-                msg_len, app_launch_uti());
+        fprintf(stderr, "[iap2-mini] -> EA02 RequestAppLaunch len=%zu bundle_id=%s\n",
+                msg_len, app_launch_bundle_id());
         free(msg);
         return rc;
     }
@@ -2918,8 +2934,8 @@ static int write_post_identification_link(struct link_state *state, uint8_t ack_
             free(msg);
             return -1;
         }
-        fprintf(stderr, "[iap2-mini] -> link 0xEA02 seq=%u sid=%u len=%zu uti=%s\n",
-                state->tx_seq, state->control_sid, msg_len, app_launch_uti());
+        fprintf(stderr, "[iap2-mini] -> link 0xEA02 seq=%u sid=%u len=%zu bundle_id=%s\n",
+                state->tx_seq, state->control_sid, msg_len, app_launch_bundle_id());
         free(msg);
     }
     return 0;
@@ -2969,8 +2985,7 @@ static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payloa
         case IAP2_MSG_ID_REJECTED:
             fprintf(stderr, "[iap2-mini] <- 1D03 IdentificationRejected\n");
             if (payload_len >= 4) {
-                uint16_t rejected = (uint16_t)((payload[2] << 8) | payload[3]);
-                fprintf(stderr, "[iap2-mini] rejected param id=0x%04x\n", rejected);
+                log_rejected_param_ids("1D03", payload, payload_len);
             }
             return -1;
         case IAP2_MSG_EA_START:
@@ -3206,10 +3221,7 @@ static int handle_link_control_msg(struct link_state *state, uint8_t rx_seq,
                 hex_preview_bytes(payload, show, preview, sizeof(preview));
                 fprintf(stderr, "[iap2-mini] 1D03 params len=%zu preview=%s\n",
                         payload_len, preview);
-                if (payload_len >= 4) {
-                    uint16_t rejected = (uint16_t)((payload[2] << 8) | payload[3]);
-                    fprintf(stderr, "[iap2-mini] 1D03 rejected param id=0x%04x\n", rejected);
-                }
+                log_rejected_param_ids("1D03", payload, payload_len);
             }
             return -1;
         case IAP2_MSG_EA_START:

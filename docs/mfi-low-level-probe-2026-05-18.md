@@ -2278,3 +2278,108 @@ Practical next step:
   - explicit `EA02` / app-launch experiments
   - waiting for real incoming control messages like `EA00` or `4800`
   - any new non-zero-payload traffic on a non-control sid
+
+## 2026-05-21: `EA02` frontier moved backward into `1D01` message-set
+## encoding
+
+After the sid `0` ACK boundary was closed, the next live experiment targeted
+`EA02 RequestAppLaunch`.
+
+First, the local probe was corrected to match public references more closely:
+
+- `EA02` now uses `CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID` as the outgoing
+  parameter instead of treating the field as a UTI
+- `1D03 IdentificationRejected` logging was upgraded to print **all** rejected
+  parameter IDs, not just the first one
+
+### Pass 1: `EA02-only` identification
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET=ea02-only`
+- `CARTHING_IAP2_POST_ID_MODE=app-launch`
+- `CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID=com.spotify.client`
+- `CARTHING_IAP2_APP_LAUNCH_METHOD=0`
+
+Result:
+
+- auth still succeeded through `AA05`
+- the session reached `1D00 StartIdentification`
+- but the iPhone rejected identification before `1D02`
+
+Exact rejection:
+
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=8 preview=00 04 00 06 00 04 00 07`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+So the blocker was not `EA02` runtime behavior yet; it was already the
+advertised message-set TLVs inside `1D01`.
+
+### Pass 2: `hid-nowplaying` identification without app-launch
+
+Control experiment:
+
+- `CARTHING_IAP2_ID_MSGSET=hid-nowplaying`
+- `CARTHING_IAP2_POST_ID_MODE=none`
+
+Result:
+
+- the same rejection happened again
+
+Exact rejection:
+
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=12 preview=00 06 00 06 40 c8 00 06 00 07 48 00`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+This is important because it shows the problem is **not specific to EA02**.
+
+### Pass 3: hybrid `hid + nowplaying + ea02`
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET=hybrid`
+- `CARTHING_IAP2_POST_ID_MODE=app-launch`
+- `CARTHING_IAP2_APP_LAUNCH_TRIGGER=none`
+- `CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID=com.spotify.client`
+
+Result:
+
+- again, auth succeeded
+- again, identification was rejected
+
+Exact rejection:
+
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=12 preview=00 06 00 06 40 c8 00 06 00 07 48 00`
+- rejected parameter IDs:
+  - `0x0006`
+  - `0x0007`
+
+### Meaning
+
+This moves the current app-launch / EA frontier one layer lower:
+
+1. The iPhone accepts the current autonomous path only when `1D01` keeps
+   `MessagesSentByAccessory (0x0006)` and `MessagesReceivedFromDevice (0x0007)`
+   empty.
+2. As soon as the probe advertises any of the current handcrafted message-set
+   variants (`EA02-only`, `hid-nowplaying`, or the hybrid), identification is
+   rejected before `1D02`.
+3. Therefore the present blocker for `EA02` is **not yet** "does iPhone launch
+   the app?" but rather:
+   - what exact encoding/semantics Apple expects for `0x0006` / `0x0007`
+   - whether the current byte-array representation is incomplete or wrong for
+     this iPhone path
+
+Practical consequence:
+
+- do **not** interpret the current `EA02` result as "app launch is impossible"
+- the honest current statement is narrower:
+  - our current `1D01` message-set encoding is rejected by the iPhone
+  - until that encoding is fixed, `EA02` cannot be tested fairly on this path
