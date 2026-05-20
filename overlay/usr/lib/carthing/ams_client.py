@@ -58,8 +58,10 @@ class AMSClient:
         self._client = None
 
     async def setup(self, connection):
-        self._client = Client(connection)
-        connection.gatt_client = self._client  # route GATT PDUs to this client
+        self._client = getattr(connection, "gatt_client", None)
+        if self._client is None:
+            self._client = Client(connection)
+            connection.gatt_client = self._client  # route GATT PDUs to this client
         logger.info("AMS: discovering services on %s", connection.peer_address)
 
         await self._client.discover_service(AMS_SERVICE_UUID)

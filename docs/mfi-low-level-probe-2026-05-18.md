@@ -1151,3 +1151,409 @@ the same visible name as the working BLE/HID runtime:
 
 So future integrated classic tests should no longer create an obviously separate
 human-facing Bluetooth identity just because the transport path is different.
+
+## 2026-05-20: inbound RFCOMM needed accessory-side link SYN before the iPhone would start real iAP2
+
+The previous inbound server-side narrowing step had already shown:
+
+- the iPhone trusted the accessory with a cached BR/EDR link key
+- classic auth completed with `AUTH COMPLETE status=0x00`
+- inbound `SDP` browse progressed once the responder matched the iPhone's initial
+  `0x0100` search
+- inbound `RFCOMM accepted` was reachable
+
+But the session still looked stalled after `RFCOMM accepted`.
+
+The next isolated experiment kept the same throwaway `0x0100`-compatible `SDP`
+responder and changed exactly one more thing outside the working tree:
+
+- after inbound `RFCOMM accepted`, run the link loop in initiator mode so the
+  accessory sends the first link-layer `SYN`
+
+That immediately produced a full live inbound iAP2 session:
+
+```text
+[iap2-mini] RFCOMM accepted peer=10:A2:D3:83:82:50 ch=3
+[iap2-mini] -> link SYN (client mode)
+[iap2-mini] <- link SYN ctl=0xc0 seq=181
+[iap2-mini] adopting control sid=1 from first payload packet
+[iap2-mini] <- link ctrl seq=182 sid=1 msg=0xaa00 len=6
+[iap2-mini] <- link AA00
+[iap2-mini] -> link 0xaa00 seq=1 sid=1 len=618
+[iap2-mini] <- link ctrl seq=183 sid=1 msg=0xaa02 len=42
+[iap2-mini] <- link AA02
+[iap2-mini] -> link 0xaa02 seq=2 sid=1 len=74
+[iap2-mini] <- link ctrl seq=184 sid=1 msg=0xaa05 len=6
+[iap2-mini] <- link AA05 auth success
+[iap2-mini] <- link ctrl seq=185 sid=1 msg=0x1d00 len=6
+[iap2-mini] <- link 1D00 StartIdentification
+[iap2-mini] -> link 0x1d00 seq=3 sid=1 len=169
+[iap2-mini] <- link ctrl seq=186 sid=1 msg=0x1d02 len=6
+[iap2-mini] <- link 1D02 IdentificationAccepted
+[iap2-mini] -> link 0x6800 seq=4 sid=1 len=39
+[iap2-mini] -> link 0x40c8 seq=5 sid=1 len=42
+```
+
+This is the new high-value conclusion:
+
+- inbound server-side iAP2 was not blocked at auth anymore
+- inbound server-side iAP2 was not blocked at `SDP` anymore
+- after inbound `RFCOMM accepted`, the iPhone was effectively waiting for the
+  accessory to start the link session with `SYN`
+
+So the inbound frontier narrowed from "why does nothing happen after tap?" to a
+much more precise rule:
+
+- server-side classic attach needs
+  1. compatible initial `SDP` browse behavior
+  2. accessory-side link-layer session start after `RFCOMM accepted`
+
+This also explains why the previous server-only run stopped at `RFCOMM accepted`
+with no further log traffic: the clean-room daemon was silently waiting for peer
+bytes instead of starting the link session itself.
+
+## 2026-05-20: even on the now-working inbound path, Apple Music still gave no useful NowPlaying traffic
+
+Once the inbound link-layer session came up, a manual Apple Music `play/pause`
+action was repeated while the device stayed connected.
+
+Result:
+
+- no additional inbound iAP2 control messages appeared
+- no `0x4800 NowPlayingUpdate` appeared
+
+So the earlier conclusion still holds on the inbound path too:
+
+- `StartNowPlayingUpdates (0x40C8)` can be sent successfully
+- Apple Music still does not produce useful `0x4800` metadata traffic here
+
+## 2026-05-20: outbound `0x6801` HID mode1 was transmitted cleanly on the inbound session, but had no visible Apple Music effect
+
+The next throwaway experiment extended the successful inbound setup with one more
+post-identification action:
+
+- after `1D02`, automatically send `0x6801 AccessoryHIDReport`
+  `Play/Pause (0x00CD)` press + release in the simple mode1 format
+  (big-endian, no report ID)
+
+Live log:
+
+```text
+[iap2-mini] <- link 1D02 IdentificationAccepted
+[iap2-mini] -> link 0x6800 seq=4 sid=1 len=39
+[iap2-mini] -> link 0x40c8 seq=5 sid=1 len=42
+[iap2-mini] -> link 0x6801 playpause press seq=6 sid=1 len=18
+[iap2-mini] -> link 0x6801 playpause release seq=7 sid=1 len=18
+```
+
+User-visible result:
+
+- Apple Music did not visibly toggle play/pause
+
+This is consistent with the preserved notes that already warned:
+
+- `0x00CD` via the basic HID mode can be transmitted and ACKed without causing
+  real media control behavior
+
+Practical conclusion for another agent:
+
+1. The inbound iAP2 path is now good enough to reach live post-identification
+   experiments, provided the accessory starts the link layer with `SYN`.
+2. Apple Music metadata should still not be treated as an iAP2 `0x4800` target.
+3. If iAP2 HID control is still desired, the next reasonable experiment is a
+   format sweep over alternative HID wire encodings (`mode2`, `mode5`, `mode6`,
+   and possibly legacy `0x6802`), not a re-investigation of auth or `SDP`.
+
+## 2026-05-20: the broader iAP2 HID wire-format sweep still produced no visible Apple Music control
+
+The earlier mode1 result could still have been explained by the wrong HID wire
+encoding, so the next live cycle explicitly tested the remaining materially
+different iAP2 HID variants on the same now-working inbound session model:
+
+- foreground Apple Music was used during retests so Bluetooth Settings would not
+  be the active UI
+- each run still used the same proven prerequisites:
+  - inbound `SDP` compatibility for the iPhone's initial `0x0100` search
+  - accessory-side link `SYN` after `RFCOMM accepted`
+  - successful `AA00 -> AA02 -> AA05 -> 1D00 -> 1D02`
+
+Tested variants:
+
+1. `mode6` — `0x6801`, report ID `0x01`, little-endian usage
+2. `mode2` — `0x6801`, report ID `0x02`, big-endian usage
+3. `mode5` — `0x6801`, no report ID, little-endian usage
+4. `mode3` — legacy `0x6802`, big-endian usage
+
+All of them were transmitted successfully on live accepted sessions. Example log
+shapes:
+
+```text
+[iap2-mini] -> link 0x6801 mode6 playpause press seq=6 sid=1 len=19
+[iap2-mini] -> link 0x6801 mode6 playpause release seq=7 sid=1 len=19
+
+[iap2-mini] -> link 0x6801 mode2 playpause press seq=6 sid=1 len=19
+[iap2-mini] -> link 0x6801 mode2 playpause release seq=7 sid=1 len=19
+
+[iap2-mini] -> link 0x6801 mode5 playpause press seq=6 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode5 playpause release seq=7 sid=1 len=18
+
+[iap2-mini] -> link 0x6802 mode3 playpause press seq=6 sid=1 len=18
+[iap2-mini] -> link 0x6802 mode3 playpause release seq=7 sid=1 len=18
+```
+
+User-visible result for all tested variants:
+
+- Apple Music did not visibly toggle play/pause
+
+This materially strengthens the earlier conclusion:
+
+- the problem is no longer "maybe the HID bytes are encoded wrong in an obvious
+  way"
+- a broad sweep across the practical iAP2 HID packet variants still did not
+  yield usable Apple Music control on this path
+
+So the research frontier should now move accordingly:
+
+1. Stop treating iAP2 HID media control as the most likely near-term path for
+   Apple Music play/pause on this device.
+2. Keep the now-proven inbound iAP2 attach/session work as infrastructure.
+3. Shift the next active search toward other control channels such as AVRCP or
+   EA-specific behaviors, rather than repeating more iAP2 HID packet variants.
+
+## 2026-05-20: fresh semantic HID sweep also produced no visible Apple Music effect
+
+To avoid overfitting to prior notes, the next live cycle was rerun as a broader
+semantic experiment instead of another simple packet-wrapper variant.
+
+The sweep used:
+
+- the same now-proven inbound iAP2 session model
+  - `0x0100`-compatible inbound `SDP`
+  - accessory-side link `SYN` after `RFCOMM accepted`
+  - successful `AA00 -> AA02 -> AA05 -> 1D00 -> 1D02`
+- authoritative USB HID Consumer usages rather than only the earlier
+  `Play/Pause (0x00CD)` assumption
+- longer press timing instead of near-immediate press/release
+
+Commands sent on one accepted session:
+
+1. `0x00B5` — Next Track
+2. `0x00B6` — Previous Track
+3. `0x00E9` — Volume Increment
+4. `0x00EA` — Volume Decrement
+5. `0x00B0` — Play
+6. `0x00B1` — Pause
+7. `0x00CD` — Play/Pause
+
+Live log excerpt:
+
+```text
+[iap2-mini] -> link 0x6801 mode1 next-track press usage=0x00b5 seq=6 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 next-track release usage=0x00b5 seq=7 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 previous-track press usage=0x00b6 seq=8 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 previous-track release usage=0x00b6 seq=9 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 volume-up press usage=0x00e9 seq=10 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 volume-up release usage=0x00e9 seq=11 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 volume-down press usage=0x00ea seq=12 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 volume-down release usage=0x00ea seq=13 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 play press usage=0x00b0 seq=14 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 play release usage=0x00b0 seq=15 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 pause press usage=0x00b1 seq=16 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 pause release usage=0x00b1 seq=17 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 play-pause press usage=0x00cd seq=18 sid=1 len=18
+[iap2-mini] -> link 0x6801 mode1 play-pause release usage=0x00cd seq=19 sid=1 len=18
+```
+
+User-visible result:
+
+- Apple Music did not visibly react to any command in the sequence
+
+This is stronger than the earlier narrow `0x00CD` result:
+
+- not only the old `Play/Pause` packet
+- not only one wire encoding
+- not only one foreground/background state
+
+Within the current iAP2 control-session model, a broader HID semantic sweep
+still produced no usable Apple Music control.
+
+Practical meaning:
+
+1. The research should not keep assuming that "the next HID usage code" is the
+   likely missing piece.
+2. The proven value of the current work is the inbound iAP2 session contract
+   itself, not successful Apple Music control through iAP2 HID.
+3. The next broad MFi frontier should move toward EA session behavior, app
+   launch, and other post-identification capabilities that are actually specific
+   to MFi/iAP2, rather than looping on more HID media-control permutations.
+
+## 2026-05-20: autonomous system events need to be treated as a separate frontier from generic iAP2 control
+
+The next clarification was architectural, not just packet-level:
+
+- companion app is explicitly out of scope
+- the device must stay self-sufficient
+- so any valuable iPhone-side events must come from system-exposed behavior that
+  the accessory can consume on its own
+
+That changes how the MFi/iAP2 layer should be interpreted.
+
+Working conclusion:
+
+1. A generic accepted iAP2 control session should **not** be treated as proof
+   that notifications, battery state, or network status are available there.
+2. Without a companion app, those iPhone-side signals should be treated as a
+   distinct research frontier with their own protocol candidates.
+3. For notifications specifically, the more realistic autonomous candidate is
+   likely `ANCS` over BLE rather than generic iAP2 control-session traffic.
+4. For other self-contained scenarios, the remaining high-value MFi-specific
+   search area is post-identification behavior that iOS itself may expose
+   without custom app logic: built-in profile interactions, EA/session
+   negotiation, app-launch semantics, and other system-owned accessory flows.
+
+Practical rule for future agents:
+
+- Do not drift back into companion-app reasoning.
+- Do not assume that iAP2 auth + `1D02` implies access to arbitrary iPhone
+  telemetry.
+- Treat autonomous notifications/system-state access as a separate protocol hunt.
+
+## 2026-05-20: inbound classic attach was blocked by the initial SDP search contract, not by trust or auth
+
+The next live narrowing step used the second device in a pure server-side mode.
+Before this test, the clean-room daemon already had:
+
+- a real cached BR/EDR link key for the iPhone
+- successful `AUTH COMPLETE status=0x00`
+- incoming `L2CAP` + `SDP SERVICE_SEARCH_REQUEST`
+
+But the attach still appeared stuck from the iPhone UI point of view.
+
+The key new observation was that the iPhone's first inbound `SDP` browse was:
+
+```text
+[iap2-mini] SDP rx params len=8 preview=35 03 19 01 00 00 30 00
+```
+
+That is, the first inbound `ServiceSearchRequest` asked for UUID `0x0100`.
+
+At that moment, the current responder only treated the following as a positive
+match:
+
+- `0x1002`
+- `CAFF`
+
+So the clean-room daemon was returning an effectively empty result to the
+iPhone's initial browse step, even though trust and classic authentication were
+already working.
+
+To isolate this, a temporary throwaway build was made outside the working tree,
+with exactly one narrow behavior change:
+
+- allow `sdp_pattern_matches_service(...)` to match `0x0100` as well
+
+That one change produced an immediate user-visible difference on iPhone:
+
+- tapping the trusted `CarThing Test iAP2` device now connected immediately
+
+And the wire-level sequence advanced to:
+
+```text
+[iap2-mini] L2CAP accepted peer=10:A2:D3:83:82:50 psm=0x0001 cid=0x1c14
+[iap2-mini] SSP LINK_KEY_REQ from 10:A2:D3:83:82:50 -> cached reply type=0x04
+[iap2-mini] SDP rx hdr pdu=0x02(SERVICE_SEARCH_REQUEST) txn=0x0001 param_len=8
+[iap2-mini] SDP rx params len=8 preview=35 03 19 01 00 00 30 00
+[iap2-mini] AUTH COMPLETE status=0x00 handle=0x000b
+[iap2-mini] SDP tx ok pdu=0x02(SERVICE_SEARCH_REQUEST) txn=0x0001
+[iap2-mini] SDP rx hdr pdu=0x04(SERVICE_ATTRIBUTE_REQUEST) txn=0x0002 param_len=14
+[iap2-mini] SDP rx params len=14 preview=00 01 00 00 01 00 35 05 0a 00 00 ff ff 00
+[iap2-mini] SDP tx ok pdu=0x04(SERVICE_ATTRIBUTE_REQUEST) txn=0x0002
+[iap2-mini] SDP rx hdr pdu=0x02(SERVICE_SEARCH_REQUEST) txn=0x0003 param_len=8
+[iap2-mini] SDP rx params len=8 preview=35 03 19 12 00 00 30 00
+[iap2-mini] SDP tx ok pdu=0x02(SERVICE_SEARCH_REQUEST) txn=0x0003
+[iap2-mini] RFCOMM accepted peer=10:A2:D3:83:82:50 ch=3
+```
+
+This is a major frontier update:
+
+- inbound classic attach is now proven to depend on the initial server-side SDP
+  browse contract
+- the previous "tap does nothing" behavior was not a trust failure anymore
+- the previous "tap does nothing" behavior was not an MFi auth-chip problem
+- matching the iPhone's first `0x0100` search is sufficient to move the peer to:
+  - `ServiceAttributeRequest`
+  - an additional `ServiceSearchRequest` for `0x1200`
+  - inbound `RFCOMM` connection acceptance on channel `3`
+
+Just as important, after `RFCOMM accepted`, no iAP2 payload was logged yet.
+So the next unresolved frontier is narrower still:
+
+- initial inbound browse problem: now localized
+- next question: what exact post-`RFCOMM accepted` behavior causes the peer to
+  remain quiet
+
+Practical handoff conclusion for another agent:
+
+1. Do not keep investigating inbound server-side attach as a trust or auth issue.
+2. The first required fix is in the SDP responder contract, specifically the
+   initial browse/search semantics seen from iPhone.
+3. The next diagnostic step after promoting this behavior into the real code is
+   to log the first post-accept RFCOMM/iAP2 bytes and determine whether the
+   iPhone expects the accessory to speak first on this path.
+
+## 2026-05-20: first ANCS notification mirror layer landed in the BLE runtime
+
+The notification frontier has now moved from theory into the working tree.
+
+What was added:
+
+- new runtime module: `overlay/usr/lib/carthing/ancs_client.py`
+- shared GATT client reuse so `AMS` and `ANCS` can coexist on the same encrypted
+  iPhone connection
+- `media_remote.py` now starts `ANCS` alongside `AMS` after pairing/encryption
+- `now_playing_ui.py` now has a notification render path that can temporarily
+  overlay the latest mirrored notification and then return to now-playing
+
+Implemented ANCS behavior:
+
+- discover the Apple Notification Center Service after the existing BLE/HID
+  pairing flow is up
+- subscribe to:
+  - Notification Source
+  - Data Source
+- request notification attributes for new events:
+  - app identifier
+  - title
+  - subtitle
+  - message
+- parse the returned ANCS attribute stream into a displayable notification model
+- clear the on-screen overlay on timeout or explicit ANCS removal
+
+Architectural meaning:
+
+- the project already had the right base for this because `ams_client.py` had
+  already proven iPhone-facing GATT discovery/subscribe/write on the same
+  Bumble-based runtime
+- notifications are now treated as a BLE/ANCS layer in the real userspace
+  runtime, not as a speculative generic iAP2 control-session feature
+- this keeps the implementation aligned with the explicit no-companion-app rule:
+  use system-exposed iPhone behavior, not custom EA app traffic
+
+Current boundary of proof:
+
+- the new Python modules compile cleanly
+- the GUI/runtime integration is in place
+- but live proof against a real iPhone notification flow is still pending
+
+Practical next step for another agent:
+
+1. Run the updated BLE runtime on the second device.
+2. Watch whether iOS exposes `ANCS` and whether it presents a notification-share
+   authorization prompt on the current bonded path.
+3. Generate real notifications and verify:
+   - ANCS discovery succeeds
+   - attribute responses arrive in the expected shape
+   - the overlay renders and then returns to the now-playing screen
+4. If the attribute stream fragments across multiple BLE notifications in a way
+   the current parser does not yet tolerate, harden the parser before broadening
+   scope further.

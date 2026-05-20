@@ -14,6 +14,7 @@ from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
 from ams_client import AMSClient, MediaState
+from ancs_client import ANCSClient, NotificationState
 from ble_transport import init_ble
 from drm_display import DRMDisplay
 from input_handler import start as start_input
@@ -30,13 +31,17 @@ logger = logging.getLogger(__name__)
 
 state = MediaState()
 ams: AMSClient | None = None
+ancs: ANCSClient | None = None
 ui: NowPlayingUI | None = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
+_active_notification: NotificationState | None = None
 _last_peer_address = None
 _reconnect_fallback_task: asyncio.Task | None = None
+_notification_clear_task: asyncio.Task | None = None
 _ams_starting: set[int] = set()
+_ancs_starting: set[int] = set()
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
 BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
@@ -154,11 +159,67 @@ def on_state_update(s: MediaState):
         int(s.duration),
         int(s.volume * 100),
     )
-    if ui:
+    _render_ui()
+
+
+def on_notification_update(notification: NotificationState):
+    global _active_notification, _last_activity
+    _last_activity = time.monotonic()
+    _active_notification = notification
+    logger.info(
+        "ANCS display: app=%s title=%r message=%r",
+        notification.app_name,
+        notification.headline,
+        notification.body,
+    )
+    _render_ui()
+    _schedule_notification_clear(notification.uid)
+
+
+def on_notification_removed(uid: int):
+    global _active_notification
+    if _active_notification and _active_notification.uid == uid:
+        logger.info("ANCS remove active notification uid=%d", uid)
+        _active_notification = None
+        _cancel_notification_clear()
+        _render_ui()
+
+
+def _render_ui():
+    if not ui:
+        return
+    try:
+        if _active_notification:
+            ui.render_notification(_active_notification, state)
+        else:
+            ui.render(state)
+    except Exception as e:
+        logger.error("UI render error: %s", e)
+
+
+def _cancel_notification_clear():
+    global _notification_clear_task
+    if _notification_clear_task is not None:
+        _notification_clear_task.cancel()
+        _notification_clear_task = None
+
+
+def _schedule_notification_clear(uid: int, delay: float = 8.0):
+    global _notification_clear_task
+    _cancel_notification_clear()
+
+    async def clear_later():
+        global _active_notification, _notification_clear_task
         try:
-            ui.render(s)
-        except Exception as e:
-            logger.error("UI render error: %s", e)
+            await asyncio.sleep(delay)
+        except asyncio.CancelledError:
+            return
+        if _active_notification and _active_notification.uid == uid:
+            _active_notification = None
+            _render_ui()
+        _notification_clear_task = None
+
+    _notification_clear_task = asyncio.create_task(clear_later())
 
 
 async def on_connection(connection: Connection):
@@ -181,6 +242,7 @@ async def on_connection(connection: Connection):
     connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
 
     if connection.is_encrypted:
+        await maybe_start_ancs(connection, "connected-encrypted")
         await maybe_start_ams(connection, "connected-encrypted")
     else:
         logger.info("Requesting pairing for handle=%d", connection.handle)
@@ -192,6 +254,7 @@ def on_pairing(connection: Connection, keys):
     if _device:
         asyncio.create_task(refresh_accept_list(_device))
     if connection.is_encrypted:
+        asyncio.create_task(maybe_start_ancs(connection, "pairing-complete"))
         asyncio.create_task(maybe_start_ams(connection, "pairing-complete"))
 
 
@@ -202,6 +265,7 @@ def on_connection_encryption_change(connection: Connection):
         connection.is_encrypted,
     )
     if connection.is_encrypted:
+        asyncio.create_task(maybe_start_ancs(connection, "link-encrypted"))
         asyncio.create_task(maybe_start_ams(connection, "link-encrypted"))
 
 
@@ -230,22 +294,49 @@ async def maybe_start_ams(connection: Connection, reason: str):
         _ams_starting.discard(connection.handle)
 
 
+async def maybe_start_ancs(connection: Connection, reason: str):
+    global ancs, _active_conn
+    if not connection.is_encrypted:
+        logger.info("ANCS wait for encryption: handle=%d reason=%s", connection.handle, reason)
+        return
+    if _active_conn is connection and ancs is not None:
+        return
+    if connection.handle in _ancs_starting:
+        return
+
+    _ancs_starting.add(connection.handle)
+    try:
+        logger.info("ANCS setup start: handle=%d reason=%s", connection.handle, reason)
+        candidate = ANCSClient(
+            on_notification=on_notification_update,
+            on_removed=on_notification_removed,
+        )
+        ok = await candidate.setup(connection)
+        if ok:
+            _active_conn = connection
+            ancs = candidate
+            logger.info("ANCS готов — жду уведомления")
+        else:
+            logger.warning("ANCS не найден на этом устройстве")
+    finally:
+        _ancs_starting.discard(connection.handle)
+
+
 async def on_disconnection(connection: Connection, reason: int):
-    global ams, _active_conn
+    global ams, ancs, _active_conn, _active_notification
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
     ams = None
+    ancs = None
     _active_conn = None
+    _active_notification = None
+    _cancel_notification_clear()
     state.title = "Lost Contact"
     state.artist = "Awaiting Deep Space Relay"
     state.album = ""
     state.duration = 0.0
     state.position = 0.0
     state.playing = False
-    if ui:
-        try:
-            ui.render(state)
-        except Exception as e:
-            logger.error("UI disconnect render error: %s", e)
+    _render_ui()
     try:
         await asyncio.sleep(0.3)
         if _device:
@@ -434,7 +525,7 @@ async def main():
         ui = await loop.run_in_executor(None, _init_display)
         logger.info("DRM display ready")
         if state.title or state.artist:
-            ui.render(state)
+            _render_ui()
     except Exception as e:
         logger.error("Display/UI init failed, continuing headless: %s", e)
         ui = None
