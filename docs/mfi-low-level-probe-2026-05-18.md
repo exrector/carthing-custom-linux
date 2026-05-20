@@ -2735,3 +2735,145 @@ The accepted shim now looks even narrower than before:
 So for the current live iPhone path, `EA02` should be treated as an almost
 unique compatibility token, not as the first step of an openly expandable EA
 message-set.
+
+## 2026-05-21: `0x000A` remains toxic, but `0x000B` is accepted and does not
+## break the safe `EA02` shim
+
+Because the accepted `EA02` shim may still become useful later as a bridge into
+our own app-specific path, the next layer checked whether two higher-level
+identification fields could coexist with it:
+
+- `0x000A` SupportedExternalAccessoryProtocol
+- `0x000B` app/team-match style field (current local name:
+  `PREFERRED_BUNDLE_SEED`)
+
+All passes used the currently safe message-set:
+
+- `0x0006 = { EA02 }`
+- `0x0007 = empty`
+
+### Matrix 5: add `0x000A` and/or `0x000B` on top of the safe shim
+
+#### Control: safe shim only
+
+Environment:
+
+- no `0x000A`
+- no `0x000B`
+
+Result:
+
+- accepted
+- `[iap2-mini] <- link 1D02 IdentificationAccepted`
+
+#### Case: safe shim + `0x000A`
+
+Environment:
+
+- `CARTHING_IAP2_EA_PROTOCOL='com.exrector.carthing.test'`
+
+Result:
+
+- rejected
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=4 preview=00 04 00 0a`
+- `[iap2-mini] 1D03 rejected param id=0x000a`
+
+This cleanly re-proves that `0x000A` itself remains toxic even on top of the now
+accepted `EA02` shim.
+
+#### Case: safe shim + `0x000B`
+
+Environment:
+
+- `CARTHING_IAP2_PREFERRED_BUNDLE_SEED='ABCDE12345'`
+
+Result:
+
+- accepted
+- `[iap2-mini] <- link 1D02 IdentificationAccepted`
+
+#### Case: safe shim + `0x000A` + `0x000B`
+
+Environment:
+
+- `CARTHING_IAP2_EA_PROTOCOL='com.exrector.carthing.test'`
+- `CARTHING_IAP2_PREFERRED_BUNDLE_SEED='ABCDE12345'`
+
+Result:
+
+- rejected
+- `[iap2-mini] <- link 1D03 IdentificationRejected`
+- `[iap2-mini] 1D03 params len=4 preview=00 04 00 0a`
+- `[iap2-mini] 1D03 rejected param id=0x000a`
+
+So `0x000B` does not rescue `0x000A`; the rejection still lands squarely on
+`0x000A`.
+
+### Matrix 6: does `0x000B` break the actual app-launch runtime?
+
+Because the field above was accepted at identification time, the next check kept
+all of this together:
+
+- safe shim (`0x0006 = { EA02 }`, `0x0007 = empty`)
+- `0x000B = 'ABCDE12345'`
+- `POST_ID_MODE=app-launch`
+- `bundle_id=com.spotify.client`
+
+Observed result:
+
+- identification still succeeded:
+  - `[iap2-mini] <- link 1D02 IdentificationAccepted`
+- app launch request still went out:
+  - `[iap2-mini] -> link 0xEA02 seq=4 sid=1 len=34 bundle_id=com.spotify.client`
+
+So `0x000B` is not just tolerated during `1D01`; it also does not break the
+already proven `EA02` launch path.
+
+### Matrix 7: basic format pressure on `0x000B`
+
+To see whether `0x000B` is treated like a tightly validated team identifier or
+more like a soft placeholder, a small format sweep was run while keeping the safe
+shim:
+
+#### `0x000B = 'A'`
+
+- accepted
+
+#### `0x000B = 'ABCDE12345'`
+
+- accepted
+
+#### `0x000B = 'ABCDEFGHIJKLMNOP'`
+
+- accepted
+
+#### `0x000B = '1234567890'`
+
+- accepted
+
+### Meaning
+
+This gives a new, cleaner split:
+
+1. `0x000A` is still a hard rejection boundary on the current path.
+2. `0x000B` is accepted much more freely.
+3. `0x000B` also coexists with the safe `EA02` app-launch shim.
+4. At least from the current acceptance surface, `0x000B` does **not** yet look
+   like a tightly enforced team-ID gate.
+
+For future archaeology this matters:
+
+- `0x000A` still looks like the real EA-session blocker
+- `0x000B` looks more like a soft annotation / placeholder that may remain usable
+  later if a custom app path becomes relevant
+
+That does **not** change the current product direction:
+
+- no companion app is still the main rule
+- Spotify is still only a diagnostic proof
+
+But it does create a useful future breadcrumb:
+
+- if a custom app path ever becomes relevant, `0x000B` is no longer the scary
+  field; `0x000A` is
