@@ -1671,3 +1671,42 @@ Meaning:
    - removal of an active on-screen notification
 3. This substantially lowers the risk for promoting the ANCS layer from
    prototype/runtime overlay into the main productized path.
+
+## 2026-05-20: genuine Live Activities are a separate app-based frontier, not an ANCS upgrade
+
+After the ANCS notification path was proven live, the next architectural
+question was whether modern iPhone `Live Activities` could be reached on the same
+autonomous path.
+
+Current Apple documentation points to a different answer:
+
+- Live Activity forwarding is documented under `AccessoryLiveActivities`
+- the forwarding path is implemented in an accessory data provider extension
+- that extension must advertise capabilities for:
+  - `AccessoryNotifications.NotificationsForwarding`
+  - `AccessoryLiveActivities.LiveActivityForwarding`
+- the documented flow explicitly assumes the iPhone-side extension model already
+  created for forwarded notifications
+- authorization is checked through framework APIs, and the system may present a
+  unified permission UI for notification and Live Activity forwarding
+
+Representative Apple documentation excerpts:
+
+- `Receiving Live Activity updates and alerts on an accessory`
+  - "you use an extension model that handles secure communication between iPhone and your accessory"
+  - "Before adding support for Live Activity forwarding, you need to adopt iOS system notification forwarding and implement the extensions that handle communication between iPhone and your accessory."
+- `AccessorySetupKit`
+  - iOS/iPadOS framework for app-driven accessory discovery and configuration
+
+Meaning for this project:
+
+1. True Live Activities are **not** just a richer ANCS payload.
+2. They are **not** currently reachable on the proven autonomous `ANCS + BLE`
+   path.
+3. Under the project's hard rule of **no companion app**, genuine Live
+   Activities should now be treated as intentionally out of scope.
+4. The correct language for future agents is no longer "maybe Live Activities are
+   still hidden somewhere in ANCS"; it is:
+   - classic notifications are proven through ANCS
+   - first-class Live Activities belong to a separate Apple framework stack that
+     conflicts with the current no-app architecture
