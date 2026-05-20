@@ -63,6 +63,15 @@ software.
   `com.apple.podcasts…` distributed notification — undocumented, needs a small
   ObjC/Swift listener; not a one-liner.
 
+## Decision (2026-05-21)
+**Settle on Apple Music only, captured natively via `osascript`. No third-party
+software.** Podcasts is intentionally dropped (would require the MediaRemote
+adapter / a brew install, which we are avoiding). The D2 macOS desktop will show
+Apple Music now-playing; the Mac helper polls Music via `osascript` (or listens
+to the `com.apple.Music.playerInfo` distributed notification) and pushes it to
+the Car Thing over BLE (CarThingLink). If Podcasts coverage is wanted later,
+revisit the media-control adapter as an explicit opt-in.
+
 ## Sources
 - https://github.com/ungive/mediaremote-adapter
 - https://github.com/nohackjustnoobb/media-remote
