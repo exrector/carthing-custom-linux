@@ -40,6 +40,13 @@ GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
 BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
 HID_SERVICE_UUID = UUID.from_16_bits(0x1812)
 
+# Apple Notification Center Service (ANCS) UUID. Advertised as a 128-bit
+# *service solicitation* (not service class) so iOS re-initiates the connection
+# to this bonded accessory after a Bluetooth toggle / out-of-range / reboot.
+# See: Apple Bluetooth Accessory Design Guidelines, "Advertising" — an accessory
+# that solicits ANCS/AMS prompts the iOS Central to connect back to it.
+ANCS_SOLICITATION_UUID = UUID("7905F431-B5CE-4E99-A40F-4B1E122D00D0")
+
 BATTERY_LEVEL_UUID = UUID.from_16_bits(0x2A19)
 HID_INFORMATION_UUID = UUID.from_16_bits(0x2A4A)
 REPORT_MAP_UUID = UUID.from_16_bits(0x2A4B)
@@ -236,10 +243,31 @@ async def on_disconnection(connection: Connection, reason: int):
 
 
 async def start_advertising(device: Device):
+    # 31-byte advertising PDU budget forces a split between the primary
+    # advertising data and the scan response:
+    #
+    #   adv data       = FLAGS (3) + 128-bit ANCS solicitation (18) = 21 bytes
+    #   scan response  = APPEARANCE (4) + HID 16-bit UUID (4) + name (10) = 18 bytes
+    #
+    # The ANCS solicitation MUST live in the primary adv data (not the scan
+    # response) because iOS acts on solicitation seen during passive scan to
+    # decide whether to connect back. A 128-bit solicitation alone (18B) plus
+    # FLAGS (3B) does not leave room for the name/appearance/HID UUID, hence the
+    # split. bytes(UUID) yields the little-endian (Bluetooth byte order) form.
     device.advertising_data = bytes(
         AdvertisingData(
             [
                 (AdvertisingData.FLAGS, bytes([0x06])),
+                (
+                    AdvertisingData.LIST_OF_128_BIT_SERVICE_SOLICITATION_UUIDS,
+                    bytes(ANCS_SOLICITATION_UUID),
+                ),
+            ]
+        )
+    )
+    device.scan_response_data = bytes(
+        AdvertisingData(
+            [
                 (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
                 (
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
@@ -253,7 +281,7 @@ async def start_advertising(device: Device):
         own_address_type=OwnAddressType.PUBLIC,
         auto_restart=True,
     )
-    logger.info("Реклама запущена")
+    logger.info("Реклама запущена (adv=FLAGS+ANCS-solicit, scan_rsp=name+HID)")
 
 
 async def gatt_ping(connection: Connection) -> bool:
