@@ -1710,3 +1710,36 @@ Meaning for this project:
    - classic notifications are proven through ANCS
    - first-class Live Activities belong to a separate Apple framework stack that
      conflicts with the current no-app architecture
+
+## 2026-05-20: direct timer/Live Activity probe on the autonomous path produced no positive signal
+
+After clarifying the documentation boundary, a direct empirical check was still
+run so the conclusion would not depend only on reading Apple docs.
+
+Test shape:
+
+- restart the current ANCS runtime with file logging on the second device
+- keep the same autonomous no-companion-app BLE/ANCS path
+- launch a timer on the iPhone as a real Live Activity candidate
+- inspect the remote runtime log for:
+  - new app-specific ANCS events
+  - repeated `event=1 modified` traffic
+  - a new service or accessory-side path beyond the already-known ANCS/AMS setup
+
+Observed log result:
+
+- no new timer-specific or `WakeMinder`-specific ANCS payload appeared
+- no obvious Live Activity update stream appeared
+- only ordinary backlog notifications were seen:
+  - `Feedbackassistant`
+  - `Gmail`
+  - `Bridge`
+
+Practical meaning:
+
+1. This is a strong negative result against the idea that true Live Activities
+   simply "fall through" the already-proven autonomous ANCS path.
+2. It does not prove that Apple never exposes Live Activities to accessories.
+3. It does support the narrower and project-relevant conclusion that the current
+   no-app CarThing runtime does not receive them as first-class objects in the
+   same way it receives ordinary notifications.
