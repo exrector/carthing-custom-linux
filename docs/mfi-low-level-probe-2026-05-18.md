@@ -1623,3 +1623,51 @@ Meaning:
 3. `ANCS over BLE` is now a proven working system-events path on this project.
 4. The next work should focus on hardening and productizing the layer, not on
    re-arguing whether notifications must come from generic iAP2 traffic.
+
+## 2026-05-20: follow-up ANCS validation also proved removal, queueing, and long payload handling
+
+The first success case was then followed by a tighter live matrix on the same
+running session.
+
+Additional observed behavior:
+
+- real `ANCS removed` events were received, not just add/display traffic
+- multiple notifications arrived back-to-back and were parsed cleanly
+- a long Gmail notification payload was fetched and rendered without breaking the
+  runtime or the now-playing path
+
+Live examples:
+
+```text
+2015-01-01 04:09:15,347 INFO ANCS source: event=0 category=5 count=1 uid=5 flags=0x10
+2015-01-01 04:09:15,453 INFO ANCS notification ready: app=Reminders title='Напоминание' message='Сегодня, 21:22'
+
+2015-01-01 04:09:31,533 INFO ANCS source: event=0 category=5 count=2 uid=6 flags=0x10
+2015-01-01 04:09:31,564 INFO ANCS notification ready: app=Reminders title='Напоминание' message='Сегодня, 21:23'
+
+2015-01-01 04:10:09,572 INFO ANCS source: event=0 category=0 count=5 uid=7 flags=0x10
+2015-01-01 04:10:09,634 INFO ANCS notification ready: app=Gmail title='donotreply@apple.com' message='Hi AK, We require additional files ...'
+```
+
+The most important narrow proof from this cycle was active removal while the
+notification overlay was still live:
+
+```text
+2015-01-01 04:13:45,693 INFO ANCS source: event=0 category=5 count=1 uid=8 flags=0x10
+2015-01-01 04:13:45,724 INFO ANCS notification ready: app=Reminders title='Тест на удаление' message='Сегодня, 21:27'
+2015-01-01 04:13:45,724 INFO ANCS display: app=Reminders title='Тест на удаление' message='Сегодня, 21:27'
+2015-01-01 04:13:51,873 INFO ANCS source: event=2 category=5 count=0 uid=8 flags=0x10
+2015-01-01 04:13:51,873 INFO ANCS remove active notification uid=8
+```
+
+Meaning:
+
+1. The runtime is not only able to show a notification once.
+2. The ANCS path now has live proof for:
+   - add
+   - attribute fetch
+   - display
+   - queueing across multiple notifications
+   - removal of an active on-screen notification
+3. This substantially lowers the risk for promoting the ANCS layer from
+   prototype/runtime overlay into the main productized path.
