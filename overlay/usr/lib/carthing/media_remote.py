@@ -233,6 +233,21 @@ async def on_disconnection(connection: Connection, reason: int):
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
     ams = None
     _active_conn = None
+    # Disconnect placeholder: without this the DRM display keeps the last
+    # rendered track frozen on screen even though BLE is gone and no more AMS
+    # updates arrive (ui.render is only driven by on_state_update). Mutate the
+    # shared MediaState to the placeholder and repaint once.
+    state.title = "Lost Contact"
+    state.artist = "Awaiting Deep Space Relay"
+    state.album = ""
+    state.duration = 0.0
+    state.position = 0.0
+    state.playing = False
+    if ui:
+        try:
+            ui.render(state)
+        except Exception as e:
+            logger.error("UI disconnect render error: %s", e)
     try:
         await asyncio.sleep(0.3)
         if _device and not _device.is_advertising:
