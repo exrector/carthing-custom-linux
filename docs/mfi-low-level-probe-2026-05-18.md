@@ -1557,3 +1557,69 @@ Practical next step for another agent:
 4. If the attribute stream fragments across multiple BLE notifications in a way
    the current parser does not yet tolerate, harden the parser before broadening
    scope further.
+
+## 2026-05-20: live ANCS notification mirror proof succeeded on the second device
+
+The first real end-to-end ANCS validation has now succeeded on live hardware.
+
+Test setup:
+
+- the runtime was launched from a temporary overlay in `/run/ancs-test`
+- `/usr/lib/carthing` on the device was not overwritten for this validation pass
+- the same existing BLE/HID runtime architecture was reused:
+  - Bumble on `hci-socket:0`
+  - the current `AMS` path
+  - the new `ANCS` path in the same session
+
+One important startup issue appeared first:
+
+- the initial launch failed with:
+
+```text
+OSError: [Errno 16] Device or resource busy
+```
+
+- this happened while opening `hci-socket:0` on Bumble's `HCI_CHANNEL_USER`
+- the working recovery was to reset the Bluetooth attach layer cleanly:
+  - kill the current `carthing-btattach-mini` PID
+  - rerun `/etc/init.d/S20-bt-init`
+  - then start the ANCS runtime again
+
+After that reset, the real runtime sequence succeeded:
+
+- `hci-socket:0` opened
+- display/UI initialized
+- the iPhone connected
+- encryption completed
+- `AMS` came up successfully
+- `ANCS` service discovery succeeded
+- subscription to `Notification Source` and `Data Source` succeeded
+
+The iPhone-side UX also behaved as required:
+
+- iOS presented the notification-sharing permission prompt for `CarThing`
+- the user explicitly allowed it
+
+Real mirrored notification proof:
+
+```text
+2015-01-01 03:57:05,070 INFO ANCS source: event=0 category=5 count=1 uid=4 flags=0x10
+2015-01-01 03:57:05,071 INFO ANCS request attributes for uid=4
+2015-01-01 03:57:05,101 INFO ANCS notification ready: app=Reminders title='Любое напоминание' message='Сегодня, 21:11'
+2015-01-01 03:57:05,101 INFO ANCS display: app=Reminders title='Любое напоминание' message='Сегодня, 21:11'
+```
+
+User-visible result:
+
+- the notification appeared on the Car Thing screen
+- the content was recognizable and useful
+- the overlay later cleared automatically
+- the UI returned to the normal now-playing state
+
+Meaning:
+
+1. Autonomous iPhone notification mirroring is no longer speculative here.
+2. The no-companion-app rule remains intact.
+3. `ANCS over BLE` is now a proven working system-events path on this project.
+4. The next work should focus on hardening and productizing the layer, not on
+   re-arguing whether notifications must come from generic iAP2 traffic.
