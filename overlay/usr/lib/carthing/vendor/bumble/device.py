@@ -929,13 +929,34 @@ class Device(CompositeEventEmitter):
                         )
                     )
 
-                # Enable address resolution
-                # await self.send_command(
-                #     HCI_LE_Set_Address_Resolution_Enable_Command(address_resolution_enable=1)
-                # )
+                # Enable controller-side address resolution when available so
+                # reconnect and directed advertising can work against bonded
+                # peers that rotate RPAs.
+                if self.host.supports_command(HCI_LE_SET_ADDRESS_RESOLUTION_ENABLE_COMMAND):
+                    await self.send_command(
+                        HCI_LE_Set_Address_Resolution_Enable_Command(
+                            address_resolution_enable=1
+                        )
+                    )
 
                 # Create a host-side address resolver
                 self.address_resolver = smp.AddressResolver(resolving_keys)
+
+            # Load the filter accept list with bonded peer identity addresses
+            # when supported. This enables reconnect advertising that is
+            # visible in the standard undirected form but only connectable by
+            # known bonded peers.
+            if self.keystore and self.host.supports_command(HCI_LE_CLEAR_FILTER_ACCEPT_LIST_COMMAND):
+                await self.send_command(HCI_LE_Clear_Filter_Accept_List_Command())
+
+                resolving_keys = await self.keystore.get_resolving_keys()
+                for (_, address) in resolving_keys:
+                    await self.send_command(
+                        HCI_LE_Add_Device_To_Filter_Accept_List_Command(
+                            address_type = address.address_type,
+                            address      = address
+                        )
+                    )
 
         if self.classic_enabled:
             await self.send_command(
@@ -983,7 +1004,8 @@ class Device(CompositeEventEmitter):
         advertising_type=AdvertisingType.UNDIRECTED_CONNECTABLE_SCANNABLE,
         target=None,
         own_address_type=OwnAddressType.RANDOM,
-        auto_restart=False
+        auto_restart=False,
+        advertising_filter_policy=0
     ):
         # If we're advertising, stop first
         if self.advertising:
@@ -1021,7 +1043,7 @@ class Device(CompositeEventEmitter):
             peer_address_type         = peer_address_type,
             peer_address              = peer_address,
             advertising_channel_map   = 7,
-            advertising_filter_policy = 0
+            advertising_filter_policy = advertising_filter_policy
         ), check_result=True)
 
         # Enable advertising
@@ -1033,6 +1055,22 @@ class Device(CompositeEventEmitter):
         self.auto_restart_advertising     = auto_restart
         self.advertising_type             = advertising_type
         self.advertising                  = True
+
+    async def refresh_filter_accept_list(self):
+        if not self.keystore:
+            return
+        if not self.host.supports_command(HCI_LE_CLEAR_FILTER_ACCEPT_LIST_COMMAND):
+            return
+
+        await self.send_command(HCI_LE_Clear_Filter_Accept_List_Command())
+        resolving_keys = await self.keystore.get_resolving_keys()
+        for (_, address) in resolving_keys:
+            await self.send_command(
+                HCI_LE_Add_Device_To_Filter_Accept_List_Command(
+                    address_type = address.address_type,
+                    address      = address
+                )
+            )
 
     async def stop_advertising(self):
         # Disable advertising
