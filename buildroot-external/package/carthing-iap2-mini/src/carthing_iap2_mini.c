@@ -2325,6 +2325,7 @@ static void read_serial(char *buf, size_t maxlen) {
 enum identification_msgset {
     ID_MSGSET_EMPTY = 0,
     ID_MSGSET_EA02_ONLY,
+    ID_MSGSET_EA02_SENT_ONLY,
     ID_MSGSET_NOWPLAYING_ONLY,
     ID_MSGSET_HID_NOWPLAYING,
     ID_MSGSET_HID_NOWPLAYING_EA02,
@@ -2346,6 +2347,10 @@ static enum identification_msgset identification_msgset(void) {
     }
     if (strcmp(v, "ea02") == 0 || strcmp(v, "ea02-only") == 0) {
         return ID_MSGSET_EA02_ONLY;
+    }
+    if (strcmp(v, "ea02-sent-only") == 0 || strcmp(v, "ea02-tx-only") == 0 ||
+        strcmp(v, "app-launch-sent-only") == 0) {
+        return ID_MSGSET_EA02_SENT_ONLY;
     }
     if (strcmp(v, "nowplaying") == 0 || strcmp(v, "nowplaying-only") == 0 || strcmp(v, "np") == 0) {
         return ID_MSGSET_NOWPLAYING_ONLY;
@@ -2427,6 +2432,13 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
             static const uint8_t recv_ids[] = {0xEA, 0x00, 0xEA, 0x01};
             if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
             if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+            break;
+        }
+        case ID_MSGSET_EA02_SENT_ONLY:
+        {
+            static const uint8_t sent_ids[] = {0xEA, 0x02};
+            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+            if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
             break;
         }
         case ID_MSGSET_NOWPLAYING_ONLY:

@@ -2361,25 +2361,106 @@ Exact rejection:
   - `0x0006`
   - `0x0007`
 
-### Meaning
+### Meaning at this stage
 
-This moves the current app-launch / EA frontier one layer lower:
+These three passes narrowed the blocker, but did **not** close it fully:
 
-1. The iPhone accepts the current autonomous path only when `1D01` keeps
-   `MessagesSentByAccessory (0x0006)` and `MessagesReceivedFromDevice (0x0007)`
-   empty.
-2. As soon as the probe advertises any of the current handcrafted message-set
-   variants (`EA02-only`, `hid-nowplaying`, or the hybrid), identification is
-   rejected before `1D02`.
-3. Therefore the present blocker for `EA02` is **not yet** "does iPhone launch
-   the app?" but rather:
+1. The iPhone definitely rejects several current non-empty message-set
+   combinations before `1D02`, including:
+   - `EA02-only`
+   - `hid-nowplaying`
+   - the hybrid `hid + nowplaying + ea02`
+2. The rejections consistently name:
+   - `0x0006`
+   - `0x0007`
+3. So the present blocker is not yet "does iPhone launch the app?" but rather:
    - what exact encoding/semantics Apple expects for `0x0006` / `0x0007`
-   - whether the current byte-array representation is incomplete or wrong for
-     this iPhone path
+   - which side of that pair is actually causing the rejection on this path
+
+At this point the honest statement was:
+
+- our current multi-ID `1D01` message-set encoding was being rejected by the
+  iPhone
+- `EA02` could not yet be tested fairly with those variants
+
+## 2026-05-21: sent-only `EA02` in `0x0006` is accepted; Spotify launch is
+## proven, but explicitly out of scope as a product direction
+
+The next live isolation pass split the two message-set fields instead of keeping
+both non-empty.
+
+Environment:
+
+- `CARTHING_IAP2_ID_MSGSET=ea02-sent-only`
+- `CARTHING_IAP2_POST_ID_MODE=app-launch`
+- `CARTHING_IAP2_APP_LAUNCH_TRIGGER=none`
+- `CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID=com.spotify.client`
+- `CARTHING_IAP2_APP_LAUNCH_METHOD=0`
+
+This variant advertised:
+
+- `0x0006 = { EA02 }`
+- `0x0007 = empty`
+
+### Device-side result
+
+Unlike the earlier variants, this path was accepted:
+
+- `AA00 -> AA02 -> AA05` succeeded
+- `1D00` arrived
+- `1D02 IdentificationAccepted` arrived
+- the accessory then sent:
+  - `[iap2-mini] -> link 0xEA02 seq=4 sid=1 len=34 bundle_id=com.spotify.client`
+
+The same result held on a longer observation window:
+
+- after a `65s` wait there was still no incoming `EA00`
+- no `EA03`
+- no follow-on non-zero-payload EA session traffic
+
+### User-visible result
+
+The user confirmed the corresponding iPhone-side behavior:
+
+- iOS showed the Spotify permission prompt
+- the user allowed it
+- the Spotify app opened
+
+So the authenticated app-launch surface is now **proven live**.
+
+### Updated meaning
+
+This supersedes the overly strong earlier conclusion that both fields must stay
+empty:
+
+1. `0x0006` is **not** universally forbidden on this path.
+2. A sent-only declaration containing `EA02` can coexist with successful
+   identification.
+3. The current practical blocker is narrower:
+   - `0x0007` non-empty is still suspect
+   - some multi-ID / bidirectional combinations around `0x0006`/`0x0007` are
+     still rejected
+   - but `EA02` itself is no longer blocked at identification if advertised only
+     in `MessagesSentByAccessory`
+
+### Boundary for the actual project goal
+
+The user also clarified two important product constraints:
+
+- Spotify itself is **not** the target of this project
+- Spotify will likely not let the path go meaningfully further without a
+  subscription
+
+So this finding should be interpreted correctly:
+
+- it proves that authenticated `RequestAppLaunch` is real and user-visible
+- it does **not** change the main no-companion-app strategy
+- it does **not** make Spotify a desirable downstream path for the actual
+  product goal
 
 Practical consequence:
 
-- do **not** interpret the current `EA02` result as "app launch is impossible"
-- the honest current statement is narrower:
-  - our current `1D01` message-set encoding is rejected by the iPhone
-  - until that encoding is fixed, `EA02` cannot be tested fairly on this path
+- keep `EA02 sent-only` as a proven diagnostic capability
+- do not pivot the project toward Spotify-specific behavior
+- keep the main research focus on autonomous no-app surfaces and on the exact
+  `0x0006/0x0007` boundary that governs what can be advertised safely in `1D01`
