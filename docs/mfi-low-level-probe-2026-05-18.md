@@ -1146,6 +1146,81 @@ User-facing confirmation from the same frontier:
   - the normal BLE/HID identity (`CarThing`) remains a separate trusted path and
     must not be conflated with the temporary classic/iAP2 persona during tests
 
+## 2026-05-21: `DisplayYesNo + MITM` unlocked successful classic pairing, and MFi auth now reaches IdentificationAccepted
+
+The next two live passes moved the frontier far beyond the earlier SSP failure.
+
+First change:
+
+- the temporary classic persona was changed from:
+  - `NoInputNoOutput + GeneralBondingNoMITM`
+- to:
+  - `DisplayYesNo + GeneralBondingMITM`
+
+User-visible result:
+
+- pairing for `CarThing iAP2` no longer failed immediately
+- iPhone showed:
+  - the pairing prompt
+  - a pairing code
+  - the follow-up trust/allow dialog
+- after confirmation, `CarThing iAP2` moved into trusted devices
+
+Accessory-side proof from the same run:
+
+- `LINK_KEY_REQ -> negative`
+- `IO_CAP_RSP ... io=0x01 auth=0x05`
+- `SIMPLE_PAIRING_COMPLETE status=0x00`
+- `LINK_KEY_NOTIFY ... type=0x05`
+- `AUTH COMPLETE status=0x00`
+- a new classic link key was persisted into:
+  - `/run/carthing-state/carthing/iap2-link-keys.txt`
+
+This means:
+
+1. The old blocker was indeed SSP policy, not transport.
+2. The previous `NoInputNoOutput + NoMITM` posture was too weak or too mismatched
+   for the iPhone's policy for this persona.
+3. The current working classic pairing posture is:
+   - `DisplayYesNo`
+   - `MITM`
+   - saved BR/EDR link key type `0x05`
+
+Second change:
+
+- the missing helper `/usr/bin/carthing-mfi-probe` was supplied explicitly as:
+  - `CARTHING_MFI_HELPER=/run/carthing-mfi-probe`
+
+Live result after pairing was already established:
+
+- `transport-active` reused the cached BR/EDR key successfully
+- iAP2 auth progressed past both MFi steps:
+  - `AA00` auth certificate request
+  - `AA02` challenge request
+  - `AA05` auth success
+- identification then completed too:
+  - `1D00 StartIdentification`
+  - accessory sent `1D01`
+  - iPhone answered `1D02 IdentificationAccepted`
+- after that the accessory sent:
+  - `0x6800` (Start HID)
+  - `0x40C8` (Start NowPlaying)
+
+Practical consequence:
+
+1. The project now has a proven live path for all of the following on the same
+   temporary classic persona:
+   - classic pair
+   - BR/EDR link key persistence
+   - MFi auth chip interaction
+   - iAP2 authentication success
+   - identification acceptance by iPhone
+2. The frontier is no longer "can we pair?" and no longer "can we authenticate?"
+3. The next frontier is post-identification behavior:
+   - confirm what the non-control link packets after `0x6800` / `0x40C8` mean
+   - determine whether EA / HID / NowPlaying sessions are actually coming up
+   - map which higher-level iPhone services become available on this live path
+
 ## 2026-05-19: classic test identity normalized to avoid duplicate trusted devices on iPhone
 
 One practical side effect of the early classic experiments was that the clean-room

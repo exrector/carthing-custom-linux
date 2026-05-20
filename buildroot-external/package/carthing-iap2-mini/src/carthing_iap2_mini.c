@@ -31,6 +31,18 @@
 #define IAP2_MSG_ID_INFO        0x1D01
 #define IAP2_MSG_ID_ACCEPTED    0x1D02
 #define IAP2_MSG_ID_REJECTED    0x1D03
+#define IAP2_MSG_EA_START       0xEA00
+#define IAP2_MSG_EA_STOP        0xEA01
+#define IAP2_MSG_APP_LAUNCH     0xEA02
+#define IAP2_MSG_EA_STATUS      0xEA03
+#define IAP2_MSG_START_NOWPLAYING 0x40C8
+#define IAP2_MSG_STOP_NOWPLAYING  0x40C9
+#define IAP2_MSG_NOWPLAYING_UPDATE 0x4800
+#define IAP2_MSG_START_HID        0x6800
+#define IAP2_MSG_HID_REPORT       0x6801
+#define IAP2_MSG_DEVICE_HID_REPORT 0x6802
+#define IAP2_MSG_STOP_HID         0x6803
+#define HID_COMPONENT_ID          0x0001
 
 #define SDP_PDU_ERROR_RESPONSE              0x01
 #define SDP_PDU_SERVICE_SEARCH_REQUEST      0x02
@@ -108,9 +120,9 @@
 #define HCIDEVUP _IOW('H', 201, int)
 #endif
 
-#define HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT 0x03
+#define HCI_IO_CAPABILITY_DISPLAY_YESNO 0x01
 #define HCI_OOB_DATA_NOT_PRESENT 0x00
-#define HCI_AUTH_REQ_GENERAL_BONDING_NO_MITM 0x04
+#define HCI_AUTH_REQ_GENERAL_BONDING_MITM 0x05
 
 #define LINK_KEY_PATH_DEFAULT "/run/carthing-state/carthing/iap2-link-keys.txt"
 #define LINK_KEY_MAX_ENTRIES 16
@@ -183,6 +195,14 @@ struct hci_filter_local {
     uint16_t opcode;
 };
 
+struct input_event_local {
+    long tv_sec;
+    long tv_usec;
+    uint16_t type;
+    uint16_t code;
+    int32_t value;
+};
+
 enum output_mode {
     OUTPUT_CONTROL = 0,
     OUTPUT_RAW = 1,
@@ -190,7 +210,21 @@ enum output_mode {
 
 struct link_state {
     uint8_t tx_seq;
+    uint8_t control_sid;
+    uint8_t last_rx_ctrl_seq;
+    uint16_t last_rx_ctrl_msg_id;
+    int last_rx_ctrl_valid;
+    uint8_t last_tx_seq;
+    uint16_t last_tx_msg_id;
+    size_t last_tx_payload_len;
+    uint8_t last_tx_payload[2048];
+    int last_tx_valid;
     int auth_ok;
+    uint8_t ea_protocol_id[8];
+    size_t ea_protocol_id_len;
+    uint8_t ea_session_id[8];
+    size_t ea_session_id_len;
+    int ea_session_open;
 };
 
 static const uint8_t SDP_UUID_CAFF[16] = {
@@ -206,7 +240,134 @@ static const uint8_t EIR_UUID_CAFF_LE[16] = {
     0xde, 0xfa, 0xca, 0xde, 0x00, 0x00, 0x00, 0x00
 };
 
+static const uint8_t kHidConsumerDesc[] = {
+    0x05, 0x0C,
+    0x09, 0x01,
+    0xA1, 0x01,
+    0x15, 0x00,
+    0x26, 0xFF, 0x03,
+    0x19, 0x00,
+    0x2A, 0xFF, 0x03,
+    0x75, 0x10,
+    0x95, 0x01,
+    0x81, 0x00,
+    0xC0
+};
+
 static const uint8_t SDP_ATTR_HANDLE[] = { 0x0A, 0x00, 0x01, 0x00, 0x00 };
+
+static int env_u8(const char *name, int defv, int minv, int maxv);
+
+static int open_input_event(const char *path) {
+    if (!path || !*path) {
+        errno = ENOENT;
+        return -1;
+    }
+    return open(path, O_RDONLY | O_NONBLOCK);
+}
+
+static int wait_for_local_user_trigger(void) {
+    const char *trigger = getenv("CARTHING_IAP2_APP_LAUNCH_TRIGGER");
+    const char *trigger_file = getenv("CARTHING_IAP2_APP_LAUNCH_TRIGGER_FILE");
+    const char *ev0_path;
+    const char *ev1_path;
+    struct pollfd pfds[2];
+    int fds[2] = {-1, -1};
+    int nfds = 0;
+    int timeout_ms;
+    int i;
+
+    if (trigger && strcmp(trigger, "none") == 0) {
+        return 1;
+    }
+
+    ev0_path = getenv("CARTHING_IAP2_TRIGGER_EVENT0");
+    ev1_path = getenv("CARTHING_IAP2_TRIGGER_EVENT1");
+    if (!ev0_path || !*ev0_path) {
+        ev0_path = "/dev/input/event0";
+    }
+    if (!ev1_path || !*ev1_path) {
+        ev1_path = "/dev/input/event1";
+    }
+    if (!trigger_file || !*trigger_file) {
+        trigger_file = "/run/carthing-iap2-trigger-launch";
+    }
+    timeout_ms = env_u8("CARTHING_IAP2_APP_LAUNCH_TRIGGER_TIMEOUT", 20, 1, 120) * 1000;
+
+    fds[nfds] = open_input_event(ev0_path);
+    if (fds[nfds] >= 0) {
+        pfds[nfds].fd = fds[nfds];
+        pfds[nfds].events = POLLIN;
+        nfds++;
+    }
+    fds[nfds] = open_input_event(ev1_path);
+    if (fds[nfds] >= 0) {
+        pfds[nfds].fd = fds[nfds];
+        pfds[nfds].events = POLLIN;
+        nfds++;
+    }
+
+    if (nfds == 0) {
+        fprintf(stderr, "[iap2-mini] no local input trigger devices available, sending EA02 immediately\n");
+        return 1;
+    }
+
+    fprintf(stderr, "[iap2-mini] waiting up to %d ms for local user trigger on %s / %s\n",
+            timeout_ms, ev0_path, ev1_path);
+
+    for (;;) {
+        int poll_ms = timeout_ms > 1000 ? 1000 : timeout_ms;
+        int rc;
+        if (access(trigger_file, F_OK) == 0) {
+            unlink(trigger_file);
+            for (i = 0; i < nfds; i++) {
+                if (pfds[i].fd >= 0) close(pfds[i].fd);
+            }
+            fprintf(stderr, "[iap2-mini] user trigger file hit: %s\n", trigger_file);
+            return 1;
+        }
+        rc = poll(pfds, (nfds_t)nfds, poll_ms);
+        if (timeout_ms > 1000) {
+            timeout_ms -= 1000;
+        } else {
+            timeout_ms = 0;
+        }
+        if (rc <= 0) {
+            if (timeout_ms > 0) {
+                continue;
+            }
+            for (i = 0; i < nfds; i++) {
+                if (pfds[i].fd >= 0) close(pfds[i].fd);
+            }
+            fprintf(stderr, "[iap2-mini] no local user trigger observed before timeout\n");
+            errno = ETIMEDOUT;
+            return 0;
+        }
+        for (i = 0; i < nfds; i++) {
+            if (pfds[i].revents & POLLIN) {
+                struct input_event_local ev;
+                ssize_t n;
+                for (;;) {
+                    n = read(pfds[i].fd, &ev, sizeof(ev));
+                    if (n == (ssize_t)sizeof(ev)) {
+                        if (ev.type != 0) {
+                            fprintf(stderr,
+                                    "[iap2-mini] local user trigger type=0x%04x code=0x%04x value=%d fd=%d\n",
+                                    ev.type, ev.code, ev.value, pfds[i].fd);
+                            for (int j = 0; j < nfds; j++) {
+                                if (pfds[j].fd >= 0) close(pfds[j].fd);
+                            }
+                            return 1;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        timeout_ms = 0;
+    }
+}
 static const uint8_t SDP_ATTR_SERVICE_CLASS_ID_LIST[] = {
     0x35, 0x11, 0x1C,
     0x00, 0x00, 0x00, 0x00, 0xde, 0xca, 0xfa, 0xde,
@@ -321,26 +482,6 @@ static int read_exact_fd(int fd, uint8_t *buf, size_t len) {
         }
         off += (size_t)n;
     }
-    return 0;
-}
-
-static int read_exact_count_fd(int fd, uint8_t *buf, size_t len, size_t *read_out) {
-    size_t off = 0;
-
-    while (off < len) {
-        ssize_t n = read(fd, buf + off, len - off);
-        if (n < 0) {
-            if (read_out) *read_out = off;
-            return -1;
-        }
-        if (n == 0) {
-            errno = 0;
-            if (read_out) *read_out = off;
-            return 1;
-        }
-        off += (size_t)n;
-    }
-    if (read_out) *read_out = off;
     return 0;
 }
 
@@ -587,14 +728,23 @@ static int sdp_build_attr_list(uint8_t *buf, size_t cap, size_t *out_len,
 
 static int sdp_write_response_fd(int out_fd, uint8_t pdu_id, uint16_t txn_id,
                                  const uint8_t *params, size_t params_len) {
-    uint8_t hdr[5];
-    hdr[0] = pdu_id;
-    hdr[1] = (uint8_t)(txn_id >> 8);
-    hdr[2] = (uint8_t)(txn_id & 0xff);
-    hdr[3] = (uint8_t)((params_len >> 8) & 0xff);
-    hdr[4] = (uint8_t)(params_len & 0xff);
-    if (write_all_fd(out_fd, hdr, sizeof(hdr)) < 0) return -1;
-    if (params_len > 0 && write_all_fd(out_fd, params, params_len) < 0) return -1;
+    uint8_t packet[705];
+    size_t off = 0;
+
+    if (sizeof(packet) < 5 + params_len) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    packet[off++] = pdu_id;
+    packet[off++] = (uint8_t)(txn_id >> 8);
+    packet[off++] = (uint8_t)(txn_id & 0xff);
+    packet[off++] = (uint8_t)((params_len >> 8) & 0xff);
+    packet[off++] = (uint8_t)(params_len & 0xff);
+    if (params_len > 0) {
+        memcpy(packet + off, params, params_len);
+        off += params_len;
+    }
+    if (write_all_fd(out_fd, packet, off) < 0) return -1;
     return 0;
 }
 
@@ -1038,11 +1188,10 @@ static int hci_cmd_complete(int fd, uint16_t opcode, const uint8_t *payload, siz
     }
 }
 
-static int hci_read_scan_enable(int dev_id) {
+static int hci_read_scan_enable_value(int dev_id, uint8_t *scan_enable_out) {
     int fd;
     uint8_t resp[8];
     size_t resp_len = 0;
-    uint8_t scan_enable;
 
     fd = hci_open_raw(dev_id);
     if (fd < 0) {
@@ -1060,7 +1209,16 @@ static int hci_read_scan_enable(int dev_id) {
         perror("HCI Read Scan Enable short reply");
         return 1;
     }
-    scan_enable = resp[0];
+    *scan_enable_out = resp[0];
+    return 0;
+}
+
+static int hci_read_scan_enable(int dev_id) {
+    uint8_t scan_enable;
+
+    if (hci_read_scan_enable_value(dev_id, &scan_enable) != 0) {
+        return 1;
+    }
     fprintf(stderr, "[iap2-mini] HCI scan enable=0x%02x\n", scan_enable);
     printf("0x%02x\n", scan_enable);
     return 0;
@@ -1083,6 +1241,25 @@ static int hci_write_scan_enable(int dev_id, uint8_t scan_enable) {
     }
     close(fd);
     fprintf(stderr, "[iap2-mini] HCI wrote scan enable=0x%02x\n", scan_enable);
+    return 0;
+}
+
+static int hci_scan_watchdog_loop(int dev_id, uint8_t expected_scan_enable) {
+    for (;;) {
+        uint8_t current = 0;
+
+        sleep(1);
+        if (hci_read_scan_enable_value(dev_id, &current) != 0) {
+            continue;
+        }
+        if (current != expected_scan_enable) {
+            fprintf(stderr,
+                    "[iap2-mini] scan watchdog: current=0x%02x expected=0x%02x -> restore\n",
+                    current, expected_scan_enable);
+            hci_write_scan_enable(dev_id, expected_scan_enable);
+        }
+    }
+
     return 0;
 }
 
@@ -1919,9 +2096,9 @@ static int hci_ssp_agent_loop(int dev_id) {
             case EVT_IO_CAPABILITY_REQUEST: {
                 uint8_t payload[9];
                 memcpy(payload, p, 6);
-                payload[6] = HCI_IO_CAPABILITY_NO_INPUT_NO_OUTPUT;
+                payload[6] = HCI_IO_CAPABILITY_DISPLAY_YESNO;
                 payload[7] = HCI_OOB_DATA_NOT_PRESENT;
-                payload[8] = HCI_AUTH_REQ_GENERAL_BONDING_NO_MITM;
+                payload[8] = HCI_AUTH_REQ_GENERAL_BONDING_MITM;
                 bdaddr_event_to_str(p, addr);
                 fprintf(stderr, "[iap2-mini] SSP IO_CAP_REQ from %s\n", addr);
                 if (hci_cmd_status_only(dev_id,
@@ -2101,14 +2278,16 @@ static int run_helper_capture(const char *const argv[], const uint8_t *stdin_buf
 
 static int append_tlv(uint8_t *buf, size_t maxlen, size_t *off, uint16_t type,
                       const uint8_t *data, size_t len) {
+    uint16_t plen = (uint16_t)(4 + len);
+
     if (*off + 4 + len > maxlen) {
         errno = ENOSPC;
         return -1;
     }
-    buf[*off + 0] = (uint8_t)((type >> 8) & 0xff);
-    buf[*off + 1] = (uint8_t)(type & 0xff);
-    buf[*off + 2] = (uint8_t)((len >> 8) & 0xff);
-    buf[*off + 3] = (uint8_t)(len & 0xff);
+    buf[*off + 0] = (uint8_t)((plen >> 8) & 0xff);
+    buf[*off + 1] = (uint8_t)(plen & 0xff);
+    buf[*off + 2] = (uint8_t)((type >> 8) & 0xff);
+    buf[*off + 3] = (uint8_t)(type & 0xff);
     if (len > 0 && data) {
         memcpy(buf + *off + 4, data, len);
     }
@@ -2143,11 +2322,98 @@ static void read_serial(char *buf, size_t maxlen) {
     }
 }
 
+enum identification_msgset {
+    ID_MSGSET_EMPTY = 0,
+    ID_MSGSET_EA02_ONLY,
+    ID_MSGSET_NOWPLAYING_ONLY,
+    ID_MSGSET_HID_NOWPLAYING,
+};
+
+enum post_identification_mode {
+    POST_ID_HID_NOWPLAYING = 0,
+    POST_ID_NOWPLAYING_ONLY,
+    POST_ID_APP_LAUNCH,
+    POST_ID_ALL,
+    POST_ID_NONE,
+};
+
+static enum identification_msgset identification_msgset(void) {
+    const char *v = getenv("CARTHING_IAP2_ID_MSGSET");
+    if (!v || !*v || strcmp(v, "baseline") == 0 || strcmp(v, "empty") == 0) {
+        return ID_MSGSET_EMPTY;
+    }
+    if (strcmp(v, "ea02") == 0 || strcmp(v, "ea02-only") == 0) {
+        return ID_MSGSET_EA02_ONLY;
+    }
+    if (strcmp(v, "nowplaying") == 0 || strcmp(v, "nowplaying-only") == 0 || strcmp(v, "np") == 0) {
+        return ID_MSGSET_NOWPLAYING_ONLY;
+    }
+    if (strcmp(v, "hid-nowplaying") == 0 || strcmp(v, "legacy") == 0) {
+        return ID_MSGSET_HID_NOWPLAYING;
+    }
+    return ID_MSGSET_EMPTY;
+}
+
+static enum post_identification_mode post_identification_mode(void) {
+    const char *v = getenv("CARTHING_IAP2_POST_ID_MODE");
+    if (!v || !*v || strcmp(v, "hid-nowplaying") == 0 || strcmp(v, "default") == 0) {
+        return POST_ID_HID_NOWPLAYING;
+    }
+    if (strcmp(v, "nowplaying") == 0 || strcmp(v, "nowplaying-only") == 0 || strcmp(v, "np") == 0) {
+        return POST_ID_NOWPLAYING_ONLY;
+    }
+    if (strcmp(v, "app-launch") == 0 || strcmp(v, "ea02") == 0) {
+        return POST_ID_APP_LAUNCH;
+    }
+    if (strcmp(v, "all") == 0) {
+        return POST_ID_ALL;
+    }
+    if (strcmp(v, "none") == 0) {
+        return POST_ID_NONE;
+    }
+    return POST_ID_HID_NOWPLAYING;
+}
+
+static const char *ea_protocol_name(void) {
+    const char *v = getenv("CARTHING_IAP2_EA_PROTOCOL");
+    return (v && v[0]) ? v : NULL;
+}
+
+static const char *preferred_bundle_seed_identifier(void) {
+    const char *v = getenv("CARTHING_IAP2_PREFERRED_BUNDLE_SEED");
+    return (v && v[0]) ? v : NULL;
+}
+
+static const char *app_launch_bundle_id(void) {
+    const char *v = getenv("CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID");
+    return (v && v[0]) ? v : NULL;
+}
+
+static const char *app_launch_uti(void) {
+    const char *v = getenv("CARTHING_IAP2_APP_LAUNCH_UTI");
+    if (v && v[0]) {
+        return v;
+    }
+    v = ea_protocol_name();
+    if (v && v[0]) {
+        return v;
+    }
+    return app_launch_bundle_id();
+}
+
 static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_len) {
     size_t off = 0;
+    size_t btc_off = 0;
     char serial[64];
+    char mac_str[20];
+    uint8_t btc[96];
+    uint8_t transport_id[2] = {0x00, 0x01};
+    uint8_t mac[6] = {0};
     uint8_t power = 0x00;
     uint8_t current[2] = {0x00, 0x64};
+    enum identification_msgset msgset = identification_msgset();
+    const char *protocol = ea_protocol_name();
+    const char *bundle_seed = preferred_bundle_seed_identifier();
 
     read_serial(serial, sizeof(serial));
 
@@ -2157,10 +2423,85 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
     if (append_tlv_cstr(buf, maxlen, &off, 0x0003, serial) < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0004, "1.0.0") < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0005, "1.0") < 0) return -1;
-    if (append_tlv(buf, maxlen, &off, 0x0006, NULL, 0) < 0) return -1;
-    if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
+    switch (msgset) {
+        case ID_MSGSET_EA02_ONLY:
+        {
+            static const uint8_t sent_ids[] = {0xEA, 0x02};
+            static const uint8_t recv_ids[] = {0xEA, 0x00, 0xEA, 0x01};
+            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+            break;
+        }
+        case ID_MSGSET_NOWPLAYING_ONLY:
+        {
+            static const uint8_t sent_ids[] = {0x40, 0xC8, 0x40, 0xC9};
+            static const uint8_t recv_ids[] = {0x48, 0x00};
+            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+            break;
+        }
+        case ID_MSGSET_HID_NOWPLAYING:
+        {
+            static const uint8_t sent_ids[] = {0x40, 0xC8, 0x68, 0x00};
+            static const uint8_t recv_ids[] = {0x48, 0x00};
+            if (append_tlv(buf, maxlen, &off, 0x0006, sent_ids, sizeof(sent_ids)) < 0) return -1;
+            if (append_tlv(buf, maxlen, &off, 0x0007, recv_ids, sizeof(recv_ids)) < 0) return -1;
+            break;
+        }
+        case ID_MSGSET_EMPTY:
+        default:
+            if (append_tlv(buf, maxlen, &off, 0x0006, NULL, 0) < 0) return -1;
+            if (append_tlv(buf, maxlen, &off, 0x0007, NULL, 0) < 0) return -1;
+            break;
+    }
     if (append_tlv(buf, maxlen, &off, 0x0008, &power, 1) < 0) return -1;
     if (append_tlv(buf, maxlen, &off, 0x0009, current, sizeof(current)) < 0) return -1;
+    if (protocol && protocol[0]) {
+        uint8_t eap[256];
+        size_t eap_off = 0;
+        uint8_t protocol_id = 0x00;
+        uint8_t match_action = (uint8_t)env_u8("CARTHING_IAP2_EA_MATCH_ACTION", 1, 0, 2);
+
+        if (append_tlv(eap, sizeof(eap), &eap_off, 0x0000, &protocol_id, sizeof(protocol_id)) < 0) return -1;
+        if (append_tlv_cstr(eap, sizeof(eap), &eap_off, 0x0001, protocol) < 0) return -1;
+        if (append_tlv(eap, sizeof(eap), &eap_off, 0x0002, &match_action, sizeof(match_action)) < 0) return -1;
+        if (append_tlv(buf, maxlen, &off, 0x000A, eap, eap_off) < 0) return -1;
+    }
+    if (bundle_seed && bundle_seed[0]) {
+        if (append_tlv_cstr(buf, maxlen, &off, 0x000B, bundle_seed) < 0) return -1;
+    }
+    if (append_tlv_cstr(buf, maxlen, &off, 0x000C, "en") < 0) return -1;
+    if (append_tlv_cstr(buf, maxlen, &off, 0x000D, "en") < 0) return -1;
+
+    read_file_str("/sys/class/bluetooth/hci0/address", mac_str, sizeof(mac_str),
+                  "30:E3:D6:00:5F:A4");
+    mac_str[strcspn(mac_str, "\r\n")] = '\0';
+    sscanf(mac_str, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+           &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+    if (append_tlv(btc, sizeof(btc), &btc_off, 0x0000, transport_id, sizeof(transport_id)) < 0) return -1;
+    if (append_tlv_cstr(btc, sizeof(btc), &btc_off, 0x0001, "Bluetooth") < 0) return -1;
+    if (append_tlv(btc, sizeof(btc), &btc_off, 0x0002, NULL, 0) < 0) return -1;
+    if (append_tlv(btc, sizeof(btc), &btc_off, 0x0003, mac, sizeof(mac)) < 0) return -1;
+    if (append_tlv(buf, maxlen, &off, 0x0011, btc, btc_off) < 0) return -1;
+
+    *out_len = off;
+    return 0;
+}
+
+static int build_start_nowplaying_params(uint8_t *buf, size_t maxlen, size_t *out_len) {
+    size_t off = 0;
+    static const uint16_t fields[] = {0x0001, 0x0002, 0x0003, 0x0008, 0x000F, 0x0010};
+    size_t i;
+
+    for (i = 0; i < sizeof(fields) / sizeof(fields[0]); i++) {
+        uint8_t field_id[2] = {
+            (uint8_t)((fields[i] >> 8) & 0xff),
+            (uint8_t)(fields[i] & 0xff),
+        };
+        if (append_tlv(buf, maxlen, &off, 0x0000, field_id, sizeof(field_id)) < 0) {
+            return -1;
+        }
+    }
 
     *out_len = off;
     return 0;
@@ -2333,11 +2674,255 @@ static int capture_identification_msg(uint8_t **out, size_t *out_len) {
         : build_control_msg_buf(IAP2_MSG_ID_INFO, params, params_len, out, out_len);
 }
 
+static int capture_start_nowplaying_msg(uint8_t **out, size_t *out_len) {
+    uint8_t params[128];
+    size_t params_len = 0;
+    return build_start_nowplaying_params(params, sizeof(params), &params_len) < 0
+        ? -1
+        : build_control_msg_buf(IAP2_MSG_START_NOWPLAYING, params, params_len, out, out_len);
+}
+
+static int capture_request_app_launch_msg(uint8_t **out, size_t *out_len) {
+    uint8_t params[256];
+    size_t off = 0;
+    uint8_t method = (uint8_t)env_u8("CARTHING_IAP2_APP_LAUNCH_METHOD", 0, 0, 255);
+    const char *uti = app_launch_uti();
+
+    if (!uti || !uti[0]) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (append_tlv_cstr(params, sizeof(params), &off, 0x0000, uti) < 0) {
+        return -1;
+    }
+    if (append_tlv(params, sizeof(params), &off, 0x0001, &method, sizeof(method)) < 0) {
+        return -1;
+    }
+    return build_control_msg_buf(IAP2_MSG_APP_LAUNCH, params, off, out, out_len);
+}
+
+static int tlv_find_param(const uint8_t *params, size_t params_len, uint16_t want_id,
+                          const uint8_t **data, size_t *data_len) {
+    size_t off = 0;
+    while (off + 4 <= params_len) {
+        uint16_t plen = (uint16_t)((params[off] << 8) | params[off + 1]);
+        uint16_t pid = (uint16_t)((params[off + 2] << 8) | params[off + 3]);
+        if (plen < 4 || off + plen > params_len) {
+            return -1;
+        }
+        if (pid == want_id) {
+            *data = params + off + 4;
+            *data_len = (size_t)(plen - 4);
+            return 0;
+        }
+        off += plen;
+    }
+    return -1;
+}
+
+static int parse_ea_session_handles(const uint8_t *params, size_t params_len,
+                                    uint8_t *protocol_id, size_t *protocol_id_len,
+                                    uint8_t *session_id, size_t *session_id_len) {
+    const uint8_t *data = NULL;
+    size_t data_len = 0;
+
+    if (tlv_find_param(params, params_len, 0x0000, &data, &data_len) < 0 ||
+        data_len == 0 || data_len > 8) {
+        return -1;
+    }
+    memcpy(protocol_id, data, data_len);
+    *protocol_id_len = data_len;
+
+    if (tlv_find_param(params, params_len, 0x0001, &data, &data_len) < 0 ||
+        data_len == 0 || data_len > 8) {
+        return -1;
+    }
+    memcpy(session_id, data, data_len);
+    *session_id_len = data_len;
+    return 0;
+}
+
+static int capture_ea_status_msg(const uint8_t *protocol_id, size_t protocol_id_len,
+                                 const uint8_t *session_id, size_t session_id_len,
+                                 int open, uint8_t **out, size_t *out_len) {
+    uint8_t params[64];
+    size_t off = 0;
+    uint8_t status = open ? 1 : 0;
+
+    if (!protocol_id || protocol_id_len == 0 || !session_id || session_id_len == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (append_tlv(params, sizeof(params), &off, 0x0000, protocol_id, protocol_id_len) < 0) {
+        return -1;
+    }
+    if (append_tlv(params, sizeof(params), &off, 0x0001, session_id, session_id_len) < 0) {
+        return -1;
+    }
+    if (append_tlv(params, sizeof(params), &off, 0x0002, &status, sizeof(status)) < 0) {
+        return -1;
+    }
+    return build_control_msg_buf(IAP2_MSG_EA_STATUS, params, off, out, out_len);
+}
+
+static int capture_start_hid_msg(uint8_t **out, size_t *out_len) {
+    uint8_t params[128];
+    size_t off = 0;
+    uint8_t cid[2] = {
+        (uint8_t)((HID_COMPONENT_ID >> 8) & 0xff),
+        (uint8_t)(HID_COMPONENT_ID & 0xff),
+    };
+
+    if (append_tlv(params, sizeof(params), &off, 0x0000, cid, sizeof(cid)) < 0) {
+        return -1;
+    }
+    if (append_tlv(params, sizeof(params), &off, 0x0001,
+                   kHidConsumerDesc, sizeof(kHidConsumerDesc)) < 0) {
+        return -1;
+    }
+    return build_control_msg_buf(IAP2_MSG_START_HID, params, off, out, out_len);
+}
+
+static int write_link_control_msg(struct link_state *state, uint8_t ack_seq, const uint8_t *payload,
+                                  size_t payload_len, uint16_t msg_id, int cache_reply);
+
+static int write_post_identification_raw(void) {
+    enum post_identification_mode mode = post_identification_mode();
+    uint8_t *msg = NULL;
+    size_t msg_len = 0;
+    int rc;
+
+    if (mode == POST_ID_NONE) {
+        return 0;
+    }
+    if (mode == POST_ID_NOWPLAYING_ONLY) {
+        if (capture_start_nowplaying_msg(&msg, &msg_len) < 0) {
+            perror("build StartNowPlaying");
+            return -1;
+        }
+        rc = write_all_fd(STDOUT_FILENO, msg, msg_len);
+        fprintf(stderr, "[iap2-mini] -> 40C8 StartNowPlaying len=%zu\n", msg_len);
+        free(msg);
+        return rc;
+    }
+    if (mode == POST_ID_HID_NOWPLAYING || mode == POST_ID_ALL) {
+        if (capture_start_hid_msg(&msg, &msg_len) < 0) {
+            perror("build StartHID");
+            return -1;
+        }
+        rc = write_all_fd(STDOUT_FILENO, msg, msg_len);
+        fprintf(stderr, "[iap2-mini] -> 6800 StartHID len=%zu\n", msg_len);
+        free(msg);
+        msg = NULL;
+        if (rc < 0) {
+            return rc;
+        }
+
+        if (capture_start_nowplaying_msg(&msg, &msg_len) < 0) {
+            perror("build StartNowPlaying");
+            return -1;
+        }
+        rc = write_all_fd(STDOUT_FILENO, msg, msg_len);
+        fprintf(stderr, "[iap2-mini] -> 40C8 StartNowPlaying len=%zu\n", msg_len);
+        free(msg);
+        msg = NULL;
+        if (rc < 0) {
+            return rc;
+        }
+    }
+    if (mode == POST_ID_APP_LAUNCH || mode == POST_ID_ALL) {
+        if (!wait_for_local_user_trigger()) {
+            return 0;
+        }
+        if (capture_request_app_launch_msg(&msg, &msg_len) < 0) {
+            fprintf(stderr, "[iap2-mini] app-launch skipped: set CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID\n");
+            return 0;
+        }
+        rc = write_all_fd(STDOUT_FILENO, msg, msg_len);
+        fprintf(stderr, "[iap2-mini] -> EA02 RequestAppLaunch len=%zu uti=%s\n",
+                msg_len, app_launch_uti());
+        free(msg);
+        return rc;
+    }
+    return 0;
+}
+
+static int write_post_identification_link(struct link_state *state, uint8_t ack_seq) {
+    enum post_identification_mode mode = post_identification_mode();
+    uint8_t *msg = NULL;
+    size_t msg_len = 0;
+
+    if (mode == POST_ID_NONE) {
+        return 0;
+    }
+    if (mode == POST_ID_NOWPLAYING_ONLY) {
+        if (capture_start_nowplaying_msg(&msg, &msg_len) < 0) {
+            perror("build link StartNowPlaying");
+            return -1;
+        }
+        if (write_link_control_msg(state, ack_seq, msg, msg_len, IAP2_MSG_START_NOWPLAYING, 1) < 0) {
+            free(msg);
+            return -1;
+        }
+        fprintf(stderr, "[iap2-mini] -> link 0x40c8 seq=%u sid=%u len=%zu\n",
+                state->last_tx_seq, state->control_sid, msg_len);
+        free(msg);
+        return 0;
+    }
+    if (mode == POST_ID_HID_NOWPLAYING || mode == POST_ID_ALL) {
+        if (capture_start_hid_msg(&msg, &msg_len) < 0) {
+            perror("build link StartHID");
+            return -1;
+        }
+        if (write_link_control_msg(state, ack_seq, msg, msg_len, IAP2_MSG_START_HID, 1) < 0) {
+            free(msg);
+            return -1;
+        }
+        fprintf(stderr, "[iap2-mini] -> link 0x6800 seq=%u sid=%u len=%zu\n",
+                state->last_tx_seq, state->control_sid, msg_len);
+        free(msg);
+        msg = NULL;
+
+        if (capture_start_nowplaying_msg(&msg, &msg_len) < 0) {
+            perror("build link StartNowPlaying");
+            return -1;
+        }
+        if (write_link_control_msg(state, ack_seq, msg, msg_len, IAP2_MSG_START_NOWPLAYING, 0) < 0) {
+            free(msg);
+            return -1;
+        }
+        fprintf(stderr, "[iap2-mini] -> link 0x40c8 seq=%u sid=%u len=%zu\n",
+                state->tx_seq, state->control_sid, msg_len);
+        free(msg);
+        msg = NULL;
+    }
+    if (mode == POST_ID_APP_LAUNCH || mode == POST_ID_ALL) {
+        if (!wait_for_local_user_trigger()) {
+            return 0;
+        }
+        if (capture_request_app_launch_msg(&msg, &msg_len) < 0) {
+            fprintf(stderr, "[iap2-mini] link app-launch skipped: set CARTHING_IAP2_APP_LAUNCH_BUNDLE_ID\n");
+            return 0;
+        }
+        if (write_link_control_msg(state, ack_seq, msg, msg_len, IAP2_MSG_APP_LAUNCH, 0) < 0) {
+            free(msg);
+            return -1;
+        }
+        fprintf(stderr, "[iap2-mini] -> link 0xEA02 seq=%u sid=%u len=%zu uti=%s\n",
+                state->tx_seq, state->control_sid, msg_len, app_launch_uti());
+        free(msg);
+    }
+    return 0;
+}
+
 static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payload_len, int *auth_ok, enum output_mode mode) {
     uint8_t idbuf[512];
     size_t idlen = 0;
     uint8_t challenge[32];
     size_t challenge_len = 0;
+    uint8_t *reply = NULL;
+    size_t reply_len = 0;
+    int rc;
 
     switch (msg_id) {
         case IAP2_MSG_AUTH_CERT_REQ:
@@ -2370,7 +2955,7 @@ static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payloa
             return write_iap2_msg(mode, IAP2_MSG_ID_INFO, idbuf, idlen);
         case IAP2_MSG_ID_ACCEPTED:
             fprintf(stderr, "[iap2-mini] <- 1D02 IdentificationAccepted\n");
-            return 0;
+            return write_post_identification_raw();
         case IAP2_MSG_ID_REJECTED:
             fprintf(stderr, "[iap2-mini] <- 1D03 IdentificationRejected\n");
             if (payload_len >= 4) {
@@ -2378,6 +2963,33 @@ static int handle_message(uint16_t msg_id, const uint8_t *payload, size_t payloa
                 fprintf(stderr, "[iap2-mini] rejected param id=0x%04x\n", rejected);
             }
             return -1;
+        case IAP2_MSG_EA_START:
+            fprintf(stderr, "[iap2-mini] <- EA00 StartExternalAccessoryProtocolSession len=%zu\n",
+                    payload_len);
+            if (parse_ea_session_handles(payload, payload_len,
+                                         challenge, &challenge_len,
+                                         idbuf, &idlen) < 0) {
+                fprintf(stderr, "[iap2-mini] malformed EA00 params\n");
+                return 0;
+            }
+            if (capture_ea_status_msg(challenge, challenge_len, idbuf, idlen, 1, &reply, &reply_len) < 0) {
+                perror("build EA03");
+                return -1;
+            }
+            rc = write_iap2_msg(mode, IAP2_MSG_EA_STATUS, reply + 6, reply_len - 6);
+            free(reply);
+            if (rc < 0) {
+                return -1;
+            }
+            fprintf(stderr, "[iap2-mini] -> EA03 StatusExternalAccessoryProtocolSession open=1\n");
+            return 0;
+        case IAP2_MSG_EA_STOP:
+            fprintf(stderr, "[iap2-mini] <- EA01 StopExternalAccessoryProtocolSession len=%zu\n",
+                    payload_len);
+            return 0;
+        case IAP2_MSG_NOWPLAYING_UPDATE:
+            fprintf(stderr, "[iap2-mini] <- 4800 NowPlayingUpdate len=%zu\n", payload_len);
+            return 0;
         default:
             fprintf(stderr, "[iap2-mini] ignoring unsupported msg 0x%04x\n", msg_id);
             return 0;
@@ -2468,7 +3080,7 @@ static int write_link_pkt(uint8_t ctl, uint8_t sid, uint8_t seq, uint8_t ack,
 }
 
 static int write_link_ack_only(struct link_state *state, uint8_t ack_seq) {
-    return write_link_pkt(IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq, NULL, 0);
+    return write_link_pkt(IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq, ack_seq, NULL, 0);
 }
 
 static int write_link_syn(struct link_state *state) {
@@ -2476,7 +3088,7 @@ static int write_link_syn(struct link_state *state) {
         0x01, 0x07, 0x08, 0x00, 0x00, 0xFA, 0x00, 0x19,
         0x03, 0x01, 0x01, 0x00, 0x00, 0x01
     };
-    return write_link_pkt(IAP2_CTL_SYN, IAP2_SID_CTL, state->tx_seq++, 0,
+    return write_link_pkt(IAP2_CTL_SYN, IAP2_SID_CTL, state->tx_seq, 0,
                           syn_payload, sizeof(syn_payload));
 }
 
@@ -2485,12 +3097,41 @@ static int write_link_synack(struct link_state *state, uint8_t ack_seq) {
         0x01, 0x07, 0x08, 0x00, 0x00, 0xFA, 0x00, 0x19,
         0x03, 0x01, 0x01, 0x00, 0x00, 0x01
     };
-    return write_link_pkt(IAP2_CTL_SYN | IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq,
+    uint8_t tx_seq = (uint8_t)(state->tx_seq + 1);
+    state->tx_seq = tx_seq;
+    return write_link_pkt(IAP2_CTL_SYN | IAP2_CTL_ACK, IAP2_SID_CTL, tx_seq, ack_seq,
                           syn_payload, sizeof(syn_payload));
 }
 
-static int write_link_reply(struct link_state *state, uint8_t ack_seq, const uint8_t *payload, size_t payload_len) {
-    return write_link_pkt(IAP2_CTL_ACK, IAP2_SID_CTL, state->tx_seq++, ack_seq, payload, payload_len);
+static int write_link_reply_seq(struct link_state *state, uint8_t tx_seq, uint8_t ack_seq,
+                                const uint8_t *payload, size_t payload_len, uint16_t msg_id,
+                                int cache_reply) {
+    if (cache_reply) {
+        if (payload_len > sizeof(state->last_tx_payload)) {
+            errno = EOVERFLOW;
+            return -1;
+        }
+        if (payload_len > 0) {
+            memcpy(state->last_tx_payload, payload, payload_len);
+        }
+        state->last_tx_payload_len = payload_len;
+        state->last_tx_seq = tx_seq;
+        state->last_tx_msg_id = msg_id;
+        state->last_tx_valid = 1;
+    }
+    return write_link_pkt(IAP2_CTL_ACK, state->control_sid, tx_seq, ack_seq, payload, payload_len);
+}
+
+static int write_link_control_msg(struct link_state *state, uint8_t ack_seq, const uint8_t *payload,
+                                  size_t payload_len, uint16_t msg_id, int cache_reply) {
+    uint8_t tx_seq = (uint8_t)(state->tx_seq + 1);
+    state->tx_seq = tx_seq;
+    return write_link_reply_seq(state, tx_seq, ack_seq, payload, payload_len, msg_id, cache_reply);
+}
+
+static int write_link_reply(struct link_state *state, uint8_t ack_seq, const uint8_t *payload,
+                            size_t payload_len, uint16_t msg_id) {
+    return write_link_control_msg(state, ack_seq, payload, payload_len, msg_id, 1);
 }
 
 static int handle_link_control_msg(struct link_state *state, uint8_t rx_seq,
@@ -2536,22 +3177,99 @@ static int handle_link_control_msg(struct link_state *state, uint8_t rx_seq,
                 perror("build link identification");
                 return -1;
             }
+            if (reply_len > 0) {
+                char preview[193];
+                size_t show = reply_len < 48 ? reply_len : 48;
+                hex_preview_bytes(reply, show, preview, sizeof(preview));
+                fprintf(stderr, "[iap2-mini] identification payload len=%zu preview=%s\n",
+                        reply_len, preview);
+            }
             break;
         case IAP2_MSG_ID_ACCEPTED:
             fprintf(stderr, "[iap2-mini] <- link 1D02 IdentificationAccepted\n");
-            return write_link_ack_only(state, rx_seq);
+            return write_post_identification_link(state, rx_seq);
         case IAP2_MSG_ID_REJECTED:
             fprintf(stderr, "[iap2-mini] <- link 1D03 IdentificationRejected\n");
+            if (payload_len > 0) {
+                char preview[193];
+                size_t show = payload_len < 48 ? payload_len : 48;
+                hex_preview_bytes(payload, show, preview, sizeof(preview));
+                fprintf(stderr, "[iap2-mini] 1D03 params len=%zu preview=%s\n",
+                        payload_len, preview);
+                if (payload_len >= 4) {
+                    uint16_t rejected = (uint16_t)((payload[2] << 8) | payload[3]);
+                    fprintf(stderr, "[iap2-mini] 1D03 rejected param id=0x%04x\n", rejected);
+                }
+            }
             return -1;
+        case IAP2_MSG_EA_START:
+            fprintf(stderr, "[iap2-mini] <- link EA00 StartExternalAccessoryProtocolSession len=%zu\n",
+                    payload_len);
+            if (payload_len > 0) {
+                char preview[193];
+                size_t show = payload_len < 48 ? payload_len : 48;
+                hex_preview_bytes(payload, show, preview, sizeof(preview));
+                fprintf(stderr, "[iap2-mini] EA00 params preview=%s\n", preview);
+            }
+            if (parse_ea_session_handles(payload, payload_len,
+                                         state->ea_protocol_id, &state->ea_protocol_id_len,
+                                         state->ea_session_id, &state->ea_session_id_len) < 0) {
+                fprintf(stderr, "[iap2-mini] malformed link EA00 params\n");
+                return write_link_ack_only(state, rx_seq);
+            }
+            state->ea_session_open = 1;
+            if (capture_ea_status_msg(state->ea_protocol_id, state->ea_protocol_id_len,
+                                      state->ea_session_id, state->ea_session_id_len,
+                                      1, &reply, &reply_len) < 0) {
+                perror("build link EA03");
+                return -1;
+            }
+            if (write_link_control_msg(state, rx_seq, reply, reply_len, IAP2_MSG_EA_STATUS, 0) < 0) {
+                free(reply);
+                return -1;
+            }
+            fprintf(stderr, "[iap2-mini] -> link 0xEA03 seq=%u sid=%u len=%zu open=1\n",
+                    state->tx_seq, state->control_sid, reply_len);
+            free(reply);
+            return 0;
+        case IAP2_MSG_EA_STOP:
+            fprintf(stderr, "[iap2-mini] <- link EA01 StopExternalAccessoryProtocolSession len=%zu\n",
+                    payload_len);
+            if (state->ea_protocol_id_len > 0 && state->ea_session_id_len > 0) {
+                state->ea_session_open = 0;
+                if (capture_ea_status_msg(state->ea_protocol_id, state->ea_protocol_id_len,
+                                          state->ea_session_id, state->ea_session_id_len,
+                                          0, &reply, &reply_len) < 0) {
+                    perror("build link EA03 close");
+                    return -1;
+                }
+                if (write_link_control_msg(state, rx_seq, reply, reply_len, IAP2_MSG_EA_STATUS, 0) < 0) {
+                    free(reply);
+                    return -1;
+                }
+                fprintf(stderr, "[iap2-mini] -> link 0xEA03 seq=%u sid=%u len=%zu open=0\n",
+                        state->tx_seq, state->control_sid, reply_len);
+                free(reply);
+                return 0;
+            }
+            return write_link_ack_only(state, rx_seq);
+        case IAP2_MSG_NOWPLAYING_UPDATE:
+            fprintf(stderr, "[iap2-mini] <- link 4800 NowPlayingUpdate len=%zu\n", payload_len);
+            return write_link_ack_only(state, rx_seq);
+        case IAP2_MSG_DEVICE_HID_REPORT:
+            fprintf(stderr, "[iap2-mini] <- link 6802 DeviceHIDReport len=%zu\n", payload_len);
+            return write_link_ack_only(state, rx_seq);
         default:
             fprintf(stderr, "[iap2-mini] ignoring unsupported link msg 0x%04x\n", msg_id);
             return write_link_ack_only(state, rx_seq);
     }
 
-    if (write_link_reply(state, rx_seq, reply, reply_len) < 0) {
+    if (write_link_reply(state, rx_seq, reply, reply_len, msg_id) < 0) {
         free(reply);
         return -1;
     }
+    fprintf(stderr, "[iap2-mini] -> link 0x%04x seq=%u sid=%u len=%zu\n",
+            msg_id, state->last_tx_seq, state->control_sid, reply_len);
     free(reply);
     return 0;
 }
@@ -2559,6 +3277,7 @@ static int handle_link_control_msg(struct link_state *state, uint8_t rx_seq,
 static int loop_link_messages_mode(int initiator) {
     struct link_state state;
     memset(&state, 0, sizeof(state));
+    state.control_sid = IAP2_SID_CTL;
 
     if (initiator) {
         fprintf(stderr, "[iap2-mini] -> link SYN (client mode)\n");
@@ -2631,6 +3350,14 @@ static int loop_link_messages_mode(int initiator) {
 
         if (ctl & IAP2_CTL_SYN) {
             fprintf(stderr, "[iap2-mini] <- link SYN ctl=0x%02x seq=%u\n", ctl, seq);
+            if (payload_len >= 13 && state.control_sid == IAP2_SID_CTL) {
+                uint8_t num_sessions = payload[10];
+                if (num_sessions >= 1) {
+                    state.control_sid = payload[11];
+                    fprintf(stderr, "[iap2-mini] link sync: negotiated control sid=%u\n",
+                            state.control_sid);
+                }
+            }
             free(payload);
             if (ctl & IAP2_CTL_ACK) {
                 if (write_link_ack_only(&state, seq) < 0) {
@@ -2648,12 +3375,38 @@ static int loop_link_messages_mode(int initiator) {
         }
 
         if (ctl & IAP2_CTL_EAK) {
-            fprintf(stderr, "[iap2-mini] <- link EAK ignored\n");
+            size_t i;
+            fprintf(stderr, "[iap2-mini] <- link EAK sid=%u len=%zu\n", sid, payload_len);
+            if (write_link_ack_only(&state, seq) < 0) {
+                free(payload);
+                return 1;
+            }
+            for (i = 0; i < payload_len; ++i) {
+                uint8_t need_seq = payload[i];
+                fprintf(stderr, "[iap2-mini] EAK requests seq=%u\n", need_seq);
+                if (state.last_tx_valid && need_seq == state.last_tx_seq) {
+                    if (write_link_reply_seq(&state, state.last_tx_seq, seq,
+                                             state.last_tx_payload, state.last_tx_payload_len,
+                                             state.last_tx_msg_id, 0) < 0) {
+                        free(payload);
+                        return 1;
+                    }
+                    fprintf(stderr, "[iap2-mini] retransmit link 0x%04x seq=%u sid=%u len=%zu\n",
+                            state.last_tx_msg_id, state.last_tx_seq, state.control_sid,
+                            state.last_tx_payload_len);
+                }
+            }
             free(payload);
             continue;
         }
 
-        if (payload_len >= 6 && sid == IAP2_SID_CTL) {
+        if (payload_len > 0 && state.control_sid == IAP2_SID_CTL && sid != IAP2_SID_CTL) {
+            state.control_sid = sid;
+            fprintf(stderr, "[iap2-mini] adopting control sid=%u from first payload packet\n",
+                    state.control_sid);
+        }
+
+        if (payload_len >= 6 && sid == state.control_sid) {
             uint16_t csm = (uint16_t)((payload[0] << 8) | payload[1]);
             uint16_t csm_total = (uint16_t)((payload[2] << 8) | payload[3]);
             uint16_t msg_id = (uint16_t)((payload[4] << 8) | payload[5]);
@@ -2662,6 +3415,27 @@ static int loop_link_messages_mode(int initiator) {
                 free(payload);
                 return 1;
             }
+            fprintf(stderr, "[iap2-mini] <- link ctrl seq=%u sid=%u msg=0x%04x len=%zu\n",
+                    seq, sid, msg_id, payload_len);
+            if (state.last_rx_ctrl_valid &&
+                state.last_rx_ctrl_seq == seq &&
+                state.last_rx_ctrl_msg_id == msg_id) {
+                fprintf(stderr, "[iap2-mini] duplicate link ctrl seq=%u msg=0x%04x\n",
+                        seq, msg_id);
+                if (state.last_tx_valid &&
+                    write_link_reply_seq(&state, state.last_tx_seq, seq,
+                                         state.last_tx_payload, state.last_tx_payload_len,
+                                         state.last_tx_msg_id, 0) == 0) {
+                    fprintf(stderr, "[iap2-mini] retransmit cached link 0x%04x seq=%u sid=%u len=%zu\n",
+                            state.last_tx_msg_id, state.last_tx_seq, state.control_sid,
+                            state.last_tx_payload_len);
+                }
+                free(payload);
+                continue;
+            }
+            state.last_rx_ctrl_seq = seq;
+            state.last_rx_ctrl_msg_id = msg_id;
+            state.last_rx_ctrl_valid = 1;
             rc = handle_link_control_msg(&state, seq, msg_id, payload + 6, csm_total - 6);
             free(payload);
             if (rc != 0) {
@@ -2871,35 +3645,35 @@ static int serve_l2cap_once(uint16_t psm) {
     {
         int rc = 0;
         for (;;) {
-            uint8_t hdr[5];
+            uint8_t packet[1029];
             uint8_t params[1024];
+            uint8_t pdu_id;
             uint16_t txn_id;
             uint16_t param_len;
             char preview[193];
-            size_t got = 0;
-            int rr;
+            ssize_t n;
 
-            rr = read_exact_count_fd(conn_fd, hdr, sizeof(hdr), &got);
-            if (rr == 1) {
-                if (got > 0) {
-                    hex_preview_bytes(hdr, got, preview, sizeof(preview));
-                    fprintf(stderr,
-                            "[iap2-mini] SDP eof reading header got=%zu/%zu preview=%s\n",
-                            got, sizeof(hdr), preview);
-                    rc = 1;
-                }
+            n = read(conn_fd, packet, sizeof(packet));
+            if (n == 0) {
                 break;
             }
-            if (rr < 0) {
-                perror("read SDP header");
+            if (n < 0) {
+                perror("read SDP packet");
                 rc = 1;
                 break;
             }
-            txn_id = (uint16_t)((hdr[1] << 8) | hdr[2]);
-            param_len = (uint16_t)((hdr[3] << 8) | hdr[4]);
+            if (n < 5) {
+                hex_preview_bytes(packet, (size_t)n, preview, sizeof(preview));
+                fprintf(stderr, "[iap2-mini] SDP short packet len=%zd preview=%s\n", n, preview);
+                rc = 1;
+                break;
+            }
+            pdu_id = packet[0];
+            txn_id = (uint16_t)((packet[1] << 8) | packet[2]);
+            param_len = (uint16_t)((packet[3] << 8) | packet[4]);
             fprintf(stderr,
                     "[iap2-mini] SDP rx hdr pdu=0x%02x(%s) txn=0x%04x param_len=%u\n",
-                    hdr[0], sdp_pdu_name(hdr[0]), txn_id, param_len);
+                    pdu_id, sdp_pdu_name(pdu_id), txn_id, param_len);
             if (param_len > sizeof(params)) {
                 fprintf(stderr,
                         "[iap2-mini] SDP param_len too large=%u cap=%zu\n",
@@ -2908,32 +3682,36 @@ static int serve_l2cap_once(uint16_t psm) {
                 rc = 1;
                 break;
             }
-            rr = read_exact_count_fd(conn_fd, params, param_len, &got);
-            if (rr != 0) {
-                if (got > 0) {
-                    hex_preview_bytes(params, got < 48 ? got : 48, preview, sizeof(preview));
+            if ((size_t)n != (size_t)(5 + param_len)) {
+                size_t body_len = (size_t)n > 5 ? (size_t)n - 5 : 0;
+                if (body_len > sizeof(params)) {
+                    body_len = sizeof(params);
+                }
+                if (body_len > 0) {
+                    memcpy(params, packet + 5, body_len);
+                    hex_preview_bytes(params, body_len < 48 ? body_len : 48, preview, sizeof(preview));
                 } else {
                     preview[0] = '\0';
                 }
                 fprintf(stderr,
-                        "[iap2-mini] SDP read params incomplete rr=%d got=%zu/%u preview=%s\n",
-                        rr, got, param_len, got > 0 ? preview : "<none>");
-                if (rr < 0) {
-                    perror("read SDP params");
-                }
+                        "[iap2-mini] SDP packet size mismatch got=%zd expected=%u body_preview=%s\n",
+                        n, (unsigned)(5 + param_len), body_len > 0 ? preview : "<none>");
                 rc = 1;
                 break;
+            }
+            if (param_len > 0) {
+                memcpy(params, packet + 5, param_len);
             }
             hex_preview_bytes(params, param_len < 48 ? param_len : 48, preview, sizeof(preview));
             fprintf(stderr, "[iap2-mini] SDP rx params len=%u preview=%s\n",
                     param_len, param_len > 0 ? preview : "<empty>");
-            if (sdp_handle_request_fd(conn_fd, hdr[0], txn_id, params, param_len) < 0) {
+            if (sdp_handle_request_fd(conn_fd, pdu_id, txn_id, params, param_len) < 0) {
                 perror("write SDP response");
                 rc = 1;
                 break;
             }
             fprintf(stderr, "[iap2-mini] SDP tx ok pdu=0x%02x(%s) txn=0x%04x\n",
-                    hdr[0], sdp_pdu_name(hdr[0]), txn_id);
+                    pdu_id, sdp_pdu_name(pdu_id), txn_id);
         }
         close(conn_fd);
         return rc;
@@ -3040,7 +3818,6 @@ static int sdp_extract_rfcomm_channel_from_attr_list(const uint8_t *attr_list, s
 static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[16]) {
     int fd;
     uint8_t req[64];
-    uint8_t rsp_hdr[5];
     uint8_t rsp[2048];
     size_t req_len = 0;
     uint16_t txn_id = 1;
@@ -3082,27 +3859,46 @@ static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[
         close(fd);
         return -1;
     }
-    if (read_exact_fd(fd, rsp_hdr, sizeof(rsp_hdr)) != 0) {
-        perror("read SDP rsp hdr");
-        close(fd);
-        return -1;
-    }
-    if (rsp_hdr[0] != SDP_PDU_SERVICE_SEARCH_ATTR_RESP) {
-        fprintf(stderr, "[iap2-mini] unexpected SDP rsp pdu=0x%02x\n", rsp_hdr[0]);
-        close(fd);
-        return -1;
-    }
-    param_len = (uint16_t)((rsp_hdr[3] << 8) | rsp_hdr[4]);
-    if (param_len > sizeof(rsp)) {
-        errno = EOVERFLOW;
-        perror("SDP response too large");
-        close(fd);
-        return -1;
-    }
-    if (read_exact_fd(fd, rsp, param_len) != 0) {
-        perror("read SDP rsp body");
-        close(fd);
-        return -1;
+    {
+        uint8_t rsp_packet[705];
+        ssize_t n = read(fd, rsp_packet, sizeof(rsp_packet));
+        if (n <= 0) {
+            if (n < 0) {
+                perror("read SDP rsp packet");
+            } else {
+                errno = 0;
+                perror("read SDP rsp packet");
+            }
+            close(fd);
+            return -1;
+        }
+        if (n < 5) {
+            errno = EPROTO;
+            perror("read SDP rsp short packet");
+            close(fd);
+            return -1;
+        }
+        if (rsp_packet[0] != SDP_PDU_SERVICE_SEARCH_ATTR_RESP) {
+            fprintf(stderr, "[iap2-mini] unexpected SDP rsp pdu=0x%02x\n", rsp_packet[0]);
+            close(fd);
+            return -1;
+        }
+        param_len = (uint16_t)((rsp_packet[3] << 8) | rsp_packet[4]);
+        if ((size_t)n != (size_t)(5 + param_len)) {
+            errno = EPROTO;
+            perror("read SDP rsp packet size mismatch");
+            close(fd);
+            return -1;
+        }
+        if (param_len > sizeof(rsp)) {
+            errno = EOVERFLOW;
+            perror("SDP response too large");
+            close(fd);
+            return -1;
+        }
+        if (param_len > 0) {
+            memcpy(rsp, rsp_packet + 5, param_len);
+        }
     }
     close(fd);
 
@@ -3266,6 +4062,7 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     pid_t sdp_pid;
     pid_t rf_pid;
     pid_t ssp_pid;
+    pid_t scan_pid;
     int status;
 
     if (hci_dev_up(hci_dev) != 0) {
@@ -3302,11 +4099,24 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
         _exit(hci_ssp_agent_loop(hci_dev));
     }
 
+    scan_pid = fork();
+    if (scan_pid < 0) {
+        perror("fork scan-watchdog");
+        kill(ssp_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
+        return 1;
+    }
+    if (scan_pid == 0) {
+        _exit(hci_scan_watchdog_loop(hci_dev, scan_enable));
+    }
+
     sdp_pid = fork();
     if (sdp_pid < 0) {
         perror("fork sdp");
         kill(ssp_pid, SIGTERM);
+        kill(scan_pid, SIGTERM);
         waitpid(ssp_pid, NULL, 0);
+        waitpid(scan_pid, NULL, 0);
         return 1;
     }
     if (sdp_pid == 0) {
@@ -3317,8 +4127,10 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
     if (rf_pid < 0) {
         perror("fork rfcomm");
         kill(ssp_pid, SIGTERM);
+        kill(scan_pid, SIGTERM);
         kill(sdp_pid, SIGTERM);
         waitpid(ssp_pid, NULL, 0);
+        waitpid(scan_pid, NULL, 0);
         waitpid(sdp_pid, NULL, 0);
         return 1;
     }
@@ -3332,9 +4144,11 @@ static int run_transport_daemon(int hci_dev, int channel, uint16_t psm, uint8_t 
 
     if (wait(&status) > 0) {
         kill(ssp_pid, SIGTERM);
+        kill(scan_pid, SIGTERM);
         kill(sdp_pid, SIGTERM);
         kill(rf_pid, SIGTERM);
         waitpid(ssp_pid, NULL, 0);
+        waitpid(scan_pid, NULL, 0);
         waitpid(sdp_pid, NULL, 0);
         waitpid(rf_pid, NULL, 0);
     }
@@ -3348,6 +4162,7 @@ static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, 
     pid_t sdp_pid;
     pid_t rf_pid;
     pid_t ssp_pid;
+    pid_t scan_pid;
     int rc;
 
     if (hci_dev_up(hci_dev) != 0) {
@@ -3384,11 +4199,24 @@ static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, 
         _exit(hci_ssp_agent_loop(hci_dev));
     }
 
+    scan_pid = fork();
+    if (scan_pid < 0) {
+        perror("fork scan-watchdog");
+        kill(ssp_pid, SIGTERM);
+        waitpid(ssp_pid, NULL, 0);
+        return 1;
+    }
+    if (scan_pid == 0) {
+        _exit(hci_scan_watchdog_loop(hci_dev, scan_enable));
+    }
+
     sdp_pid = fork();
     if (sdp_pid < 0) {
         perror("fork sdp");
         kill(ssp_pid, SIGTERM);
+        kill(scan_pid, SIGTERM);
         waitpid(ssp_pid, NULL, 0);
+        waitpid(scan_pid, NULL, 0);
         return 1;
     }
     if (sdp_pid == 0) {
@@ -3399,8 +4227,10 @@ static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, 
     if (rf_pid < 0) {
         perror("fork rfcomm");
         kill(ssp_pid, SIGTERM);
+        kill(scan_pid, SIGTERM);
         kill(sdp_pid, SIGTERM);
         waitpid(ssp_pid, NULL, 0);
+        waitpid(scan_pid, NULL, 0);
         waitpid(sdp_pid, NULL, 0);
         return 1;
     }
@@ -3415,9 +4245,11 @@ static int run_transport_active_connect(int hci_dev, int channel, uint16_t psm, 
     rc = run_cafe_connect(hci_dev, peer_addr);
 
     kill(ssp_pid, SIGTERM);
+    kill(scan_pid, SIGTERM);
     kill(sdp_pid, SIGTERM);
     kill(rf_pid, SIGTERM);
     waitpid(ssp_pid, NULL, 0);
+    waitpid(scan_pid, NULL, 0);
     waitpid(sdp_pid, NULL, 0);
     waitpid(rf_pid, NULL, 0);
     return rc;
