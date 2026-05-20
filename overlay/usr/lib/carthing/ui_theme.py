@@ -25,9 +25,31 @@ WARN     = (220, 90, 60)
 # ─── spacing / layout tokens ──────────────────────────────────────────────────
 MARGIN     = 40          # outer side margin
 GUTTER     = 16          # gap between elements
-STATUSBAR_H = 40         # height of the persistent top status bar
 ROW_H      = 64          # list row height
 RADIUS     = 8
+
+# ── Clean 3-part screen partition (tiles the panel with no gaps/corners) ──────
+#   MAIN (top-left)           : [0, OCCLUSION_LEFT] x [0, OCCLUSION_BOTTOM]
+#   ENCODER column (occluded) : [OCCLUSION_LEFT, W] x [0, OCCLUSION_BOTTOM]
+#   BOTTOM BAR (full width)   : [0, W] x [OCCLUSION_BOTTOM, H]
+# The physical rotary dial / top-right button occlude the encoder column.
+# Provisional from on-Mac calibration; refine on-device.
+SAFE_RIGHT       = 60
+OCCLUSION_LEFT   = W - SAFE_RIGHT     # 740 — vertical divider in the top band
+OCCLUSION_BOTTOM = 345                # horizontal divider: top band / bottom bar
+OCCLUSION = (OCCLUSION_LEFT, 0, W, OCCLUSION_BOTTOM)
+
+# MAIN region geometry — content centers here
+CONTENT_X0 = MARGIN                   # 40
+CONTENT_X1 = OCCLUSION_LEFT           # 740 — right boundary; nothing draws past
+CONTENT_CX = OCCLUSION_LEFT // 2      # 370 — main horizontal center (left edge..zone)
+CONTENT_W  = 2 * (CONTENT_CX - CONTENT_X0)   # 660
+MAIN_CY    = OCCLUSION_BOTTOM // 2    # 172 — main vertical center
+CONTENT_TOP = 24                      # top-aligned content (lists) start
+
+# BOTTOM BAR fills the bottom band exactly (top aligned with occlusion bottom)
+STATUSBAR_TOP = OCCLUSION_BOTTOM      # 345
+STATUSBAR_H   = H - OCCLUSION_BOTTOM  # 135
 
 # ─── type scale ───────────────────────────────────────────────────────────────
 SZ_TITLE = 48
@@ -78,8 +100,29 @@ def icon_dot(draw, cx, cy, r, color=FG):
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
 
 
+def icon_prev(draw, cx, cy, r, color=FG):
+    draw.rectangle([cx - r, cy - r, cx - r + r * 0.35, cy + r], fill=color)
+    draw.polygon([(cx + r, cy - r), (cx + r, cy + r), (cx - r * 0.35, cy)], fill=color)
+
+
+def icon_next(draw, cx, cy, r, color=FG):
+    draw.rectangle([cx + r - r * 0.35, cy - r, cx + r, cy + r], fill=color)
+    draw.polygon([(cx - r, cy - r), (cx - r, cy + r), (cx + r * 0.35, cy)], fill=color)
+
+
 def icon_ring(draw, cx, cy, r, color=FG, width=2):
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color, width=width)
+
+
+def encoder_arc(draw, color=FAINT, width=2):
+    """Outline of the physical rotary dial: a large circle centered off-screen to
+    the right (its 'square' completed rightward from the occlusion zone), so only
+    its left arc bulges onto the screen edge. Diameter ~= occlusion zone height."""
+    R = OCCLUSION_BOTTOM // 2
+    cy = OCCLUSION_BOTTOM // 2
+    cx = CONTENT_X1 + R                       # leftmost point sits at CONTENT_X1
+    bbox = [cx - R, cy - R, cx + R, cy + R]
+    draw.arc(bbox, start=131, end=229, fill=color, width=width)   # visible left arc
 
 
 def icon_chevron(draw, cx, cy, r, color=MUTED, expanded=False, width=3):

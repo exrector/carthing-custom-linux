@@ -94,7 +94,7 @@ def progress_bar(draw, x, y, w, pct, h=3, bg=T.HAIRLINE, fg=T.FG):
 def list_row(draw, y, label, selected=False, expandable=False, expanded=False,
              indent=0):
     """Draw one row; return its rect for InteractiveRegion registration."""
-    x0, x1 = 24, T.W - 24
+    x0, x1 = 24, T.CONTENT_X1        # stay within the MAIN region (no overflow right)
     rect = (x0, y - 6, x1, y + T.ROW_H - 14)
     if selected:
         draw.rectangle(rect, fill=T.SURFACE_SEL)
@@ -102,6 +102,6 @@ def list_row(draw, y, label, selected=False, expandable=False, expanded=False,
     tx = 52 + indent
     draw.text((tx, y), label, font=T.font(T.SZ_BODY), fill=T.FG if selected else T.MUTED)
     if expandable:
-        T.icon_chevron(draw, T.W - 56, y + T.SZ_BODY // 2, 9,
+        T.icon_chevron(draw, T.CONTENT_X1 - 12, y + T.SZ_BODY // 2, 9,
                        color=(T.FG if selected else T.FAINT), expanded=expanded)
     return rect

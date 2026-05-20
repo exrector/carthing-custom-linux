@@ -6,7 +6,7 @@ import ui_theme as T
 import ui_components as C
 from ui_screen import Screen, Input
 
-CONTENT_TOP = T.STATUSBAR_H + 16
+CONTENT_TOP = T.CONTENT_TOP
 
 
 def _fmt(s):
@@ -18,64 +18,58 @@ class NowPlayingScreen(Screen):
     name = "nowplaying"
     title = "iPhone"
 
-    def __init__(self, state=None, on_command=None):
-        self.state = state
-        self.on_command = on_command or (lambda c: None)
+    def __init__(self, emit=None):
+        self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
 
     def on_state(self, state):
         self.state = state
 
     def on_input(self, event):
         if event in (Input.PRESS, Input.BTN_4):
-            self.on_command("play_pause"); return True
+            self.emit("media_play_pause"); return True
         if event == Input.ENCODER_CW:
-            self.on_command("vol_up"); return True
+            self.emit("media_vol_up"); return True
         if event == Input.ENCODER_CCW:
-            self.on_command("vol_down"); return True
+            self.emit("media_vol_down"); return True
         if event == Input.BTN_2:
-            self.on_command("next"); return True
+            self.emit("media_next"); return True
         if event == Input.BTN_3:
-            self.on_command("prev"); return True
+            self.emit("media_prev"); return True
         return False
 
     def render(self, regions=None):
         img, draw = self.blank()
-        st = self.state
-        connected = getattr(st, "iphone_connected", True) if st else False
+        sess = self.state.iphone if self.state else None
 
-        if not connected or st is None:
-            C.text_centered(draw, "Lost Contact", T.font(T.SZ_TITLE), T.WARN, T.H // 2 - 60)
-            C.text_centered(draw, "Awaiting iPhone", T.font(T.SZ_BODY), T.MUTED, T.H // 2 + 6)
+        if sess is None or not sess.connected:
+            C.text_centered(draw, "Lost Contact", T.font(T.SZ_TITLE), T.WARN, T.MAIN_CY - 30, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Awaiting iPhone", T.font(T.SZ_BODY), T.MUTED, T.MAIN_CY + 30, cx=T.CONTENT_CX)
             return img
 
-        y = CONTENT_TOP
-        for line in C.wrap_lines(draw, getattr(st, "title", "") or "—",
-                                 T.font(T.SZ_TITLE), T.W - 2 * T.MARGIN):
-            C.text_centered(draw, line, T.font(T.SZ_TITLE), T.FG, y); y += 56
-
-        artist = getattr(st, "artist", "") or ""
+        # vertically center the now-playing block in the MAIN region
+        lines = C.wrap_lines(draw, sess.title or "—", T.font(T.SZ_TITLE), T.CONTENT_W)
+        artist = sess.artist or ""
+        LH = 56
+        block_h = len(lines) * LH + (56 if artist else 0) + 18 + 3 + 30
+        y = max(T.CONTENT_TOP, T.MAIN_CY - block_h // 2)
+        for line in lines:
+            C.text_centered(draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX); y += LH
         if artist:
             y += 6
-            C.text_centered(draw, artist, T.font(T.SZ_BODY), T.MUTED, y); y += 50
+            C.text_centered(draw, artist, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX); y += 50
 
         bar_y = y + 18
-        dur = getattr(st, "duration", 0) or 0
-        pos = getattr(st, "position", 0) or 0
-        C.progress_bar(draw, T.MARGIN, bar_y, T.W - 2 * T.MARGIN,
-                       (pos / dur) if dur else 0)
+        C.progress_bar(draw, T.CONTENT_X0, bar_y, T.CONTENT_W,
+                       (sess.position / sess.duration) if sess.duration else 0)
 
-        # meta row: vector play/pause icon + time, centered as a group
-        time_str = f"{_fmt(pos)}  /  {_fmt(dur)}" if dur else ""
+        time_str = f"{_fmt(sess.position)}  /  {_fmt(sess.duration)}" if sess.duration else ""
         f = T.font(T.SZ_META)
-        tw = C.text_w(draw, time_str, f)
         r = 9
-        group = (2 * r + 16 + tw) if time_str else 2 * r
-        gx = (T.W - group) // 2
+        group = (2 * r + 16 + C.text_w(draw, time_str, f)) if time_str else 2 * r
+        gx = T.CONTENT_CX - group // 2
         gy = bar_y + 26
-        if getattr(st, "playing", False):
-            T.icon_play(draw, gx + r, gy, r, color=T.FAINT)
-        else:
-            T.icon_pause(draw, gx + r, gy, r, color=T.FAINT)
+        (T.icon_pause if sess.playing else T.icon_play)(draw, gx + r, gy, r, color=T.FAINT)
         if time_str:
             draw.text((gx + 2 * r + 16, gy - T.SZ_META // 2), time_str, font=f, fill=T.FAINT)
         return img
@@ -85,20 +79,47 @@ class MacOSScreen(Screen):
     name = "macos"
     title = "macOS"
 
-    def __init__(self, state=None):
-        self.state = state
+    def __init__(self, emit=None):
+        self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
 
     def on_state(self, state):
         self.state = state
 
+    def on_input(self, event):
+        if event in (Input.PRESS, Input.BTN_4):
+            self.emit("media_play_pause"); return True
+        if event == Input.BTN_2:
+            self.emit("media_next"); return True
+        if event == Input.BTN_3:
+            self.emit("media_prev"); return True
+        return False
+
     def render(self, regions=None):
         img, draw = self.blank()
-        C.text_centered(draw, "macOS", T.font(T.SZ_TITLE), T.FG, CONTENT_TOP)
-        connected = getattr(self.state, "mac_connected", False) if self.state else False
-        if not connected:
-            C.text_centered(draw, "Нет связи", T.font(T.SZ_BODY), T.MUTED, T.H // 2 - 12)
+        sess = self.state.mac if self.state else None
+
+        if sess is None or not sess.connected:
+            C.text_centered(draw, "macOS", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 74, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Нет связи", T.font(T.SZ_BODY), T.MUTED, T.MAIN_CY - 6, cx=T.CONTENT_CX)
             C.text_centered(draw, "Подключите Mac в настройках", T.font(T.SZ_META),
-                            T.FAINT, T.H // 2 + 30)
+                            T.FAINT, T.MAIN_CY + 34, cx=T.CONTENT_CX)
+            return img
+
+        if not sess.title:
+            C.text_centered(draw, "macOS", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 30, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Готов к воспроизведению", T.font(T.SZ_META), T.FAINT,
+                            T.MAIN_CY + 24, cx=T.CONTENT_CX)
+            return img
+
+        lines = C.wrap_lines(draw, sess.title, T.font(T.SZ_TITLE), T.CONTENT_W)
+        block_h = len(lines) * 56 + (56 if sess.artist else 0) + 20
+        y = max(T.CONTENT_TOP, T.MAIN_CY - block_h // 2)
+        for line in lines:
+            C.text_centered(draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX); y += 56
+        if sess.artist:
+            y += 6
+            C.text_centered(draw, sess.artist, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX)
         return img
 
 
@@ -157,6 +178,8 @@ class SettingsScreen(Screen):
 
         y = CONTENT_TOP + 52
         for i, (level, key, label, expandable, expanded) in enumerate(self._visible()):
+            if y + T.ROW_H - 14 > T.OCCLUSION_BOTTOM:    # stay within MAIN band (TODO: scroll)
+                break
             rect = C.list_row(draw, y, label, selected=(i == self.sel),
                               expandable=expandable, expanded=expanded,
                               indent=24 if level else 0)

@@ -136,6 +136,8 @@ class Compositor:
         if self.anim:
             self.anim.start_transition(delta)
         self.active = (self.active + delta) % n
+        if self.state is not None and hasattr(self.state, "active_desktop"):
+            self.state.active_desktop = self.active   # control_source follows the desktop
         self.render()
         return True
 
@@ -166,6 +168,7 @@ class Compositor:
             img = self.current.render(self._regions)
 
         draw = ImageDraw.Draw(img)
+        T.encoder_arc(draw)        # right-edge outline of the physical rotary dial
         if self.status_bar:
             self.status_bar.render(draw, self._regions, self.anim, self.state)
         if self.show_dots and len(self.screens) > 1:
@@ -192,13 +195,14 @@ class Compositor:
         return canvas
 
     def _draw_dots(self, draw):
+        # along the top of the bottom bar (transport sits below them)
         n = len(self.screens)
         gap = 22
         x0 = T.W // 2 - (n - 1) * gap // 2
-        y = T.H - 22
+        y = T.STATUSBAR_TOP + 16
         for i in range(n):
             col = T.ACCENT if i == self.active else T.FAINT
-            T.icon_dot(draw, x0 + i * gap, y, 5, color=col)
+            T.icon_dot(draw, x0 + i * gap, y, 4, color=col)
 
     def _draw_modal(self, img):
         # dim the backdrop, then let the modal draw itself
