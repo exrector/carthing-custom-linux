@@ -32,6 +32,8 @@ class Dispatcher:
             self.state.unread_count = 0
         elif intent == "settings_select":
             self._settings(payload)
+        elif intent == "pairing_cancel":
+            self.state.pairing_mode = False
 
     # ── media ────────────────────────────────────────────────────────────────
     def _media(self, command):

@@ -2,6 +2,8 @@
 calls raw PIL styling or font glyphs (vector icons only). Content starts below
 the status bar. Screens read duck-typed state and emit intents via callbacks.
 """
+from PIL import ImageDraw
+
 import ui_theme as T
 import ui_components as C
 from ui_screen import Screen, Input
@@ -187,3 +189,45 @@ class SettingsScreen(Screen):
                 regions.add(rect, "settings_select", payload=key)
             y += T.ROW_H
         return img
+
+
+class PairingModal:
+    """Live-action overlay: makes the device discoverable and waits for a new
+    device to connect from its side. Drawn over the dimmed active desktop.
+    Shown while AppState.pairing_mode is True. Emits 'pairing_cancel' to close.
+    """
+
+    def __init__(self, emit=None):
+        self.emit = emit or (lambda intent, payload=None: None)
+        self.state = None
+
+    def on_state(self, state):
+        self.state = state
+
+    def on_input(self, event):
+        if event in (Input.BACK, Input.PRESS):
+            self.emit("pairing_cancel")
+            return True
+        return False
+
+    def render(self, img, regions):
+        draw = ImageDraw.Draw(img)
+        cx = T.CONTENT_CX
+        # card background for legibility over the dimmed desktop
+        cw, ch = 580, 300
+        draw.rounded_rectangle([cx - cw // 2, T.MAIN_CY - ch // 2, cx + cw // 2, T.MAIN_CY + ch // 2],
+                               radius=T.RADIUS, fill=T.SURFACE, outline=T.HAIRLINE, width=1)
+        C.text_centered(draw, "Режим сопряжения", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 92, cx=cx)
+        C.text_centered(draw, "Откройте Bluetooth на iPhone или Mac", T.font(T.SZ_META), T.MUTED,
+                        T.MAIN_CY - 30, cx=cx)
+        C.text_centered(draw, "и выберите «CarThing»", T.font(T.SZ_META), T.MUTED,
+                        T.MAIN_CY + 2, cx=cx)
+        C.text_centered(draw, "Ожидание подключения…", T.font(T.SZ_SMALL), T.ACCENT,
+                        T.MAIN_CY + 44, cx=cx)
+
+        # Cancel button (tappable) — also Back/Press cancels
+        bw, bh = 200, 48
+        bx0, by0 = cx - bw // 2, T.MAIN_CY + 84
+        draw.rectangle([bx0, by0, bx0 + bw, by0 + bh], outline=T.FAINT, width=2)
+        C.text_centered(draw, "Отмена", T.font(T.SZ_META), T.MUTED, by0 + 8, cx=cx)
+        regions.add((bx0, by0, bx0 + bw, by0 + bh), "pairing_cancel")

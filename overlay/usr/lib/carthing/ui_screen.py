@@ -88,7 +88,7 @@ class Compositor:
     """Owns desktops + status bar + modal; renders layers and routes input."""
 
     def __init__(self, display, screens, status_bar=None, anim=None,
-                 state=None, on_intent=None, show_dots=True):
+                 state=None, on_intent=None, show_dots=True, pairing_modal=None):
         assert screens
         self.display = display
         self.screens = screens
@@ -99,7 +99,19 @@ class Compositor:
         self.show_dots = show_dots
         self.active = 0
         self.modal = None
+        self._pairing_modal = pairing_modal
         self._regions = RegionSet()
+
+    def _sync_modal(self):
+        """Derive the modal from state (unidirectional): show the pairing modal
+        while AppState.pairing_mode is True."""
+        if self._pairing_modal is None:
+            return
+        want = bool(getattr(self.state, "pairing_mode", False))
+        if want and self.modal is not self._pairing_modal:
+            self.modal = self._pairing_modal
+        elif not want and self.modal is self._pairing_modal:
+            self.modal = None
 
     @property
     def current(self):
@@ -107,6 +119,7 @@ class Compositor:
 
     # ── input ──────────────────────────────────────────────────────────────
     def handle_input(self, event):
+        self._sync_modal()
         if isinstance(event, tuple) and event and event[0] == Input.TAP:
             return self._handle_tap(event[1], event[2])
         if self.modal is not None:
@@ -159,6 +172,7 @@ class Compositor:
 
     # ── render ───────────────────────────────────────────────────────────────
     def render(self):
+        self._sync_modal()
         self._regions.clear()
         transitioning = self.anim and self.anim.transition_active
 
@@ -208,4 +222,5 @@ class Compositor:
         # dim the backdrop, then let the modal draw itself
         overlay = Image.new("RGB", (T.W, T.H), (0, 0, 0))
         img.paste(Image.blend(img, overlay, 0.55), (0, 0))
+        self._regions.clear()            # modal is exclusive for hit-testing
         self.modal.render(img, self._regions)

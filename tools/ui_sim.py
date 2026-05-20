@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "overlay", "usr", "l
 from ui_screen import Compositor, Display, Input          # noqa: E402
 from ui_statusbar import StatusBar                          # noqa: E402
 from ui_anim import AnimDriver                              # noqa: E402
-from screens import NowPlayingScreen, MacOSScreen, SettingsScreen  # noqa: E402
+from screens import NowPlayingScreen, MacOSScreen, SettingsScreen, PairingModal  # noqa: E402
 from app_state import AppState                              # noqa: E402
 from intents import Dispatcher                              # noqa: E402
 
@@ -75,7 +75,8 @@ comp = Compositor(
     [NowPlayingScreen(emit=dispatcher.dispatch),
      MacOSScreen(emit=dispatcher.dispatch),
      SettingsScreen(on_select=lambda key: dispatcher.dispatch("settings_select", key))],
-    status_bar=StatusBar(), anim=anim, state=state, on_intent=dispatcher.dispatch)
+    status_bar=StatusBar(), anim=anim, state=state, on_intent=dispatcher.dispatch,
+    pairing_modal=PairingModal(emit=dispatcher.dispatch))
 comp.broadcast_state(state)
 
 
