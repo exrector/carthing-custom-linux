@@ -2184,3 +2184,97 @@ Meaning:
    the reliable controller boundary on this target is lower:
    - kernel attach + operational `hci0`
    - raw HCI socket / existing C helper path
+
+## 2026-05-21: isolating post-identification traffic proved `ctl=0x40 sid=0`
+## packets are bare link ACKs, not hidden service data
+
+To stop guessing which post-identification service was producing the observed
+`ignoring non-control link packet ctl=0x40 sid=0` lines, the probe was extended
+with one new diagnostic mode:
+
+- `CARTHING_IAP2_POST_ID_MODE=hid-only`
+
+That allowed three clean live passes against the already trusted iPhone address
+`10:A2:D3:83:82:50` while keeping the rest of the classic/iAP2 path unchanged:
+
+- cached BR/EDR link key reuse
+- live MFi auth through `CARTHING_MFI_HELPER=/run/carthing-mfi-probe`
+- normal `AA00 -> AA02 -> AA05 -> 1D00 -> 1D02` flow
+
+### Pass 1: `nowplaying-only`
+
+Observed post-identification behavior:
+
+- only one post-`1D02` control message was sent:
+  - `[iap2-mini] -> link 0x40c8 seq=4 sid=1 len=42`
+- the "non-control" packet still appeared:
+  - `[iap2-mini] ignoring non-control link packet ctl=0x40 seq=74 sid=0 len=0`
+
+Important context from the same log:
+
+- the same `ctl=0x40 sid=0 len=0` packets already appeared earlier at:
+  - seq `70` after `AA00`
+  - seq `71` after `AA02`
+  - seq `73` after `1D00`
+
+### Pass 2: `hid-only`
+
+Observed post-identification behavior:
+
+- only one post-`1D02` control message was sent:
+  - `[iap2-mini] -> link 0x6800 seq=4 sid=1 len=39`
+- the same "non-control" packet still appeared:
+  - `[iap2-mini] ignoring non-control link packet ctl=0x40 seq=77 sid=0 len=0`
+
+Again, matching zero-length `ctl=0x40 sid=0` packets had already appeared before
+`1D02`, including after:
+
+- `AA00`
+- `AA02`
+- `1D00`
+
+### Pass 3: `none`
+
+This was the decisive control case:
+
+- no post-identification service start message was sent at all
+- the session still reached:
+  - `[iap2-mini] <- link 1D02 IdentificationAccepted`
+- then the iPhone resent the same control packet:
+  - `[iap2-mini] <- link ctrl seq=91 sid=1 msg=0x1d02 len=6`
+  - `[iap2-mini] duplicate link ctrl seq=91 msg=0x1d02`
+  - `[iap2-mini] retransmit cached link 0x1d00 seq=3 sid=1 len=169`
+- and a matching sid `0` ACK-only packet still followed:
+  - `[iap2-mini] ignoring non-control link packet ctl=0x40 seq=91 sid=0 len=0`
+
+### Meaning
+
+This sharply narrows the interpretation of those packets:
+
+1. `ctl=0x40` is pure ACK at the link layer.
+2. `sid=0` here is not carrying hidden `HID`, `NowPlaying`, or `EA` payload.
+3. `len=0` confirms there is no data payload in the packet at all.
+4. The packet appears as a transport-level acknowledgement pattern across the
+   whole session, not as a post-identification service event.
+
+So the earlier suspicion was wrong:
+
+- `ignoring non-control link packet ctl=0x40 sid=0` is **not** evidence of
+  hidden `NowPlaying` or `ExternalAccessory` data that the parser is dropping.
+
+What remains genuinely open after this isolation pass:
+
+- whether the iPhone will ever send real `0x4800 NowPlayingUpdate`
+- whether any `EA00 StartExternalAccessoryProtocolSession` will appear on the
+  autonomous no-app path
+- why `1D02` is duplicated in the `none` case and whether that reflects a
+  transport retry / acknowledgement nuance rather than any higher-level service
+  negotiation
+
+Practical next step:
+
+- stop chasing sid `0` / `ctl=0x40` as a hidden service path
+- focus instead on:
+  - explicit `EA02` / app-launch experiments
+  - waiting for real incoming control messages like `EA00` or `4800`
+  - any new non-zero-payload traffic on a non-control sid

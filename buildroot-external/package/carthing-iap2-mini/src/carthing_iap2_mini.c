@@ -2331,6 +2331,7 @@ enum identification_msgset {
 
 enum post_identification_mode {
     POST_ID_HID_NOWPLAYING = 0,
+    POST_ID_HID_ONLY,
     POST_ID_NOWPLAYING_ONLY,
     POST_ID_APP_LAUNCH,
     POST_ID_ALL,
@@ -2358,6 +2359,9 @@ static enum post_identification_mode post_identification_mode(void) {
     const char *v = getenv("CARTHING_IAP2_POST_ID_MODE");
     if (!v || !*v || strcmp(v, "hid-nowplaying") == 0 || strcmp(v, "default") == 0) {
         return POST_ID_HID_NOWPLAYING;
+    }
+    if (strcmp(v, "hid") == 0 || strcmp(v, "hid-only") == 0) {
+        return POST_ID_HID_ONLY;
     }
     if (strcmp(v, "nowplaying") == 0 || strcmp(v, "nowplaying-only") == 0 || strcmp(v, "np") == 0) {
         return POST_ID_NOWPLAYING_ONLY;
@@ -2805,7 +2809,7 @@ static int write_post_identification_raw(void) {
         free(msg);
         return rc;
     }
-    if (mode == POST_ID_HID_NOWPLAYING || mode == POST_ID_ALL) {
+    if (mode == POST_ID_HID_ONLY || mode == POST_ID_HID_NOWPLAYING || mode == POST_ID_ALL) {
         if (capture_start_hid_msg(&msg, &msg_len) < 0) {
             perror("build StartHID");
             return -1;
@@ -2816,6 +2820,9 @@ static int write_post_identification_raw(void) {
         msg = NULL;
         if (rc < 0) {
             return rc;
+        }
+        if (mode == POST_ID_HID_ONLY) {
+            return 0;
         }
 
         if (capture_start_nowplaying_msg(&msg, &msg_len) < 0) {
@@ -2869,7 +2876,7 @@ static int write_post_identification_link(struct link_state *state, uint8_t ack_
         free(msg);
         return 0;
     }
-    if (mode == POST_ID_HID_NOWPLAYING || mode == POST_ID_ALL) {
+    if (mode == POST_ID_HID_ONLY || mode == POST_ID_HID_NOWPLAYING || mode == POST_ID_ALL) {
         if (capture_start_hid_msg(&msg, &msg_len) < 0) {
             perror("build link StartHID");
             return -1;
@@ -2882,6 +2889,9 @@ static int write_post_identification_link(struct link_state *state, uint8_t ack_
                 state->last_tx_seq, state->control_sid, msg_len);
         free(msg);
         msg = NULL;
+        if (mode == POST_ID_HID_ONLY) {
+            return 0;
+        }
 
         if (capture_start_nowplaying_msg(&msg, &msg_len) < 0) {
             perror("build link StartNowPlaying");
@@ -3444,7 +3454,18 @@ static int loop_link_messages_mode(int initiator) {
             continue;
         }
 
-        fprintf(stderr, "[iap2-mini] ignoring non-control link packet ctl=0x%02x sid=%u\n", ctl, sid);
+        if (payload_len > 0) {
+            char preview[193];
+            size_t show = payload_len < 48 ? payload_len : 48;
+            hex_preview_bytes(payload, show, preview, sizeof(preview));
+            fprintf(stderr,
+                    "[iap2-mini] ignoring non-control link packet ctl=0x%02x seq=%u sid=%u len=%zu preview=%s\n",
+                    ctl, seq, sid, payload_len, preview);
+        } else {
+            fprintf(stderr,
+                    "[iap2-mini] ignoring non-control link packet ctl=0x%02x seq=%u sid=%u len=0\n",
+                    ctl, seq, sid);
+        }
         free(payload);
     }
 }
