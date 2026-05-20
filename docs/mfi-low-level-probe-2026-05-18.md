@@ -1132,6 +1132,20 @@ This is a major narrowing step:
 In other words, the next step is no longer "make the transport exist" but
 "understand why classic auth ends with status `0x05` and a refused attach".
 
+User-facing confirmation from the same frontier:
+
+- the test persona appears in iPhone Bluetooth UI as a distinct device:
+  - `CarThing iAP2`
+- attempting to pair that persona from iPhone produces the standard failure UI:
+  - "Pairing Unsuccessful"
+  - "Make sure CarThing iAP2 is turned on, in range, and is ready to pair"
+- this confirms the failure is not just an internal accessory-side log artifact;
+  iOS also treats the classic pairing attempt as unsuccessful
+- after the failed attempt:
+  - no new BR/EDR link key is persisted into `iap2-link-keys.txt`
+  - the normal BLE/HID identity (`CarThing`) remains a separate trusted path and
+    must not be conflated with the temporary classic/iAP2 persona during tests
+
 ## 2026-05-19: classic test identity normalized to avoid duplicate trusted devices on iPhone
 
 One practical side effect of the early classic experiments was that the clean-room
