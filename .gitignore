@@ -10,3 +10,5 @@ artifacts/
 
 !buildroot-external/package/carthing-bt-fwload/
 !buildroot-external/package/carthing-bt-fwload/**
+tools/previews/
+__pycache__/
