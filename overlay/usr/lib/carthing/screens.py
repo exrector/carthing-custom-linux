@@ -49,31 +49,22 @@ class NowPlayingScreen(Screen):
             C.text_centered(draw, "Awaiting iPhone", T.font(T.SZ_BODY), T.MUTED, T.MAIN_CY + 30, cx=T.CONTENT_CX)
             return img
 
-        # vertically center the now-playing block in the MAIN region
+        # Center title + artist in MAIN. Progress + play state now live on the
+        # bar's top divider / transport, so nothing here reflows or scrolls off.
         lines = C.wrap_lines(draw, sess.title or "—", T.font(T.SZ_TITLE), T.CONTENT_W)
+        MAXL = 4                                   # cap long podcast titles
+        if len(lines) > MAXL:
+            lines = lines[:MAXL]
+            lines[-1] = C.truncate(draw, lines[-1] + "…", T.font(T.SZ_TITLE), T.CONTENT_W)
         artist = sess.artist or ""
         LH = 56
-        block_h = len(lines) * LH + (56 if artist else 0) + 18 + 3 + 30
+        block_h = len(lines) * LH + (50 if artist else 0)
         y = max(T.CONTENT_TOP, T.MAIN_CY - block_h // 2)
         for line in lines:
             C.text_centered(draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX); y += LH
         if artist:
             y += 6
-            C.text_centered(draw, artist, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX); y += 50
-
-        bar_y = y + 18
-        C.progress_bar(draw, T.CONTENT_X0, bar_y, T.CONTENT_W,
-                       (sess.position / sess.duration) if sess.duration else 0)
-
-        time_str = f"{_fmt(sess.position)}  /  {_fmt(sess.duration)}" if sess.duration else ""
-        f = T.font(T.SZ_META)
-        r = 9
-        group = (2 * r + 16 + C.text_w(draw, time_str, f)) if time_str else 2 * r
-        gx = T.CONTENT_CX - group // 2
-        gy = bar_y + 26
-        (T.icon_pause if sess.playing else T.icon_play)(draw, gx + r, gy, r, color=T.FAINT)
-        if time_str:
-            draw.text((gx + 2 * r + 16, gy - T.SZ_META // 2), time_str, font=f, fill=T.FAINT)
+            C.text_centered(draw, artist, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX)
         return img
 
 
@@ -146,6 +137,7 @@ class SettingsScreen(Screen):
         ]
         self.expanded = set()
         self.sel = 0
+        self.top = 0          # first visible row (scroll offset)
         self.state = None
 
     def on_state(self, state):
@@ -172,9 +164,9 @@ class SettingsScreen(Screen):
 
     def on_input(self, event):
         rows = self._visible()
-        if event == Input.ENCODER_CW:
+        if event in (Input.ENCODER_CW, Input.SWIPE_UP):     # swipe up = move down the list
             self.sel = (self.sel + 1) % len(rows); return True
-        if event == Input.ENCODER_CCW:
+        if event in (Input.ENCODER_CCW, Input.SWIPE_DOWN):
             self.sel = (self.sel - 1) % len(rows); return True
         if event == Input.PRESS:
             level, key, _label, expandable, expanded = rows[self.sel]
@@ -188,12 +180,21 @@ class SettingsScreen(Screen):
     def render(self, regions=None):
         img, draw = self.blank()
         draw.text((24, CONTENT_TOP - 8), "Настройки", font=T.font(34), fill=T.MUTED)
-        draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
+        draw.line([24, CONTENT_TOP + 34, T.LIST_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
-        y = CONTENT_TOP + 52
-        for i, (level, key, label, expandable, expanded) in enumerate(self._visible()):
-            if y + T.ROW_H - 14 > T.OCCLUSION_BOTTOM:    # stay within MAIN band (TODO: scroll)
-                break
+        rows = self._visible()
+        start_y = CONTENT_TOP + 52
+        vis = max(1, (T.OCCLUSION_BOTTOM - start_y) // T.ROW_H)   # rows that fit
+        # scroll so the selected row stays in view
+        if self.sel < self.top:
+            self.top = self.sel
+        elif self.sel >= self.top + vis:
+            self.top = self.sel - vis + 1
+        self.top = max(0, min(self.top, max(0, len(rows) - vis)))
+
+        y = start_y
+        for i in range(self.top, min(self.top + vis, len(rows))):
+            level, key, label, expandable, expanded = rows[i]
             rect = C.list_row(draw, y, label, selected=(i == self.sel),
                               expandable=expandable, expanded=expanded,
                               indent=24 if level else 0)

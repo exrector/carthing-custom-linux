@@ -18,9 +18,19 @@ log = logging.getLogger(__name__)
 _EV_FMT = 'qqHHi'
 _EV_SIZE = struct.calcsize(_EV_FMT)
 
+EV_SYN = 0x00
 EV_KEY = 0x01
 EV_REL = 0x02
+EV_ABS = 0x03
 REL_HWHEEL = 6
+
+# Touchscreen (event3, tlsc6x — MT protocol type B)
+ABS_MT_SLOT        = 0x2f
+ABS_MT_POSITION_X  = 0x35
+ABS_MT_POSITION_Y  = 0x36
+ABS_MT_TRACKING_ID = 0x39
+BTN_TOUCH          = 0x14a
+SYN_REPORT         = 0x00
 
 KEY_DOWN = 1
 KEY_UP   = 0
@@ -49,7 +59,18 @@ EV_ENCODER_CW  = "encoder_cw"
 EV_ENCODER_CCW = "encoder_ccw"
 EV_PRESS       = "press"
 EV_BACK        = "back"
+EV_SWIPE_LEFT  = "swipe_left"
+EV_SWIPE_RIGHT = "swipe_right"
+EV_SWIPE_UP    = "swipe_up"
+EV_SWIPE_DOWN  = "swipe_down"
+EV_TAP         = "tap"
 _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"}
+
+# Touch → landscape canvas. Panel is portrait 480x800; the screen is rotated -90,
+# so canvas_x = touch_y and canvas_y = (CANVAS_H-1) - touch_x.
+CANVAS_H     = 480
+SWIPE_MIN_PX = 100   # min horizontal canvas travel to switch desktops
+TAP_MAX_PX   = 30    # max travel to count as a tap
 
 
 async def _read_events(path, callback):
@@ -122,5 +143,52 @@ async def start(get_ams=None, on_event=None):
             log.info("Button %d → TogglePlayPause", code)
             await ams.send_command(CMD_TOGGLE)
 
+    # Touch: a single-finger gesture → horizontal swipe (desktop switch) or tap.
+    # MT type B; we track the active contact only (good enough for swipe/tap).
+    t = {"rawx": None, "rawy": None, "down": False,
+         "sx": None, "sy": None, "cx": None, "cy": None}
+
+    def _finish_touch():
+        if not t["down"]:
+            return
+        t["down"] = False
+        if t["sx"] is None or t["cx"] is None:
+            return
+        dx, dy = t["cx"] - t["sx"], t["cy"] - t["sy"]
+        if abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
+            on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
+        elif abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
+            on_event(EV_SWIPE_UP if dy < 0 else EV_SWIPE_DOWN)
+        elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
+            on_event((EV_TAP, t["cx"], t["cy"]))
+        t["sx"] = t["sy"] = t["cx"] = t["cy"] = None
+
+    async def on_touch(ev):
+        if not use_gui:
+            return
+        _, _, evtype, code, value = ev
+        if evtype == EV_ABS:
+            if code == ABS_MT_POSITION_X:
+                t["rawx"] = value
+            elif code == ABS_MT_POSITION_Y:
+                t["rawy"] = value
+            elif code == ABS_MT_TRACKING_ID:
+                if value == -1:
+                    _finish_touch()
+                else:
+                    t["down"] = True
+                    t["sx"] = t["sy"] = None
+        elif evtype == EV_KEY and code == BTN_TOUCH and value == 0:
+            _finish_touch()
+        elif evtype == EV_SYN and code == SYN_REPORT:
+            if t["down"] and t["rawx"] is not None and t["rawy"] is not None:
+                cx = t["rawy"]                       # canvas_x = touch_y
+                cy = (CANVAS_H - 1) - t["rawx"]       # canvas_y = (H-1) - touch_x
+                if t["sx"] is None:
+                    t["sx"], t["sy"] = cx, cy
+                t["cx"], t["cy"] = cx, cy
+
     await _read_events('/dev/input/event1', on_encoder)
     await _read_events('/dev/input/event0', on_buttons)
+    if use_gui:
+        await _read_events('/dev/input/event3', on_touch)

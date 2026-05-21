@@ -25,6 +25,8 @@ class Input:
     BTN_4 = "btn_4"
     SWIPE_LEFT = "swipe_left"
     SWIPE_RIGHT = "swipe_right"
+    SWIPE_UP = "swipe_up"
+    SWIPE_DOWN = "swipe_down"
     # tap carries coordinates: ("tap", x, y)
     TAP = "tap"
 
@@ -194,10 +196,10 @@ class Compositor:
             img = self.current.render(self._regions)
 
         draw = ImageDraw.Draw(img)
-        # On media desktops the dial doubles as a volume gauge; elsewhere it is a
-        # plain outline (the encoder navigates instead of changing volume).
+        # The dial is a persistent volume gauge on every desktop (it reflects the
+        # control source's volume regardless of what the encoder does here).
         vol = None
-        if self.state is not None and self.current.name in ("nowplaying", "macos"):
+        if self.state is not None:
             cs = getattr(self.state, "control_source", None)
             vol = cs.volume if cs is not None else None
         T.encoder_arc(draw, level=vol)

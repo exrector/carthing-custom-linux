@@ -495,6 +495,22 @@ def _last_activity_bump():
     _last_activity = time.monotonic()
 
 
+async def animation_loop():
+    """Advance transient animations (swipe slide) + ambient pulse, then re-render.
+    Idles cheaply when nothing is animating so the no-traffic policy still holds."""
+    while True:
+        anim = getattr(compositor, "anim", None) if compositor is not None else None
+        if anim is not None and anim.needs_tick():
+            anim.tick()
+            try:
+                compositor.render()
+            except Exception as e:
+                logger.error("anim render error: %s", e)
+            await asyncio.sleep(1 / 30)
+        else:
+            await asyncio.sleep(0.08)
+
+
 async def main():
     global ui, compositor, _device
     device, _transport = await init_ble(configure_device=install_hid_pairing_profile)
@@ -537,6 +553,7 @@ async def main():
     # AMS directly (legacy). handle_input is synchronous and renders in-loop.
     if compositor is not None:
         await start_input(on_event=compositor.handle_input)
+        asyncio.create_task(animation_loop())
     else:
         await start_input(get_ams=lambda: ams)
     await asyncio.get_event_loop().create_future()

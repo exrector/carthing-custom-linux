@@ -17,7 +17,6 @@ class StatusBar:
     def render(self, draw, regions, anim, st):
         bar_top = T.STATUSBAR_TOP
         draw.rectangle([0, bar_top, T.W, T.H], fill=T.BG)
-        draw.line([0, bar_top, T.W, bar_top], fill=T.HAIRLINE, width=1)
 
         cy = bar_top + (T.H - bar_top) // 2 + 6   # transport row (dots sit above)
         cx = T.W // 2                              # full-width bar -> true center
@@ -25,6 +24,14 @@ class StatusBar:
 
         control = getattr(st, "control_source", None)   # MediaSession the transport drives
         playing = control.playing if control else False
+
+        # ── top divider doubles as the now-playing progress line ───────────────
+        # Fixed position (never reflows with long titles); segmented in the same
+        # visual language as the dial — fills left→right by track position.
+        pct = 0.0
+        if control is not None and getattr(control, "duration", 0):
+            pct = min(control.position / control.duration, 1.0)
+        T.progress_segments(draw, 0, bar_top, T.W, pct)
 
         # ── media transport (center) ──────────────────────────────────────────
         gap = 140

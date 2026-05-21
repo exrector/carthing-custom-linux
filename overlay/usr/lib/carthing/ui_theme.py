@@ -46,6 +46,7 @@ CONTENT_CX = OCCLUSION_LEFT // 2      # 370 — main horizontal center (left edg
 CONTENT_W  = 2 * (CONTENT_CX - CONTENT_X0)   # 660
 MAIN_CY    = OCCLUSION_BOTTOM // 2    # 172 — main vertical center
 CONTENT_TOP = 24                      # top-aligned content (lists) start
+LIST_X1     = OCCLUSION_LEFT - 72     # 668 — right edge for list rows; keeps them clear of the dial arc
 
 # BOTTOM BAR fills the bottom band exactly (top aligned with occlusion bottom)
 STATUSBAR_TOP = OCCLUSION_BOTTOM      # 318
@@ -156,6 +157,21 @@ def encoder_arc(draw, level=None, color=FAINT, width=2):
         w = 8 if on else 3
         bbox = [cx - rr, cy - rr, cx + rr, cy + rr]
         draw.arc(bbox, start=s, end=s + seg, fill=col, width=w)
+
+
+def progress_segments(draw, x0, y, w, level, n=32, gap=4):
+    """Horizontal segmented progress in the dial's visual language: filled
+    segments are bright (ACCENT) and thicker (bulge), empty ones thin + faint.
+    Centred on `y` so it reads as the divider line filling up left→right."""
+    level = max(0.0, min(1.0, level))
+    seg_w = (w - gap * (n - 1)) / n
+    filled = round(level * n)
+    for i in range(n):
+        x = x0 + i * (seg_w + gap)
+        on = i < filled
+        col = ACCENT if on else HAIRLINE
+        h = 3 if on else 1                     # filled segments bulge thicker
+        draw.rectangle([x, y - h, x + seg_w, y + h], fill=col)
 
 
 def icon_chevron(draw, cx, cy, r, color=MUTED, expanded=False, width=3):
