@@ -194,7 +194,13 @@ class Compositor:
             img = self.current.render(self._regions)
 
         draw = ImageDraw.Draw(img)
-        T.encoder_arc(draw)        # right-edge outline of the physical rotary dial
+        # On media desktops the dial doubles as a volume gauge; elsewhere it is a
+        # plain outline (the encoder navigates instead of changing volume).
+        vol = None
+        if self.state is not None and self.current.name in ("nowplaying", "macos"):
+            cs = getattr(self.state, "control_source", None)
+            vol = cs.volume if cs is not None else None
+        T.encoder_arc(draw, level=vol)
         if self.status_bar:
             self.status_bar.render(draw, self._regions, self.anim, self.state)
         if self.show_dots and len(self.screens) > 1:

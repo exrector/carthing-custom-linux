@@ -21,28 +21,28 @@ class StatusBar:
 
         cy = bar_top + (T.H - bar_top) // 2 + 6   # transport row (dots sit above)
         cx = T.W // 2                              # full-width bar -> true center
-        f = T.font(T.SZ_SMALL)
+        f = T.font(T.SZ_BAR)
 
         control = getattr(st, "control_source", None)   # MediaSession the transport drives
         playing = control.playing if control else False
 
         # ── media transport (center) ──────────────────────────────────────────
-        gap = 78
-        T.icon_prev(draw, cx - gap, cy, 13, color=T.FG)
-        regions.add((cx - gap - 28, cy - 28, cx - gap + 28, cy + 28), self.INTENT_PREV)
+        gap = 140
+        T.icon_prev(draw, cx - gap, cy, 23, color=T.FG)
+        regions.add((cx - gap - 36, cy - 36, cx - gap + 36, cy + 36), self.INTENT_PREV)
 
         if playing:
-            T.icon_pause(draw, cx, cy, 16, color=T.FG)
+            T.icon_pause(draw, cx, cy, 28, color=T.FG)
         else:
-            T.icon_play(draw, cx, cy, 16, color=T.FG)
-        regions.add((cx - 32, cy - 32, cx + 32, cy + 32), self.INTENT_PLAY_PAUSE)
+            T.icon_play(draw, cx, cy, 28, color=T.FG)
+        regions.add((cx - 42, cy - 42, cx + 42, cy + 42), self.INTENT_PLAY_PAUSE)
 
-        T.icon_next(draw, cx + gap, cy, 13, color=T.FG)
-        regions.add((cx + gap - 28, cy - 28, cx + gap + 28, cy + 28), self.INTENT_NEXT)
+        T.icon_next(draw, cx + gap, cy, 23, color=T.FG)
+        regions.add((cx + gap - 36, cy - 36, cx + gap + 36, cy + 36), self.INTENT_NEXT)
 
         # ── clock (left) ──────────────────────────────────────────────────────
         clock = getattr(st, "clock_text", "") or "--:--"
-        draw.text((T.MARGIN - 16, cy - T.SZ_SMALL // 2 - 2), clock, font=f, fill=T.MUTED)
+        draw.text((T.MARGIN - 16, cy - T.SZ_BAR // 2 - 2), clock, font=f, fill=T.MUTED)
 
         # ── right: source label + notification ───────────────────────────────
         x = T.W - (T.MARGIN - 16)
@@ -58,4 +58,4 @@ class StatusBar:
         label = control.label if control else ""
         if label:
             b = draw.textbbox((0, 0), label, font=f)
-            draw.text((x - (b[2] - b[0]), cy - T.SZ_SMALL // 2 - 2), label, font=f, fill=T.FAINT)
+            draw.text((x - (b[2] - b[0]), cy - T.SZ_BAR // 2 - 2), label, font=f, fill=T.FAINT)

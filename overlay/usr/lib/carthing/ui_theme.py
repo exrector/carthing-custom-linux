@@ -36,7 +36,7 @@ RADIUS     = 8
 # Provisional from on-Mac calibration; refine on-device.
 SAFE_RIGHT       = 60
 OCCLUSION_LEFT   = W - SAFE_RIGHT     # 740 — vertical divider in the top band
-OCCLUSION_BOTTOM = 345                # horizontal divider: top band / bottom bar
+OCCLUSION_BOTTOM = 318                # horizontal divider: top band / bottom bar (raised → taller bar)
 OCCLUSION = (OCCLUSION_LEFT, 0, W, OCCLUSION_BOTTOM)
 
 # MAIN region geometry — content centers here
@@ -48,14 +48,21 @@ MAIN_CY    = OCCLUSION_BOTTOM // 2    # 172 — main vertical center
 CONTENT_TOP = 24                      # top-aligned content (lists) start
 
 # BOTTOM BAR fills the bottom band exactly (top aligned with occlusion bottom)
-STATUSBAR_TOP = OCCLUSION_BOTTOM      # 345
-STATUSBAR_H   = H - OCCLUSION_BOTTOM  # 135
+STATUSBAR_TOP = OCCLUSION_BOTTOM      # 318
+STATUSBAR_H   = H - OCCLUSION_BOTTOM  # 162
+
+# Encoder dial arc — kept independent of the occlusion divider so it can be
+# nudged without resizing the bottom bar. Diameter preserved from the original
+# calibration; centre lifted slightly to better trace the physical dial.
+ENCODER_ARC_R  = 162                  # radius — diameter trimmed to match the physical dial (was 172)
+ENCODER_ARC_CY = 150                  # vertical centre — raised (was 172)
 
 # ─── type scale ───────────────────────────────────────────────────────────────
 SZ_TITLE = 48
 SZ_BODY  = 32
 SZ_META  = 28
 SZ_SMALL = 22
+SZ_BAR   = 26   # bottom-bar text (clock, source label) — a touch larger for the taller bar
 
 _FONT_CANDIDATES = [
     os.environ.get("CARTHING_FONT_PATH", ""),
@@ -114,15 +121,41 @@ def icon_ring(draw, cx, cy, r, color=FG, width=2):
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color, width=width)
 
 
-def encoder_arc(draw, color=FAINT, width=2):
+ENCODER_ARC_A0 = 131                  # visible arc span: bottom-left …
+ENCODER_ARC_A1 = 229                  # … to top-left (traces the physical dial edge)
+
+
+def encoder_arc(draw, level=None, color=FAINT, width=2):
     """Outline of the physical rotary dial: a large circle centered off-screen to
-    the right (its 'square' completed rightward from the occlusion zone), so only
-    its left arc bulges onto the screen edge. Diameter ~= occlusion zone height."""
-    R = OCCLUSION_BOTTOM // 2
-    cy = OCCLUSION_BOTTOM // 2
+    the right, so only its left arc bulges onto the screen edge.
+
+    level=None → plain faint outline. level in 0..1 → volume indicator: the span
+    is split into segments and filled from the bottom up; filled segments are
+    bright and bulge outward (larger radius), empty ones stay thin and faint."""
+    R = ENCODER_ARC_R
+    cy = ENCODER_ARC_CY
     cx = CONTENT_X1 + R                       # leftmost point sits at CONTENT_X1
-    bbox = [cx - R, cy - R, cx + R, cy + R]
-    draw.arc(bbox, start=131, end=229, fill=color, width=width)   # visible left arc
+    a0, a1 = ENCODER_ARC_A0, ENCODER_ARC_A1
+
+    if level is None:
+        bbox = [cx - R, cy - R, cx + R, cy + R]
+        draw.arc(bbox, start=a0, end=a1, fill=color, width=width)   # visible left arc
+        return
+
+    level = max(0.0, min(1.0, level))
+    N = 14
+    gap_deg = 2.2                              # spacing between segments
+    span = a1 - a0
+    seg = (span - gap_deg * (N - 1)) / N
+    filled = round(level * N)
+    for i in range(N):
+        s = a0 + i * (seg + gap_deg)
+        on = i < filled
+        rr = R + 7 if on else R                # filled segments bulge outward
+        col = ACCENT if on else HAIRLINE
+        w = 8 if on else 3
+        bbox = [cx - rr, cy - rr, cx + rr, cy + rr]
+        draw.arc(bbox, start=s, end=s + seg, fill=col, width=w)
 
 
 def icon_chevron(draw, cx, cy, r, color=MUTED, expanded=False, width=3):
