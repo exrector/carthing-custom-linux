@@ -26,7 +26,9 @@ class MediaSession:
 
 
 class AppState:
-    # desktop index -> media source key. Settings (2) maps to None (no media).
+    # desktop indices (the swipe order)
+    IPHONE, MAC, SETTINGS, NOTIFICATIONS = 0, 1, 2, 3
+    # desktop index -> media source key. Non-media desktops map to None.
     DESKTOP_SOURCE = {0: "iphone", 1: "mac"}
 
     def __init__(self):
@@ -35,6 +37,7 @@ class AppState:
         self.active_desktop = 0
         self.last_media_source = "iphone"   # fallback for non-media desktops
         self.unread_count = 0
+        self.notifications = []             # list of {"app","title","message"}
         self.clock_text = "--:--"
         self.pairing_mode = False
 

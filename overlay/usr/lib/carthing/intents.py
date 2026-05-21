@@ -29,6 +29,7 @@ class Dispatcher:
         elif intent == "media_vol_down":
             self._media("vol_down")
         elif intent == "open_notifications":
+            self.state.active_desktop = self.state.NOTIFICATIONS   # navigate to the list
             self.state.unread_count = 0
         elif intent == "settings_select":
             self._settings(payload)

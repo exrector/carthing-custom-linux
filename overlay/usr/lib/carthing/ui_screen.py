@@ -97,10 +97,24 @@ class Compositor:
         self.state = state
         self.on_intent = on_intent or (lambda intent, payload=None: None)
         self.show_dots = show_dots
-        self.active = 0
+        self._active = 0
         self.modal = None
         self._pairing_modal = pairing_modal
         self._regions = RegionSet()
+
+    @property
+    def active(self):
+        # active desktop lives in AppState (unidirectional) when available
+        if self.state is not None and hasattr(self.state, "active_desktop"):
+            return self.state.active_desktop
+        return self._active
+
+    @active.setter
+    def active(self, v):
+        if self.state is not None and hasattr(self.state, "active_desktop"):
+            self.state.active_desktop = v
+        else:
+            self._active = v
 
     def _sync_modal(self):
         """Derive the modal from state (unidirectional): show the pairing modal
@@ -148,9 +162,7 @@ class Compositor:
             return False
         if self.anim:
             self.anim.start_transition(delta)
-        self.active = (self.active + delta) % n
-        if self.state is not None and hasattr(self.state, "active_desktop"):
-            self.state.active_desktop = self.active   # control_source follows the desktop
+        self.active = (self.active + delta) % n   # setter writes state.active_desktop
         self.render()
         return True
 

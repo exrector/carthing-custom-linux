@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "overlay", "usr", "l
 from ui_screen import Compositor, Display, Input          # noqa: E402
 from ui_statusbar import StatusBar                          # noqa: E402
 from ui_anim import AnimDriver                              # noqa: E402
-from screens import NowPlayingScreen, MacOSScreen, SettingsScreen, PairingModal  # noqa: E402
+from screens import NowPlayingScreen, MacOSScreen, SettingsScreen, NotificationsScreen, PairingModal  # noqa: E402
 from app_state import AppState                              # noqa: E402
 from intents import Dispatcher                              # noqa: E402
 
@@ -60,6 +60,12 @@ state.iphone.position = 192
 state.iphone.playing = True
 # Mac: LIVE from real Apple Music on this Mac (filled by the poller below)
 state.mac.connected = False
+# seed a couple of notifications so the status-bar indicator is visible
+state.unread_count = 2
+state.notifications = [
+    {"app": "Telegram", "title": "Анна", "message": "Привет! Ты уже в машине?"},
+    {"app": "Почта", "title": "GitHub", "message": "PR #42 merged into main"},
+]
 
 
 def _on_command(src, cmd):
@@ -74,7 +80,8 @@ comp = Compositor(
     sink,
     [NowPlayingScreen(emit=dispatcher.dispatch),
      MacOSScreen(emit=dispatcher.dispatch),
-     SettingsScreen(on_select=lambda key: dispatcher.dispatch("settings_select", key))],
+     SettingsScreen(on_select=lambda key: dispatcher.dispatch("settings_select", key)),
+     NotificationsScreen()],
     status_bar=StatusBar(), anim=anim, state=state, on_intent=dispatcher.dispatch,
     pairing_modal=PairingModal(emit=dispatcher.dispatch))
 comp.broadcast_state(state)

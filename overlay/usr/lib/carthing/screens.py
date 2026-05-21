@@ -191,6 +191,44 @@ class SettingsScreen(Screen):
         return img
 
 
+class NotificationsScreen(Screen):
+    """Desktop 4 — mirror of iPhone notifications (ANCS). Reached by swipe or by
+    tapping the pulsing status-bar indicator."""
+
+    name = "notifications"
+    title = "Уведомления"
+
+    def __init__(self):
+        self.state = None
+
+    def on_state(self, state):
+        self.state = state
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        draw.text((24, CONTENT_TOP - 8), "Уведомления", font=T.font(34), fill=T.MUTED)
+        draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
+
+        notes = self.state.notifications if self.state else []
+        if not notes:
+            C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_BODY), T.FAINT, T.MAIN_CY, cx=T.CONTENT_CX)
+            return img
+
+        y = CONTENT_TOP + 52
+        maxw = T.CONTENT_W - 16
+        for n in notes:
+            if y + 90 > T.OCCLUSION_BOTTOM:
+                break
+            draw.text((40, y), n.get("app", ""), font=T.font(T.SZ_SMALL), fill=T.ACCENT)
+            draw.text((40, y + 24), C.truncate(draw, n.get("title", ""), T.font(T.SZ_BODY), maxw),
+                      font=T.font(T.SZ_BODY), fill=T.FG)
+            draw.text((40, y + 58), C.truncate(draw, n.get("message", ""), T.font(T.SZ_META), maxw),
+                      font=T.font(T.SZ_META), fill=T.MUTED)
+            y += 100
+            draw.line([40, y - 14, T.CONTENT_X1, y - 14], fill=T.HAIRLINE, width=1)
+        return img
+
+
 class PairingModal:
     """Live-action overlay: makes the device discoverable and waits for a new
     device to connect from its side. Drawn over the dimmed active desktop.
