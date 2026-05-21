@@ -72,6 +72,29 @@ to the `com.apple.Music.playerInfo` distributed notification) and pushes it to
 the Car Thing over BLE (CarThingLink). If Podcasts coverage is wanted later,
 revisit the media-control adapter as an explicit opt-in.
 
+## BLE link to the Mac — services/profiles (2026-05-21)
+
+Asymmetry vs iPhone: the iPhone exposes **AMS/ANCS** (standard Apple GATT
+services) that the Car Thing just reads — no software on the phone. **macOS
+exposes no equivalent now-playing GATT service** (MediaRemote is internal, not
+BLE), so a custom channel + a tiny Mac helper are required for display.
+
+| Goal | Service / profile | Mac software |
+|---|---|---|
+| Connect + trust | GAP + GATT + **LE Secure Connections bonding** | none |
+| **Control** Apple Music | **HID-over-GATT (HOGP, 0x1812) Consumer Control** — Car Thing sends media keys; macOS applies them to Music natively. Same HID the device already exposes; Mac can be paired as a BT remote from System Settings | **none** |
+| **Display** now-playing on D2 | custom **CarThingLink** GATT service (RX: Mac writes now-playing JSON; TX/notify optional). Already in repo history at commit `30c28ed` (post-v1; not on this branch yet) | **yes** — CoreBluetooth central helper + `osascript` (tools/mac_music.py is the basis) |
+| (optional) identity | Device Information `0x180A`, Battery `0x180F` | none |
+
+GATT roles are per-connection: on the iPhone link the Car Thing is GATT *client*
+(reads AMS); on the Mac link it is GATT *server* (exposes CarThingLink). Both can
+run simultaneously (multi-connection proven). macOS won't pair an arbitrary
+custom-service peripheral from System Settings — the CarThingLink connection is
+driven programmatically by the helper; only the HID role is Settings-pairable.
+
+Minimum (control only) = zero Mac software via HID. Full D2 (track display) =
+custom service + helper.
+
 ## Sources
 - https://github.com/ungive/mediaremote-adapter
 - https://github.com/nohackjustnoobb/media-remote
