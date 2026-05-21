@@ -16,8 +16,12 @@ from bumble.smp import PairingConfig
 from ams_client import AMSClient, MediaState
 from ble_transport import init_ble
 from drm_display import DRMDisplay
-from input_handler import start as start_input
+from input_handler import (
+    start as start_input,
+    CMD_TOGGLE, CMD_NEXT, CMD_PREV, CMD_VOL_UP, CMD_VOL_DOWN,
+)
 
+# Legacy single-screen UI (kept as a fallback if the modular GUI fails to import)
 try:
     from now_playing_ui import NowPlayingUI
     _ui_import_error = None
@@ -25,18 +29,103 @@ except Exception as exc:
     NowPlayingUI = None
     _ui_import_error = exc
 
+# Modular GUI stack (PIL→DRM compositor). Optional: on import failure we fall
+# back to the legacy NowPlayingUI so the device never boots without a screen.
+try:
+    from ui_screen import Compositor, DRMDisplayAdapter
+    from ui_statusbar import StatusBar
+    from ui_anim import AnimDriver
+    from app_state import AppState
+    from intents import Dispatcher
+    from screens import (
+        NowPlayingScreen, MacOSScreen, SettingsScreen,
+        NotificationsScreen, PairingModal,
+    )
+    _gui_import_error = None
+except Exception as exc:
+    Compositor = None
+    _gui_import_error = exc
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 state = MediaState()
 ams: AMSClient | None = None
-ui: NowPlayingUI | None = None
+ui: NowPlayingUI | None = None        # legacy UI (used only if GUI import failed)
+compositor = None                     # modular GUI compositor (preferred)
+app_state = AppState() if Compositor is not None else None
+dispatcher = None
 _device: Device | None = None
 _last_activity = time.monotonic()
 _active_conn: Connection | None = None
 _last_peer_address = None
 _reconnect_fallback_task: asyncio.Task | None = None
 _ams_starting: set[int] = set()
+
+# Dispatcher command → AMS RemoteCommand. play/pause both map to Toggle (AMS has
+# no discrete play/pause); AMS state updates re-sync the UI's notion of playing.
+_AMS_CMD = {
+    "play": CMD_TOGGLE, "pause": CMD_TOGGLE, "next": CMD_NEXT,
+    "prev": CMD_PREV, "vol_up": CMD_VOL_UP, "vol_down": CMD_VOL_DOWN,
+}
+
+
+def _ble_command(source_key: str, command: str):
+    """Intent dispatcher sink: forward a UI media command to the live AMS link.
+    Only the iPhone source exists on this device; Mac is simulator-only."""
+    if source_key != "iphone" or ams is None:
+        return
+    code = _AMS_CMD.get(command)
+    if code is not None:
+        asyncio.create_task(ams.send_command(code))
+
+
+def _sync_media_to_appstate(s: MediaState):
+    """Project the AMS MediaState onto AppState.iphone (the GUI's source)."""
+    sess = app_state.iphone
+    sess.connected = _active_conn is not None
+    sess.title = s.title
+    sess.artist = s.artist
+    sess.duration = s.duration
+    sess.position = s.position
+    sess.playing = s.playing
+    sess.volume = s.volume
+    app_state.clock_text = time.strftime("%H:%M")
+
+
+def _render_ui(s: MediaState):
+    """Push current media state to whichever UI is active."""
+    if compositor is not None:
+        try:
+            _sync_media_to_appstate(s)
+            compositor.broadcast_state(app_state)
+        except Exception as e:
+            logger.error("GUI render error: %s", e)
+    elif ui is not None:
+        try:
+            ui.render(s)
+        except Exception as e:
+            logger.error("UI render error: %s", e)
+
+
+def _build_compositor(display):
+    """Wire the modular GUI: desktops + dispatcher + status bar over the DRM display."""
+    global dispatcher
+    adapter = DRMDisplayAdapter(display)
+    dispatcher = Dispatcher(app_state, on_command=_ble_command)
+    emit = dispatcher.dispatch
+    screens = [
+        NowPlayingScreen(emit=emit),                                  # AppState.IPHONE = 0
+        MacOSScreen(emit=emit),                                       # MAC = 1
+        SettingsScreen(on_select=lambda key: emit("settings_select", key)),  # SETTINGS = 2
+        NotificationsScreen(),                                        # NOTIFICATIONS = 3
+    ]
+    return Compositor(
+        adapter, screens,
+        status_bar=StatusBar(), anim=AnimDriver(),
+        state=app_state, on_intent=emit,
+        pairing_modal=PairingModal(emit=emit),
+    )
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
 BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
@@ -154,11 +243,7 @@ def on_state_update(s: MediaState):
         int(s.duration),
         int(s.volume * 100),
     )
-    if ui:
-        try:
-            ui.render(s)
-        except Exception as e:
-            logger.error("UI render error: %s", e)
+    _render_ui(s)
 
 
 async def on_connection(connection: Connection):
@@ -224,6 +309,7 @@ async def maybe_start_ams(connection: Connection, reason: str):
             _active_conn = connection
             ams = candidate
             logger.info("AMS готов — жду метаданные")
+            _render_ui(state)        # flip the GUI from "Lost Contact" to connected
         else:
             logger.warning("AMS не найден на этом устройстве")
     finally:
@@ -241,11 +327,9 @@ async def on_disconnection(connection: Connection, reason: int):
     state.duration = 0.0
     state.position = 0.0
     state.playing = False
-    if ui:
-        try:
-            ui.render(state)
-        except Exception as e:
-            logger.error("UI disconnect render error: %s", e)
+    if app_state is not None:
+        app_state.iphone.connected = False
+    _render_ui(state)
     try:
         await asyncio.sleep(0.3)
         if _device:
@@ -412,7 +496,7 @@ def _last_activity_bump():
 
 
 async def main():
-    global ui, _device
+    global ui, compositor, _device
     device, _transport = await init_ble(configure_device=install_hid_pairing_profile)
     _device = device
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
@@ -425,21 +509,36 @@ async def main():
     loop = asyncio.get_event_loop()
 
     def _init_display():
+        """Build the display + UI off the event loop (DRM open can block)."""
         display = DRMDisplay()
-        if NowPlayingUI is None:
-            raise RuntimeError(f"UI import failed: {_ui_import_error}")
-        return NowPlayingUI(display)
+        if Compositor is not None:
+            return ("gui", _build_compositor(display))
+        if NowPlayingUI is not None:
+            return ("legacy", NowPlayingUI(display))
+        raise RuntimeError(
+            f"No UI available (gui import: {_gui_import_error}; legacy: {_ui_import_error})"
+        )
 
     try:
-        ui = await loop.run_in_executor(None, _init_display)
-        logger.info("DRM display ready")
-        if state.title or state.artist:
-            ui.render(state)
+        kind, obj = await loop.run_in_executor(None, _init_display)
+        if kind == "gui":
+            compositor = obj
+            logger.info("DRM display ready — modular GUI active")
+        else:
+            ui = obj
+            logger.warning("DRM display ready — legacy UI (GUI import failed: %s)", _gui_import_error)
+        _render_ui(state)        # paint the initial frame (idle desktops / Lost Contact)
     except Exception as e:
         logger.error("Display/UI init failed, continuing headless: %s", e)
+        compositor = None
         ui = None
 
-    await start_input(lambda: ams)
+    # Route physical input into the GUI compositor when present; otherwise drive
+    # AMS directly (legacy). handle_input is synchronous and renders in-loop.
+    if compositor is not None:
+        await start_input(on_event=compositor.handle_input)
+    else:
+        await start_input(get_ams=lambda: ams)
     await asyncio.get_event_loop().create_future()
 
 

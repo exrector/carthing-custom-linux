@@ -43,6 +43,14 @@ CMD_PREV      = 0x04
 CMD_VOL_UP    = 0x05
 CMD_VOL_DOWN  = 0x06
 
+# High-level UI event names — MUST match ui_screen.Input values (no PIL import
+# here, so the input layer stays free of the GUI stack's dependencies).
+EV_ENCODER_CW  = "encoder_cw"
+EV_ENCODER_CCW = "encoder_ccw"
+EV_PRESS       = "press"
+EV_BACK        = "back"
+_KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"}
+
 
 async def _read_events(path, callback):
     fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
@@ -62,24 +70,43 @@ async def _read_events(path, callback):
     log.info("Input: watching %s", path)
 
 
-async def start(get_ams):
-    """Start reading encoder + buttons. get_ams() returns current AMSClient or None."""
+async def start(get_ams=None, on_event=None):
+    """Start reading encoder + buttons.
+
+    Two modes:
+      - on_event(name): preferred — emit high-level UI events into the GUI
+        compositor, which routes them to the active screen / intents.
+      - get_ams(): legacy fallback — drive AMS directly when no GUI sink is wired.
+    """
+    use_gui = on_event is not None
 
     async def on_encoder(ev):
         _, _, evtype, code, value = ev
-        if evtype == EV_REL and code == REL_HWHEEL:
-            ams = get_ams()
-            if not ams:
-                return
-            cmd = CMD_VOL_UP if value > 0 else CMD_VOL_DOWN
-            log.info("Encoder %+d → cmd 0x%02x", value, cmd)
-            await ams.send_command(cmd)
+        if evtype != EV_REL or code != REL_HWHEEL:
+            return
+        if use_gui:
+            on_event(EV_ENCODER_CW if value > 0 else EV_ENCODER_CCW)
+            return
+        ams = get_ams() if get_ams else None
+        if not ams:
+            return
+        cmd = CMD_VOL_UP if value > 0 else CMD_VOL_DOWN
+        log.info("Encoder %+d → cmd 0x%02x", value, cmd)
+        await ams.send_command(cmd)
 
     async def on_buttons(ev):
         _, _, evtype, code, value = ev
         if evtype != EV_KEY or value != KEY_DOWN:
             return
-        ams = get_ams()
+        if use_gui:
+            if code == KEY_ENTER:
+                on_event(EV_PRESS)
+            elif code == KEY_ESC:
+                on_event(EV_BACK)
+            elif code in _KEY_TO_BTN:
+                on_event(_KEY_TO_BTN[code])
+            return
+        ams = get_ams() if get_ams else None
         if not ams:
             return
         if code == KEY_ENTER:
