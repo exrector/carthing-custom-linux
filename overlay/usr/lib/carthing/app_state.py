@@ -38,6 +38,7 @@ class AppState:
         self.last_media_source = "iphone"   # fallback for non-media desktops
         self.unread_count = 0
         self.notifications = []             # list of {"app","title","message"}
+        self.trusted = []                   # bonded devices: {"key","label","type"}
         self.clock_text = "--:--"
         self.pairing_mode = False
 

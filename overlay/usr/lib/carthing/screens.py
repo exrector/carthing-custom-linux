@@ -146,6 +146,18 @@ class SettingsScreen(Screen):
         ]
         self.expanded = set()
         self.sel = 0
+        self.state = None
+
+    def on_state(self, state):
+        self.state = state
+
+    def _children(self, it):
+        if it["key"] == "trusted":      # dynamic from the trusted registry
+            trusted = self.state.trusted if self.state else []
+            if not trusted:
+                return [("trusted_empty", "— нет устройств —")]
+            return [("trusted:" + d["key"], d["label"] + "  ·  " + d["type"]) for d in trusted]
+        return it.get("children", [])
 
     def _visible(self):
         """Flatten to rows: (level, key, label, expandable, expanded)."""
@@ -154,7 +166,7 @@ class SettingsScreen(Screen):
             has_children = "children" in it
             rows.append((0, it["key"], it["label"], has_children, it["key"] in self.expanded))
             if has_children and it["key"] in self.expanded:
-                for ckey, clabel in it["children"]:
+                for ckey, clabel in self._children(it):
                     rows.append((1, ckey, clabel, False, False))
         return rows
 
@@ -176,7 +188,7 @@ class SettingsScreen(Screen):
     def render(self, regions=None):
         img, draw = self.blank()
         draw.text((24, CONTENT_TOP - 8), "Настройки", font=T.font(34), fill=T.MUTED)
-        draw.line([24, CONTENT_TOP + 34, T.W - 24, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
+        draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
         y = CONTENT_TOP + 52
         for i, (level, key, label, expandable, expanded) in enumerate(self._visible()):

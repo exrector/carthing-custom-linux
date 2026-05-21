@@ -66,6 +66,10 @@ state.notifications = [
     {"app": "Telegram", "title": "Анна", "message": "Привет! Ты уже в машине?"},
     {"app": "Почта", "title": "GitHub", "message": "PR #42 merged into main"},
 ]
+state.trusted = [
+    {"key": "iphone", "label": "iPhone 15 Pro", "type": "iPhone"},
+    {"key": "mac", "label": "MacBook Pro", "type": "Mac"},
+]
 
 
 def _on_command(src, cmd):
