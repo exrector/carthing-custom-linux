@@ -3,7 +3,7 @@ BLE HID Consumer Control — Media Remote для iPhone.
 HID service UUID 0x1812 в advertising → iPhone показывает в BT Settings.
 """
 import asyncio, logging, struct
-from runtime_paths import BD_ADDRESS, KEYSTORE_PATH, TRANSPORT
+from runtime_paths import BD_ADDRESS, KEYSTORE_PATH, TRANSPORT, device_name
 from bumble.device import Device, OwnAddressType, AdvertisingData
 from bumble.host import Host
 from bumble.transport import open_transport_or_link
@@ -67,8 +67,9 @@ def on_connection(conn):
 
 async def main():
     transport = await open_transport_or_link(TRANSPORT)
+    bt_name = device_name()
     device = Device(
-        name="CarThing",
+        name=bt_name,
         address=BD_ADDRESS,
         host=Host(controller_source=transport.source, controller_sink=transport.sink),
     )
@@ -77,7 +78,7 @@ async def main():
     device.add_service(Service(GAP_SERVICE_UUID, [
         Characteristic(DEVICE_NAME_UUID,
                        Characteristic.READ, Characteristic.READABLE,
-                       b"CarThing"),
+                       bt_name.encode("utf-8")),
         Characteristic(APPEARANCE_UUID,
                        Characteristic.READ, Characteristic.READABLE,
                        struct.pack("<H", 0x0180)),
@@ -135,14 +136,14 @@ async def main():
         (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
         (AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
          struct.pack("<H", 0x1812)),
-        (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+        (AdvertisingData.COMPLETE_LOCAL_NAME, bt_name.encode("utf-8")),
     ]))
 
     await device.start_advertising(
         own_address_type=OwnAddressType.PUBLIC,
         auto_restart=True,
     )
-    log.info("BLE HID рекламируется. iPhone → Настройки → Bluetooth → 'CarThing'")
+    log.info("BLE HID рекламируется. iPhone → Настройки → Bluetooth → %r", bt_name)
 
     await asyncio.get_event_loop().create_future()
 

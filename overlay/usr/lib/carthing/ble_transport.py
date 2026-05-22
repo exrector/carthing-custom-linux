@@ -6,6 +6,7 @@ from bumble.device import Device
 from bumble.host import Host
 from bumble.transport import open_transport_or_link
 from bumble.keys import JsonKeyStore
+from bumble.hci import HCI_Write_Local_Name_Command
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,19 @@ async def init_ble(configure_device=None, on_ready=None):
 
     await device.power_on()
 
-    # The unique name comes from the REAL controller MAC (differs per physical
-    # unit), not the (cloned) config BD address. Set it as the device name AND
-    # the OS hostname so BLE, classic and `ssh root@…` all show the same id.
+    # device_name() is the cross-layer identity source: factory efuse serial
+    # first, then explicit config, then hostname/MAC fallback.
     real_mac = str(device.public_address).split("/")[0]
-    unique = name_from_mac(real_mac)
+    unique = device_name() or name_from_mac(real_mac)
+    logger.info("Controller public address: %s  -> name=%s", real_mac, unique)
+
     device.name = unique
+    # Same name on the classic Local Name too, so a BT scan shows ONE name
+    # (not the factory "Car Thing (sn: …)" on classic and ours on BLE).
+    try:
+        await device.host.send_command(HCI_Write_Local_Name_Command(local_name=unique.encode("utf-8")))
+    except Exception as e:
+        logger.warning("Write_Local_Name(%s) failed: %s", unique, e)
     try:
         socket.sethostname(unique)
     except Exception as e:

@@ -9,9 +9,10 @@ from bumble.core import BT_BR_EDR_TRANSPORT
 from bumble.device import AdvertisingData, Device
 
 from app_state import normalize_address
+from runtime_paths import device_name
 
 
-DEFAULT_BT_NAME = "Car Thing Audio"
+DEFAULT_BT_NAME = ""
 DEFAULT_LEGACY_LINK_KEYS_PATH = "/run/carthing-state/carthing/iap2-link-keys.txt"
 COD_AUDIO_LOUDSPEAKER = 0x240414
 SERVICE_RECORD_AUDIO_SOURCE = 0x10001
@@ -69,7 +70,7 @@ class A2DPBridge:
     ):
         self.device = device
         self.state = state
-        self.bt_name = bt_name
+        self.bt_name = bt_name or getattr(device, "name", "") or device_name()
         self.autoconnect = autoconnect
         self.reconnect_interval = reconnect_interval
         self.connect_timeout = connect_timeout
@@ -162,6 +163,8 @@ class A2DPBridge:
             self._receiver_task = asyncio.create_task(self.receiver_loop())
 
     async def enable_classic_visibility(self):
+        # Connectable always (bonded peers reconnect, incoming A2DP works), but
+        # NOT discoverable by default — discovery is opened only in pairing mode.
         self.device.class_of_device = COD_AUDIO_LOUDSPEAKER
         self.device.inquiry_response = bytes(
             AdvertisingData(
@@ -176,8 +179,20 @@ class A2DPBridge:
             )
         )
         await self.device.set_connectable(True)
+        await self.device.set_discoverable(False)
+        self.logger.info("A2DP classic connectable (not discoverable) enabled")
+
+    async def enter_pairing(self):
+        """Pairing mode: become classic-discoverable (so a phone can add us as an
+        audio output) and scan for trusted speakers to add as transfer targets."""
         await self.device.set_discoverable(True)
-        self.logger.info("A2DP classic discoverable/connectable enabled")
+        self.logger.info("A2DP classic discoverable ON (pairing)")
+        if self._scan_task is None or self._scan_task.done():
+            self._scan_task = asyncio.create_task(self.scan_trusted_speakers())
+
+    async def exit_pairing(self):
+        await self.device.set_discoverable(False)
+        self.logger.info("A2DP classic discoverable OFF")
 
     async def receiver_loop(self):
         while True:

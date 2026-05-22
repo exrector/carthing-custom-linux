@@ -100,6 +100,7 @@ def _broadcast_app_state():
     if compositor is not None:
         try:
             app_state.clock_text = time.strftime("%H:%M")
+            app_state.device_name = bluetooth_name()
             compositor.broadcast_state(app_state)
         except Exception as e:
             logger.error("GUI state broadcast error: %s", e)
@@ -115,6 +116,33 @@ def request_transfer_select(address):
     if _a2dp_bridge is None:
         return
     asyncio.create_task(_a2dp_bridge.request_receiver_connection(address))
+
+
+def request_pairing_mode(enabled: bool):
+    """UI entered/left Settings → Pairing. Visibility is on-request:
+    - pairing ON  → general-discoverable BLE (sources find us) + classic
+      discoverable + speaker scan (transfer targets);
+    - pairing OFF → bonded-only/directed advertising (reconnect to the paired
+      iPhone — we stay connectable but invisible to new devices)."""
+    asyncio.create_task(_apply_pairing_mode(enabled))
+
+
+async def _apply_pairing_mode(enabled: bool):
+    if _device is None:
+        return
+    try:
+        if enabled:
+            logger.info("Pairing mode ON — discoverable (sources) + speaker scan")
+            await start_advertising(_device)               # general discoverable (BLE)
+            if _a2dp_bridge is not None:
+                await _a2dp_bridge.enter_pairing()         # classic discoverable + scan
+        else:
+            logger.info("Pairing mode OFF — bonded-only reconnect")
+            await start_bonded_only_advertising(_device)   # connectable, not discoverable
+            if _a2dp_bridge is not None:
+                await _a2dp_bridge.exit_pairing()
+    except Exception as e:
+        logger.error("apply pairing mode (%s) error: %s", enabled, e)
 
 
 def _sync_media_to_appstate(s: MediaState):
@@ -135,6 +163,7 @@ def _render_ui(s: MediaState):
     if compositor is not None:
         try:
             _sync_media_to_appstate(s)
+            app_state.device_name = bluetooth_name()
             compositor.broadcast_state(app_state)
         except Exception as e:
             logger.error("GUI render error: %s", e)
@@ -154,6 +183,7 @@ def _build_compositor(display):
         on_command=_ble_command,
         on_transfer_rescan=request_transfer_rescan,
         on_transfer_select=request_transfer_select,
+        on_pairing=request_pairing_mode,
     )
     emit = dispatcher.dispatch
     screens = [
@@ -438,7 +468,7 @@ async def start_advertising(device: Device):
         own_address_type=OwnAddressType.PUBLIC,
         auto_restart=True,
     )
-    logger.info("Реклама запущена")
+    logger.info("Реклама запущена: name=%s adv=%s", bluetooth_name(), device.advertising_data.hex())
 
 
 async def refresh_accept_list(device: Device):
@@ -450,7 +480,6 @@ async def refresh_accept_list(device: Device):
 
 
 async def start_bonded_only_advertising(device: Device):
-    name = bluetooth_name().encode("utf-8")
     device.advertising_data = bytes(
         AdvertisingData(
             [
@@ -460,7 +489,6 @@ async def start_bonded_only_advertising(device: Device):
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
                     struct.pack("<H", 0x1812),
                 ),
-                (AdvertisingData.COMPLETE_LOCAL_NAME, name),
             ]
         )
     )
@@ -470,7 +498,7 @@ async def start_bonded_only_advertising(device: Device):
         auto_restart=True,
         advertising_filter_policy=0x03,
     )
-    logger.info("Bonded-only HID advertising started")
+    logger.info("Bonded-only HID advertising started without local name: adv=%s", device.advertising_data.hex())
 
 
 async def start_reconnect_advertising(device: Device, target):
@@ -545,12 +573,16 @@ async def heartbeat():
             logger.info("HB: connections=%d advertising=%s silent=%ds", n_conn, adv, silent_for)
 
             if n_conn == 0 and adv is False:
-                logger.warning("HB: 0 conn + no adv — restart reconnect advertising")
+                # Keep reconnect alive without going general-discoverable (that
+                # only happens in pairing mode). Skip while pairing is active.
+                if app_state is not None and getattr(app_state, "pairing_mode", False):
+                    continue
+                logger.warning("HB: 0 conn + no adv — restart bonded reconnect advertising")
                 try:
                     if _last_peer_address is not None:
                         await start_reconnect_advertising(_device, _last_peer_address)
                     else:
-                        await start_advertising(_device)
+                        await start_bonded_only_advertising(_device)
                 except Exception as e:
                     logger.error("HB advertising restart failed: %s", e)
                 continue
@@ -600,6 +632,8 @@ async def main():
         app_state.load_trusted()
     device, _transport = await init_ble(configure_device=configure_runtime_device)
     _device = device
+    if app_state is not None:
+        app_state.device_name = bluetooth_name()
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))
     if app_state is not None and os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "1") == "1":
@@ -614,8 +648,10 @@ async def main():
         _a2dp_bridge.install_sdp_records()
         _a2dp_bridge.install_safe_link_key_provider()
         await _a2dp_bridge.start()
-    await start_advertising(device)
-    logger.info("Car Thing Media Remote запущен.")
+    # On-request visibility: start invisible-but-reconnectable (bonded-only).
+    # General discoverability is opened only by entering Settings → Pairing.
+    await start_bonded_only_advertising(device)
+    logger.info("Car Thing Media Remote запущен (bonded-only; pairing on request).")
 
     asyncio.create_task(heartbeat())
 

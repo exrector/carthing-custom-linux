@@ -13,11 +13,13 @@ Media routing (agreed model):
 
 
 class Dispatcher:
-    def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None):
+    def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
+                 on_pairing=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
         self.on_transfer_select = on_transfer_select or (lambda address: None)
+        self.on_pairing = on_pairing or (lambda enabled: None)
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -42,6 +44,7 @@ class Dispatcher:
             self._transfer_select(payload)
         elif intent == "pairing_cancel":
             self.state.pairing_mode = False
+            self.on_pairing(False)
 
     # ── media ────────────────────────────────────────────────────────────────
     def _media(self, command):
@@ -69,6 +72,7 @@ class Dispatcher:
     def _settings(self, key):
         if key == "pairing":
             self.state.pairing_mode = True
+            self.on_pairing(True)
         # trusted / display / about: handled by UI navigation later
 
     def _transfer_select(self, key):

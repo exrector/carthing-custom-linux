@@ -12,6 +12,7 @@ active source on non-media desktops.
 import json
 import os
 from pathlib import Path
+from runtime_paths import device_name
 
 
 DEFAULT_TRUSTED_DEVICES_PATH = "/run/carthing-state/carthing/trusted-devices.json"
@@ -55,6 +56,7 @@ class AppState:
         self.transfer_scanning = False
         self.transfer_source = ""
         self.clock_text = "--:--"
+        self.device_name = device_name()
         self.pairing_mode = False
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
 

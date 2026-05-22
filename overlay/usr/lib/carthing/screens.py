@@ -333,13 +333,16 @@ class PairingModal:
         cw, ch = 580, 300
         draw.rounded_rectangle([cx - cw // 2, T.MAIN_CY - ch // 2, cx + cw // 2, T.MAIN_CY + ch // 2],
                                radius=T.RADIUS, fill=T.SURFACE, outline=T.HAIRLINE, width=1)
+        name = getattr(self.state, "device_name", "Car Thing")
         C.text_centered(draw, "Режим сопряжения", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 92, cx=cx)
         C.text_centered(draw, "Откройте Bluetooth на iPhone или Mac", T.font(T.SZ_META), T.MUTED,
                         T.MAIN_CY - 30, cx=cx)
-        C.text_centered(draw, "и выберите «CarThing»", T.font(T.SZ_META), T.MUTED,
+        C.text_centered(draw, "и выберите устройство", T.font(T.SZ_META), T.MUTED,
                         T.MAIN_CY + 2, cx=cx)
+        C.text_centered(draw, "«" + name + "»", T.font(T.SZ_SMALL), T.MUTED,
+                        T.MAIN_CY + 32, cx=cx)
         C.text_centered(draw, "Ожидание подключения…", T.font(T.SZ_SMALL), T.ACCENT,
-                        T.MAIN_CY + 44, cx=cx)
+                        T.MAIN_CY + 68, cx=cx)
 
         # Cancel button (tappable) — also Back/Press cancels
         bw, bh = 200, 48

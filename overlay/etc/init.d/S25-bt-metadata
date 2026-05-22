@@ -5,10 +5,29 @@ set -eu
 
 serial=""
 bt_mac=""
+device_name=""
 
-if [ -r /sys/class/efuse/usid ]; then
-    full_serial=$(cat /sys/class/efuse/usid || true)
-    serial=$(printf "%s" "$full_serial" | tail -c 5 || true)
+usid_path=${CARTHING_EFUSE_USID_PATH:-/sys/class/efuse/usid}
+if [ -r "$usid_path" ]; then
+    full_serial=$(tr -d '\r\n\000' < "$usid_path" 2>/dev/null || true)
+    serial=$(printf "%s" "$full_serial" | sed 's/.*\(....\)$/\1/' | tr 'a-z' 'A-Z' || true)
+fi
+
+if [ -n "$serial" ]; then
+    prefix=${CARTHING_FACTORY_NAME_PREFIX:-Car Thing}
+    device_name="${prefix} (SN: ${serial})"
+else
+    device_name=${CARTHING_DEVICE_NAME:-${CARTHING_BT_ALIAS:-}}
+fi
+
+if [ -z "$device_name" ]; then
+    base=${CARTHING_NAME_BASE:-CarThing}
+    mac=$(printf '%s' "${CARTHING_BD_ADDRESS:-}" | tr -d ':-' | tr 'a-f' 'A-F')
+    if [ -n "$mac" ]; then
+        device_name="${base}-${mac}"
+    else
+        device_name="$base"
+    fi
 fi
 
 if [ -r /sys/class/efuse/mac_bt ]; then
@@ -18,12 +37,12 @@ if [ -r /sys/class/efuse/mac_bt ]; then
     }' /sys/class/efuse/mac_bt || true)
 fi
 
-printf 'PRETTY_HOSTNAME=%s\n' "$CARTHING_BT_ALIAS" > /etc/machine-info
+printf 'PRETTY_HOSTNAME=%s\n' "$device_name" > /etc/machine-info
 
 if [ -n "$bt_mac" ]; then
     settings_dir="/var/lib/bluetooth/$bt_mac"
     mkdir -p "$settings_dir"
-    printf '[General]\nAlias=%s\n' "$CARTHING_BT_ALIAS" > "$settings_dir/settings"
+    printf '[General]\nAlias=%s\n' "$device_name" > "$settings_dir/settings"
 fi
 
 cat > /etc/superbird <<EOF

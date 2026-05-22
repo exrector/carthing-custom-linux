@@ -1,18 +1,33 @@
 #!/bin/sh
 set -eu
 
-# Single source of truth for the device name: derive it from the controller MAC
-# and set it as the OS hostname, so `ssh root@…` shows which unit this is and
-# the BT runtime (BLE + classic) can read it back via socket.gethostname().
+# Single source of truth for the device name: manufacture efuse USID first,
+# then explicit config, then MAC fallback.
 
 [ -f /etc/default/carthing ] && . /etc/default/carthing
 
-base=${CARTHING_NAME_BASE:-CarThing}
-mac=$(printf '%s' "${CARTHING_BD_ADDRESS:-}" | tr -d ':-' | tr 'a-f' 'A-F')
-if [ -n "$mac" ]; then
-    name="${base}-${mac}"
-else
-    name="$base"
+name=
+usid_path=${CARTHING_EFUSE_USID_PATH:-/sys/class/efuse/usid}
+if [ -r "$usid_path" ]; then
+    usid=$(tr -d '\r\n\000' < "$usid_path" 2>/dev/null || true)
+    serial=$(printf '%s' "$usid" | sed 's/.*\(....\)$/\1/' | tr 'a-z' 'A-Z')
+    if [ -n "$serial" ]; then
+        prefix=${CARTHING_FACTORY_NAME_PREFIX:-Car Thing}
+        name="${prefix} (SN: ${serial})"
+    fi
+fi
+
+if [ -z "$name" ]; then
+    name=${CARTHING_DEVICE_NAME:-${CARTHING_BT_ALIAS:-}}
+fi
+if [ -z "$name" ]; then
+    base=${CARTHING_NAME_BASE:-CarThing}
+    mac=$(printf '%s' "${CARTHING_BD_ADDRESS:-}" | tr -d ':-' | tr 'a-f' 'A-F')
+    if [ -n "$mac" ]; then
+        name="${base}-${mac}"
+    else
+        name="$base"
+    fi
 fi
 
 hostname "$name"

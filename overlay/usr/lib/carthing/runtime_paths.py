@@ -14,25 +14,51 @@ KEYSTORE_PATH = Path(
 TRANSPORT = os.environ.get("CAR_THING_TRANSPORT", "serial:/dev/ttyS1,3000000")
 BD_ADDRESS = os.environ.get("CAR_THING_BD_ADDRESS", "30:E3:D6:00:5F:A4")
 
+EFUSE_USID_PATH = Path(os.environ.get("CARTHING_EFUSE_USID_PATH", "/sys/class/efuse/usid"))
+DEVICE_NAME = os.environ.get("CARTHING_DEVICE_NAME") or os.environ.get("CARTHING_BT_ALIAS")
 NAME_BASE = os.environ.get("CARTHING_NAME_BASE", "CarThing")
+FACTORY_NAME_PREFIX = os.environ.get("CARTHING_FACTORY_NAME_PREFIX", "Car Thing")
 
 
 def name_from_mac(mac: str = BD_ADDRESS, base: str = NAME_BASE) -> str:
-    """The one unique device name, derived from the controller MAC:
-    e.g. 30:E3:D6:00:5F:A4 -> CarThing-30E3D6005FA4."""
+    """Unique name from a controller MAC: 30:E3:D6:00:5F:A4 -> CarThing-30E3D6005FA4."""
     suffix = (mac or "").replace(":", "").replace("-", "").upper()
     return f"{base}-{suffix}" if suffix else base
 
 
+def manufacturing_serial() -> str:
+    """Factory serial from efuse USID. Example: 8559RP88Q917 -> Q917."""
+    try:
+        usid = EFUSE_USID_PATH.read_text().strip()
+    except Exception:
+        return ""
+    if len(usid) >= 4:
+        return usid[-4:].upper()
+    return usid.upper()
+
+
+def factory_device_name() -> str:
+    serial = manufacturing_serial()
+    return f"{FACTORY_NAME_PREFIX} (SN: {serial})" if serial else ""
+
+
+def configured_device_name() -> str:
+    return (DEVICE_NAME or "").strip()
+
+
 def device_name() -> str:
-    """Single source of truth for the device's name. Prefer the OS hostname
-    (set early from the MAC, so `ssh root@…` shows it); fall back to computing
-    it from the MAC if the hostname is unset/generic."""
+    """Single source of truth for the user-visible device name."""
+    factory = factory_device_name()
+    if factory:
+        return factory
+    configured = configured_device_name()
+    if configured:
+        return configured
     try:
         host = socket.gethostname()
     except Exception:
         host = ""
-    if host and host.lower().startswith(NAME_BASE.lower()):
+    if host and host not in {"(none)", "localhost"}:
         return host
     return name_from_mac()
 

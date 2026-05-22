@@ -23,7 +23,7 @@ CARTHING_BT_ATTACH_PIDFILE=/run/carthing-btattach.pid
 CARTHING_BT_ATTACH_BAUD=115200
 CARTHING_BT_ATTACH_ARGS=
 CARTHING_BT_BUMBLE_TRANSPORT=hci-socket:0
-CARTHING_BT_ALIAS="CarThing"
+CARTHING_BT_ALIAS="Car Thing"
 
 CARTHING_STATE_DEVICE=/dev/mmcblk0p1
 CARTHING_STATE_MOUNT=/run/carthing-state
@@ -36,7 +36,8 @@ CARTHING_RUNTIME_LOG=/run/carthing/carthing-remote.log
 CARTHING_AUTOSTART_REMOTE=1
 CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4
 CARTHING_FONT_PATH=/usr/share/fonts/truetype/DejaVuSans.ttf
-# One unique name everywhere: base + MAC → hostname + BLE + classic (see S04-hostname).
+# One name everywhere comes from manufacturing efuse USID when available.
+CARTHING_FACTORY_NAME_PREFIX="Car Thing"
 CARTHING_NAME_BASE=CarThing
 CARTHING_A2DP_BRIDGE_ENABLE=1
 CARTHING_A2DP_AUTOCONNECT=0
