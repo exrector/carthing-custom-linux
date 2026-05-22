@@ -36,6 +36,11 @@ CARTHING_RUNTIME_LOG=/run/carthing/carthing-remote.log
 CARTHING_AUTOSTART_REMOTE=1
 CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4
 CARTHING_FONT_PATH=/usr/share/fonts/truetype/DejaVuSans.ttf
+# One unique name everywhere: base + MAC → hostname + BLE + classic (see S04-hostname).
+CARTHING_NAME_BASE=CarThing
+CARTHING_A2DP_BRIDGE_ENABLE=1
+CARTHING_A2DP_AUTOCONNECT=0
+CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/trusted-devices.json
 
 CARTHING_SSH_ENABLE=1
 CARTHING_DROPBEAR_ARGS=""

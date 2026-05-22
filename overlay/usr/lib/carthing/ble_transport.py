@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from runtime_paths import BD_ADDRESS, KEYSTORE_PATH, TRANSPORT
+import socket
+from runtime_paths import BD_ADDRESS, KEYSTORE_PATH, TRANSPORT, device_name, name_from_mac
 from bumble.device import Device
 from bumble.host import Host
 from bumble.transport import open_transport_or_link
@@ -14,7 +15,7 @@ async def init_ble(configure_device=None, on_ready=None):
     transport = await open_transport_or_link(TRANSPORT)
 
     device = Device(
-        name="CarThing",
+        name=device_name(),                 # provisional (hostname/config) until power_on
         address=BD_ADDRESS,
         host=Host(
             controller_source=transport.source,
@@ -27,7 +28,18 @@ async def init_ble(configure_device=None, on_ready=None):
         configure_device(device)
 
     await device.power_on()
-    logger.info("BLE device ON — address: %s", device.public_address)
+
+    # The unique name comes from the REAL controller MAC (differs per physical
+    # unit), not the (cloned) config BD address. Set it as the device name AND
+    # the OS hostname so BLE, classic and `ssh root@…` all show the same id.
+    real_mac = str(device.public_address).split("/")[0]
+    unique = name_from_mac(real_mac)
+    device.name = unique
+    try:
+        socket.sethostname(unique)
+    except Exception as e:
+        logger.warning("sethostname(%s) failed: %s", unique, e)
+    logger.info("BLE device ON — address: %s  name: %s", device.public_address, unique)
 
     if on_ready:
         await on_ready(device)

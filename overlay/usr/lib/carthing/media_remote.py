@@ -2,17 +2,19 @@
 
 import asyncio
 import logging
+import os
 import struct
 import time
-from runtime_paths import ensure_runtime_paths
+from runtime_paths import ensure_runtime_paths, device_name
 
 ensure_runtime_paths()
 
-from bumble.core import UUID
+from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, AdvertisingType, Connection, Device, OwnAddressType
 from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
+from a2dp_bridge import A2DPBridge, COD_AUDIO_LOUDSPEAKER
 from ams_client import AMSClient, MediaState
 from ble_transport import init_ble
 from drm_display import DRMDisplay
@@ -38,7 +40,7 @@ try:
     from app_state import AppState
     from intents import Dispatcher
     from screens import (
-        NowPlayingScreen, MacOSScreen, SettingsScreen,
+        NowPlayingScreen, MacOSScreen, TransferScreen, SettingsScreen,
         NotificationsScreen, PairingModal,
     )
     _gui_import_error = None
@@ -61,6 +63,7 @@ _active_conn: Connection | None = None
 _last_peer_address = None
 _reconnect_fallback_task: asyncio.Task | None = None
 _ams_starting: set[int] = set()
+_a2dp_bridge: A2DPBridge | None = None
 
 # Dispatcher command → AMS RemoteCommand. play/pause both map to Toggle (AMS has
 # no discrete play/pause); AMS state updates re-sync the UI's notion of playing.
@@ -78,6 +81,40 @@ def _ble_command(source_key: str, command: str):
     code = _AMS_CMD.get(command)
     if code is not None:
         asyncio.create_task(ams.send_command(code))
+
+
+def bluetooth_name() -> str:
+    # One name everywhere (BLE advertising + classic inquiry). After power_on the
+    # device name is the unique id from the real controller MAC; before that we
+    # fall back to the hostname/config-derived name.
+    if _device is not None and getattr(_device, "name", None):
+        return _device.name
+    return device_name()
+
+
+def is_classic_connection(connection: Connection) -> bool:
+    return getattr(connection, "transport", None) == BT_BR_EDR_TRANSPORT
+
+
+def _broadcast_app_state():
+    if compositor is not None:
+        try:
+            app_state.clock_text = time.strftime("%H:%M")
+            compositor.broadcast_state(app_state)
+        except Exception as e:
+            logger.error("GUI state broadcast error: %s", e)
+
+
+def request_transfer_rescan():
+    if _a2dp_bridge is None:
+        return
+    asyncio.create_task(_a2dp_bridge.scan_trusted_speakers())
+
+
+def request_transfer_select(address):
+    if _a2dp_bridge is None:
+        return
+    asyncio.create_task(_a2dp_bridge.request_receiver_connection(address))
 
 
 def _sync_media_to_appstate(s: MediaState):
@@ -112,13 +149,19 @@ def _build_compositor(display):
     """Wire the modular GUI: desktops + dispatcher + status bar over the DRM display."""
     global dispatcher
     adapter = DRMDisplayAdapter(display)
-    dispatcher = Dispatcher(app_state, on_command=_ble_command)
+    dispatcher = Dispatcher(
+        app_state,
+        on_command=_ble_command,
+        on_transfer_rescan=request_transfer_rescan,
+        on_transfer_select=request_transfer_select,
+    )
     emit = dispatcher.dispatch
     screens = [
         NowPlayingScreen(emit=emit),                                  # AppState.IPHONE = 0
         MacOSScreen(emit=emit),                                       # MAC = 1
-        SettingsScreen(on_select=lambda key: emit("settings_select", key)),  # SETTINGS = 2
-        NotificationsScreen(),                                        # NOTIFICATIONS = 3
+        TransferScreen(emit=emit),                                           # TRANSFER = 2
+        SettingsScreen(on_select=lambda key: emit("settings_select", key)),  # SETTINGS = 3
+        NotificationsScreen(),                                               # NOTIFICATIONS = 4
     ]
     return Compositor(
         adapter, screens,
@@ -231,6 +274,19 @@ def install_hid_pairing_profile(device: Device):
     logger.info("HID pairing profile installed")
 
 
+def configure_runtime_device(device: Device):
+    install_hid_pairing_profile(device)
+    if os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "1") == "1":
+        device.classic_enabled = True
+        device.classic_ssp_enabled = True
+        device.classic_sc_enabled = True
+        device.connectable = True
+        device.discoverable = True
+        device.class_of_device = COD_AUDIO_LOUDSPEAKER
+        device.name = bluetooth_name()
+        logger.info("Classic runtime support enabled before power_on")
+
+
 def on_state_update(s: MediaState):
     global _last_activity
     _last_activity = time.monotonic()
@@ -249,6 +305,19 @@ def on_state_update(s: MediaState):
 async def on_connection(connection: Connection):
     global _last_activity, _last_peer_address, _reconnect_fallback_task
     _last_activity = time.monotonic()
+    connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
+
+    if is_classic_connection(connection):
+        logger.info(
+            "Classic/A2DP peer connected: %s handle=%d encrypted=%s",
+            connection.peer_address,
+            connection.handle,
+            connection.is_encrypted,
+        )
+        if _a2dp_bridge is not None:
+            await _a2dp_bridge.handle_classic_connection(connection)
+        return
+
     _last_peer_address = connection.peer_address
     if _reconnect_fallback_task is not None:
         _reconnect_fallback_task.cancel()
@@ -263,7 +332,6 @@ async def on_connection(connection: Connection):
     connection.on("pairing", lambda keys: on_pairing(connection, keys))
     connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
     connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
-    connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
 
     if connection.is_encrypted:
         await maybe_start_ams(connection, "connected-encrypted")
@@ -273,6 +341,8 @@ async def on_connection(connection: Connection):
 
 
 def on_pairing(connection: Connection, keys):
+    if is_classic_connection(connection):
+        return
     logger.info("SMP: bonding complete handle=%d keys=%s", connection.handle, keys)
     if _device:
         asyncio.create_task(refresh_accept_list(_device))
@@ -281,6 +351,13 @@ def on_pairing(connection: Connection, keys):
 
 
 def on_connection_encryption_change(connection: Connection):
+    if is_classic_connection(connection):
+        logger.info(
+            "Classic encryption change handle=%d encrypted=%s",
+            connection.handle,
+            connection.is_encrypted,
+        )
+        return
     logger.info(
         "Encryption change handle=%d encrypted=%s",
         connection.handle,
@@ -319,6 +396,10 @@ async def maybe_start_ams(connection: Connection, reason: str):
 async def on_disconnection(connection: Connection, reason: int):
     global ams, _active_conn
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
+    if is_classic_connection(connection):
+        logger.info("Classic/A2DP disconnection ignored by media remote state machine")
+        return
+
     ams = None
     _active_conn = None
     state.title = "Lost Contact"
@@ -339,6 +420,7 @@ async def on_disconnection(connection: Connection, reason: int):
 
 
 async def start_advertising(device: Device):
+    name = bluetooth_name().encode("utf-8")
     device.advertising_data = bytes(
         AdvertisingData(
             [
@@ -348,7 +430,7 @@ async def start_advertising(device: Device):
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
                     struct.pack("<H", 0x1812),
                 ),
-                (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+                (AdvertisingData.COMPLETE_LOCAL_NAME, name),
             ]
         )
     )
@@ -368,6 +450,7 @@ async def refresh_accept_list(device: Device):
 
 
 async def start_bonded_only_advertising(device: Device):
+    name = bluetooth_name().encode("utf-8")
     device.advertising_data = bytes(
         AdvertisingData(
             [
@@ -377,7 +460,7 @@ async def start_bonded_only_advertising(device: Device):
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
                     struct.pack("<H", 0x1812),
                 ),
-                (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+                (AdvertisingData.COMPLETE_LOCAL_NAME, name),
             ]
         )
     )
@@ -512,11 +595,25 @@ async def animation_loop():
 
 
 async def main():
-    global ui, compositor, _device
-    device, _transport = await init_ble(configure_device=install_hid_pairing_profile)
+    global ui, compositor, _device, _a2dp_bridge
+    if app_state is not None:
+        app_state.load_trusted()
+    device, _transport = await init_ble(configure_device=configure_runtime_device)
     _device = device
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))
+    if app_state is not None and os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "1") == "1":
+        _a2dp_bridge = A2DPBridge(
+            device,
+            app_state,
+            bt_name=bluetooth_name(),          # one unified name (BLE + classic)
+            autoconnect=os.environ.get("CARTHING_A2DP_AUTOCONNECT", "1") == "1",
+            on_state_change=_broadcast_app_state,
+            logger=logger,
+        )
+        _a2dp_bridge.install_sdp_records()
+        _a2dp_bridge.install_safe_link_key_provider()
+        await _a2dp_bridge.start()
     await start_advertising(device)
     logger.info("Car Thing Media Remote запущен.")
 
