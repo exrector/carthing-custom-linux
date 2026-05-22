@@ -98,6 +98,29 @@ find /usr/lib/carthing -maxdepth 3 -type d -name __pycache__: empty
 processes: carthing-btattach-mini + one python3 /usr/lib/carthing/media_remote.py
 ```
 
+### Visibility fix folded into the same image (current starting point)
+
+After the cleanup image above, the on-request-visibility fix was written into
+the same persistent rootfs via `e2cp` (e2tools), so flashing it is correct and
+carries the latest runtime — code and image are one consistent starting point.
+
+```text
+commit:        57ec025 fix(ble): default to reject-all — directed-to-bonded or silent
+changed:       overlay/usr/lib/carthing/media_remote.py  23881 -> 25898 bytes (in image)
+image:         artifacts/flash-device1-factory-name-20260522/rootfs.img  (512M)
+new sha256:    4bd50c3a45a9ee2a89386c4eeced10f1c5728f4f95989937e44b9b055911d856
+prev sha256:   9fa4dc25db82680e4378288021909b378c893b8eab3ec7a5e3d95d59e4000dba (pre-fix, Codex cleanup)
+backup:        artifacts/flash-device1-factory-name-20260522/rootfs.before-visibility-fix-20260522.img
+SHA256SUMS:    updated to the new hash
+```
+
+Behaviour added by the fix (verified by BLE scan + classic inquiry = nothing
+while idle): outside pairing the device rejects everyone — directed advertising
+to a BLE-bonded peer (invisible to scanners) if a bond exists, otherwise silent.
+General discoverability stays gated behind Settings → Pairing.
+
+**Flash this image (sha `4bd50c3a…`) — it is the unified starting point.**
+
 ## Do not regress
 
 Do not reintroduce:
