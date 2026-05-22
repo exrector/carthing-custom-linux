@@ -29,6 +29,8 @@ done
 
 find "$TARGET_DIR/etc/init.d" -type f -name 'S*' -exec chmod 0755 {} +
 find "$TARGET_DIR/usr/libexec/carthing" -type f -exec chmod 0755 {} +
+find "$TARGET_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
+find "$TARGET_DIR" -type f -name '*.pyc' -delete
 
 if [ -d "$TARGET_DIR/root/.ssh" ]; then
     chmod 0700 "$TARGET_DIR/root/.ssh"

@@ -23,39 +23,23 @@ from input_handler import (
     CMD_TOGGLE, CMD_NEXT, CMD_PREV, CMD_VOL_UP, CMD_VOL_DOWN,
 )
 
-# Legacy single-screen UI (kept as a fallback if the modular GUI fails to import)
-try:
-    from now_playing_ui import NowPlayingUI
-    _ui_import_error = None
-except Exception as exc:
-    NowPlayingUI = None
-    _ui_import_error = exc
-
-# Modular GUI stack (PIL→DRM compositor). Optional: on import failure we fall
-# back to the legacy NowPlayingUI so the device never boots without a screen.
-try:
-    from ui_screen import Compositor, DRMDisplayAdapter
-    from ui_statusbar import StatusBar
-    from ui_anim import AnimDriver
-    from app_state import AppState
-    from intents import Dispatcher
-    from screens import (
-        NowPlayingScreen, MacOSScreen, TransferScreen, SettingsScreen,
-        NotificationsScreen, PairingModal,
-    )
-    _gui_import_error = None
-except Exception as exc:
-    Compositor = None
-    _gui_import_error = exc
+from ui_screen import Compositor, DRMDisplayAdapter
+from ui_statusbar import StatusBar
+from ui_anim import AnimDriver
+from app_state import AppState
+from intents import Dispatcher
+from screens import (
+    NowPlayingScreen, MacOSScreen, TransferScreen, SettingsScreen,
+    NotificationsScreen, PairingModal,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 state = MediaState()
 ams: AMSClient | None = None
-ui: NowPlayingUI | None = None        # legacy UI (used only if GUI import failed)
-compositor = None                     # modular GUI compositor (preferred)
-app_state = AppState() if Compositor is not None else None
+compositor: Compositor | None = None
+app_state = AppState()
 dispatcher = None
 _device: Device | None = None
 _last_activity = time.monotonic()
@@ -158,7 +142,7 @@ def _sync_media_to_appstate(s: MediaState):
 
 
 def _render_ui(s: MediaState):
-    """Push current media state to whichever UI is active."""
+    """Push current media state to the GUI compositor."""
     if compositor is not None:
         try:
             _sync_media_to_appstate(s)
@@ -166,11 +150,6 @@ def _render_ui(s: MediaState):
             compositor.broadcast_state(app_state)
         except Exception as e:
             logger.error("GUI render error: %s", e)
-    elif ui is not None:
-        try:
-            ui.render(s)
-        except Exception as e:
-            logger.error("UI render error: %s", e)
 
 
 def _build_compositor(display):
@@ -437,8 +416,7 @@ async def on_disconnection(connection: Connection, reason: int):
     state.duration = 0.0
     state.position = 0.0
     state.playing = False
-    if app_state is not None:
-        app_state.iphone.connected = False
+    app_state.iphone.connected = False
     _render_ui(state)
     try:
         await asyncio.sleep(0.3)
@@ -574,7 +552,7 @@ async def heartbeat():
             if n_conn == 0 and adv is False:
                 # Keep reconnect alive without going general-discoverable (that
                 # only happens in pairing mode). Skip while pairing is active.
-                if app_state is not None and getattr(app_state, "pairing_mode", False):
+                if app_state.pairing_mode:
                     continue
                 logger.warning("HB: 0 conn + no adv — restart bonded reconnect advertising")
                 try:
@@ -626,16 +604,14 @@ async def animation_loop():
 
 
 async def main():
-    global ui, compositor, _device, _a2dp_bridge
-    if app_state is not None:
-        app_state.load_trusted()
+    global compositor, _device, _a2dp_bridge
+    app_state.load_trusted()
     device, _transport = await init_ble(configure_device=configure_runtime_device)
     _device = device
-    if app_state is not None:
-        app_state.device_name = bluetooth_name()
+    app_state.device_name = bluetooth_name()
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))
-    if app_state is not None and os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "1") == "1":
+    if os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "1") == "1":
         _a2dp_bridge = A2DPBridge(
             device,
             app_state,
@@ -657,32 +633,20 @@ async def main():
     loop = asyncio.get_event_loop()
 
     def _init_display():
-        """Build the display + UI off the event loop (DRM open can block)."""
+        """Build the display + GUI off the event loop (DRM open can block)."""
         display = DRMDisplay()
-        if Compositor is not None:
-            return ("gui", _build_compositor(display))
-        if NowPlayingUI is not None:
-            return ("legacy", NowPlayingUI(display))
-        raise RuntimeError(
-            f"No UI available (gui import: {_gui_import_error}; legacy: {_ui_import_error})"
-        )
+        return _build_compositor(display)
 
     try:
-        kind, obj = await loop.run_in_executor(None, _init_display)
-        if kind == "gui":
-            compositor = obj
-            logger.info("DRM display ready — modular GUI active")
-        else:
-            ui = obj
-            logger.warning("DRM display ready — legacy UI (GUI import failed: %s)", _gui_import_error)
+        compositor = await loop.run_in_executor(None, _init_display)
+        logger.info("DRM display ready — modular GUI active")
         _render_ui(state)        # paint the initial frame (idle desktops / Lost Contact)
     except Exception as e:
         logger.error("Display/UI init failed, continuing headless: %s", e)
         compositor = None
-        ui = None
 
-    # Route physical input into the GUI compositor when present; otherwise drive
-    # AMS directly (legacy). handle_input is synchronous and renders in-loop.
+    # Route physical input into the GUI compositor when present; otherwise keep
+    # the AMS direct fallback for headless recovery.
     if compositor is not None:
         await start_input(on_event=compositor.handle_input)
         asyncio.create_task(animation_loop())

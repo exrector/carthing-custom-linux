@@ -6,9 +6,9 @@ records the sharp edges that are easy to forget.
 
 ## Architecture recap
 
-- `media_remote.py` now builds the modular `Compositor` over `DRMDisplayAdapter`
-  instead of the legacy `NowPlayingUI`. The legacy UI is kept as an
-  import-failure fallback so the device never boots screenless.
+- `media_remote.py` builds the modular `Compositor` over `DRMDisplayAdapter`.
+  The old single-screen fallback was removed during cleanup; if GUI import or
+  DRM setup fails, the runtime continues headless with AMS/input recovery.
 - Data flow: AMS `MediaState` → `_sync_media_to_appstate` → `AppState.iphone` →
   `compositor.broadcast_state`. UI intents → `Dispatcher` → `_ble_command` →
   `ams.send_command`.
