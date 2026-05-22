@@ -84,9 +84,8 @@ def _ble_command(source_key: str, command: str):
 
 
 def bluetooth_name() -> str:
-    # One name everywhere (BLE advertising + classic inquiry). After power_on the
-    # device name is the unique id from the real controller MAC; before that we
-    # fall back to the hostname/config-derived name.
+    # One name everywhere (BLE advertising + classic inquiry): manufacture efuse
+    # USID -> "Car Thing (SN: XXXX)", with config/hostname/MAC only as fallback.
     if _device is not None and getattr(_device, "name", None):
         return _device.name
     return device_name()

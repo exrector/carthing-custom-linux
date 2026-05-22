@@ -7,7 +7,7 @@ not the design. This plan turns the scaffolding into a solid base. Do this
 ## Principle
 
 Separate two things that currently look mixed:
-- **Architecture** (keep): one unique identity from the real MAC; one `Device`
+- **Architecture** (keep): one factory identity from manufacture efuse USID; one `Device`
   with all profiles; A2DP AAC passthrough relay; on-request visibility; modular
   GUI. These are root-cause solutions.
 - **Scaffolding** (replace): how we run/deploy/patch the device *right now* for
@@ -24,21 +24,18 @@ Separate two things that currently look mixed:
   init unit; one launcher, no manual nohup. Drop `/run/product-os` as a runtime
   path (it was only an iteration shortcut).
 
-### 2. Hostname / identity — straighten the seam
-- **Now:** `sethostname()` is a side-effect inside `ble_transport.init_ble`
-  (after `power_on`), so the hostname only exists once the Python runtime is up,
-  and the responsibility is smeared into the BT module.
-- **Target:** a dedicated init step **after HCI is up** (after `S20-bt-init`)
-  reads the real controller BD address (`hciconfig hci0` / `btmgmt info`) and
-  sets the hostname. `ble_transport` then only *reads* `device_name()`. Hostname
-  becomes independent of the Python runtime; `S04-hostname` stops being a guess.
+### 2. Hostname / identity — factory efuse is the source of truth
+- **Now:** fixed in commit `98d6a85`. `S04-hostname` and `runtime_paths.device_name()`
+  derive the visible identity from `/sys/class/efuse/usid`, e.g.
+  `8559RP88Q917` -> `Car Thing (SN: Q917)`.
+- **Target:** keep this. The controller MAC is only a technical address and
+  last-resort fallback; it is not the normal user-visible identity.
 
 ### 3. Config hygiene
-- **Now:** `CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4` is the *cloned* address of unit
-  #1; we work around it by reading the real controller MAC.
-- **Target:** drop the static/incorrect BD address (or generate it); identity
-  derives only from the real controller. Re-check whether bumble's `Device`
-  needs a configured address at all on this controller.
+- **Now:** `CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4` may still exist as controller
+  configuration input.
+- **Target:** do not use that variable for user-visible naming. Naming derives
+  from manufacture efuse first, then explicit config/hostname/MAC fallback.
 
 ### 4. rootfs is read-only
 - **Now:** prompt drop-in was written via `mount -o remount,rw /`.
@@ -74,5 +71,7 @@ happens in pairing mode (see #5).
 
 ## Done already (sound, kept)
 
-- **п.1**: one unique name from the real MAC → hostname + BLE + classic + shell
-  prompt (commits `d840c1e`, `bd0d10a`). Verified: `CarThing-30E3D604C342`.
+- **Identity update**: commit `98d6a85` supersedes the older MAC-derived identity.
+  The single visible name is manufacture efuse USID -> `Car Thing (SN: Q917)`,
+  verified after flashing a persistent 512M rootfs image. See
+  `docs/factory-identity-2026-05-22.md`.

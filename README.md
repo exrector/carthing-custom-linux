@@ -50,9 +50,10 @@ failure be considered.
 10. `docs/device1-v1-working-baseline-2026-05-18.md`
 11. `docs/device1-reliability-pass-2026-05-18.md`
 12. `docs/session-freeze-2026-05-12.md`
-13. `overlay/etc/default/carthing`
-14. `overlay/etc/init.d/`
-15. `overlay/usr/libexec/carthing/contract-selftest`
+13. `docs/factory-identity-2026-05-22.md`
+14. `overlay/etc/default/carthing`
+15. `overlay/etc/init.d/`
+16. `overlay/usr/libexec/carthing/contract-selftest`
 
 ## What This Repository Contains
 
@@ -152,6 +153,10 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - macOS host diagnostics are now documented around `ioreg` first, not `adb` or raw `ping`
 - macOS host bring-up is now scripted separately from diagnostics so `en14` and `172.16.42.0/24` can be recovered consistently
 - stale macOS host-routes to `172.16.42.77` are now treated as a first-class failure mode and are cleared by the canonical bring-up script
+- user-visible Bluetooth/system identity is now factory efuse-derived:
+  - `/sys/class/efuse/usid=8559RP88Q917` -> `Car Thing (SN: Q917)`
+  - commit `98d6a85`
+  - persistent 512M rootfs: `artifacts/flash-device1-factory-name-20260522/rootfs.img`
 - current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
 - storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
 - legacy MFi / iAP2 notes have been curated into `reference/legacy-mfi-iap2/`
