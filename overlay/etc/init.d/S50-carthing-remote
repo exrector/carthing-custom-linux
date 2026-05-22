@@ -12,6 +12,22 @@ fi
 
 mkdir -p /run/carthing
 
-nohup /usr/libexec/carthing/run-media-remote >> "$CARTHING_RUNTIME_LOG" 2>&1 &
+if [ -f /run/carthing/media-remote-supervisor.pid ]; then
+    old_pid=$(cat /run/carthing/media-remote-supervisor.pid 2>/dev/null || true)
+    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+        echo "[S50-carthing-remote] supervisor already running: $old_pid"
+        exit 0
+    fi
+fi
 
-echo "[S50-carthing-remote] runtime started"
+(
+    while true; do
+        /usr/libexec/carthing/run-media-remote >> "$CARTHING_RUNTIME_LOG" 2>&1
+        rc=$?
+        echo "[S50-carthing-remote] runtime exited rc=$rc; restarting in 4s" >> "$CARTHING_RUNTIME_LOG"
+        sleep 4
+    done
+) &
+echo $! > /run/carthing/media-remote-supervisor.pid
+
+echo "[S50-carthing-remote] supervisor started"

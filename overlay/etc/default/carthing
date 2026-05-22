@@ -39,7 +39,9 @@ CARTHING_FONT_PATH=/usr/share/fonts/truetype/DejaVuSans.ttf
 # One name everywhere comes from manufacturing efuse USID when available.
 CARTHING_FACTORY_NAME_PREFIX="Car Thing"
 CARTHING_NAME_BASE=CarThing
-CARTHING_A2DP_BRIDGE_ENABLE=1
+# Keep the transfer/A2DP surface off by default. Enabling it at boot exposes a
+# second classic-audio identity next to the BLE media remote on iOS/macOS.
+CARTHING_A2DP_BRIDGE_ENABLE=0
 CARTHING_A2DP_AUTOCONNECT=0
 CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/trusted-devices.json
 
