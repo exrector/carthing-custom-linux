@@ -12,6 +12,7 @@ ensure_runtime_paths()
 from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, AdvertisingType, Connection, Device, OwnAddressType
 from bumble.gatt import Characteristic, Descriptor, Service
+from bumble.hci import Address
 from bumble.smp import PairingConfig
 
 from a2dp_bridge import A2DPBridge, COD_AUDIO_LOUDSPEAKER
@@ -121,7 +122,7 @@ async def _apply_pairing_mode(enabled: bool):
                 await _a2dp_bridge.enter_pairing()         # classic discoverable + scan
         else:
             logger.info("Pairing mode OFF — bonded-only reconnect")
-            await start_bonded_only_advertising(_device)   # connectable, not discoverable
+            await idle_visibility(_device)                 # directed-to-bonded or silent
             if _a2dp_bridge is not None:
                 await _a2dp_bridge.exit_pairing()
     except Exception as e:
@@ -478,6 +479,50 @@ async def start_bonded_only_advertising(device: Device):
     logger.info("Bonded-only HID advertising started without local name: adv=%s", device.advertising_data.hex())
 
 
+async def _bonded_peer(device: Device):
+    """Identity address of a BLE-bonded peer (has LTK/IRK) for directed reconnect.
+    classic-only bonds (link_key — e.g. A2DP speakers) are ignored: directed BLE
+    to them is meaningless. Returns None if no BLE bond exists (→ stay silent)."""
+    try:
+        ks = getattr(device, "keystore", None)
+        if ks is None:
+            return None
+        allk = await ks.get_all()
+        for name, keys in reversed(allk):                 # most recent first
+            if getattr(keys, "ltk", None) or getattr(keys, "irk", None):
+                return Address(name)                      # BLE bond → directed target
+        return None                                       # only classic bonds → silent
+    except Exception as e:
+        logger.warning("bonded peer lookup failed: %s", e)
+        return None
+
+
+async def idle_visibility(device: Device):
+    """Default (outside pairing): reject everyone. If a bond exists, stick to it
+    via DIRECTED advertising (invisible to scanners — addressed to the peer, no
+    AdvData). If there is no bond, stay completely silent until pairing is armed
+    from the Settings menu."""
+    await refresh_accept_list(device)         # connect filter = bonded only
+    peer = await _bonded_peer(device)
+    if peer is None:
+        try:
+            await device.stop_advertising()
+        except Exception as e:
+            logger.warning("stop_advertising failed: %s", e)
+        logger.info("Idle: no bond — silent, rejecting all (pairing not armed)")
+        return
+    try:
+        await device.start_advertising(
+            advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
+            target=peer,
+            own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+            auto_restart=True,
+        )
+        logger.info("Idle: directed reconnect to bonded peer %s (invisible to scans)", peer)
+    except Exception as e:
+        logger.warning("directed idle advertising failed: %s", e)
+
+
 async def start_reconnect_advertising(device: Device, target):
     global _reconnect_fallback_task
     if _reconnect_fallback_task is not None:
@@ -497,8 +542,8 @@ async def start_reconnect_advertising(device: Device, target):
             if _device and len(_device.connections) > 0:
                 return
 
-            logger.info("Directed reconnect window ended -> bonded-only HID advertising")
-            await start_bonded_only_advertising(device)
+            logger.info("Directed reconnect window ended -> idle (directed-to-bonded / silent)")
+            await idle_visibility(device)
         except asyncio.CancelledError:
             return
         except Exception as e:
@@ -559,7 +604,7 @@ async def heartbeat():
                     if _last_peer_address is not None:
                         await start_reconnect_advertising(_device, _last_peer_address)
                     else:
-                        await start_bonded_only_advertising(_device)
+                        await idle_visibility(_device)
                 except Exception as e:
                     logger.error("HB advertising restart failed: %s", e)
                 continue
@@ -623,10 +668,10 @@ async def main():
         _a2dp_bridge.install_sdp_records()
         _a2dp_bridge.install_safe_link_key_provider()
         await _a2dp_bridge.start()
-    # On-request visibility: start invisible-but-reconnectable (bonded-only).
-    # General discoverability is opened only by entering Settings → Pairing.
-    await start_bonded_only_advertising(device)
-    logger.info("Car Thing Media Remote запущен (bonded-only; pairing on request).")
+    # Default = reject everyone: directed reconnect to a bonded peer (invisible),
+    # or silent if no bond. General discoverability only via Settings → Pairing.
+    await idle_visibility(device)
+    logger.info("Car Thing Media Remote запущен (idle: directed-to-bonded / silent).")
 
     asyncio.create_task(heartbeat())
 
