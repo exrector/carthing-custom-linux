@@ -116,6 +116,65 @@ class MacOSScreen(Screen):
         return img
 
 
+class TransferScreen(Screen):
+    name = "transfer"
+    title = "Audio"
+
+    def __init__(self, emit=None):
+        self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
+
+    def on_state(self, state):
+        self.state = state
+
+    def on_input(self, event):
+        if event == Input.PRESS:
+            self.emit("transfer_rescan")
+            return True
+        return False
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        draw.text((24, CONTENT_TOP - 8), "Audio Output", font=T.font(34), fill=T.MUTED)
+        draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
+
+        if not self.state or not self.state.transfer_active:
+            C.text_centered(draw, "Transfer готов", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 38, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Выберите Car Thing как аудиовыход на iPhone", T.font(T.SZ_META),
+                            T.MUTED, T.MAIN_CY + 22, cx=T.CONTENT_CX)
+            return img
+
+        subtitle = "Сканирую доверенные динамики…" if self.state.transfer_scanning else "Доверенные динамики"
+        C.text_centered(draw, subtitle, T.font(T.SZ_META), T.MUTED, CONTENT_TOP + 58, cx=T.CONTENT_CX)
+
+        speakers = self.state.trusted_speakers
+        if not speakers:
+            C.text_centered(draw, "Нет доверенных динамиков", T.font(T.SZ_BODY), T.FAINT,
+                            T.MAIN_CY, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Добавьте динамик в настройках", T.font(T.SZ_META), T.MUTED,
+                            T.MAIN_CY + 46, cx=T.CONTENT_CX)
+            return img
+
+        y = CONTENT_TOP + 104
+        for speaker in speakers[:5]:
+            connected = bool(speaker.get("connected"))
+            online = bool(speaker.get("online")) or connected
+            default = bool(speaker.get("default"))
+            status = "connected" if connected else ("online" if online else "offline")
+            label = speaker.get("label") or speaker.get("address") or "Speaker"
+            suffix = "  · default" if default else ""
+            text = f"{label}{suffix}"
+            color = T.FG if online else T.FAINT
+            if connected:
+                color = T.ACCENT
+            rect = C.list_row(draw, y, text, selected=connected or (default and online), indent=0)
+            draw.text((T.LIST_X0 + 26, y + 42), status, font=T.font(T.SZ_SMALL), fill=color)
+            if regions is not None:
+                regions.add(rect, "transfer_select", payload=speaker.get("key"))
+            y += T.ROW_H
+        return img
+
+
 class SettingsScreen(Screen):
     """Accordion menu: parents expand inline to reveal children. Encoder moves
     selection over the visible (flattened) list; press toggles a parent or
@@ -148,7 +207,13 @@ class SettingsScreen(Screen):
             trusted = self.state.trusted if self.state else []
             if not trusted:
                 return [("trusted_empty", "— нет устройств —")]
-            return [("trusted:" + d["key"], d["label"] + "  ·  " + d["type"]) for d in trusted]
+            rows = []
+            for d in trusted:
+                state = "online" if d.get("online") else "offline"
+                if d.get("connected"):
+                    state = "connected"
+                rows.append(("trusted:" + d["key"], d["label"] + "  ·  " + d["type"] + "  ·  " + state))
+            return rows
         return it.get("children", [])
 
     def _visible(self):

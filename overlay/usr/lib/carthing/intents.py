@@ -13,9 +13,11 @@ Media routing (agreed model):
 
 
 class Dispatcher:
-    def __init__(self, state, on_command=None):
+    def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
+        self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
+        self.on_transfer_select = on_transfer_select or (lambda address: None)
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -33,6 +35,11 @@ class Dispatcher:
             self.state.unread_count = 0
         elif intent == "settings_select":
             self._settings(payload)
+        elif intent == "transfer_rescan":
+            self.state.transfer_scanning = True
+            self.on_transfer_rescan()
+        elif intent == "transfer_select":
+            self._transfer_select(payload)
         elif intent == "pairing_cancel":
             self.state.pairing_mode = False
 
@@ -63,3 +70,12 @@ class Dispatcher:
         if key == "pairing":
             self.state.pairing_mode = True
         # trusted / display / about: handled by UI navigation later
+
+    def _transfer_select(self, key):
+        address = self.state.select_default_speaker(key)
+        if address:
+            try:
+                self.state.save_trusted()
+            except Exception:
+                pass
+            self.on_transfer_select(address)
