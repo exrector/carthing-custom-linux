@@ -64,14 +64,15 @@ Commit:
 
 ```text
 98d6a85 Use factory efuse name across Bluetooth runtime
+c553c3c Prune duplicate Car Thing runtime scaffolding
 ```
 
-Persistent rootfs image flashed on 2026-05-22:
+Persistent rootfs image flashed on 2026-05-22 and cleaned after `c553c3c`:
 
 ```text
 artifacts/flash-device1-factory-name-20260522/rootfs.img
 size:   512M
-sha256: e8b494b3bea92c60640311fa1cfd1e44b37cc55e95bf1876d2f7315ece4f13ce
+sha256: 9fa4dc25db82680e4378288021909b378c893b8eab3ec7a5e3d95d59e4000dba
 ```
 
 The image was built from the intentionally enlarged 512M
@@ -85,6 +86,16 @@ runtime:  python3 /usr/lib/carthing/media_remote.py
 log:      Controller public address: 30:E3:D6:04:C3:42 -> name=Car Thing (SN: Q917)
 log:      BLE device ON ... name: Car Thing (SN: Q917)
 log:      A2DP bridge started ... name=Car Thing (SN: Q917)
+```
+
+Cleanup verification after `c553c3c`:
+
+```text
+/usr/lib/carthing/hid_pair.py: no such file
+/usr/lib/carthing/media_remote_v3.py: no such file
+/usr/lib/carthing/now_playing_ui.py: no such file
+find /usr/lib/carthing -maxdepth 3 -type d -name __pycache__: empty
+processes: carthing-btattach-mini + one python3 /usr/lib/carthing/media_remote.py
 ```
 
 ## Do not regress

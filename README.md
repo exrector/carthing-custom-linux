@@ -156,7 +156,9 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - user-visible Bluetooth/system identity is now factory efuse-derived:
   - `/sys/class/efuse/usid=8559RP88Q917` -> `Car Thing (SN: Q917)`
   - commit `98d6a85`
-  - persistent 512M rootfs: `artifacts/flash-device1-factory-name-20260522/rootfs.img`
+- duplicate runtime scaffolding was pruned in commit `c553c3c`
+- persistent 512M rootfs: `artifacts/flash-device1-factory-name-20260522/rootfs.img`
+  - current sha256: `9fa4dc25db82680e4378288021909b378c893b8eab3ec7a5e3d95d59e4000dba`
 - current early-userspace findings are locked in `docs/early-userspace-findings-2026-05-11.md`
 - storage and cleanup map is documented in `docs/storage-map-and-cleanup.md`
 - legacy MFi / iAP2 notes have been curated into `reference/legacy-mfi-iap2/`
