@@ -1,0 +1,217 @@
+"""accessory_orchestrator — product-level Bluetooth owner above Bumble.
+
+runtime-contract.md §Module Boundaries + pairing-and-transfer-scenarios.md.
+
+ЭТО KEYSTONE. Он one-shot убирает корень всех dual-mode жалоб:
+  «два устройства в рекламе» · «BLE и classic не вместе» · «не прилипает» · «баннер висит».
+
+Владеет ЛОГИЧЕСКИМ аксессуаром: ОДНО видимое имя (identity_service), ОДИН источник-сессия,
+CTKD-pairing (LE+BR/EDR link-key в одну сессию, без перезатирания), фазовая машина и
+политика видимости. BLE и Classic — транспорты-адаптеры НИЖЕ этого слоя, не отдельные персоны.
+GUI сюда шлёт лишь intents «add source / add speaker», но НЕ решает, что видимо.
+
+Фазы (pairing-and-transfer-scenarios.md):
+  pairing                  — бондов нет           → general discoverable (BLE+classic)
+  classic_ready_needs_le   — classic есть, LE нет  → general (восстановить LE)
+  le_ready_needs_classic   — LE есть, classic нет  → bonded-only/directed (скрыт, ждём classic)
+  both_bonded_transfer_idle— оба бонда, transfer off→ directed-to-bonded / silent; classic connectable=False
+  ready                    — оба бонда, A2DP open  → directed-to-bonded / silent
+
+ИНВАРИАНТ (pairing-and-transfer-scenarios.md): Classic-HW включён на КАЖДОМ boot
+(иначе CTKD не отработает при первом BLE-сопряжении), но connectable=False вне Transfer.
+Вне сопряжения — directed-к-bonded ИЛИ полная тишина. «Пока пара не активирована через меню —
+устройство молчит и отказывает всем.»
+"""
+
+import asyncio
+import logging
+import struct
+
+from bumble.device import AdvertisingData, AdvertisingType, Device, OwnAddressType
+from bumble.hci import Address, HCI_Write_Local_Name_Command
+from bumble.smp import PairingConfig
+
+import identity_service
+
+logger = logging.getLogger(__name__)
+
+APPEARANCE_REMOTE = 0x0180          # Generic Remote Control
+HID_SERVICE_UUID = 0x1812          # HID-over-GATT
+
+
+# ── фазы ──────────────────────────────────────────────────────────────────────
+PAIRING = "pairing"
+CLASSIC_READY_NEEDS_LE = "classic_ready_needs_le"
+LE_READY_NEEDS_CLASSIC = "le_ready_needs_classic"
+BOTH_BONDED_TRANSFER_IDLE = "both_bonded_transfer_idle"
+READY = "ready"
+
+
+class AccessoryOrchestrator:
+    def __init__(self, device: Device, on_phase_change=None):
+        self.device = device
+        self.on_phase_change = on_phase_change
+        self.pairing_armed = False        # выставляется GUI-intent'ом «add source/speaker»
+        self.transfer_connectable = False # classic connectable для A2DP (Transfer)
+        self.a2dp_open = False
+        self.phase = PAIRING
+
+    # ── идентичность (одно имя на все транспорты) ─────────────────────────────
+    async def apply_identity(self):
+        name = identity_service.visible_name()
+        self.device.name = name
+        try:
+            await self.device.host.send_command(
+                HCI_Write_Local_Name_Command(local_name=name.encode("utf-8"))
+            )
+        except Exception as e:
+            logger.warning("Write_Local_Name(%s) failed: %s", name, e)
+
+    # ── CTKD-pairing (один pairing → оба ключа в одну логическую сессию) ──────
+    def pairing_config_factory(self, connection):
+        # sc=True (Secure Connections) — обязателен для CTKD; bonding=True — храним.
+        # При sc=True и поднятом classic Bumble выводит BR/EDR link-key из LE LTK (CTKD),
+        # так пользователь парится ОДИН раз, а Transfer потом не требует повторной пары.
+        return PairingConfig(sc=True, mitm=False, bonding=True)
+
+    def install(self):
+        """Повесить pairing_config_factory на Device. Classic-HW держим включённым."""
+        self.device.pairing_config_factory = self.pairing_config_factory
+        # Classic включён всегда (для CTKD), но не connectable/discoverable вне нужды.
+        try:
+            self.device.classic_enabled = True
+        except Exception as e:
+            logger.warning("classic_enable failed: %s", e)
+
+    # ── состояние бондов ─────────────────────────────────────────────────────
+    async def _bonds(self):
+        """(le_addr|None, has_classic) из keystore. LE-бонд = есть ltk/irk."""
+        le_addr, has_classic = None, False
+        try:
+            ks = getattr(self.device, "keystore", None)
+            if ks is None:
+                return le_addr, has_classic
+            for name, keys in reversed(await ks.get_all()):
+                if getattr(keys, "ltk", None) or getattr(keys, "irk", None):
+                    if le_addr is None:
+                        le_addr = Address(name)
+                if getattr(keys, "link_key", None):
+                    has_classic = True
+        except Exception as e:
+            logger.warning("bond inspection failed: %s", e)
+        return le_addr, has_classic
+
+    async def _compute_phase(self, le_addr, has_classic):
+        if le_addr is None and not has_classic:
+            return PAIRING
+        if le_addr is None and has_classic:
+            return CLASSIC_READY_NEEDS_LE
+        if le_addr is not None and not has_classic:
+            return LE_READY_NEEDS_CLASSIC
+        return READY if self.a2dp_open else BOTH_BONDED_TRANSFER_IDLE
+
+    # ── ЕДИНСТВЕННЫЙ метод видимости: всё advertising+classic из текущей фазы ──
+    async def apply_visibility(self):
+        le_addr, has_classic = await self._bonds()
+        phase = await self._compute_phase(le_addr, has_classic)
+        if phase != self.phase:
+            self.phase = phase
+            if self.on_phase_change:
+                try:
+                    self.on_phase_change(phase)
+                except Exception:
+                    pass
+
+        # 1) classic: connectable только в Transfer; discoverable только в pairing.
+        await self._set_classic(
+            connectable=self.transfer_connectable or self.pairing_armed,
+            discoverable=self.pairing_armed,
+        )
+
+        # 2) BLE advertising по фазе/режиму сопряжения.
+        if self.pairing_armed or phase in (PAIRING, CLASSIC_READY_NEEDS_LE):
+            await self._advertise_general()        # видим, принимаем новых (как источник)
+        elif le_addr is not None:
+            await self._advertise_directed(le_addr) # невидим, прилипает к iPhone
+        else:
+            await self._advertise_silent()          # тишина, отказ всем
+
+        logger.info("Visibility: phase=%s pairing_armed=%s transfer_conn=%s",
+                    phase, self.pairing_armed, self.transfer_connectable)
+
+    # ── BLE advertising примитивы (порт проверенного из media_remote) ─────────
+    def _adv_payload(self, with_name: bool):
+        items = [
+            (AdvertisingData.FLAGS, bytes([0x06])),
+            (AdvertisingData.APPEARANCE, struct.pack("<H", APPEARANCE_REMOTE)),
+            (AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
+             struct.pack("<H", HID_SERVICE_UUID)),
+        ]
+        if with_name:
+            items.append((AdvertisingData.COMPLETE_LOCAL_NAME,
+                          identity_service.visible_name().encode("utf-8")))
+        return bytes(AdvertisingData(items))
+
+    async def _advertise_general(self):
+        await self._stop()
+        self.device.advertising_data = self._adv_payload(with_name=True)
+        await self.device.start_advertising(
+            own_address_type=OwnAddressType.PUBLIC, auto_restart=True)
+
+    async def _advertise_directed(self, target):
+        await self._stop()
+        try:
+            await self.device.refresh_filter_accept_list()
+        except Exception:
+            pass
+        await self.device.start_advertising(
+            advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
+            target=target,
+            own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+            auto_restart=True)
+
+    async def _advertise_silent(self):
+        await self._stop()
+
+    async def _stop(self):
+        try:
+            await self.device.stop_advertising()
+        except Exception:
+            pass
+
+    async def _set_classic(self, connectable: bool, discoverable: bool):
+        for fn_name, val in (("set_connectable", connectable),
+                             ("set_discoverable", discoverable)):
+            fn = getattr(self.device, fn_name, None)
+            if fn is None:
+                continue
+            try:
+                res = fn(val)
+                if asyncio.iscoroutine(res):
+                    await res
+            except Exception as e:
+                logger.warning("%s(%s) failed: %s", fn_name, val, e)
+
+    # ── intents / события (пересчитывают видимость) ──────────────────────────
+    async def arm_pairing(self, on: bool):
+        """GUI: вход/выход «Режим сопряжения» (двунаправленный — источники И динамики)."""
+        self.pairing_armed = bool(on)
+        await self.apply_visibility()
+
+    async def set_transfer_connectable(self, on: bool):
+        """Transfer: открыть classic для входящего A2DP (link-key уже есть из CTKD)."""
+        self.transfer_connectable = bool(on)
+        await self.apply_visibility()
+
+    async def on_bonded(self):
+        """Вызывать после успешного SMP-бонда (CTKD мог положить и LE, и classic ключ)."""
+        # успешная пара → снять armed, перейти к directed/тишине по фазе.
+        self.pairing_armed = False
+        await self.apply_visibility()
+
+    async def on_a2dp_state(self, opened: bool):
+        self.a2dp_open = bool(opened)
+        await self.apply_visibility()
+
+    async def on_disconnect(self):
+        await self.apply_visibility()
