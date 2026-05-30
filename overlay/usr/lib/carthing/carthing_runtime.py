@@ -199,6 +199,8 @@ async def main():
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
     await orch.apply_visibility()
+    # Старт с существующим бондом -> активно прилипнуть (high-duty directed burst).
+    asyncio.ensure_future(orch.kick_reconnect())
 
     # Рендер-цикл — ОТДЕЛЬНАЯ задача (не зависит от input.start, который блокирует loop).
     async def _render_loop():

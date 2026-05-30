@@ -26,6 +26,7 @@ GUI сюда шлёт лишь intents «add source / add speaker», но НЕ �
 import asyncio
 import logging
 import struct
+import time
 
 from bumble.device import AdvertisingData, AdvertisingType, Device, OwnAddressType
 from bumble.hci import Address, HCI_Write_Local_Name_Command
@@ -229,4 +230,37 @@ class AccessoryOrchestrator:
 
     async def on_disconnect(self):
         await asyncio.sleep(0.5)   # дать контроллеру осесть (иначе start_advertising = 0xC)
+        await self.kick_reconnect()
+
+    async def kick_reconnect(self, window: float = 25.0):
+        """Активный HIGH-DUTY directed burst к bonded iPhone — мгновенное «прилипание».
+        Окно с повтором (high-duty directed живёт ~1.28с), затем idle (low-duty/тишина)."""
+        le_addr, _ = await self._bonds()
+        if le_addr is None:
+            await self.apply_visibility()
+            return
+        logger.info("Sticky: high-duty directed reconnect burst -> %s", le_addr)
+        deadline = time.monotonic() + window
+        while time.monotonic() < deadline:
+            try:
+                if len(self.device.connections) > 0:
+                    logger.info("Sticky: iPhone reattached")
+                    return
+            except Exception:
+                pass
+            await self._stop()
+            try:
+                await self.device.refresh_filter_accept_list()
+            except Exception:
+                pass
+            try:
+                await self.device.start_advertising(
+                    advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_HIGH_DUTY,
+                    target=le_addr,
+                    own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                    auto_restart=False)
+            except Exception as e:
+                logger.warning("reconnect burst failed: %s", e)
+            await asyncio.sleep(1.4)
+        logger.info("Sticky: burst window ended -> idle visibility")
         await self.apply_visibility()
