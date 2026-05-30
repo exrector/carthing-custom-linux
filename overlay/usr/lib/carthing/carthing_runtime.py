@@ -200,24 +200,30 @@ async def main():
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
     await orch.apply_visibility()
 
-    # Физический ввод (энкодер/кнопки/тач) -> GUI.
+    # Рендер-цикл — ОТДЕЛЬНАЯ задача (не зависит от input.start, который блокирует loop).
+    async def _render_loop():
+        tick = 0
+        while True:
+            if gui is not None:
+                gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
+                gui.render()
+            if tick % PUBLISH_EVERY == 0:
+                _on_publish()         # runtime-bt.json для дирижёра/sync
+            tick += 1
+            await asyncio.sleep(RENDER_INTERVAL)
+
+    asyncio.ensure_future(_render_loop())
+
+    # Физический ввод (энкодер/кнопки/тач) -> GUI (параллельно рендеру).
     if gui is not None:
         try:
             import input_handler
-            await input_handler.start(on_event=gui.handle_input)
+            asyncio.ensure_future(input_handler.start(on_event=gui.handle_input))
         except Exception as e:
             logger.warning("input disabled: %s", e)
 
     logger.info("runtime up — name=%s", identity_service.visible_name())
-    tick = 0
-    while True:
-        if gui is not None:
-            gui.apply(model)          # RuntimeModel -> AppState (живой прогресс)
-            gui.render()
-        if tick % PUBLISH_EVERY == 0:
-            _on_publish()             # runtime-bt.json для дирижёра/sync
-        tick += 1
-        await asyncio.sleep(RENDER_INTERVAL)
+    await asyncio.get_event_loop().create_future()   # работать вечно
 
 
 if __name__ == "__main__":
