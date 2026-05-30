@@ -7,7 +7,17 @@ architecture.md: источник iPhone проецируется в ОДНУ Me
 
 import logging
 
-from ams_client import AMSClient, MediaState
+from ams_client import (
+    AMSClient, MediaState,
+    CMD_TOGGLE, CMD_NEXT, CMD_PREV, CMD_VOL_UP, CMD_VOL_DOWN,
+)
+
+# GUI-intent -> AMS command (play/pause оба = TOGGLE: у AMS нет раздельных).
+_AMS_CMD = {
+    "play": CMD_TOGGLE, "pause": CMD_TOGGLE, "toggle": CMD_TOGGLE,
+    "next": CMD_NEXT, "prev": CMD_PREV, "previous": CMD_PREV,
+    "vol_up": CMD_VOL_UP, "vol_down": CMD_VOL_DOWN,
+}
 
 try:
     from ancs_client import ANCSClient
@@ -97,3 +107,9 @@ class IPhoneService:
     async def send_command(self, cmd):
         if self.ams is not None:
             await self.ams.send_command(cmd)
+
+    async def command(self, intent: str):
+        """GUI/encoder intent (строка) -> AMS-команда."""
+        code = _AMS_CMD.get(intent)
+        if code is not None and self.ams is not None:
+            await self.ams.send_command(code)

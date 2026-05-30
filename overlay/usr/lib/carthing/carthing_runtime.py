@@ -25,11 +25,25 @@ from iphone_service import IPhoneService
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("carthing_runtime")
 
-PUBLISH_INTERVAL = 1.0  # с: ритм публикации bt-части (живой прогресс для GUI/дирижёра)
+RENDER_INTERVAL = 0.2   # с: рендер-тик (живой прогресс на экране)
+PUBLISH_EVERY = 5       # каждые N тиков писать runtime-bt.json (~1 с)
 
 orch: AccessoryOrchestrator | None = None
 model = RuntimeModel()
 _iphone: IPhoneService | None = None
+gui = None
+
+
+def _on_command(source, command):
+    if source == "iphone" and _iphone is not None:
+        asyncio.ensure_future(_iphone.command(command))
+
+
+def _on_pairing(enabled):
+    if orch is not None:
+        asyncio.ensure_future(orch.arm_pairing(bool(enabled)))
+    if gui is not None:
+        gui.set_pairing_mode(bool(enabled))
 
 
 def _verify_persistent():
@@ -81,10 +95,35 @@ async def main():
 
     device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
 
+    # GUI: один home-surface + views поверх DRM (если дисплей доступен).
+    global gui
+    try:
+        from drm_display import DRMDisplay
+        from gui_controller import GuiController
+        gui = GuiController(DRMDisplay(), on_command=_on_command, on_pairing=_on_pairing)
+        logger.info("GUI active (modular Compositor)")
+    except Exception as e:
+        gui = None
+        logger.warning("GUI disabled (no display?): %s", e)
+
+    # Физический ввод (энкодер/кнопки/тач) -> GUI.
+    if gui is not None:
+        try:
+            import input_handler
+            await input_handler.start(on_event=gui.handle_input)
+        except Exception as e:
+            logger.warning("input disabled: %s", e)
+
     logger.info("runtime up — name=%s", identity_service.visible_name())
+    tick = 0
     while True:
-        _on_publish()
-        await asyncio.sleep(PUBLISH_INTERVAL)
+        if gui is not None:
+            gui.apply(model)          # RuntimeModel -> AppState (живой прогресс)
+            gui.render()
+        if tick % PUBLISH_EVERY == 0:
+            _on_publish()             # runtime-bt.json для дирижёра/sync
+        tick += 1
+        await asyncio.sleep(RENDER_INTERVAL)
 
 
 if __name__ == "__main__":
