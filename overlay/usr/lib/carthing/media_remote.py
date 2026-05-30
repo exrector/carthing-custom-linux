@@ -341,6 +341,11 @@ async def on_connection(connection: Connection):
     connection.on("pairing", lambda keys: on_pairing(connection, keys))
     connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
     connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
+    # авто-закрыть pairing-модалку при подключении + выйти из discoverable
+    if app_state.pairing_mode:
+        app_state.pairing_mode = False
+        request_pairing_mode(False)
+    _broadcast_app_state()
 
     if connection.is_encrypted:
         await maybe_start_ams(connection, "connected-encrypted")
