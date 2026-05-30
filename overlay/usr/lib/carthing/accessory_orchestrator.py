@@ -128,8 +128,16 @@ class AccessoryOrchestrator:
             discoverable=self.pairing_armed,
         )
 
-        # 2) BLE advertising по фазе/режиму сопряжения.
-        if self.pairing_armed or phase in (PAIRING, CLASSIC_READY_NEEDS_LE):
+        # 2) BLE advertising по фазе/режиму. Когда УЖЕ подключены — не рекламируемся
+        # (иначе контроллер отдаёт HCI_COMMAND_DISALLOWED 0xC).
+        connected = False
+        try:
+            connected = len(self.device.connections) > 0
+        except Exception:
+            pass
+        if connected:
+            await self._advertise_silent()
+        elif self.pairing_armed or phase in (PAIRING, CLASSIC_READY_NEEDS_LE):
             await self._advertise_general()        # видим, принимаем новых (как источник)
         elif le_addr is not None:
             await self._advertise_directed(le_addr) # невидим, прилипает к iPhone
@@ -155,8 +163,11 @@ class AccessoryOrchestrator:
     async def _advertise_general(self):
         await self._stop()
         self.device.advertising_data = self._adv_payload(with_name=True)
-        await self.device.start_advertising(
-            own_address_type=OwnAddressType.PUBLIC, auto_restart=True)
+        try:
+            await self.device.start_advertising(
+                own_address_type=OwnAddressType.PUBLIC, auto_restart=True)
+        except Exception as e:
+            logger.warning("general advertising failed: %s", e)
 
     async def _advertise_directed(self, target):
         await self._stop()
@@ -164,11 +175,14 @@ class AccessoryOrchestrator:
             await self.device.refresh_filter_accept_list()
         except Exception:
             pass
-        await self.device.start_advertising(
-            advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
-            target=target,
-            own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
-            auto_restart=True)
+        try:
+            await self.device.start_advertising(
+                advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
+                target=target,
+                own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                auto_restart=True)
+        except Exception as e:
+            logger.warning("directed advertising failed: %s", e)
 
     async def _advertise_silent(self):
         await self._stop()
@@ -214,4 +228,5 @@ class AccessoryOrchestrator:
         await self.apply_visibility()
 
     async def on_disconnect(self):
+        await asyncio.sleep(0.5)   # дать контроллеру осесть (иначе start_advertising = 0xC)
         await self.apply_visibility()

@@ -92,14 +92,33 @@ def _is_classic(connection) -> bool:
 
 async def _on_connection(connection):
     global _iphone
-    logger.info("connected: %s classic=%s", getattr(connection, "peer_address", "?"),
-                _is_classic(connection))
+    classic = _is_classic(connection)
+    logger.info("connected: %s classic=%s encrypted=%s",
+                getattr(connection, "peer_address", "?"), classic,
+                getattr(connection, "is_encrypted", False))
 
     # Входящий classic A2DP (iPhone выбрал Car Thing аудиовыходом) -> Transfer-маршрут.
-    if _is_classic(connection):
+    if classic:
         if transfer is not None:
             await transfer.on_incoming_classic(connection)
         return
+
+    _iphone = IPhoneService(model, on_update=_on_publish)
+    started = {"v": False}
+
+    async def _start_ams(why):
+        # AMS-характеристики требуют ШИФРОВАНИЯ — поднимаем только когда encrypted.
+        if started["v"] or not getattr(connection, "is_encrypted", False):
+            return
+        started["v"] = True
+        logger.info("AMS start (%s)", why)
+        try:
+            await _iphone.setup(connection)
+        except Exception as e:
+            started["v"] = False
+            logger.warning("iphone setup failed: %s", e)
+        if orch is not None:
+            await orch.on_bonded()
 
     def _disc(*_):
         if _iphone is not None:
@@ -108,14 +127,22 @@ async def _on_connection(connection):
             asyncio.ensure_future(orch.on_disconnect())
 
     connection.on("disconnection", _disc)
+    connection.on("pairing", lambda *_: asyncio.ensure_future(_start_ams("pairing")))
+    connection.on("pairing_failure", lambda r: logger.error("SMP pairing failed: %s", r))
     connection.on("connection_encryption_change",
-                  lambda *_: orch and asyncio.ensure_future(orch.on_bonded()))
+                  lambda *_: asyncio.ensure_future(_start_ams("encryption")))
 
-    _iphone = IPhoneService(model, on_update=_on_publish)
-    try:
-        await _iphone.setup(connection)
-    except Exception as e:
-        logger.warning("iphone service setup failed: %s", e)
+    if gui is not None:
+        gui.set_pairing_mode(False)   # авто-закрыть pairing-модалку на коннекте
+
+    if getattr(connection, "is_encrypted", False):
+        await _start_ams("connected-encrypted")
+    else:
+        logger.info("requesting pairing (link not encrypted yet)")
+        try:
+            connection.request_pairing()
+        except Exception as e:
+            logger.warning("request_pairing failed: %s", e)
 
 
 async def main():
