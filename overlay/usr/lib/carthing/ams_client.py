@@ -58,6 +58,15 @@ class MediaState:
             base = min(base, self.duration)
         return max(0.0, base)
 
+    @position.setter
+    def position(self, v):
+        # совместимость: присвоение position = снимок elapsed (живой бар продолжит экстраполяцию)
+        try:
+            self._elapsed = float(v)
+        except (TypeError, ValueError):
+            self._elapsed = 0.0
+        self._ts = time.monotonic()
+
     def __repr__(self):
         st = "▶" if self.playing else "⏸"
         return (f"{st} {self.title} — {self.artist} "
