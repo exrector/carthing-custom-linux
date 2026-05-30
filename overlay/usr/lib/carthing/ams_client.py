@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from runtime_paths import ensure_runtime_paths
 ensure_runtime_paths()
 from bumble.gatt_client import Client
@@ -40,9 +41,22 @@ class MediaState:
     artist   = ""
     album    = ""
     duration = 0.0
-    position = 0.0
     volume   = 0.0
     playing  = False
+    _elapsed = 0.0
+    _rate    = 1.0
+    _ts      = 0.0
+
+    @property
+    def position(self):
+        # живой прогресс: экстраполяция от снимка AMS (elapsed + прошедшее*rate)
+        if not self.playing or self._rate <= 0:
+            base = self._elapsed
+        else:
+            base = self._elapsed + (time.monotonic() - self._ts) * self._rate
+        if self.duration:
+            base = min(base, self.duration)
+        return max(0.0, base)
 
     def __repr__(self):
         st = "▶" if self.playing else "⏸"
@@ -133,9 +147,14 @@ class AMSClient:
                 parts = data.split(",")
                 if parts:
                     self.state.playing = (parts[0].strip() == "1")
+                try:
+                    self.state._rate = float(parts[1].strip()) if len(parts) >= 2 and parts[1].strip() else 1.0
+                except ValueError:
+                    self.state._rate = 1.0
                 if len(parts) >= 3:
                     try:
-                        self.state.position = float(parts[2].strip()) if parts[2].strip() else 0.0
+                        self.state._elapsed = float(parts[2].strip()) if parts[2].strip() else 0.0
+                        self.state._ts = time.monotonic()
                     except ValueError:
                         pass
             elif attr_id == PLAYER_ATTR_VOLUME:

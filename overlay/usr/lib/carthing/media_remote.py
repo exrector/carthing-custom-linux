@@ -650,7 +650,17 @@ async def animation_loop():
                 logger.error("anim render error: %s", e)
             await asyncio.sleep(1 / 30)
         else:
-            await asyncio.sleep(0.08)
+            # живой прогресс-бар: пере-синк live position + рендер каждые 0.5с когда играет
+            if (compositor is not None and ams is not None and _active_conn is not None
+                    and getattr(ams.state, "playing", False)):
+                try:
+                    _sync_media_to_appstate(ams.state)
+                    compositor.render()
+                except Exception:
+                    pass
+                await asyncio.sleep(0.5)
+            else:
+                await asyncio.sleep(0.08)
 
 
 async def main():
