@@ -239,28 +239,31 @@ class AccessoryOrchestrator:
         if le_addr is None:
             await self.apply_visibility()
             return
-        logger.info("Sticky: high-duty directed reconnect burst -> %s", le_addr)
+        # UNDIRECTED bonded-only (без имени, filter accept-list 0x03): приватный iPhone
+        # с RPA реконнектит bonded HID-периферию по нему; directed-к-identity он игнорирует.
+        # Утечки имени нет (COMPLETE_LOCAL_NAME не кладём) — только nameless HID-маяк на окно.
+        logger.info("Sticky: bonded-only reconnect window -> %s", le_addr)
+        await self._stop()
+        try:
+            await self.device.refresh_filter_accept_list()
+        except Exception:
+            pass
+        self.device.advertising_data = self._adv_payload(with_name=False)
+        try:
+            await self.device.start_advertising(
+                own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                auto_restart=True,
+                advertising_filter_policy=0x03)
+        except Exception as e:
+            logger.warning("bonded-only advertising failed: %s", e)
         deadline = time.monotonic() + window
         while time.monotonic() < deadline:
+            await asyncio.sleep(1.0)
             try:
                 if len(self.device.connections) > 0:
                     logger.info("Sticky: iPhone reattached")
                     return
             except Exception:
                 pass
-            await self._stop()
-            try:
-                await self.device.refresh_filter_accept_list()
-            except Exception:
-                pass
-            try:
-                await self.device.start_advertising(
-                    advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_HIGH_DUTY,
-                    target=le_addr,
-                    own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
-                    auto_restart=False)
-            except Exception as e:
-                logger.warning("reconnect burst failed: %s", e)
-            await asyncio.sleep(1.4)
-        logger.info("Sticky: burst window ended -> idle visibility")
+        logger.info("Sticky: window ended (no reattach) -> idle visibility")
         await self.apply_visibility()
