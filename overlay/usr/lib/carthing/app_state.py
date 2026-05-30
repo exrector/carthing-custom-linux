@@ -41,8 +41,9 @@ class MediaSession:
 class AppState:
     # desktop indices (the swipe order)
     IPHONE, MAC, TRANSFER, SETTINGS, NOTIFICATIONS = 0, 1, 2, 3, 4
-    # desktop index -> media source key. Non-media desktops map to None.
-    DESKTOP_SOURCE = {0: "iphone", 1: "mac"}
+    # index -> media source. Один home (0)=iPhone; прочие view (Settings/Notifications)
+    # не медиа -> control_source падает на last_media_source (=iphone), бар рулит реальным источником.
+    DESKTOP_SOURCE = {0: "iphone"}
 
     def __init__(self):
         self.iphone = MediaSession("iphone", "iPhone")

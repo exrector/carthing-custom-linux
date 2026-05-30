@@ -1,13 +1,12 @@
-"""gui_controller — один home-surface + views поверх проверенного Compositor-субстрата.
+"""gui_controller — ОДНА home-поверхность, без свайпа по «рабочим столам».
 
-gui-contract.md / architecture.md §GUI Contract. GUI — слой представления и intents для
-ОДНОГО рантайма. Views (now_playing/routes/devices/notifications/system) НЕ меняют BT-роль,
-маршрут, сопряжение или источник — переключение view это только смена представления.
-GUI НЕ владеет BT/scanner/pairing/audio — лишь читает RuntimeModel и шлёт intents в сервисы.
+Раньше был свайп-ринг из 5 десктопов (iPhone/Mac/Transfer/Settings/Notifications) — пользователь
+заколебался не понимать, куда смотреть. Теперь: ВСЕГДА видно ОДИН home (now_playing + бар +
+дуга громкости + виджет ассистента). Settings — по физической кнопке (push), Notifications — по
+тапу индикатора; возврат — Back. Никакого горизонтального свайпа между столами.
 
-Это тонкий координатор: строит Compositor (порт _build_compositor), мостит RuntimeModel→AppState
-(живой прогресс на каждый тик), роутит ввод. Колбэки intents инъектируются (carthing_runtime
-подключает их к accessory_orchestrator / iphone_service / transfer_service).
+GUI — слой представления/intents для одного рантайма. Не владеет BT/pairing/audio; читает
+RuntimeModel, шлёт intents в сервисы (инъекция колбэков из carthing_runtime).
 """
 
 import logging
@@ -16,15 +15,14 @@ import time
 import identity_service
 from app_state import AppState
 from intents import Dispatcher
-from ui_screen import Compositor, DRMDisplayAdapter
+from ui_screen import Compositor, DRMDisplayAdapter, Input
 from ui_statusbar import StatusBar
 from ui_anim import AnimDriver
-from screens import (
-    NowPlayingScreen, MacOSScreen, TransferScreen, SettingsScreen,
-    NotificationsScreen, PairingModal,
-)
+from screens import NowPlayingScreen, SettingsScreen, NotificationsScreen, PairingModal
 
 logger = logging.getLogger(__name__)
+
+HOME, SETTINGS, NOTIF = 0, 1, 2   # индексы экранов (home всегда базовый)
 
 
 class GuiController:
@@ -40,34 +38,58 @@ class GuiController:
         )
         emit = self.dispatcher.dispatch
         screens = [
-            NowPlayingScreen(emit=emit),                                          # 0 now_playing
-            MacOSScreen(emit=emit),                                               # 1 (mac source)
-            TransferScreen(emit=emit),                                            # 2 routes
-            SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 3 devices/system
-            NotificationsScreen(),                                                # 4 notifications
+            NowPlayingScreen(emit=emit),                                          # 0 HOME
+            SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 1 (по кнопке)
+            NotificationsScreen(),                                                # 2 (по тапу)
         ]
         self.compositor = Compositor(
             DRMDisplayAdapter(display), screens,
             status_bar=StatusBar(), anim=AnimDriver(),
-            state=self.app_state, on_intent=emit,
+            state=self.app_state, on_intent=self._nav_intent,
+            show_dots=False,                       # без точек-десктопов: один home
             pairing_modal=PairingModal(emit=emit),
         )
+        self.app_state.active_desktop = HOME
         self._prev_iphone_connected = False
 
-    # ── RuntimeModel -> AppState (вызывать каждый рендер-тик: живой прогресс) ──
+    # ── навигация: один home + push Settings/Notifications, без свайпа ────────
+    def _nav_intent(self, intent, payload=None):
+        if intent == StatusBar.INTENT_NOTIFICATIONS:
+            self.compositor.active = NOTIF
+            self.compositor.render()
+            return
+        if intent == StatusBar.INTENT_ASSISTANT:
+            logger.info("assistant tap (Фаза 5 — логика позже)")
+            return
+        self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
+
+    def handle_input(self, event):
+        if event == Input.SETTINGS:
+            self.compositor.active = SETTINGS
+            self.compositor.render()
+            return
+        if event == Input.BACK:
+            if self.compositor.active != HOME:
+                self.compositor.active = HOME
+                self.compositor.render()
+            return
+        if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
+            return                                  # НЕТ свайпа по столам
+        self.compositor.handle_input(event)
+
+    # ── RuntimeModel -> AppState (каждый рендер-тик: живой прогресс) ──────────
     def apply(self, model):
         a = self.app_state
         s = model.session
         a.iphone.connected = (s.source == "iphone" and s.connected)
-        # При ПОДКЛЮЧЕНИИ iPhone — показать его NowPlaying (не залипать на пустом Mac-десктопе).
         if a.iphone.connected and not self._prev_iphone_connected:
-            a.active_desktop = 0
+            a.active_desktop = HOME                 # подключился iPhone -> на home
         self._prev_iphone_connected = a.iphone.connected
         if a.iphone.connected:
             a.iphone.title = s.title
             a.iphone.artist = s.artist
             a.iphone.duration = s.duration
-            a.iphone.position = s.elapsed      # ЖИВОЙ (экстраполяция в runtime_model)
+            a.iphone.position = s.elapsed
             a.iphone.playing = s.playing
             a.iphone.volume = s.volume
         else:
@@ -86,14 +108,9 @@ class GuiController:
 
     def render(self):
         try:
-            # broadcast_state ОБЯЗАТЕЛЕН: проталкивает app_state в экраны (их .state)
-            # и рендерит. Без него screens.state=None -> "Lost Contact"/нет метадаты.
             self.compositor.broadcast_state(self.app_state)
         except Exception as e:
             logger.error("render error: %s", e)
-
-    def handle_input(self, event):
-        self.compositor.handle_input(event)
 
     def set_pairing_mode(self, on: bool):
         self.app_state.pairing_mode = bool(on)

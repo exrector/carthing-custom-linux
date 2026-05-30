@@ -19,6 +19,7 @@ class Input:
     ENCODER_CCW = "encoder_ccw"
     PRESS = "press"
     BACK = "back"
+    SETTINGS = "settings"
     BTN_1 = "btn_1"
     BTN_2 = "btn_2"
     BTN_3 = "btn_3"

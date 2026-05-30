@@ -45,6 +45,7 @@ KEY_2     = 3   # preset 2
 KEY_3     = 4   # preset 3
 KEY_4     = 5   # preset 4
 KEY_ENTER = 28  # encoder press
+KEY_SETTINGS = 50  # settings button (верхний ряд)
 
 # AMS RemoteCommand codes
 CMD_TOGGLE    = 0x02
@@ -59,6 +60,7 @@ EV_ENCODER_CW  = "encoder_cw"
 EV_ENCODER_CCW = "encoder_ccw"
 EV_PRESS       = "press"
 EV_BACK        = "back"
+EV_SETTINGS    = "settings"
 EV_SWIPE_LEFT  = "swipe_left"
 EV_SWIPE_RIGHT = "swipe_right"
 EV_SWIPE_UP    = "swipe_up"
@@ -124,6 +126,8 @@ async def start(get_ams=None, on_event=None):
                 on_event(EV_PRESS)
             elif code == KEY_ESC:
                 on_event(EV_BACK)
+            elif code == KEY_SETTINGS:
+                on_event(EV_SETTINGS)
             elif code in _KEY_TO_BTN:
                 on_event(_KEY_TO_BTN[code])
             return
