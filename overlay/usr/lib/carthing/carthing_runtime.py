@@ -161,7 +161,18 @@ async def main():
         orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p))
         orch.install()  # CTKD pairing config + classic enabled (для CTKD)
 
-    device, _transport = await init_ble(configure_device=_configure)
+    # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
+    device = None
+    for attempt in range(8):
+        try:
+            device, _transport = await init_ble(configure_device=_configure)
+            break
+        except OSError as e:
+            logger.warning("init_ble attempt %d failed (HCI busy?): %s", attempt + 1, e)
+            await asyncio.sleep(3)
+    if device is None:
+        logger.error("init_ble failed after retries — exiting (supervisor restart)")
+        return
     await orch.apply_identity()       # одно имя на все транспорты
 
     device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
