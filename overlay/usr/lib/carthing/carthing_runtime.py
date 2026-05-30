@@ -32,11 +32,18 @@ orch: AccessoryOrchestrator | None = None
 model = RuntimeModel()
 _iphone: IPhoneService | None = None
 gui = None
+transfer = None          # TransferService
+backchannel = None       # TransferControlBackchannel
+settings = None          # SettingsService
+hw_caps = {}             # hardware_inventory.probe()
+mac = None               # MacService
 
 
 def _on_command(source, command):
     if source == "iphone" and _iphone is not None:
         asyncio.ensure_future(_iphone.command(command))
+    elif source == "mac" and mac is not None:
+        asyncio.ensure_future(mac.command(command))
 
 
 def _on_pairing(enabled):
@@ -44,6 +51,22 @@ def _on_pairing(enabled):
         asyncio.ensure_future(orch.arm_pairing(bool(enabled)))
     if gui is not None:
         gui.set_pairing_mode(bool(enabled))
+
+
+def _on_transfer_rescan():
+    if transfer is not None:
+        asyncio.ensure_future(transfer.rescan())
+
+
+def _on_transfer_select(address):
+    if transfer is not None:
+        asyncio.ensure_future(transfer.select(address))
+
+
+async def _emit_source_intent(intent):
+    """Для backchannel: команда динамика -> активный источник."""
+    if _iphone is not None:
+        await _iphone.command(intent)
 
 
 def _verify_persistent():
@@ -59,9 +82,24 @@ def _on_publish():
     model.write_bt_json()
 
 
+def _is_classic(connection) -> bool:
+    try:
+        from bumble.core import BT_BR_EDR_TRANSPORT
+        return getattr(connection, "transport", None) == BT_BR_EDR_TRANSPORT
+    except Exception:
+        return False
+
+
 async def _on_connection(connection):
     global _iphone
-    logger.info("connected: %s", getattr(connection, "peer_address", "?"))
+    logger.info("connected: %s classic=%s", getattr(connection, "peer_address", "?"),
+                _is_classic(connection))
+
+    # Входящий classic A2DP (iPhone выбрал Car Thing аудиовыходом) -> Transfer-маршрут.
+    if _is_classic(connection):
+        if transfer is not None:
+            await transfer.on_incoming_classic(connection)
+        return
 
     def _disc(*_):
         if _iphone is not None:
@@ -81,8 +119,15 @@ async def _on_connection(connection):
 
 
 async def main():
-    global orch
+    global orch, gui, transfer, backchannel, settings, hw_caps, mac
     _verify_persistent()
+
+    # Per-boot инвентарь возможностей + настройки.
+    import hardware_inventory
+    from settings_service import SettingsService
+    hw_caps = hardware_inventory.probe()
+    settings = SettingsService()
+    logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
 
     def _configure(device):
         global orch
@@ -91,20 +136,42 @@ async def main():
 
     device, _transport = await init_ble(configure_device=_configure)
     await orch.apply_identity()       # одно имя на все транспорты
-    await orch.apply_visibility()     # старт: directed-к-bonded / тишина (никакой открытой рекламы)
 
     device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
 
     # GUI: один home-surface + views поверх DRM (если дисплей доступен).
-    global gui
+    if hw_caps.get("display_drm"):
+        try:
+            from drm_display import DRMDisplay
+            from gui_controller import GuiController
+            gui = GuiController(DRMDisplay(),
+                                on_command=_on_command, on_pairing=_on_pairing,
+                                on_transfer_rescan=_on_transfer_rescan,
+                                on_transfer_select=_on_transfer_select)
+            logger.info("GUI active (modular Compositor)")
+        except Exception as e:
+            gui = None
+            logger.warning("GUI disabled: %s", e)
+
+    # Transfer: A2DP relay + backchannel (внутри единого рантайма).
     try:
-        from drm_display import DRMDisplay
-        from gui_controller import GuiController
-        gui = GuiController(DRMDisplay(), on_command=_on_command, on_pairing=_on_pairing)
-        logger.info("GUI active (modular Compositor)")
+        from transfer_service import TransferService
+        from transfer_control import TransferControlBackchannel
+        app_state = gui.app_state if gui is not None else None
+        transfer = TransferService(device, app_state, orch, model, on_change=_on_publish)
+        backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
+        await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
     except Exception as e:
-        gui = None
-        logger.warning("GUI disabled (no display?): %s", e)
+        transfer = None
+        logger.warning("transfer disabled: %s", e)
+
+    # macOS-источник (Фаза 4, каркас).
+    from mac_service import MacService
+    mac = MacService(model, on_update=_on_publish)
+
+    # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
+    # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
+    await orch.apply_visibility()
 
     # Физический ввод (энкодер/кнопки/тач) -> GUI.
     if gui is not None:
