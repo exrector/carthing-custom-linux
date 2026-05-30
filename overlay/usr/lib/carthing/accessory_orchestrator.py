@@ -141,7 +141,7 @@ class AccessoryOrchestrator:
         elif self.pairing_armed or phase in (PAIRING, CLASSIC_READY_NEEDS_LE):
             await self._advertise_general()        # видим, принимаем новых (как источник)
         elif le_addr is not None:
-            await self._advertise_directed(le_addr) # невидим, прилипает к iPhone
+            await self._advertise_bonded_only()     # НЕПРЕРЫВНО: iPhone реконнектит в любой момент
         else:
             await self._advertise_silent()          # тишина, отказ всем
 
@@ -232,17 +232,11 @@ class AccessoryOrchestrator:
         await asyncio.sleep(0.5)   # дать контроллеру осесть (иначе start_advertising = 0xC)
         await self.kick_reconnect()
 
-    async def kick_reconnect(self, window: float = 25.0):
-        """Активный HIGH-DUTY directed burst к bonded iPhone — мгновенное «прилипание».
-        Окно с повтором (high-duty directed живёт ~1.28с), затем idle (low-duty/тишина)."""
-        le_addr, _ = await self._bonds()
-        if le_addr is None:
-            await self.apply_visibility()
-            return
-        # UNDIRECTED bonded-only (без имени, filter accept-list 0x03): приватный iPhone
-        # с RPA реконнектит bonded HID-периферию по нему; directed-к-identity он игнорирует.
-        # Утечки имени нет (COMPLETE_LOCAL_NAME не кладём) — только nameless HID-маяк на окно.
-        logger.info("Sticky: bonded-only reconnect window -> %s", le_addr)
+    async def _advertise_bonded_only(self):
+        """НЕПРЕРЫВНАЯ undirected bonded-only (nameless, accept-list 0x03).
+        Приватный iPhone (RPA) реконнектит bonded HID-периферию по ней в ЛЮБОЙ момент
+        (10 минут/час отсутствия — без разницы); имя в эфир НЕ уходит. directed-к-identity
+        RPA-iPhone игнорирует — поэтому именно непрерывный bonded-only, а не окно/directed."""
         await self._stop()
         try:
             await self.device.refresh_filter_accept_list()
@@ -254,16 +248,11 @@ class AccessoryOrchestrator:
                 own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
                 auto_restart=True,
                 advertising_filter_policy=0x03)
+            logger.info("Sticky: continuous bonded-only advertising (reattaches anytime)")
         except Exception as e:
             logger.warning("bonded-only advertising failed: %s", e)
-        deadline = time.monotonic() + window
-        while time.monotonic() < deadline:
-            await asyncio.sleep(1.0)
-            try:
-                if len(self.device.connections) > 0:
-                    logger.info("Sticky: iPhone reattached")
-                    return
-            except Exception:
-                pass
-        logger.info("Sticky: window ended (no reattach) -> idle visibility")
+
+    async def kick_reconnect(self):
+        """Прилипание = НЕПРЕРЫВНАЯ bonded-only реклама (apply_visibility). Точка вызова
+        на старте/диссконнекте; auto_restart держит рекламу живой бесконечно."""
         await self.apply_visibility()
