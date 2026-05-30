@@ -52,12 +52,17 @@ class GuiController:
             state=self.app_state, on_intent=emit,
             pairing_modal=PairingModal(emit=emit),
         )
+        self._prev_iphone_connected = False
 
     # ── RuntimeModel -> AppState (вызывать каждый рендер-тик: живой прогресс) ──
     def apply(self, model):
         a = self.app_state
         s = model.session
         a.iphone.connected = (s.source == "iphone" and s.connected)
+        # При ПОДКЛЮЧЕНИИ iPhone — показать его NowPlaying (не залипать на пустом Mac-десктопе).
+        if a.iphone.connected and not self._prev_iphone_connected:
+            a.active_desktop = 0
+        self._prev_iphone_connected = a.iphone.connected
         if a.iphone.connected:
             a.iphone.title = s.title
             a.iphone.artist = s.artist
@@ -81,7 +86,9 @@ class GuiController:
 
     def render(self):
         try:
-            self.compositor.render()
+            # broadcast_state ОБЯЗАТЕЛЕН: проталкивает app_state в экраны (их .state)
+            # и рендерит. Без него screens.state=None -> "Lost Contact"/нет метадаты.
+            self.compositor.broadcast_state(self.app_state)
         except Exception as e:
             logger.error("render error: %s", e)
 

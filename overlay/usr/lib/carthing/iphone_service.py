@@ -6,6 +6,7 @@ architecture.md: источник iPhone проецируется в ОДНУ Me
 """
 
 import logging
+import time as _time
 
 from ams_client import (
     AMSClient, MediaState,
@@ -77,7 +78,13 @@ class IPhoneService:
         sess.album = getattr(s, "album", "")
         sess.duration = s.duration
         sess.volume = s.volume
-        sess.set_playback(getattr(s, "_elapsed", 0.0), getattr(s, "_rate", 1.0), s.playing)
+        # Копируем СНИМОК воспроизведения как есть (_elapsed/_rate/_ts), НЕ пере-штампуя
+        # _ts=now: иначе нотификация громкости сбрасывала живой прогресс на старый снимок
+        # (прогресс «прыгал» при кручении энкодера). _ts источника = момент playbackInfo.
+        sess._elapsed = getattr(s, "_elapsed", 0.0)
+        sess._rate = getattr(s, "_rate", 1.0)
+        sess._ts = getattr(s, "_ts", _time.monotonic())
+        sess.playing = s.playing
         self._publish()
 
     # ── ANCS -> notif-индикатор (не баннер) ──────────────────────────────────

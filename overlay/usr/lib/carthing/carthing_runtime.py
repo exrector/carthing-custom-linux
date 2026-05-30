@@ -13,6 +13,15 @@ accessory_orchestrator; идентичность — только через ide
 
 import asyncio
 import logging
+import os
+import time
+
+# Часы: CTS синкает системное время в UTC -> выставляем локальную зону для strftime.
+os.environ.setdefault("TZ", os.environ.get("CARTHING_TZ", "MSK-3"))  # Москва UTC+3, без DST
+try:
+    time.tzset()
+except Exception:
+    pass
 
 import runtime_paths  # noqa: F401  (ставит sys.path)
 import state_paths

@@ -13,6 +13,7 @@ class StatusBar:
     INTENT_PLAY_PAUSE = "media_play_pause"
     INTENT_PREV = "media_prev"
     INTENT_NEXT = "media_next"
+    INTENT_ASSISTANT = "assistant"
 
     def render(self, draw, regions, anim, st):
         bar_top = T.STATUSBAR_TOP
@@ -51,7 +52,8 @@ class StatusBar:
         clock = getattr(st, "clock_text", "") or "--:--"
         draw.text((T.MARGIN - 16, cy - T.SZ_BAR // 2 - 2), clock, font=f, fill=T.MUTED)
 
-        # ── right: source label + notification ───────────────────────────────
+        # ── right: assistant button (ВМЕСТО подписи источника) + notification ──
+        # Подпись iPhone/Mac убрана: активный view и так показывает источник.
         x = T.W - (T.MARGIN - 16)
         unread = getattr(st, "unread_count", 0) or 0
         if unread > 0:
@@ -59,10 +61,19 @@ class StatusBar:
             col = tuple(int(c * a) for c in T.ACCENT)
             T.icon_dot(draw, x - 7, cy, 7, color=col)
             regions.add((x - 7 - 18, bar_top, x + 10, T.H), self.INTENT_NOTIFICATIONS)
-            x -= 30
+            x -= 34
 
-        # source the transport controls (e.g. "iPhone" / "Mac")
-        label = control.label if control else ""
-        if label:
-            b = draw.textbbox((0, 0), label, font=f)
-            draw.text((x - (b[2] - b[0]), cy - T.SZ_BAR // 2 - 2), label, font=f, fill=T.FAINT)
+        # Виджет ассистента (Фаза 5): орб с состояниями. Сейчас место + состояния + тап.
+        astate = getattr(st, "assistant_state", "idle")
+        ar = 13
+        acx, acy = x - ar, cy
+        box = [acx - ar, acy - ar, acx + ar, acy + ar]
+        if astate == "idle":
+            draw.ellipse(box, outline=T.FAINT, width=2)
+        elif astate == "responding":
+            draw.ellipse(box, fill=T.ACCENT)
+        else:  # listening / thinking — пульсируют
+            a = anim.pulse_alpha()
+            base = T.ACCENT if astate == "listening" else T.MUTED
+            draw.ellipse(box, fill=tuple(int(c * a) for c in base))
+        regions.add((acx - ar - 8, bar_top, x + 8, T.H), self.INTENT_ASSISTANT)

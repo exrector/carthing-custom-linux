@@ -56,15 +56,24 @@ class NowPlayingScreen(Screen):
         if len(lines) > MAXL:
             lines = lines[:MAXL]
             lines[-1] = C.truncate(draw, lines[-1] + "…", T.font(T.SZ_TITLE), T.CONTENT_W)
-        artist = sess.artist or ""
-        LH = 56
-        block_h = len(lines) * LH + (50 if artist else 0)
+        # Artist ТОЖЕ переносится в CONTENT_W (иначе длинный исполнитель прёт за границы
+        # MAIN через весь экран). Лимит 2 строки + многоточие.
+        alines = []
+        if sess.artist:
+            alines = C.wrap_lines(draw, sess.artist, T.font(T.SZ_BODY), T.CONTENT_W)
+            MAXA = 2
+            if len(alines) > MAXA:
+                alines = alines[:MAXA]
+                alines[-1] = C.truncate(draw, alines[-1] + "…", T.font(T.SZ_BODY), T.CONTENT_W)
+        LH, ALH = 56, 40
+        block_h = len(lines) * LH + (len(alines) * ALH + 10 if alines else 0)
         y = max(T.CONTENT_TOP, T.MAIN_CY - block_h // 2)
         for line in lines:
             C.text_centered(draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX); y += LH
-        if artist:
-            y += 6
-            C.text_centered(draw, artist, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX)
+        if alines:
+            y += 10
+            for aline in alines:
+                C.text_centered(draw, aline, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX); y += ALH
         return img
 
 

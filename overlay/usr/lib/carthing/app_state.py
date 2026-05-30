@@ -58,6 +58,7 @@ class AppState:
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False
+        self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
 
     @property
