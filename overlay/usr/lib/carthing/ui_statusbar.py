@@ -52,16 +52,10 @@ class StatusBar:
         clock = getattr(st, "clock_text", "") or "--:--"
         draw.text((T.MARGIN - 16, cy - T.SZ_BAR // 2 - 2), clock, font=f, fill=T.MUTED)
 
-        # ── right: assistant button (ВМЕСТО подписи источника) + notification ──
-        # Подпись iPhone/Mac убрана: активный view и так показывает источник.
+        # ── right: assistant button (ВМЕСТО подписи источника) ────────────────
+        # Подпись iPhone/Mac убрана. Индикатор уведомлений — НЕ здесь, а в мини-зоне
+        # под энкодером (Compositor рисует белый пульс при непрочитанном ANCS).
         x = T.W - (T.MARGIN - 16)
-        unread = getattr(st, "unread_count", 0) or 0
-        if unread > 0:
-            a = anim.pulse_alpha()
-            col = tuple(int(c * a) for c in T.ACCENT)
-            T.icon_dot(draw, x - 7, cy, 7, color=col)
-            regions.add((x - 7 - 18, bar_top, x + 10, T.H), self.INTENT_NOTIFICATIONS)
-            x -= 34
 
         # Виджет ассистента (Фаза 5): орб с состояниями. Сейчас место + состояния + тап.
         astate = getattr(st, "assistant_state", "idle")
