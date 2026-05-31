@@ -75,6 +75,15 @@ class GuiController:
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
             return                                  # НЕТ свайпа по столам
+        # Свайп вниз на home -> уведомления (как «шторка» iOS); вверх в уведомлениях -> назад.
+        if event == Input.SWIPE_DOWN and self.compositor.active == HOME:
+            self.compositor.active = NOTIF
+            self.compositor.render()
+            return
+        if event == Input.SWIPE_UP and self.compositor.active == NOTIF:
+            self.compositor.active = HOME
+            self.compositor.render()
+            return
         self.compositor.handle_input(event)
 
     # ── RuntimeModel -> AppState (каждый рендер-тик: живой прогресс) ──────────

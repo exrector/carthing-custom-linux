@@ -204,15 +204,14 @@ class Compositor:
             cs = getattr(self.state, "control_source", None)
             vol = cs.volume if cs is not None else None
         T.encoder_arc(draw, level=vol)
-        # Уведомления: БЕЛЫЙ ПУЛЬС в мини-зоне под энкодером (не баннер, не в баре).
-        # Тап по зоне -> список уведомлений.
+        # Уведомления: БЕЛЫЙ ПУЛЬС в мини-зоне под энкодером — ТОЛЬКО индикатор (зона
+        # физически перекрыта энкодером, не нажимается). Открыть список — свайп вниз на home.
         unread = getattr(self.state, "unread_count", 0) if self.state else 0
         if unread and self.anim is not None:
             a = self.anim.pulse_alpha()
             w = int(255 * a)
             icx, icy = T.W - 28, T.OCCLUSION_BOTTOM - 36
             draw.ellipse([icx - 9, icy - 9, icx + 9, icy + 9], fill=(w, w, w))
-            self._regions.add((T.OCCLUSION_LEFT, icy - 36, T.W, T.OCCLUSION_BOTTOM), "open_notifications")
         if self.status_bar:
             self.status_bar.render(draw, self._regions, self.anim, self.state)
         if self.show_dots and len(self.screens) > 1:
