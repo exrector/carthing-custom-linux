@@ -21,6 +21,9 @@ FAINT    = (95, 95, 95)
 HAIRLINE = (40, 40, 40)
 ACCENT   = (0, 200, 120)
 WARN     = (220, 90, 60)
+STATUS_OK   = (40, 200, 90)    # connected — зелёный
+STATUS_WARN = (235, 195, 40)   # online — жёлтый
+STATUS_OFF  = (220, 70, 60)    # offline — красный
 
 # ─── spacing / layout tokens ──────────────────────────────────────────────────
 MARGIN     = 40          # outer side margin

@@ -218,10 +218,15 @@ class SettingsScreen(Screen):
                 return [("trusted_empty", "— нет устройств —")]
             rows = []
             for d in trusted:
-                mark = "●" if d.get("connected") else ("◐" if d.get("online") else "○")
+                if d.get("connected"):
+                    color = T.STATUS_OK       # зелёный
+                elif d.get("online"):
+                    color = T.STATUS_WARN     # жёлтый
+                else:
+                    color = T.STATUS_OFF      # красный
                 addr = d.get("address") or "—"
-                # имя + MAC + компактный индикатор (без повтора имени/слова "connected")
-                rows.append(("trusted:" + d["key"], f"{mark} {d['label']}   {addr}"))
+                # имя + MAC; цветную статус-точку рисует render (3-й элемент = цвет)
+                rows.append(("trusted:" + d["key"], f"{d['label']}   {addr}", color))
             return rows
         return it.get("children", [])
 
@@ -230,10 +235,12 @@ class SettingsScreen(Screen):
         rows = []
         for it in self.items:
             has_children = "children" in it
-            rows.append((0, it["key"], it["label"], has_children, it["key"] in self.expanded))
+            rows.append((0, it["key"], it["label"], has_children, it["key"] in self.expanded, None))
             if has_children and it["key"] in self.expanded:
-                for ckey, clabel in self._children(it):
-                    rows.append((1, ckey, clabel, False, False))
+                for child in self._children(it):
+                    ckey, clabel = child[0], child[1]
+                    color = child[2] if len(child) > 2 else None
+                    rows.append((1, ckey, clabel, False, False, color))
         return rows
 
     def _activate(self, i):
@@ -242,7 +249,7 @@ class SettingsScreen(Screen):
         if not (0 <= i < len(rows)):
             return
         self.sel = i
-        level, key, _label, expandable, expanded = rows[i]
+        level, key, _label, expandable, expanded, _color = rows[i]
         if expandable:
             self.expanded.symmetric_difference_update({key})
         else:
@@ -281,10 +288,12 @@ class SettingsScreen(Screen):
 
         y = start_y
         for i in range(self.top, min(self.top + vis, len(rows))):
-            level, key, label, expandable, expanded = rows[i]
+            level, key, label, expandable, expanded, color = rows[i]
             rect = C.list_row(draw, y, label, selected=(i == self.sel),
                               expandable=expandable, expanded=expanded,
                               indent=24 if level else 0)
+            if color is not None:                              # цветная статус-точка по центру строки
+                T.icon_dot(draw, 40, y + T.SZ_BODY // 2, 7, color=color)
             if regions is not None:
                 regions.add(rect, "settings_tap", payload=i)   # тап -> выбрать+активировать строку i
             y += T.ROW_H
