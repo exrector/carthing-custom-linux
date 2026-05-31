@@ -60,7 +60,11 @@ class IPhoneService:
         ok = await self.ams.setup(connection)
 
         if ANCSClient is not None:
-            self.ancs = ANCSClient(on_fetched=self._on_notif, on_removed=self._on_removed)
+            # ignore_preexisting=False: при подключении iOS переигрывает ВСЕ уже висящие
+            # уведомления (флаг PreExisting). Так список = живое зеркало Центра уведомлений
+            # и НАПОЛНЯЕТСЯ после ребута/реконнекта, а не остаётся пустым.
+            self.ancs = ANCSClient(on_fetched=self._on_notif, on_removed=self._on_removed,
+                                   ignore_preexisting=False)
             try:
                 await self.ancs.setup(connection)
             except Exception as e:
