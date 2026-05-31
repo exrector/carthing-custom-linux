@@ -121,23 +121,26 @@ class GuiController:
         a.notifications = list(model.notifications)   # [{uid, app, text}] — без iPhone/заголовков
         a.unread_count = len(a.notifications)
         # Зарегистрировать iPhone как доверенный ИСТОЧНИК (чтобы он попал в Settings→Доверенные).
-        self._sync_trusted_iphone(a, a.iphone.connected)
+        self._sync_trusted_iphone(a, a.iphone.connected, model.session.peer)
         a.transfer_active = model.transfer_active
         a.transfer_source = model.speaker_name or ""
         a.clock_text = time.strftime("%H:%M")
         a.device_name = identity_service.visible_name()
 
-    def _sync_trusted_iphone(self, a, connected):
+    def _sync_trusted_iphone(self, a, connected, peer=None):
         """iPhone (BLE-bonded источник) -> в список доверенных как role=source.
         In-memory: переисточается при подключении, BLE-бонд персистентен сам по себе."""
         entry = next((d for d in a.trusted if d.get("key") == "iphone"), None)
         if entry is None:
             if connected:
                 a.trusted.append({"key": "iphone", "label": "iPhone", "type": "iPhone",
-                                  "role": "source", "online": True, "connected": True})
+                                  "role": "source", "online": True, "connected": True,
+                                  "address": peer or ""})
         else:
             entry["connected"] = bool(connected)
             entry["online"] = bool(connected) or entry.get("online", False)
+            if connected and peer:
+                entry["address"] = peer
 
     def render(self):
         try:

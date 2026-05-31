@@ -218,10 +218,10 @@ class SettingsScreen(Screen):
                 return [("trusted_empty", "— нет устройств —")]
             rows = []
             for d in trusted:
-                state = "online" if d.get("online") else "offline"
-                if d.get("connected"):
-                    state = "connected"
-                rows.append(("trusted:" + d["key"], d["label"] + "  ·  " + d["type"] + "  ·  " + state))
+                mark = "●" if d.get("connected") else ("◐" if d.get("online") else "○")
+                addr = d.get("address") or "—"
+                # имя + MAC + компактный индикатор (без повтора имени/слова "connected")
+                rows.append(("trusted:" + d["key"], f"{mark} {d['label']}   {addr}"))
             return rows
         return it.get("children", [])
 
@@ -254,9 +254,10 @@ class SettingsScreen(Screen):
 
     def on_input(self, event):
         rows = self._visible()
-        if event in (Input.ENCODER_CW, Input.SWIPE_UP):     # swipe up = move down the list
+        # палец/контент тянем вниз -> идём ВНИЗ по списку (не инвертировано)
+        if event == Input.ENCODER_CW or event == Input.SWIPE_DOWN:
             self.sel = (self.sel + 1) % len(rows); return True
-        if event in (Input.ENCODER_CCW, Input.SWIPE_DOWN):
+        if event == Input.ENCODER_CCW or event == Input.SWIPE_UP:
             self.sel = (self.sel - 1) % len(rows); return True
         if event == Input.PRESS:
             self._activate(self.sel)
