@@ -126,18 +126,20 @@ ENCODER_ARC_A0 = 131                  # visible arc span: bottom-left …
 ENCODER_ARC_A1 = 229                  # … to top-left (traces the physical dial edge)
 
 
-ENCODER_ZONE_GAP = 18                 # отступ сегмента-индикатора от дуги (не сливается)
+ENCODER_ZONE_GAP = 6                  # минимальный зазор от дуги (только чтоб не слиплось)
 
 
 def encoder_zone_glow(draw, alpha):
-    """Индикатор ANCS: мигание ВСЕЙ зоны под энкодером (сегмент диска справа от дуги),
-    ЯРКИМ белым, с отступом от дуги. Дуга/громкость рисуются ПОВЕРХ. Не отдельная точка."""
+    """Индикатор ANCS: мигание ВСЕЙ зоны под энкодером (сегмент диска справа от дуги).
+    Пульс БЕЛЫЙ↔КРАСНЫЙ (всегда яркий, без серого): R=255 всегда, G/B пульсируют.
+    Дуга/громкость рисуются ПОВЕРХ. Не отдельная точка."""
     cy = ENCODER_ARC_CY
     cx = CONTENT_X1 + ENCODER_ARC_R                  # центр тот же, что у дуги (off-screen)
-    R = ENCODER_ARC_R - ENCODER_ZONE_GAP             # меньший радиус -> зазор от дуги
+    R = ENCODER_ARC_R - ENCODER_ZONE_GAP             # минимальный зазор от дуги
     bbox = [cx - R, cy - R, cx + R, cy + R]
-    w = int(255 * max(0.0, min(1.0, alpha)))         # ЯРКИЙ белый (мигает через alpha)
-    draw.pieslice(bbox, start=ENCODER_ARC_A0, end=ENCODER_ARC_A1, fill=(w, w, w))
+    a = max(0.0, min(1.0, (alpha - 0.35) / 0.65))    # растянуть диапазон pulse в 0..1
+    gb = int(255 * a)                                # red(255,0,0) -> white(255,255,255)
+    draw.pieslice(bbox, start=ENCODER_ARC_A0, end=ENCODER_ARC_A1, fill=(255, gb, gb))
 
 
 def encoder_arc(draw, level=None, color=FAINT, width=2):
