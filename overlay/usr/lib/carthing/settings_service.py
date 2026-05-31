@@ -20,6 +20,13 @@ _DEFAULTS = {
     "screen_off_after_sec": 150,
     "screen_active_brightness": 100,
     "screen_dim_brightness": 12,
+    "runtime_quiet_after_sec": 20,
+    "render_interval_active_sec": 0.2,
+    "render_interval_quiet_sec": 1.0,
+    "render_interval_off_sec": 2.0,
+    "publish_interval_active_sec": 1.0,
+    "publish_interval_quiet_sec": 10.0,
+    "publish_interval_off_sec": 30.0,
 }
 
 

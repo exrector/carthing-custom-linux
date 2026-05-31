@@ -1,7 +1,9 @@
-"""Idle power policy for the Car Thing userspace.
+"""Runtime power policy for the Car Thing userspace.
 
-Stage 1 is deliberately conservative: only the LCD backlight is dimmed/off.
-USB, Bluetooth, SSH, and recovery paths stay alive.
+The controller intentionally keeps transport links alive. Power saving starts
+above Bluetooth/USB: backlight, render cadence, heartbeat publish cadence, and
+mode-aware UI wakeups. A bonded iPhone should be connected-but-quiet, not forced
+through disconnect/reconnect loops.
 """
 
 from __future__ import annotations
@@ -20,11 +22,23 @@ class IdlePowerController:
         self.enabled = self._setting("sleep_on_idle", True)
         self.dim_after = float(self._setting("screen_dim_after_sec", 45))
         self.off_after = float(self._setting("screen_off_after_sec", 150))
+        self.quiet_after = float(self._setting("runtime_quiet_after_sec", 20))
         self.active_brightness = int(self._setting("screen_active_brightness", 100))
         self.dim_brightness = int(self._setting("screen_dim_brightness", 12))
+        self.render_interval_active = float(self._setting("render_interval_active_sec", 0.2))
+        self.render_interval_quiet = float(self._setting("render_interval_quiet_sec", 1.0))
+        self.render_interval_off = float(self._setting("render_interval_off_sec", 2.0))
+        self.publish_interval_active = float(self._setting("publish_interval_active_sec", 1.0))
+        self.publish_interval_quiet = float(self._setting("publish_interval_quiet_sec", 10.0))
+        self.publish_interval_off = float(self._setting("publish_interval_off_sec", 30.0))
         self._last_activity = time.monotonic()
+        self._last_publish = 0.0
         self._last_content_signature = None
-        self._state = "init"
+        self._display_state = "init"
+        self._runtime_tier = "boot"
+        self._pairing_armed = False
+        self._transfer_active = False
+        self._transfer_scanning_until = 0.0
         self._max_brightness = self._read_int("max_brightness", default=255)
         self._active_brightness = self.active_brightness
         self._active_brightness = max(1, min(self._active_brightness, self._max_brightness))
@@ -34,13 +48,14 @@ class IdlePowerController:
             self.enabled = False
         elif self.enabled:
             logger.info(
-                "Power: idle backlight policy active dim=%ss off=%ss active=%s dim_level=%s",
+                "Power: runtime policy active dim=%ss off=%ss quiet=%ss active=%s dim_level=%s",
                 self.dim_after,
                 self.off_after,
+                self.quiet_after,
                 self._active_brightness,
                 self.dim_brightness,
             )
-            self._set_state("active")
+            self._set_display_state("active")
 
     @staticmethod
     def _find_backlight(root: Path) -> Path | None:
@@ -81,8 +96,8 @@ class IdlePowerController:
         except Exception as e:
             logger.debug("Power: write %s failed: %s", path, e)
 
-    def _set_state(self, state: str) -> None:
-        if not self.enabled or state == self._state:
+    def _set_display_state(self, state: str) -> None:
+        if not self.enabled or state == self._display_state:
             return
         if state == "active":
             self._write_int("bl_power", 0)
@@ -97,16 +112,38 @@ class IdlePowerController:
             self._write_int("bl_power", 4)
         else:
             return
-        self._state = state
+        self._display_state = state
         logger.info("Power: display %s", state)
+
+    def _set_runtime_tier(self, tier: str) -> None:
+        if tier == self._runtime_tier:
+            return
+        self._runtime_tier = tier
+        logger.info("Power: runtime tier %s", tier)
 
     def note_activity(self, reason="activity") -> None:
         if not self.enabled:
             return
         self._last_activity = time.monotonic()
-        if self._state != "active":
+        if self._display_state != "active":
             logger.info("Power: wake by %s", reason)
-        self._set_state("active")
+        self._set_display_state("active")
+
+    def set_pairing(self, armed: bool) -> None:
+        armed = bool(armed)
+        if armed == self._pairing_armed:
+            return
+        self._pairing_armed = armed
+        self.note_activity("pairing" if armed else "pairing_done")
+
+    def note_transfer_scan(self, hold_sec: float = 20.0) -> None:
+        if not self.enabled:
+            return
+        self._transfer_scanning_until = max(
+            self._transfer_scanning_until,
+            time.monotonic() + max(1.0, float(hold_sec)),
+        )
+        self.note_activity("transfer_scan")
 
     def note_model(self, model) -> None:
         """Wake briefly for meaningful content changes, not for position ticks."""
@@ -114,10 +151,13 @@ class IdlePowerController:
             return
         session = getattr(model, "session", None)
         notifications = getattr(model, "notifications", []) or []
+        self._transfer_active = bool(getattr(model, "transfer_active", False))
         signature = (
+            getattr(session, "source", None),
             getattr(session, "connected", None),
             getattr(session, "title", None),
             getattr(session, "artist", None),
+            getattr(session, "playing", None),
             tuple(n.get("uid") for n in notifications if isinstance(n, dict)),
         )
         if self._last_content_signature is None:
@@ -129,16 +169,60 @@ class IdlePowerController:
 
     def tick(self) -> str:
         if not self.enabled:
-            return self._state
-        idle = time.monotonic() - self._last_activity
-        if idle >= self.off_after:
-            self._set_state("off")
-        elif idle >= self.dim_after:
-            self._set_state("dim")
+            return self._display_state
+        now = time.monotonic()
+        idle = now - self._last_activity
+        scanning = now < self._transfer_scanning_until
+
+        if self._pairing_armed:
+            self._set_runtime_tier("pairing")
+        elif self._transfer_active or scanning:
+            self._set_runtime_tier("transfer")
+        elif idle >= self.off_after:
+            self._set_runtime_tier("screen_off")
+        elif idle >= self.quiet_after:
+            self._set_runtime_tier("connected_quiet")
         else:
-            self._set_state("active")
-        return self._state
+            self._set_runtime_tier("interactive")
+
+        if self._pairing_armed:
+            self._set_display_state("active")
+        elif idle >= self.off_after:
+            self._set_display_state("off")
+        elif idle >= self.dim_after:
+            self._set_display_state("dim")
+        else:
+            self._set_display_state("active")
+        return self._display_state
+
+    @property
+    def runtime_tier(self) -> str:
+        return self._runtime_tier
+
+    @property
+    def render_interval(self) -> float:
+        if self._display_state == "off":
+            return self.render_interval_off
+        if self._runtime_tier in ("connected_quiet", "screen_off") or self._display_state == "dim":
+            return self.render_interval_quiet
+        return self.render_interval_active
+
+    def should_publish(self) -> bool:
+        now = time.monotonic()
+        if self._last_publish <= 0:
+            self._last_publish = now
+            return True
+        if self._runtime_tier == "screen_off" or self._display_state == "off":
+            interval = self.publish_interval_off
+        elif self._runtime_tier == "connected_quiet":
+            interval = self.publish_interval_quiet
+        else:
+            interval = self.publish_interval_active
+        if now - self._last_publish >= interval:
+            self._last_publish = now
+            return True
+        return False
 
     @property
     def display_awake(self) -> bool:
-        return self._state != "off"
+        return self._display_state != "off"

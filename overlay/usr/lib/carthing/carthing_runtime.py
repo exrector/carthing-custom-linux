@@ -57,6 +57,8 @@ def _on_command(source, command):
 
 
 def _on_pairing(enabled):
+    if power is not None:
+        power.set_pairing(bool(enabled))
     if orch is not None:
         asyncio.ensure_future(orch.arm_pairing(bool(enabled)))
     if gui is not None:
@@ -64,11 +66,15 @@ def _on_pairing(enabled):
 
 
 def _on_transfer_rescan():
+    if power is not None:
+        power.note_transfer_scan()
     if transfer is not None:
         asyncio.ensure_future(transfer.rescan())
 
 
 def _on_transfer_select(address):
+    if power is not None:
+        power.note_activity("transfer_select")
     if transfer is not None:
         asyncio.ensure_future(transfer.select(address))
 
@@ -150,6 +156,8 @@ async def _on_connection(connection):
 
     if gui is not None:
         gui.set_pairing_mode(False)   # авто-закрыть pairing-модалку на коннекте
+    if power is not None:
+        power.set_pairing(False)
 
     if getattr(connection, "is_encrypted", False):
         await _start_ams("connected-encrypted")
@@ -246,10 +254,12 @@ async def main():
                 gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
                 if power is None or power.display_awake:
                     gui.render()
-            if not shade and tick % PUBLISH_EVERY == 0:
+            publish_due = (tick % PUBLISH_EVERY == 0) if power is None else power.should_publish()
+            if not shade and publish_due:
                 _on_publish()         # runtime-bt.json для дирижёра/sync
             tick += 1
-            await asyncio.sleep(RENDER_INTERVAL)
+            interval = RENDER_INTERVAL if power is None else power.render_interval
+            await asyncio.sleep(interval)
 
     asyncio.ensure_future(_render_loop())
 
