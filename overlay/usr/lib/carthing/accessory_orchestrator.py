@@ -138,12 +138,12 @@ class AccessoryOrchestrator:
             pass
         if connected:
             await self._advertise_silent()
-        elif self.pairing_armed or phase in (PAIRING, CLASSIC_READY_NEEDS_LE):
-            await self._advertise_general()        # видим, принимаем новых (как источник)
+        elif self.pairing_armed:
+            await self._advertise_general()        # видим ТОЛЬКО в режиме сопряжения (из меню)
         elif le_addr is not None:
-            await self._advertise_bonded_only()     # НЕПРЕРЫВНО: iPhone реконнектит в любой момент
+            await self._advertise_bonded_only()     # sticky: реконнект к УЖЕ-bonded iPhone (nameless)
         else:
-            await self._advertise_silent()          # тишина, отказ всем
+            await self._advertise_silent()          # нет бонда + не сопряжение -> ПОЛНАЯ ТИШИНА
 
         logger.info("Visibility: phase=%s pairing_armed=%s transfer_conn=%s",
                     phase, self.pairing_armed, self.transfer_connectable)
