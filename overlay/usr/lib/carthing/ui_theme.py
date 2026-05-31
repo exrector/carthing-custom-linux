@@ -227,6 +227,22 @@ def progress_segments(draw, x0, y, w, level, n=32, gap=4):
         draw.rectangle([x, y - h, x + seg_w, y + h], fill=col)
 
 
+def icon_heart(draw, cx, cy, r, color=FG, filled=False, width=3):
+    """Сердце (параметрическая кривая). filled=False -> контур («нажми, чтобы в избранное»);
+    состояние «уже лайкнуто» AMS не сообщает, поэтому по умолчанию контур, не заливка."""
+    import math
+    pts = []
+    for i in range(0, 360, 10):
+        t = math.radians(i)
+        x = 16 * math.sin(t) ** 3
+        y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+        pts.append((cx + x * r / 16.0, cy - y * r / 16.0))
+    if filled:
+        draw.polygon(pts, fill=color)
+    else:
+        draw.line(pts + [pts[0]], fill=color, width=width)
+
+
 def icon_chevron(draw, cx, cy, r, color=MUTED, expanded=False, width=3):
     # accordion indicator: ▸ collapsed / ▾ expanded
     if expanded:

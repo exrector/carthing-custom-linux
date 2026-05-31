@@ -11,7 +11,7 @@ import time as _time
 from ams_client import (
     AMSClient, MediaState,
     CMD_TOGGLE, CMD_NEXT, CMD_PREV, CMD_VOL_UP, CMD_VOL_DOWN,
-    CMD_SKIP_FWD, CMD_SKIP_BACK,
+    CMD_SKIP_FWD, CMD_SKIP_BACK, CMD_LIKE, CMD_DISLIKE,
 )
 
 # GUI-intent -> AMS command (play/pause оба = TOGGLE: у AMS нет раздельных).
@@ -20,6 +20,7 @@ _AMS_CMD = {
     "next": CMD_NEXT, "prev": CMD_PREV, "previous": CMD_PREV,
     "vol_up": CMD_VOL_UP, "vol_down": CMD_VOL_DOWN,
     "skip_fwd": CMD_SKIP_FWD, "skip_back": CMD_SKIP_BACK,
+    "like": CMD_LIKE, "dislike": CMD_DISLIKE,
 }
 
 try:

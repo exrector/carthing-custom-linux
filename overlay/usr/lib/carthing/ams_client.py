@@ -40,6 +40,8 @@ CMD_VOL_DOWN = 6
 # приложение (Podcasts ~15-30с; Music обычно НЕ заявляет 9/10 для песен).
 CMD_SKIP_FWD  = 9
 CMD_SKIP_BACK = 10
+CMD_LIKE      = 11
+CMD_DISLIKE   = 12
 
 # Человекочитаемые имена для лога supported-списка.
 CMD_NAMES = {
@@ -237,3 +239,5 @@ class AMSClient:
     async def vol_down(self):  await self.send_command(CMD_VOL_DOWN)
     async def skip_fwd(self):  await self.send_command(CMD_SKIP_FWD)
     async def skip_back(self): await self.send_command(CMD_SKIP_BACK)
+    async def like(self):      await self.send_command(CMD_LIKE)
+    async def dislike(self):   await self.send_command(CMD_DISLIKE)

@@ -32,6 +32,10 @@ class Dispatcher:
             self._media("skip_fwd")
         elif intent == "media_skip_back":
             self._media("skip_back")
+        elif intent == "media_like":
+            self._media("like")
+        elif intent == "media_dislike":
+            self._media("dislike")
         elif intent == "media_vol_up":
             self._media("vol_up")
         elif intent == "media_vol_down":
