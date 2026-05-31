@@ -126,6 +126,16 @@ ENCODER_ARC_A0 = 131                  # visible arc span: bottom-left …
 ENCODER_ARC_A1 = 229                  # … to top-left (traces the physical dial edge)
 
 
+def encoder_zone_glow(draw, alpha):
+    """Индикатор ANCS: пульс ВСЕЙ зоны под энкодером (видимый сегмент диска справа от дуги).
+    Заполняет сегмент мягким белым; дуга/громкость рисуются ПОВЕРХ. Не отдельная точка."""
+    R, cy = ENCODER_ARC_R, ENCODER_ARC_CY
+    cx = CONTENT_X1 + R                              # центр окружности off-screen справа
+    bbox = [cx - R, cy - R, cx + R, cy + R]
+    w = int(150 * max(0.0, min(1.0, alpha)))         # мягкий белый пульс, не слепящий
+    draw.pieslice(bbox, start=ENCODER_ARC_A0, end=ENCODER_ARC_A1, fill=(w, w, w))
+
+
 def encoder_arc(draw, level=None, color=FAINT, width=2):
     """Outline of the physical rotary dial: a large circle centered off-screen to
     the right, so only its left arc bulges onto the screen edge.
