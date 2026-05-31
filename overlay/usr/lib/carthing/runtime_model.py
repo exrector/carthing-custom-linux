@@ -110,12 +110,15 @@ class RuntimeModel:
             self.transfer_control_available = True
 
     # ── уведомления (зеркало iPhone) ─────────────────────────────────────────
-    def add_notification(self, uid, app, text):
+    def add_notification(self, uid, app, title, body=""):
+        # title = содержание (у Напоминаний — сам текст; у Сообщений — отправитель);
+        # body = вторичное (дата/время, текст сообщения). Несём оба — единого «того
+        # самого» поля у iOS нет, оно разное для разных приложений.
         for n in self.notifications:
             if n["uid"] == uid:
-                n["app"], n["text"] = app, text
+                n["app"], n["title"], n["body"] = app, title, body
                 return
-        self.notifications.append({"uid": uid, "app": app, "text": text})
+        self.notifications.append({"uid": uid, "app": app, "title": title, "body": body})
 
     def remove_notification(self, uid):
         self.notifications = [n for n in self.notifications if n["uid"] != uid]
@@ -138,7 +141,7 @@ class RuntimeModel:
             },
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
             "notifications": {"count": len(self.notifications),
-                              "last": (self.notifications[-1]["text"] if self.notifications else None)},
+                              "last": (self.notifications[-1]["title"] if self.notifications else None)},
             "transfer_active": self.transfer_active,
             "transfer_control_available": self.transfer_control_available,
         }

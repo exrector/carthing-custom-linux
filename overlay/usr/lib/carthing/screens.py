@@ -351,14 +351,23 @@ class NotificationsScreen(Screen):
         top = max(0, min(sel - per // 2, len(notes) - per))
         y = CONTENT_TOP + 50
         maxw = T.CONTENT_W - 24
+        pitch = 80
         for i in range(top, min(top + per, len(notes))):
             n = notes[i]
             if i == sel:
-                draw.rectangle([20, y - 8, T.CONTENT_X1, y + 70], fill=T.HAIRLINE)
+                draw.rectangle([20, y - 6, T.CONTENT_X1, y + pitch - 14], fill=T.HAIRLINE)
             draw.text((40, y), n.get("app", ""), font=T.font(T.SZ_SMALL), fill=T.ACCENT)
-            draw.text((40, y + 30), C.truncate(draw, n.get("text", ""), T.font(T.SZ_BODY), maxw),
-                      font=T.font(T.SZ_BODY), fill=T.FG)
-            y += 92
+            # title = содержание (главная строка, белым)
+            draw.text((40, y + 22),
+                      C.truncate(draw, n.get("title", ""), T.font(T.SZ_META), maxw),
+                      font=T.font(T.SZ_META), fill=T.FG)
+            # body = вторичное (дата/время/текст сообщения), приглушённым; только если есть
+            body = n.get("body", "")
+            if body:
+                draw.text((40, y + 52),
+                          C.truncate(draw, body, T.font(T.SZ_SMALL), maxw),
+                          font=T.font(T.SZ_SMALL), fill=T.MUTED)
+            y += pitch
         C.text_centered(draw, "← смахни, чтобы очистить", T.font(T.SZ_META), T.FAINT,
                         T.OCCLUSION_BOTTOM - 14, cx=T.CONTENT_CX)
         return img

@@ -70,7 +70,16 @@ BUNDLE_NAMES = {
     "com.burbn.instagram": "Instagram",
     "com.google.Gmail": "Gmail",
     "com.atebits.Tweetie2": "X",
+    "ai.perplexity.app": "Perplexity",
+    "com.openai.chat": "ChatGPT",
+    "com.apple.news": "Новости",
+    "com.apple.podcasts": "Подкасты",
+    "com.spotify.client": "Spotify",
+    "com.google.ios.youtube": "YouTube",
 }
+
+# Родовые хвосты bundle id — их пропускаем при fallback (ai.perplexity.app -> Perplexity).
+_GENERIC_SEGMENTS = {"app", "apps", "ios", "iphone", "ipad", "mobile", "application", "client"}
 
 ATTR_APP_IDENTIFIER         = 0
 ATTR_TITLE                  = 1
@@ -107,11 +116,20 @@ class Notification:
 
     @property
     def app_name(self) -> str:
-        """Дружелюбное имя приложения (карта + fallback на последний сегмент bundle id)."""
+        """Дружелюбное имя приложения: карта bundle id, иначе последний ЗНАЧИМЫЙ сегмент
+        (пропуская родовые app/ios/mobile/…) с капитализацией. ai.perplexity.app -> Perplexity."""
         if self.app_id in BUNDLE_NAMES:
             return BUNDLE_NAMES[self.app_id]
-        seg = self.app_id.rsplit(".", 1)[-1] if self.app_id else ""
-        return seg or self.app_id
+        if not self.app_id:
+            return ""
+        parts = self.app_id.split(".")
+        seg = ""
+        for p in reversed(parts):
+            if p and p.lower() not in _GENERIC_SEGMENTS:
+                seg = p
+                break
+        seg = seg or parts[-1]
+        return seg[:1].upper() + seg[1:] if seg.islower() else seg
 
     @property
     def category(self) -> str:

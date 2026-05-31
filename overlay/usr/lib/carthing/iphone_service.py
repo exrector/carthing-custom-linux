@@ -97,9 +97,14 @@ class IPhoneService:
 
     # ── ANCS -> список уведомлений (зеркало iPhone) ──────────────────────────
     def _on_notif(self, notif):
-        # Без заголовков: имя приложения + текст (body); если body пуст — title как fallback.
-        text = (getattr(notif, "message", "") or getattr(notif, "title", "") or "").strip()
-        self.model.add_notification(notif.uid, notif.app_name, text)
+        # Несём title и body РАЗДЕЛЬНО: у iOS «текст» лежит в разных полях для разных
+        # приложений (Напоминания: title=текст, message=дата; Сообщения: title=отправитель,
+        # message=текст). title = главное содержание, body = вторичное.
+        title = (getattr(notif, "title", "") or "").strip()
+        body = (getattr(notif, "message", "") or getattr(notif, "subtitle", "") or "").strip()
+        if not title:                      # если title пуст — поднять body в заголовок
+            title, body = body, ""
+        self.model.add_notification(notif.uid, notif.app_name, title, body)
         self._publish()
 
     def _on_removed(self, uid):
