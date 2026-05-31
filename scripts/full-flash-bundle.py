@@ -36,6 +36,11 @@ def import_flasher(bundle: Path):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("bundle", type=Path, help="flash bundle containing bootfs.bin and rootfs.img")
+    parser.add_argument(
+        "--no-reboot",
+        action="store_true",
+        help="leave the device in Burn Mode instead of sending a final reset command",
+    )
     args = parser.parse_args()
 
     bundle = args.bundle.resolve()
@@ -54,7 +59,14 @@ def main() -> int:
     dev.bulkcmd("amlmmc key", ignore_timeout=True)
     dev = flasher.write_image(dev, str(bootfs), 0, "BOOTFS")
     dev = flasher.write_image(dev, str(rootfs), flasher.ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
-    print("\n=== DONE. Power-cycle without buttons for normal boot. ===", flush=True)
+    if args.no_reboot:
+        print("\n=== DONE. Device left in Burn Mode (--no-reboot). ===", flush=True)
+        return 0
+
+    print("\n=== DONE. Sending reset for normal boot. ===", flush=True)
+    print("If the reset command times out, that is expected when the device reboots.", flush=True)
+    dev.bulkcmd("reset", ignore_timeout=True)
+    print("If normal boot does not appear, reconnect USB without holding buttons.", flush=True)
     return 0
 
 
