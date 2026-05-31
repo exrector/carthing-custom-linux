@@ -354,11 +354,14 @@ class NotificationsScreen(Screen):
             return img
 
         sel = max(0, min(self.sel, len(notes) - 1))
+        S = T.SZ_META                                     # ЕДИНЫЙ мелкий размер на все строки
+        f = T.font(S)
         x0 = 28
         maxw = T.W - x0 - 40
-        start_y = 78
-        pitch = 116                                       # крупные строки на весь экран
-        per = max(1, (T.H - start_y - 8) // pitch)
+        start_y = 76
+        pitch = 98
+        block_h = 90                                      # высота одного блока (полоса на всю)
+        per = max(1, (T.H - start_y) // pitch)
         # прокрутка: держим выбранное в окне
         if sel < self.top:
             self.top = sel
@@ -370,19 +373,18 @@ class NotificationsScreen(Screen):
         tx = x0 + 24
         for i in range(self.top, min(self.top + per, len(notes))):
             n = notes[i]
-            if i == sel:                                  # зелёная полоса слева (без серого фона)
-                draw.rectangle([x0, y - 4, x0 + 7, y + pitch - 28], fill=T.ACCENT)
-            draw.text((tx, y), n.get("app", ""), font=T.font(T.SZ_META), fill=T.ACCENT)
-            draw.text((tx, y + 34),
-                      C.truncate(draw, n.get("title", ""), T.font(T.SZ_TITLE), maxw),
-                      font=T.font(T.SZ_TITLE), fill=T.FG)
+            if i == sel:                                  # зелёная полоса на ВЕСЬ блок (без серого фона)
+                draw.rectangle([x0, y - 6, x0 + 7, y - 6 + block_h], fill=T.ACCENT)
+            draw.text((tx, y), n.get("app", ""), font=f, fill=T.ACCENT)         # источник (зелёный)
+            draw.text((tx, y + 28),                                             # содержание — ЖИРНЫМ
+                      C.truncate(draw, n.get("title", ""), f, maxw),
+                      font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG)
             body = n.get("body", "")
             if body:
-                draw.text((tx, y + 76),
-                          C.truncate(draw, body, T.font(T.SZ_BODY), maxw),
-                          font=T.font(T.SZ_BODY), fill=T.MUTED)
+                draw.text((tx, y + 56),                                         # вторичное (приглушённо)
+                          C.truncate(draw, body, f, maxw), font=f, fill=T.MUTED)
             if regions is not None:
-                regions.add((x0, y - 4, T.W - 24, y + pitch - 28), "notif_select", payload=i)
+                regions.add((x0, y - 6, T.W - 24, y - 6 + block_h), "notif_select", payload=i)
             y += pitch
         return img
 
