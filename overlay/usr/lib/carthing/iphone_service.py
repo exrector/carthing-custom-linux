@@ -11,6 +11,7 @@ import time as _time
 from ams_client import (
     AMSClient, MediaState,
     CMD_TOGGLE, CMD_NEXT, CMD_PREV, CMD_VOL_UP, CMD_VOL_DOWN,
+    CMD_SKIP_FWD, CMD_SKIP_BACK,
 )
 
 # GUI-intent -> AMS command (play/pause оба = TOGGLE: у AMS нет раздельных).
@@ -18,6 +19,7 @@ _AMS_CMD = {
     "play": CMD_TOGGLE, "pause": CMD_TOGGLE, "toggle": CMD_TOGGLE,
     "next": CMD_NEXT, "prev": CMD_PREV, "previous": CMD_PREV,
     "vol_up": CMD_VOL_UP, "vol_down": CMD_VOL_DOWN,
+    "skip_fwd": CMD_SKIP_FWD, "skip_back": CMD_SKIP_BACK,
 }
 
 try:
@@ -50,7 +52,8 @@ class IPhoneService:
         except Exception:
             sess.peer = None
 
-        self.ams = AMSClient(self._ams_state, on_update=self._on_ams)
+        self.ams = AMSClient(self._ams_state, on_update=self._on_ams,
+                             on_commands=self._on_commands)
         ok = await self.ams.setup(connection)
 
         if ANCSClient is not None:
@@ -85,6 +88,11 @@ class IPhoneService:
         sess._rate = getattr(s, "_rate", 1.0)
         sess._ts = getattr(s, "_ts", _time.monotonic())
         sess.playing = s.playing
+        self._publish()
+
+    # ── AMS supported-команды -> сессия (GUI рисует только рабочие кнопки) ────
+    def _on_commands(self, cmds):
+        self.model.session.supported_commands = set(cmds)
         self._publish()
 
     # ── ANCS -> список уведомлений (зеркало iPhone) ──────────────────────────

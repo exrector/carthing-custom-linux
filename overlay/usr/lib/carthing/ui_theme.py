@@ -125,6 +125,42 @@ def icon_ring(draw, cx, cy, r, color=FG, width=2):
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=color, width=width)
 
 
+def _arrowhead(draw, x, y, dx, dy, size, color):
+    """Маленький треугольник-наконечник в точке (x,y), указывающий в (dx,dy)."""
+    import math
+    ang = math.atan2(dy, dx)
+    a1 = ang + math.radians(140)
+    a2 = ang - math.radians(140)
+    p1 = (x + size * math.cos(a1), y + size * math.sin(a1))
+    p2 = (x + size * math.cos(a2), y + size * math.sin(a2))
+    draw.polygon([(x, y), p1, p2], fill=color)
+
+
+def icon_skip_back(draw, cx, cy, r, color=FG, width=3):
+    """Перемотка назад на интервал: круговая стрелка против часовой (петля с разрывом
+    сверху, наконечник вверху-слева). Интервал задаёт само приложение (не рисуем число)."""
+    import math
+    bbox = [cx - r, cy - r, cx + r, cy + r]
+    draw.arc(bbox, start=300, end=210, fill=color, width=width)   # разрыв сверху
+    # наконечник в точке конца дуги (angle=300°), касательная против часовой
+    a = math.radians(300)
+    ex, ey = cx + r * math.cos(a), cy + r * math.sin(a)
+    _arrowhead(draw, ex, ey, math.cos(a - math.radians(90)), math.sin(a - math.radians(90)),
+               r * 0.55, color)
+
+
+def icon_skip_fwd(draw, cx, cy, r, color=FG, width=3):
+    """Перемотка вперёд: круговая стрелка по часовой (петля с разрывом сверху,
+    наконечник вверху-справа)."""
+    import math
+    bbox = [cx - r, cy - r, cx + r, cy + r]
+    draw.arc(bbox, start=330, end=240, fill=color, width=width)
+    a = math.radians(240)
+    ex, ey = cx + r * math.cos(a), cy + r * math.sin(a)
+    _arrowhead(draw, ex, ey, math.cos(a + math.radians(90)), math.sin(a + math.radians(90)),
+               r * 0.55, color)
+
+
 ENCODER_ARC_A0 = 131                  # visible arc span: bottom-left …
 ENCODER_ARC_A1 = 229                  # … to top-left (traces the physical dial edge)
 

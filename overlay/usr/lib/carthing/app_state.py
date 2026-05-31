@@ -36,6 +36,8 @@ class MediaSession:
         self.position = 0.0
         self.playing = False
         self.volume = 0.0
+        # AMS RemoteCommand-список текущего приложения (какие кнопки рисовать).
+        self.supported_commands = set()
 
 
 class AppState:

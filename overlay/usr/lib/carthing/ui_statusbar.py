@@ -13,7 +13,12 @@ class StatusBar:
     INTENT_PLAY_PAUSE = "media_play_pause"
     INTENT_PREV = "media_prev"
     INTENT_NEXT = "media_next"
+    INTENT_SKIP_BACK = "media_skip_back"
+    INTENT_SKIP_FWD = "media_skip_fwd"
     INTENT_ASSISTANT = "assistant"
+
+    # AMS RemoteCommandID (дублируем как простые int, чтобы UI-слой не тянул ams_client).
+    _CMD_NEXT, _CMD_PREV, _CMD_SKIP_FWD, _CMD_SKIP_BACK = 3, 4, 9, 10
 
     def render(self, draw, regions, anim, st):
         bar_top = T.STATUSBAR_TOP
@@ -34,19 +39,47 @@ class StatusBar:
             pct = min(control.position / control.duration, 1.0)
         T.progress_segments(draw, 0, bar_top, T.W, pct)
 
-        # ── media transport (center) ──────────────────────────────────────────
-        gap = 140
-        T.icon_prev(draw, cx - gap, cy, 23, color=T.FG)
-        regions.add((cx - gap - 36, cy - 36, cx - gap + 36, cy + 36), self.INTENT_PREV)
+        # ── media transport (center) — рисуем ТОЛЬКО то, что приложение реально
+        # поддерживает (AMS RemoteCommand-список). Music: prev/play/next; Podcasts:
+        # skip_back/play/skip_fwd (+ может next/prev). Play/Pause — всегда. ─────────
+        sup = set(getattr(control, "supported_commands", set()) or set())
+        # порядок слева→направо; play/pause всегда в середине
+        order = []
+        if not sup or self._CMD_SKIP_BACK in sup:
+            if self._CMD_SKIP_BACK in sup:
+                order.append("skip_back")
+        if not sup or self._CMD_PREV in sup:
+            order.append("prev")
+        order.append("play")
+        if not sup or self._CMD_NEXT in sup:
+            order.append("next")
+        if self._CMD_SKIP_FWD in sup:
+            order.append("skip_fwd")
+        # если supported пуст (только что подключились) — дефолт prev/play/next уже собран
 
-        if playing:
-            T.icon_pause(draw, cx, cy, 28, color=T.FG)
-        else:
-            T.icon_play(draw, cx, cy, 28, color=T.FG)
-        regions.add((cx - 42, cy - 42, cx + 42, cy + 42), self.INTENT_PLAY_PAUSE)
-
-        T.icon_next(draw, cx + gap, cy, 23, color=T.FG)
-        regions.add((cx + gap - 36, cy - 36, cx + gap + 36, cy + 36), self.INTENT_NEXT)
+        gap = 120 if len(order) >= 4 else 140
+        n = len(order)
+        start = cx - gap * (n - 1) / 2
+        for i, kind in enumerate(order):
+            bx = int(start + i * gap)
+            if kind == "play":
+                if playing:
+                    T.icon_pause(draw, bx, cy, 28, color=T.FG)
+                else:
+                    T.icon_play(draw, bx, cy, 28, color=T.FG)
+                regions.add((bx - 42, cy - 42, bx + 42, cy + 42), self.INTENT_PLAY_PAUSE)
+            elif kind == "prev":
+                T.icon_prev(draw, bx, cy, 23, color=T.FG)
+                regions.add((bx - 36, cy - 36, bx + 36, cy + 36), self.INTENT_PREV)
+            elif kind == "next":
+                T.icon_next(draw, bx, cy, 23, color=T.FG)
+                regions.add((bx - 36, cy - 36, bx + 36, cy + 36), self.INTENT_NEXT)
+            elif kind == "skip_back":
+                T.icon_skip_back(draw, bx, cy, 22, color=T.FG)
+                regions.add((bx - 36, cy - 36, bx + 36, cy + 36), self.INTENT_SKIP_BACK)
+            elif kind == "skip_fwd":
+                T.icon_skip_fwd(draw, bx, cy, 22, color=T.FG)
+                regions.add((bx - 36, cy - 36, bx + 36, cy + 36), self.INTENT_SKIP_FWD)
 
         # ── clock (left) ──────────────────────────────────────────────────────
         clock = getattr(st, "clock_text", "") or "--:--"

@@ -114,10 +114,12 @@ class GuiController:
             a.iphone.position = s.elapsed
             a.iphone.playing = s.playing
             a.iphone.volume = s.volume
+            a.iphone.supported_commands = set(s.supported_commands)
         else:
             a.iphone.title = a.iphone.artist = ""
             a.iphone.duration = a.iphone.position = 0.0
             a.iphone.playing = False
+            a.iphone.supported_commands = set()
         a.notifications = list(model.notifications)   # [{uid, app, text}] — без iPhone/заголовков
         a.unread_count = len(a.notifications)
         # Зарегистрировать iPhone как доверенный ИСТОЧНИК (чтобы он попал в Settings→Доверенные).

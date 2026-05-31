@@ -34,6 +34,19 @@ CMD_NEXT     = 3
 CMD_PREV     = 4
 CMD_VOL_UP   = 5
 CMD_VOL_DOWN = 6
+# AMS spec: 7=AdvanceRepeat, 8=AdvanceShuffle, 9=SkipForward, 10=SkipBackward,
+# 11=LikeTrack, 12=DislikeTrack, 13=BookmarkTrack. Seek по абсолютной позиции AMS
+# НЕ умеет (бар прогресса остаётся индикатором). Skip±: интервал задаёт само
+# приложение (Podcasts ~15-30с; Music обычно НЕ заявляет 9/10 для песен).
+CMD_SKIP_FWD  = 9
+CMD_SKIP_BACK = 10
+
+# Человекочитаемые имена для лога supported-списка.
+CMD_NAMES = {
+    0: "Play", 1: "Pause", 2: "Toggle", 3: "Next", 4: "Prev",
+    5: "VolUp", 6: "VolDown", 7: "Repeat", 8: "Shuffle",
+    9: "SkipFwd", 10: "SkipBack", 11: "Like", 12: "Dislike", 13: "Bookmark",
+}
 
 
 class MediaState:
@@ -74,9 +87,11 @@ class MediaState:
 
 
 class AMSClient:
-    def __init__(self, state: MediaState, on_update=None):
+    def __init__(self, state: MediaState, on_update=None, on_commands=None):
         self.state = state
         self.on_update = on_update
+        self.on_commands = on_commands        # колбэк: set(int) поддерживаемых команд
+        self.supported = set()                # текущий supported-список (меняется с приложением)
         self._remote_cmd_char = None
         self._client = None
 
@@ -107,6 +122,15 @@ class AMSClient:
             return False
 
         self._remote_cmd_char = remote_cmd
+
+        # Subscribe to RemoteCommand notifications: iPhone NOTIFIES the array of
+        # currently-supported RemoteCommandIDs (меняется при смене приложения/состояния).
+        # Тот же характеристик мы используем для записи команд — это нормально по AMS spec.
+        try:
+            await remote_cmd.subscribe(self._handle_remote_command_update)
+            logger.info("AMS: subscribed to RemoteCommand (supported-commands list)")
+        except Exception as e:
+            logger.warning("AMS: RemoteCommand subscribe failed: %s", e)
 
         # Subscribe to EntityUpdate notifications
         await entity_upd.subscribe(self._handle_entity_update)
@@ -176,9 +200,29 @@ class AMSClient:
         if self.on_update:
             self.on_update(self.state)
 
+    def _handle_remote_command_update(self, value):
+        """Notify на RemoteCommand = массив байт, каждый = поддерживаемый RemoteCommandID.
+        Меняется при смене активного приложения/состояния (Music vs Podcasts и т.п.).
+        Источник истины «какие кнопки реально работают сейчас»."""
+        cmds = set(value) if value else set()
+        if cmds == self.supported:
+            return
+        self.supported = cmds
+        names = [CMD_NAMES.get(c, str(c)) for c in sorted(cmds)]
+        logger.info("AMS: supported commands -> %s", names)
+        if self.on_commands:
+            try:
+                self.on_commands(set(cmds))
+            except Exception as e:
+                logger.warning("on_commands callback error: %s", e)
+
     async def send_command(self, cmd_id: int):
         if not self._remote_cmd_char:
             logger.warning("AMS: not connected")
+            return
+        if self.supported and cmd_id not in self.supported:
+            logger.info("AMS: command %s not supported by current app — skip",
+                        CMD_NAMES.get(cmd_id, cmd_id))
             return
         try:
             await self._remote_cmd_char.write_value(bytes([cmd_id]), with_response=True)
@@ -186,8 +230,10 @@ class AMSClient:
         except Exception as e:
             logger.error("AMS send_command error: %s", e)
 
-    async def toggle(self):   await self.send_command(CMD_TOGGLE)
-    async def next(self):     await self.send_command(CMD_NEXT)
-    async def prev(self):     await self.send_command(CMD_PREV)
-    async def vol_up(self):   await self.send_command(CMD_VOL_UP)
-    async def vol_down(self): await self.send_command(CMD_VOL_DOWN)
+    async def toggle(self):    await self.send_command(CMD_TOGGLE)
+    async def next(self):      await self.send_command(CMD_NEXT)
+    async def prev(self):      await self.send_command(CMD_PREV)
+    async def vol_up(self):    await self.send_command(CMD_VOL_UP)
+    async def vol_down(self):  await self.send_command(CMD_VOL_DOWN)
+    async def skip_fwd(self):  await self.send_command(CMD_SKIP_FWD)
+    async def skip_back(self): await self.send_command(CMD_SKIP_BACK)

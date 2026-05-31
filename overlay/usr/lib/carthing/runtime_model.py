@@ -48,6 +48,9 @@ class MediaSession:
         self._elapsed = 0.0           # снимок elapsed от источника (AMS/AVRCP)
         self._rate = 1.0              # playbackRate
         self._ts = 0.0                # monotonic снимка
+        # Какие транспорт-команды реально поддерживает текущее приложение (AMS
+        # RemoteCommand-список). Меняется Music<->Podcasts. GUI рисует ТОЛЬКО их.
+        self.supported_commands = set()
 
     def set_playback(self, elapsed, rate, playing):
         self._elapsed = float(elapsed or 0.0)
@@ -131,6 +134,7 @@ class RuntimeModel:
                 "playing": s.playing,
                 "elapsed": round(s.elapsed, 1),
                 "duration": round(s.duration, 1),
+                "supported_commands": sorted(s.supported_commands),
             },
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
             "notifications": {"count": len(self.notifications),
