@@ -93,8 +93,8 @@ ATTR_NEGATIVE_ACTION_LABEL  = 7
 DEFAULT_ATTRS_WITH_LEN = (
     (ATTR_TITLE,    255),
     (ATTR_SUBTITLE, 255),
-    (ATTR_MESSAGE,  255),
-)
+    (ATTR_MESSAGE,  512),   # тело: берём максимум доступного сниппета (письма длинные).
+)                           # Полное письмо по ANCS НЕдоступно — это лишь превью из шторки.
 DEFAULT_ATTRS_NO_LEN = (
     ATTR_APP_IDENTIFIER,
     ATTR_DATE,

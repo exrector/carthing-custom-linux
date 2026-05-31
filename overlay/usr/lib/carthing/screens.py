@@ -314,6 +314,7 @@ class NotificationsScreen(Screen):
         self.emit = emit or (lambda intent, payload=None: None)
         self.sel = 0
         self.top = 0
+        self.detail_uid = None         # None = список; иначе uid развёрнутой карточки
 
     def on_state(self, state):
         self.state = state
@@ -326,15 +327,35 @@ class NotificationsScreen(Screen):
         if notes:
             self.sel = max(0, min(i, len(notes) - 1))
 
+    def open_detail(self, i):
+        notes = self._notes()
+        if 0 <= i < len(notes):
+            self.sel = i
+            self.detail_uid = notes[i].get("uid")
+
+    def close_detail(self):
+        self.detail_uid = None
+
     def on_input(self, event):
         notes = self._notes()
         if not notes:
             return False
+        # ── детальный режим: одна развёрнутая карточка ───────────────────────
+        if self.detail_uid is not None:
+            if event in (Input.PRESS, Input.SWIPE_RIGHT):
+                self.detail_uid = None; return True            # назад к списку
+            if event == Input.SWIPE_LEFT:
+                self.emit("notif_dismiss", self.detail_uid)    # очистить и назад
+                self.detail_uid = None; return True
+            return False
+        # ── список ───────────────────────────────────────────────────────────
         self.sel = max(0, min(self.sel, len(notes) - 1))
         if event in (Input.ENCODER_CW, Input.SWIPE_DOWN):      # вниз по списку
             self.sel = min(self.sel + 1, len(notes) - 1); return True
         if event in (Input.ENCODER_CCW, Input.SWIPE_UP):       # вверх по списку
             self.sel = max(self.sel - 1, 0); return True
+        if event == Input.PRESS:                               # нажатие энкодера -> развернуть
+            self.detail_uid = notes[self.sel].get("uid"); return True
         if event == Input.SWIPE_LEFT:
             uid = notes[self.sel].get("uid")
             if uid is not None:
@@ -344,6 +365,13 @@ class NotificationsScreen(Screen):
         return False
 
     def render(self, regions=None):
+        # развёрнутая карточка имеет приоритет (если её uid ещё в списке)
+        if self.detail_uid is not None:
+            n = next((x for x in self._notes() if x.get("uid") == self.detail_uid), None)
+            if n is not None:
+                return self._render_detail(n, regions)
+            self.detail_uid = None                     # уведомление ушло -> вернуться к списку
+
         img, draw = self.blank()
         draw.text((28, 16), "Уведомления", font=T.font(34), fill=T.MUTED)
         draw.line([28, 60, T.W - 28, 60], fill=T.HAIRLINE, width=2)
@@ -383,9 +411,38 @@ class NotificationsScreen(Screen):
             if body:
                 draw.text((tx, y + 56),                                         # вторичное (приглушённо)
                           C.truncate(draw, body, f, maxw), font=f, fill=T.MUTED)
-            if regions is not None:
-                regions.add((x0, y - 6, T.W - 24, y - 6 + block_h), "notif_select", payload=i)
+            if regions is not None:                       # тап по строке -> развернуть её
+                regions.add((x0, y - 6, T.W - 24, y - 6 + block_h), "notif_open", payload=i)
             y += pitch
+        return img
+
+    def _render_detail(self, n, regions=None):
+        """Развёрнутая карточка одного уведомления на весь экран: источник + полный
+        заголовок и тело с ПЕРЕНОСОМ. Показываем максимум доступного (ANCS-превью, не всё письмо)."""
+        img, draw = self.blank()
+        S = T.SZ_META
+        f = T.font(S)
+        x0 = 28
+        maxw = T.W - 2 * x0
+        draw.text((x0, 16), n.get("app", ""), font=T.font(T.SZ_BODY), fill=T.ACCENT)
+        draw.line([x0, 60, T.W - x0, 60], fill=T.HAIRLINE, width=2)
+
+        y = 78
+        for line in C.wrap_lines(draw, n.get("title", ""), f, maxw)[:3]:    # заголовок жирным
+            draw.text((x0, y), line, font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG)
+            y += 36
+        body = n.get("body", "")
+        if body:
+            y += 10
+            lines = C.wrap_lines(draw, body, f, maxw)
+            fit = max(1, (T.H - y - 16) // 34)
+            if len(lines) > fit:                                            # не влезло -> многоточие
+                lines = lines[:fit]
+                lines[-1] = C.truncate(draw, lines[-1] + "…", f, maxw)
+            for line in lines:
+                draw.text((x0, y), line, font=f, fill=T.MUTED); y += 34
+        if regions is not None:
+            regions.add((0, 0, T.W, T.H), "notif_close")    # тап в любом месте -> назад к списку
         return img
 
 

@@ -65,8 +65,12 @@ class GuiController:
         if intent == "notif_dismiss":
             self._on_notif_dismiss(payload)         # payload = uid; очистить и на iPhone
             return
-        if intent == "notif_select":                # тап по строке уведомления = выбрать её
-            self.compositor.screens[NOTIF].select(payload)
+        if intent == "notif_open":                  # тап по строке = развернуть карточку
+            self.compositor.screens[NOTIF].open_detail(payload)
+            self.compositor.render()
+            return
+        if intent == "notif_close":                 # тап по развёрнутой карточке = назад к списку
+            self.compositor.screens[NOTIF].close_detail()
             self.compositor.render()
             return
         if intent == "settings_tap":                # тап по строке Settings = выбрать+активировать
@@ -81,6 +85,8 @@ class GuiController:
             self.compositor.render()
             return
         if event == Input.BACK:
+            if self._notif_step_back():             # из развёрнутой карточки -> к списку
+                return
             if self.compositor.active != HOME:
                 self.compositor.active = HOME
                 self.compositor.render()
@@ -91,8 +97,10 @@ class GuiController:
                 self.compositor.active = NOTIF
                 self.compositor.render()
             return
-        # Жест ОТ НИЖНЕГО КРАЯ вверх -> закрыть полноэкранный вью, вернуться на home.
+        # Жест ОТ НИЖНЕГО КРАЯ вверх -> сначала свернуть карточку, потом закрыть вью на home.
         if event == Input.EDGE_BOTTOM:
+            if self._notif_step_back():
+                return
             if self.compositor.active != HOME:
                 self.compositor.active = HOME
                 self.compositor.render()
@@ -105,6 +113,15 @@ class GuiController:
             return
         # Средние свайпы вверх/вниз (и энкодер) -> прокрутка активного вью.
         self.compositor.handle_input(event)
+
+    def _notif_step_back(self):
+        """Если открыта развёрнутая карточка уведомления — свернуть её к списку (True)."""
+        scr = self.compositor.screens[NOTIF]
+        if self.compositor.active == NOTIF and getattr(scr, "detail_uid", None) is not None:
+            scr.close_detail()
+            self.compositor.render()
+            return True
+        return False
 
     # ── RuntimeModel -> AppState (каждый рендер-тик: живой прогресс) ──────────
     def apply(self, model):
