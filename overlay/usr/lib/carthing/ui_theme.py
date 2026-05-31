@@ -56,7 +56,7 @@ STATUSBAR_H   = H - OCCLUSION_BOTTOM  # 162
 # nudged without resizing the bottom bar. Diameter preserved from the original
 # calibration; centre lifted slightly to better trace the physical dial.
 ENCODER_ARC_R  = 162                  # radius — diameter trimmed to match the physical dial (was 172)
-ENCODER_ARC_CY = 150                  # vertical centre — raised (was 172)
+ENCODER_ARC_CY = 147                  # vertical centre (172 -> 150 -> 144 -> 147)
 
 # ─── type scale ───────────────────────────────────────────────────────────────
 SZ_TITLE = 48
