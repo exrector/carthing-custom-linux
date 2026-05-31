@@ -26,7 +26,7 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "83f85b3b16877ec387fb347ea2ee7ecb91bb7edf"
+EXPECTED_RUNTIME_TREE_SHA1 = "b7963e251ab7e7a6f161c83a66d1303e0cbfe560"
 RETIRED_RUNTIME_FILES = (
     "classic_profile_probe.py",
     "hid_pair.py",

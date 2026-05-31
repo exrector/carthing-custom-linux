@@ -56,6 +56,8 @@ class GuiController:
         self._prev_iphone_connected = False
         self._shade_task = None        # единственный рендер-тикер шторки (~60fps)
         self._snap = None              # None = следуем за пальцем; иначе доводка
+        self._scroll_task = None       # единая инерция scroll-view для всех экранов
+        self._scroll_velocity = 0.0
         self._last_scroll_render = 0.0
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
@@ -146,22 +148,68 @@ class GuiController:
                 self.compositor.end_shade()
                 self.compositor.render()
 
-    def _on_scroll(self, delta):
-        """Пиксельный скролл активного вью «за пальцем» (троттлинг рендера ~60fps)."""
-        if self.compositor.current.on_input(("scroll", delta)):
+    def _scrollable_screen(self):
+        return self.compositor.current
+
+    def _apply_scroll_delta(self, delta, *, force=False):
+        screen = self._scrollable_screen()
+        before = getattr(screen, "scroll_y", None)
+        handled = screen.on_input(("scroll", delta))
+        after = getattr(screen, "scroll_y", None)
+        if not handled:
+            return False
+        changed = before is None or after is None or abs(after - before) >= 0.01
+        if changed:
             now = time.monotonic()
-            if now - self._last_scroll_render >= 0.016:
+            if force or now - self._last_scroll_render >= 0.016:
                 self._last_scroll_render = now
                 self.compositor.render()
+        return changed
+
+    def _cancel_scroll_inertia(self):
+        self._scroll_velocity = 0.0
+        if self._scroll_task is not None and not self._scroll_task.done():
+            self._scroll_task.cancel()
+
+    def _on_scroll(self, delta):
+        """Пиксельный скролл активного вью «за пальцем»."""
+        self._cancel_scroll_inertia()
+        self._apply_scroll_delta(delta, force=False)
+
+    def _on_scroll_end(self, velocity):
+        """Единая инерция scroll-view после отпускания пальца."""
+        if abs(velocity) < 180:
+            return
+        self._scroll_velocity = max(-2600.0, min(2600.0, float(velocity)))
+        if self._scroll_task is None or self._scroll_task.done():
+            self._scroll_task = asyncio.ensure_future(self._scroll_loop())
+
+    async def _scroll_loop(self):
+        last = time.monotonic()
+        try:
+            while abs(self._scroll_velocity) >= 20:
+                now = time.monotonic()
+                dt = min(0.04, max(0.001, now - last))
+                last = now
+                delta = self._scroll_velocity * dt
+                if not self._apply_scroll_delta(delta, force=True):
+                    break
+                self._scroll_velocity *= 0.90 ** (dt / 0.016)
+                await asyncio.sleep(0.016)
+        finally:
+            self._scroll_velocity = 0.0
 
     def handle_input(self, event):
         if isinstance(event, tuple) and event:
             if event[0] == "drag":
+                self._cancel_scroll_inertia()
                 self._on_drag(event[1], event[2]); return
             if event[0] == "drag_end":
                 self._on_drag_end(event[1], event[2]); return
             if event[0] == "scroll":
                 self._on_scroll(event[1]); return
+            if event[0] == "scroll_end":
+                self._on_scroll_end(event[1]); return
         # ЭНКОДЕР (вращение) = ГРОМКОСТЬ ВСЕГДА, на любом вью (физический регулятор).
         if event in (Input.ENCODER_CW, Input.ENCODER_CCW):
             up = event == Input.ENCODER_CW
@@ -172,10 +220,12 @@ class GuiController:
             self.compositor.render()
             return
         if event == Input.SETTINGS:
+            self._cancel_scroll_inertia()
             self.compositor.active = SETTINGS
             self.compositor.render()
             return
         if event == Input.BACK:
+            self._cancel_scroll_inertia()
             if self._notif_step_back():             # из развёрнутой карточки -> к списку
                 return
             if self.compositor.active != HOME:
@@ -184,12 +234,14 @@ class GuiController:
             return
         # Жест ОТ ВЕРХНЕГО КРАЯ вниз -> открыть уведомления (как «шторка» iOS).
         if event == Input.EDGE_TOP:
+            self._cancel_scroll_inertia()
             if self.compositor.active != NOTIF:
                 self.compositor.active = NOTIF
                 self.compositor.render()
             return
         # Жест ОТ НИЖНЕГО КРАЯ вверх -> сначала свернуть карточку, потом закрыть вью на home.
         if event == Input.EDGE_BOTTOM:
+            self._cancel_scroll_inertia()
             if self._notif_step_back():
                 return
             if self.compositor.active != HOME:

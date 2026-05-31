@@ -10,7 +10,7 @@ AMS RemoteCommand values:
   0x05 = VolumeUp
   0x06 = VolumeDown
 """
-import asyncio, struct, os, logging
+import asyncio, struct, os, logging, time
 
 log = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"
 CANVAS_H     = 480
 SWIPE_MIN_PX = 100   # min horizontal canvas travel to switch desktops
 TAP_MAX_PX   = 30    # max travel to count as a tap
-EDGE_PX      = 70    # зона «края» по вертикали: старт свайпа здесь = жест открыть/закрыть
+EDGE_PX      = 36    # узкая системная edge-зона; остальной экран ведёт себя как обычный scroll-view
 
 
 async def _read_events(path, callback):
@@ -156,7 +156,8 @@ async def start(get_ams=None, on_event=None):
     SCROLL_START   = 6     # небольшой touch-slop: список начинает ехать почти сразу, но тап остаётся тапом
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
-         "lasty": None, "vstepped": False, "zone": "mid", "dragging": False}
+         "lasty": None, "last_scroll_t": None, "velocity": 0.0,
+         "vstepped": False, "zone": "mid", "dragging": False}
 
     def _finish_touch():
         if not t["down"]:
@@ -168,13 +169,14 @@ async def start(get_ams=None, on_event=None):
         if t["dragging"]:                         # начатый edge-drag -> доводка (по позиции пальца)
             kind = "open" if t["zone"] == "top" else "close"
             on_event(("drag_end", kind, t["cy"]))
+        elif t["vstepped"]:
+            on_event(("scroll_end", t["velocity"]))  # отпустили список -> единая инерция в GUI
         elif abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
-        elif t["vstepped"]:
-            pass                                  # середина: уже проскроллено пикселями за пальцем
         elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
             on_event((EV_TAP, t["cx"], t["cy"]))  # маленькое движение = тап
-        t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = None
+        t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = t["last_scroll_t"] = None
+        t["velocity"] = 0.0
         t["vstepped"] = False
         t["zone"] = "mid"
         t["dragging"] = False
@@ -194,6 +196,8 @@ async def start(get_ams=None, on_event=None):
                 else:
                     t["down"] = True
                     t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = None
+                    t["last_scroll_t"] = None
+                    t["velocity"] = 0.0
                     t["vstepped"] = False
                     t["zone"] = "mid"
                     t["dragging"] = False
@@ -205,6 +209,7 @@ async def start(get_ams=None, on_event=None):
                 cy = (CANVAS_H - 1) - t["rawx"]       # canvas_y = (H-1) - touch_x
                 if t["sx"] is None:
                     t["sx"], t["sy"], t["lasty"] = cx, cy, cy
+                    t["last_scroll_t"] = time.monotonic()
                     # классифицируем старт: верхний край / нижний край / середина
                     t["zone"] = ("top" if cy < EDGE_PX
                                  else "bottom" if cy > CANVAS_H - EDGE_PX
@@ -215,6 +220,11 @@ async def start(get_ams=None, on_event=None):
                     if t["vstepped"] or abs(t["cy"] - t["sy"]) >= SCROLL_START:
                         d = t["cy"] - t["lasty"]
                         if d != 0:
+                            now = time.monotonic()
+                            dt = max(0.001, now - (t["last_scroll_t"] or now))
+                            inst = d / dt
+                            t["velocity"] = (0.65 * inst) + (0.35 * t["velocity"])
+                            t["last_scroll_t"] = now
                             on_event(("scroll", d)); t["lasty"] = t["cy"]; t["vstepped"] = True
                 elif t["zone"] == "top":
                     # от верхнего края: НИЖНИЙ край шторки = позиция пальца (cy), едет за ним
