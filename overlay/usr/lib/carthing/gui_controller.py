@@ -69,12 +69,8 @@ class GuiController:
         if intent == "notif_dismiss":
             self._on_notif_dismiss(payload)         # payload = uid; очистить и на iPhone
             return
-        if intent == "notif_open":                  # тап по строке = развернуть карточку
-            self.compositor.screens[NOTIF].open_detail(payload)
-            self.compositor.render()
-            return
-        if intent == "notif_close":                 # тап по развёрнутой карточке = назад к списку
-            self.compositor.screens[NOTIF].close_detail()
+        if intent == "notif_select":                # тап по блоку = выбрать (для свайп-очистки)
+            self.compositor.screens[NOTIF].select(payload)
             self.compositor.render()
             return
         if intent == "settings_tap":                # тап по строке Settings = выбрать+активировать
@@ -89,20 +85,20 @@ class GuiController:
         return self.compositor.shade_active
 
     # ── интерактивная шторка (game-loop: касание ТОЛЬКО двигает p, рисует тикер) ──
-    def _on_drag(self, kind, offset):
-        frac = max(0.0, min(1.0, offset / float(T.H)))
+    def _on_drag(self, kind, finger_y):
+        # НИЖНИЙ край шторки = позиция пальца по вертикали (абсолютная) -> едет ровно за пальцем
+        p = max(0.0, min(1.0, finger_y / float(T.H)))
         if kind == "open":
             if self.compositor.active == NOTIF:
                 return                                  # уже открыто
             if not self.compositor.shade_active:
-                self.compositor.begin_shade(self.compositor.active, NOTIF, frac)
-            self.compositor.update_shade(frac)
+                self.compositor.begin_shade(self.compositor.active, NOTIF, p)
         else:  # close
             if self.compositor.active != NOTIF:
                 return                                  # нечего закрывать
             if not self.compositor.shade_active:
-                self.compositor.begin_shade(HOME, NOTIF, 1.0 - frac)
-            self.compositor.update_shade(1.0 - frac)
+                self.compositor.begin_shade(HOME, NOTIF, p)
+        self.compositor.update_shade(p)
         self._snap = None                               # следуем за пальцем (без доводки)
         self._ensure_shade_task()
 

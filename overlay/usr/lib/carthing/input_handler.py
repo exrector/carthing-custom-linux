@@ -155,9 +155,10 @@ async def start(get_ams=None, on_event=None):
     # DRAG_STEP_PX: пока тянешь палец, каждые столько px вертикали = один шаг прокрутки
     # (непрерывное листание «за пальцем», а не один резкий свайп на отпускании).
     DRAG_STEP_PX = 50
+    EDGE_DRAG_START = 10   # как мало нужно увести палец от края, чтобы шторка начала ехать
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
-         "stepy": None, "vstepped": False, "zone": "mid"}
+         "stepy": None, "vstepped": False, "zone": "mid", "dragging": False}
 
     def _finish_touch():
         if not t["down"]:
@@ -166,14 +167,13 @@ async def start(get_ams=None, on_event=None):
         if t["sx"] is None or t["cx"] is None:
             return
         dx, dy = t["cx"] - t["sx"], t["cy"] - t["sy"]
-        if abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
+        if t["dragging"]:                         # начатый edge-drag -> доводка (по позиции пальца)
+            kind = "open" if t["zone"] == "top" else "close"
+            on_event(("drag_end", kind, t["cy"]))
+        elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
             on_event((EV_TAP, t["cx"], t["cy"]))  # маленькое движение в любом месте = тап
         elif abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
-        elif t["zone"] == "top":
-            on_event(("drag_end", "open", max(0, dy)))    # доводка шторки сверху
-        elif t["zone"] == "bottom":
-            on_event(("drag_end", "close", max(0, -dy)))  # доводка шторки снизу
         elif t["vstepped"]:
             pass                                  # середина: вертикаль уже проскроллена шагами
         elif abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
@@ -199,6 +199,7 @@ async def start(get_ams=None, on_event=None):
                     t["sx"] = t["sy"] = t["stepy"] = None
                     t["vstepped"] = False
                     t["zone"] = "mid"
+                    t["dragging"] = False
         elif evtype == EV_KEY and code == BTN_TOUCH and value == 0:
             _finish_touch()
         elif evtype == EV_SYN and code == SYN_REPORT:
@@ -219,14 +220,14 @@ async def start(get_ams=None, on_event=None):
                     while t["stepy"] - t["cy"] >= DRAG_STEP_PX:
                         on_event(EV_SWIPE_UP); t["stepy"] -= DRAG_STEP_PX; t["vstepped"] = True
                 elif t["zone"] == "top":
-                    # от верхнего края: панель едет ЗА пальцем (интерактивная шторка)
-                    d = t["cy"] - t["sy"]
-                    if d >= TAP_MAX_PX:
-                        on_event(("drag", "open", d))
+                    # от верхнего края: НИЖНИЙ край шторки = позиция пальца (cy), едет за ним
+                    if t["dragging"] or t["cy"] - t["sy"] >= EDGE_DRAG_START:
+                        t["dragging"] = True
+                        on_event(("drag", "open", t["cy"]))
                 elif t["zone"] == "bottom":
-                    d = t["sy"] - t["cy"]
-                    if d >= TAP_MAX_PX:
-                        on_event(("drag", "close", d))
+                    if t["dragging"] or t["sy"] - t["cy"] >= EDGE_DRAG_START:
+                        t["dragging"] = True
+                        on_event(("drag", "close", t["cy"]))
 
     await _read_events('/dev/input/event1', on_encoder)
     await _read_events('/dev/input/event0', on_buttons)

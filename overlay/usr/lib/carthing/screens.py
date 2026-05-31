@@ -340,22 +340,11 @@ class NotificationsScreen(Screen):
         notes = self._notes()
         if not notes:
             return False
-        # ── детальный режим: одна развёрнутая карточка ───────────────────────
-        if self.detail_uid is not None:
-            if event in (Input.PRESS, Input.SWIPE_RIGHT):
-                self.detail_uid = None; return True            # назад к списку
-            if event == Input.SWIPE_LEFT:
-                self.emit("notif_dismiss", self.detail_uid)    # очистить и назад
-                self.detail_uid = None; return True
-            return False
-        # ── список ───────────────────────────────────────────────────────────
         self.sel = max(0, min(self.sel, len(notes) - 1))
         if event in (Input.ENCODER_CW, Input.SWIPE_DOWN):      # вниз по списку
             self.sel = min(self.sel + 1, len(notes) - 1); return True
         if event in (Input.ENCODER_CCW, Input.SWIPE_UP):       # вверх по списку
             self.sel = max(self.sel - 1, 0); return True
-        if event == Input.PRESS:                               # нажатие энкодера -> развернуть
-            self.detail_uid = notes[self.sel].get("uid"); return True
         if event == Input.SWIPE_LEFT:
             uid = notes[self.sel].get("uid")
             if uid is not None:
@@ -365,13 +354,8 @@ class NotificationsScreen(Screen):
         return False
 
     def render(self, regions=None):
-        # развёрнутая карточка имеет приоритет (если её uid ещё в списке)
-        if self.detail_uid is not None:
-            n = next((x for x in self._notes() if x.get("uid") == self.detail_uid), None)
-            if n is not None:
-                return self._render_detail(n, regions)
-            self.detail_uid = None                     # уведомление ушло -> вернуться к списку
-
+        # Список со ВСЕМИ уведомлениями СРАЗУ целиком (тело с переносом, переменная высота).
+        # Без отдельного «разворота»: всё видно прямо в списке, прокрутка энкодером/свайпом.
         img, draw = self.blank()
         draw.text((28, 16), "Уведомления", font=T.font(34), fill=T.MUTED)
         draw.line([28, 60, T.W - 28, 60], fill=T.HAIRLINE, width=2)
@@ -381,39 +365,44 @@ class NotificationsScreen(Screen):
             C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_TITLE), T.FAINT, T.H // 2, cx=T.W // 2)
             return img
 
+        f = T.font(T.SZ_META)                             # единый мелкий размер на все строки
+        x0 = 28; tx = x0 + 24
+        maxw = T.W - tx - 24
+        LH = 34; GAP = 22                                 # высота строки / зазор между блоками
+        top_y = 74; bot_y = T.H - 6
         sel = max(0, min(self.sel, len(notes) - 1))
-        S = T.SZ_META                                     # ЕДИНЫЙ мелкий размер на все строки
-        f = T.font(S)
-        x0 = 28
-        maxw = T.W - x0 - 40
-        start_y = 76
-        pitch = 98
-        block_h = 90                                      # высота одного блока (полоса на всю)
-        per = max(1, (T.H - start_y) // pitch)
-        # прокрутка: держим выбранное в окне
+
+        # заранее раскладываем каждый блок на строки и считаем высоту (переменную)
+        items = []
+        for n in notes:
+            tl = C.wrap_lines(draw, n.get("title", "") or "—", f, maxw) or [""]
+            bl = C.wrap_lines(draw, n.get("body", ""), f, maxw) if n.get("body") else []
+            items.append((tl, bl, LH + len(tl) * LH + len(bl) * LH + GAP))
+
+        # прокрутка: top = первый видимый блок; держим выбранный в окне
         if sel < self.top:
             self.top = sel
-        elif sel >= self.top + per:
-            self.top = sel - per + 1
-        self.top = max(0, min(self.top, max(0, len(notes) - per)))
+        while self.top < sel and top_y + sum(items[j][2] for j in range(self.top, sel + 1)) > bot_y:
+            self.top += 1
+        self.top = max(0, min(self.top, len(notes) - 1))
 
-        y = start_y
-        tx = x0 + 24
-        for i in range(self.top, min(self.top + per, len(notes))):
-            n = notes[i]
-            if i == sel:                                  # зелёная полоса на ВЕСЬ блок (без серого фона)
-                draw.rectangle([x0, y - 6, x0 + 7, y - 6 + block_h], fill=T.ACCENT)
-            draw.text((tx, y), n.get("app", ""), font=f, fill=T.ACCENT)         # источник (зелёный)
-            draw.text((tx, y + 28),                                             # содержание — ЖИРНЫМ
-                      C.truncate(draw, n.get("title", ""), f, maxw),
-                      font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG)
-            body = n.get("body", "")
-            if body:
-                draw.text((tx, y + 56),                                         # вторичное (приглушённо)
-                          C.truncate(draw, body, f, maxw), font=f, fill=T.MUTED)
-            if regions is not None:                       # тап по строке -> развернуть её
-                regions.add((x0, y - 6, T.W - 24, y - 6 + block_h), "notif_open", payload=i)
-            y += pitch
+        y = top_y
+        for i in range(self.top, len(notes)):
+            tl, bl, h = items[i]
+            if y >= bot_y:
+                break
+            content_h = h - GAP
+            if i == sel:                                  # зелёная полоса на весь блок
+                draw.rectangle([x0, y - 4, x0 + 7, y - 4 + content_h], fill=T.ACCENT)
+            yy = y
+            draw.text((tx, yy), notes[i].get("app", ""), font=f, fill=T.ACCENT); yy += LH
+            for ln in tl:                                 # заголовок — ЖИРНЫМ
+                draw.text((tx, yy), ln, font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG); yy += LH
+            for ln in bl:                                 # тело целиком — приглушённым
+                draw.text((tx, yy), ln, font=f, fill=T.MUTED); yy += LH
+            if regions is not None:                       # тап по блоку = выбрать (для свайп-очистки)
+                regions.add((x0, y - 4, T.W - 24, y - 4 + content_h), "notif_select", payload=i)
+            y += h
         return img
 
     def _render_detail(self, n, regions=None):
