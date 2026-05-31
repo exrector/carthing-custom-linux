@@ -81,6 +81,7 @@ class RuntimeModel:
         self.session = MediaSession()
         self.device_mode = "remote"
         self.power_tier = "boot"
+        self.mode_status = "remote"
         # AudioRoute: куда идёт звук (builtin = телефон сам; speaker = Transfer-relay).
         self.audio_sink = "builtin"          # builtin|speaker
         self.speaker_name = None
@@ -145,6 +146,7 @@ class RuntimeModel:
             "notifications": {"count": len(self.notifications),
                               "last": (self.notifications[-1]["title"] if self.notifications else None)},
             "device_mode": self.device_mode,
+            "mode_status": self.mode_status,
             "power_tier": self.power_tier,
             "transfer_active": self.transfer_active,
             "transfer_control_available": self.transfer_control_available,

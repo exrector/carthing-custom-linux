@@ -42,6 +42,9 @@ class IPhoneService:
         self.model = model
         self.on_update = on_update
         self._ams_state = MediaState()
+        self._peer = None
+        self._connected = False
+        self._supported_commands = set()
         self.ams = None
         self.ancs = None
         self.cts = None
@@ -54,6 +57,8 @@ class IPhoneService:
             sess.peer = str(connection.peer_address)
         except Exception:
             sess.peer = None
+        self._peer = sess.peer
+        self._connected = True
 
         self.ams = AMSClient(self._ams_state, on_update=self._on_ams,
                              on_commands=self._on_commands)
@@ -99,6 +104,7 @@ class IPhoneService:
 
     # ── AMS supported-команды -> сессия (GUI рисует только рабочие кнопки) ────
     def _on_commands(self, cmds):
+        self._supported_commands = set(cmds)
         self.model.session.supported_commands = set(cmds)
         self._publish()
 
@@ -129,9 +135,28 @@ class IPhoneService:
         self._publish()
 
     def reset(self):
+        self._connected = False
         sess = self.model.session
         sess.connected = False
         sess.clear_track()
+        self._publish()
+
+    def activate_source(self):
+        """Return runtime focus to the existing iPhone BLE session."""
+        self.model.select_source("iphone")
+        sess = self.model.session
+        sess.connected = bool(self._connected)
+        sess.peer = self._peer
+        sess.title = self._ams_state.title
+        sess.artist = self._ams_state.artist
+        sess.album = getattr(self._ams_state, "album", "")
+        sess.duration = self._ams_state.duration
+        sess.volume = self._ams_state.volume
+        sess._elapsed = getattr(self._ams_state, "_elapsed", 0.0)
+        sess._rate = getattr(self._ams_state, "_rate", 1.0)
+        sess._ts = getattr(self._ams_state, "_ts", _time.monotonic())
+        sess.playing = self._ams_state.playing
+        sess.supported_commands = set(self._supported_commands)
         self._publish()
 
     def _publish(self):

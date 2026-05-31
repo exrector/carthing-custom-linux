@@ -88,10 +88,11 @@ def _on_mode_select(mode):
 async def _apply_device_mode(mode, persist=True):
     mode = mode if mode in VALID_DEVICE_MODES else "remote"
     model.device_mode = mode
+    model.mode_status = "applying"
     if settings is not None and persist and mode != "pairing":
         settings.set("device_mode", mode)
     if power is not None:
-        power.note_activity(f"mode:{mode}")
+        power.set_device_mode(mode)
 
     if mode != "pairing":
         if power is not None:
@@ -101,31 +102,63 @@ async def _apply_device_mode(mode, persist=True):
         if orch is not None:
             await orch.arm_pairing(False)
 
-    if mode in ("remote", "quiet", "service", "mac") and transfer is not None:
+    if mode in ("remote", "quiet", "service", "mac", "pairing") and transfer is not None:
         await transfer.deactivate()
 
     if mode == "remote":
+        model.audio_sink = "builtin"
+        model.mode_status = "iPhone remote"
+        if mac is not None:
+            mac.detach()
+        if _iphone is not None:
+            _iphone.activate_source()
         if gui is not None:
             gui.show_home()
     elif mode == "transfer":
+        model.audio_sink = "speaker"
+        model.mode_status = "transfer armed"
+        if _iphone is not None:
+            _iphone.activate_source()
         if transfer is not None:
             await transfer.activate()
+            asyncio.ensure_future(transfer.rescan())
         if power is not None:
             power.note_transfer_scan(hold_sec=15.0)
         if gui is not None:
             gui.show_transfer_screen()
     elif mode == "mac":
+        model.audio_sink = "builtin"
+        model.mode_status = "macOS control"
+        if mac is not None:
+            mac.attach()
         if gui is not None:
             gui.show_mac_screen()
     elif mode == "pairing":
+        model.audio_sink = "builtin"
+        model.mode_status = "pairing window"
         if gui is not None:
             gui.show_mode_screen()
         _on_pairing(True)
-    elif mode in ("quiet", "service"):
+    elif mode == "quiet":
+        model.audio_sink = "builtin"
+        model.mode_status = "connected quiet"
+        if mac is not None:
+            mac.detach()
+        if _iphone is not None:
+            _iphone.activate_source()
+        if gui is not None:
+            gui.show_mode_screen()
+    elif mode == "service":
+        model.audio_sink = "builtin"
+        model.mode_status = "service safe"
+        if mac is not None:
+            mac.detach()
+        if _iphone is not None:
+            _iphone.activate_source()
         if gui is not None:
             gui.show_mode_screen()
 
-    logger.info("device mode: %s", mode)
+    logger.info("device mode: %s (%s)", mode, model.mode_status)
     _on_publish()
 
 

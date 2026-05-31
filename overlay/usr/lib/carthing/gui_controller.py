@@ -328,7 +328,21 @@ class GuiController:
         a.transfer_active = model.transfer_active
         a.transfer_source = model.speaker_name or ""
         a.device_mode = getattr(model, "device_mode", "remote")
+        a.mode_status = getattr(model, "mode_status", a.device_mode)
         a.power_tier = getattr(model, "power_tier", "boot")
+        if s.source == "mac":
+            a.mac.connected = bool(s.connected)
+            a.mac.title = s.title
+            a.mac.artist = s.artist
+            a.mac.duration = s.duration
+            a.mac.position = s.elapsed
+            a.mac.playing = s.playing
+            a.mac.volume = s.volume
+        else:
+            a.mac.connected = False
+            a.mac.title = a.mac.artist = ""
+            a.mac.duration = a.mac.position = 0.0
+            a.mac.playing = False
         a.clock_text = time.strftime("%H:%M")
         a.device_name = identity_service.visible_name()
 

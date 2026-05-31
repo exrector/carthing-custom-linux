@@ -48,7 +48,7 @@ class AppState:
     IPHONE, SETTINGS, NOTIFICATIONS, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
     # index -> media source. Один home (0)=iPhone; прочие view (Settings/Notifications)
     # не медиа -> control_source падает на last_media_source (=iphone), бар рулит реальным источником.
-    DESKTOP_SOURCE = {0: "iphone"}
+    DESKTOP_SOURCE = {IPHONE: "iphone", TRANSFER: "iphone", MAC: "mac"}
 
     def __init__(self):
         self.iphone = MediaSession("iphone", "iPhone")
@@ -62,6 +62,7 @@ class AppState:
         self.transfer_scanning = False
         self.transfer_source = ""
         self.device_mode = "remote"
+        self.mode_status = "remote"
         self.power_tier = "boot"
         self.clock_text = "--:--"
         self.device_name = device_name()

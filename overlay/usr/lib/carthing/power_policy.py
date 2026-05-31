@@ -36,6 +36,7 @@ class IdlePowerController:
         self._last_content_signature = None
         self._display_state = "init"
         self._runtime_tier = "boot"
+        self._device_mode = "remote"
         self._pairing_armed = False
         self._transfer_active = False
         self._transfer_scanning_until = 0.0
@@ -136,6 +137,14 @@ class IdlePowerController:
         self._pairing_armed = armed
         self.note_activity("pairing" if armed else "pairing_done")
 
+    def set_device_mode(self, mode: str) -> None:
+        mode = mode or "remote"
+        if mode == self._device_mode:
+            return
+        self._device_mode = mode
+        if mode != "quiet":
+            self.note_activity(f"mode:{mode}")
+
     def note_transfer_scan(self, hold_sec: float = 20.0) -> None:
         if not self.enabled:
             return
@@ -172,6 +181,8 @@ class IdlePowerController:
             return self._display_state
         now = time.monotonic()
         idle = now - self._last_activity
+        if self._device_mode == "quiet":
+            idle = max(idle, self.quiet_after)
         scanning = now < self._transfer_scanning_until
 
         if self._pairing_armed:

@@ -255,6 +255,7 @@ class ModesScreen(Screen):
 
         current = getattr(self.state, "device_mode", "remote") if self.state else "remote"
         power_tier = getattr(self.state, "power_tier", "boot") if self.state else "boot"
+        mode_status = getattr(self.state, "mode_status", current) if self.state else current
         top = CONTENT_TOP + 52
         bottom = T.OCCLUSION_BOTTOM
         row_h = T.ROW_H + 16
@@ -263,7 +264,8 @@ class ModesScreen(Screen):
         self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
 
         status_y = top - self.scroll_y
-        draw.text((52, status_y), f"Power: {power_tier}", font=T.font(T.SZ_META), fill=T.FAINT)
+        draw.text((52, status_y), f"{mode_status} · {power_tier}",
+                  font=T.font(T.SZ_META), fill=T.FAINT)
 
         for i, (key, label, desc) in enumerate(self.MODES):
             y = top + 52 + i * row_h - self.scroll_y

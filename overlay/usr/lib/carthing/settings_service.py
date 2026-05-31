@@ -47,7 +47,8 @@ class SettingsService:
     def save(self):
         try:
             state_paths.require_persistent()
-            state_paths.SETTINGS_PATH.write_text(json.dumps(self.values, ensure_ascii=False))
+            data = {k: v for k, v in self.values.items() if _DEFAULTS.get(k) != v}
+            state_paths.SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False))
         except Exception as e:
             logger.warning("settings save failed (degraded?): %s", e)
 
