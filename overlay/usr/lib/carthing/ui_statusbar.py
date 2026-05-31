@@ -19,15 +19,15 @@ class StatusBar:
     INTENT_ASSISTANT = "assistant"
 
     # Порядок слева→направо: (kind, AMS cmd id, intent). Громкость (5/6) НЕ здесь — энкодер.
-    # play — всегда (центр). like — ОДИН значок-тумблер: контур = не в избранном, залит = в
-    # избранном; тап переключает (add/remove). AMS состояние не отдаёт → lit локальный/optimistic.
+    # play — всегда (центр). like = ТОЛЬКО добавить в избранное (без снятия): контур = ещё не
+    # лайкал в этой сессии, залит = лайкнул. Тап всегда лайкает (если уже в избранном — безвреден).
     _LAYOUT = [
         ("skip_back", 10, "media_skip_back"),
         ("prev",       4, "media_prev"),
         ("play",       2, "media_play_pause"),
         ("next",       3, "media_next"),
         ("skip_fwd",   9, "media_skip_fwd"),
-        ("like",      11, "media_like_toggle"),
+        ("like",      11, "media_like"),
     ]
 
     def render(self, img, regions, anim, st):

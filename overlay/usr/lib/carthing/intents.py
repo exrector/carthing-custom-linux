@@ -32,12 +32,8 @@ class Dispatcher:
             self._media("skip_fwd")
         elif intent == "media_skip_back":
             self._media("skip_back")
-        elif intent == "media_like_toggle":
-            self._like_toggle()
         elif intent == "media_like":
-            self._media("like")
-        elif intent == "media_dislike":
-            self._media("dislike")
+            self._like_add()
         elif intent == "media_shuffle":
             self._media("shuffle")
         elif intent == "media_repeat":
@@ -77,14 +73,16 @@ class Dispatcher:
             self.state.last_media_source = key
             self.on_command(key, command)
 
-    def _like_toggle(self):
-        """ОДНО сердце-тумблер: тап переключает «в избранном». AMS не сообщает реальное
-        состояние, поэтому lit — локальный optimistic-флаг. add -> Like(11), remove -> Dislike(12)."""
+    def _like_add(self):
+        """Сердце = ТОЛЬКО добавить в избранное (Like 11). Тумблера НЕТ намеренно: AMS не
+        сообщает реальное состояние, и снятие лайка могло бы случайно выкинуть песню из
+        избранного. Поэтому тап всегда лайкает; если песня уже там — тап безвреден (no-op).
+        Снять лайк нельзя — это сознательная страховка."""
         key = self.state.control_source_key
         sess = self.state.sources[key]
-        sess.liked = not getattr(sess, "liked", False)
+        sess.liked = True
         self.state.last_media_source = key
-        self.on_command(key, "like" if sess.liked else "dislike")
+        self.on_command(key, "like")
 
     def _exclude(self, active_key):
         """Pause every other source when one starts playing."""
