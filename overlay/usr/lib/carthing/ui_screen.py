@@ -198,26 +198,28 @@ class Compositor:
             img = self.current.render(self._regions)
 
         draw = ImageDraw.Draw(img)
-        # The dial is a persistent volume gauge on every desktop (it reflects the
-        # control source's volume regardless of what the encoder does here).
-        vol = None
-        if self.state is not None:
-            cs = getattr(self.state, "control_source", None)
-            vol = cs.volume if cs is not None else None
-        # Уведомления: пульс ВСЕЙ зоны под энкодером (сегмент диска), под дугой/громкостью.
-        # Зона физически перекрыта энкодером -> только индикатор; список — свайп вниз на home.
-        unread = getattr(self.state, "unread_count", 0) if self.state else 0
-        astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
-        if self.anim is not None:
-            self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс только для орба ассистента
-        # Уведомление: РЕЗКОЕ моргание белый↔фон (square-wave ~1.5 Гц), без полутонов.
-        if unread and int(time.monotonic() * 1.5) % 2 == 0:
-            T.encoder_zone_glow(draw)
-        T.encoder_arc(draw, level=vol)
-        if self.status_bar:
-            self.status_bar.render(img, self._regions, self.anim, self.state)
-        if self.show_dots and len(self.screens) > 1:
-            self._draw_dots(draw)
+        # Полноэкранный вью (напр. Уведомления) занимает весь экран — НЕ накладываем поверх
+        # него ни дугу-громкость, ни бар, ни точки (иначе они перекроют контент). Только модал.
+        fullscreen = getattr(self.current, "fullscreen", False) and not transitioning
+        if not fullscreen:
+            # The dial is a persistent volume gauge on every desktop (it reflects the
+            # control source's volume regardless of what the encoder does here).
+            vol = None
+            if self.state is not None:
+                cs = getattr(self.state, "control_source", None)
+                vol = cs.volume if cs is not None else None
+            unread = getattr(self.state, "unread_count", 0) if self.state else 0
+            astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
+            if self.anim is not None:
+                self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс орба
+            # Уведомление: РЕЗКОЕ моргание белый↔фон (square-wave ~1.5 Гц), без полутонов.
+            if unread and int(time.monotonic() * 1.5) % 2 == 0:
+                T.encoder_zone_glow(draw)
+            T.encoder_arc(draw, level=vol)
+            if self.status_bar:
+                self.status_bar.render(img, self._regions, self.anim, self.state)
+            if self.show_dots and len(self.screens) > 1:
+                self._draw_dots(draw)
         if self.modal is not None:
             self._draw_modal(img)
 

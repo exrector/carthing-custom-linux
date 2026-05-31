@@ -301,23 +301,30 @@ class SettingsScreen(Screen):
 
 
 class NotificationsScreen(Screen):
-    """Зеркало уведомлений iPhone (ANCS). Открывается свайпом вниз с home.
-    Каждая запись: ИМЯ ПРИЛОЖЕНИЯ + ТЕКСТ (без заголовков, без слова iPhone).
-    Энкодер — выбор; свайп влево — очистить выбранное (и на iPhone тоже)."""
+    """Зеркало уведомлений iPhone (ANCS) — ПОЛНОЭКРАННЫЙ вью (поверх бара/энкодера, весь
+    экран под текст). Запись: имя приложения + содержание + вторичное. Выделение = зелёная
+    полоса слева (как в Настройках), без серого фона. Энкодер/тап — выбор; свайп влево — очистить."""
 
     name = "notifications"
     title = "Уведомления"
+    fullscreen = True            # компоситор не накладывает бар/дугу/точки поверх
 
     def __init__(self, emit=None):
         self.state = None
         self.emit = emit or (lambda intent, payload=None: None)
         self.sel = 0
+        self.top = 0
 
     def on_state(self, state):
         self.state = state
 
     def _notes(self):
         return (self.state.notifications if self.state else []) or []
+
+    def select(self, i):
+        notes = self._notes()
+        if notes:
+            self.sel = max(0, min(i, len(notes) - 1))
 
     def on_input(self, event):
         notes = self._notes()
@@ -338,38 +345,45 @@ class NotificationsScreen(Screen):
 
     def render(self, regions=None):
         img, draw = self.blank()
-        draw.text((24, CONTENT_TOP - 8), "Уведомления", font=T.font(34), fill=T.MUTED)
-        draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
+        draw.text((28, 16), "Уведомления", font=T.font(34), fill=T.MUTED)
+        draw.line([28, 60, T.W - 28, 60], fill=T.HAIRLINE, width=2)
 
         notes = self._notes()
         if not notes:
-            C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_BODY), T.FAINT, T.MAIN_CY, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_TITLE), T.FAINT, T.H // 2, cx=T.W // 2)
             return img
 
         sel = max(0, min(self.sel, len(notes) - 1))
-        per = 3                                          # видимое окно
-        top = max(0, min(sel - per // 2, len(notes) - per))
-        y = CONTENT_TOP + 50
-        maxw = T.CONTENT_W - 24
-        pitch = 80
-        for i in range(top, min(top + per, len(notes))):
+        x0 = 28
+        maxw = T.W - x0 - 40
+        start_y = 78
+        pitch = 116                                       # крупные строки на весь экран
+        per = max(1, (T.H - start_y - 8) // pitch)
+        # прокрутка: держим выбранное в окне
+        if sel < self.top:
+            self.top = sel
+        elif sel >= self.top + per:
+            self.top = sel - per + 1
+        self.top = max(0, min(self.top, max(0, len(notes) - per)))
+
+        y = start_y
+        tx = x0 + 24
+        for i in range(self.top, min(self.top + per, len(notes))):
             n = notes[i]
-            if i == sel:
-                draw.rectangle([20, y - 6, T.CONTENT_X1, y + pitch - 14], fill=T.HAIRLINE)
-            draw.text((40, y), n.get("app", ""), font=T.font(T.SZ_SMALL), fill=T.ACCENT)
-            # title = содержание (главная строка, белым)
-            draw.text((40, y + 22),
-                      C.truncate(draw, n.get("title", ""), T.font(T.SZ_META), maxw),
-                      font=T.font(T.SZ_META), fill=T.FG)
-            # body = вторичное (дата/время/текст сообщения), приглушённым; только если есть
+            if i == sel:                                  # зелёная полоса слева (без серого фона)
+                draw.rectangle([x0, y - 4, x0 + 7, y + pitch - 28], fill=T.ACCENT)
+            draw.text((tx, y), n.get("app", ""), font=T.font(T.SZ_META), fill=T.ACCENT)
+            draw.text((tx, y + 34),
+                      C.truncate(draw, n.get("title", ""), T.font(T.SZ_TITLE), maxw),
+                      font=T.font(T.SZ_TITLE), fill=T.FG)
             body = n.get("body", "")
             if body:
-                draw.text((40, y + 52),
-                          C.truncate(draw, body, T.font(T.SZ_SMALL), maxw),
-                          font=T.font(T.SZ_SMALL), fill=T.MUTED)
+                draw.text((tx, y + 76),
+                          C.truncate(draw, body, T.font(T.SZ_BODY), maxw),
+                          font=T.font(T.SZ_BODY), fill=T.MUTED)
+            if regions is not None:
+                regions.add((x0, y - 4, T.W - 24, y + pitch - 28), "notif_select", payload=i)
             y += pitch
-        C.text_centered(draw, "← смахни, чтобы очистить", T.font(T.SZ_META), T.FAINT,
-                        T.OCCLUSION_BOTTOM - 14, cx=T.CONTENT_CX)
         return img
 
 

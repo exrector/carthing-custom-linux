@@ -65,6 +65,10 @@ class GuiController:
         if intent == "notif_dismiss":
             self._on_notif_dismiss(payload)         # payload = uid; очистить и на iPhone
             return
+        if intent == "notif_select":                # тап по строке уведомления = выбрать её
+            self.compositor.screens[NOTIF].select(payload)
+            self.compositor.render()
+            return
         if intent == "settings_tap":                # тап по строке Settings = выбрать+активировать
             self.compositor.screens[SETTINGS].tap(payload)
             self.compositor.render()
