@@ -20,16 +20,25 @@ from intents import Dispatcher
 from ui_screen import Compositor, DRMDisplayAdapter, Input
 from ui_statusbar import StatusBar
 from ui_anim import AnimDriver
-from screens import NowPlayingScreen, SettingsScreen, NotificationsScreen, PairingModal
+from screens import (
+    MacOSScreen,
+    ModesScreen,
+    NowPlayingScreen,
+    SettingsScreen,
+    TransferScreen,
+    NotificationsScreen,
+    PairingModal,
+)
 
 logger = logging.getLogger(__name__)
 
-HOME, SETTINGS, NOTIF = 0, 1, 2   # индексы экранов (home всегда базовый)
+HOME, SETTINGS, NOTIF, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
 
 
 class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
-                 on_transfer_rescan=None, on_transfer_select=None, on_notif_dismiss=None):
+                 on_transfer_rescan=None, on_transfer_select=None, on_notif_dismiss=None,
+                 on_mode_select=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
@@ -38,12 +47,16 @@ class GuiController:
             on_transfer_rescan=on_transfer_rescan or (lambda *a, **k: None),
             on_transfer_select=on_transfer_select or (lambda *a, **k: None),
             on_pairing=on_pairing or (lambda *a, **k: None),
+            on_mode_select=on_mode_select or (lambda *a, **k: None),
         )
         emit = self.dispatcher.dispatch
         screens = [
             NowPlayingScreen(emit=emit),                                          # 0 HOME
             SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 1 (по кнопке)
             NotificationsScreen(emit=self._nav_intent),                           # 2 (свайп вниз)
+            ModesScreen(emit=emit),                                                # 3 (из Settings)
+            TransferScreen(emit=emit),                                             # 4 (режим Transfer)
+            MacOSScreen(emit=emit),                                                # 5 (режим macOS)
         ]
         self.compositor = Compositor(
             DRMDisplayAdapter(display), screens,
@@ -79,6 +92,10 @@ class GuiController:
             return
         if intent == "settings_tap":                # тап по строке Settings = выбрать+активировать
             self.compositor.screens[SETTINGS].tap(payload)
+            self.compositor.render()
+            return
+        if intent == "mode_select":
+            self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
@@ -305,6 +322,8 @@ class GuiController:
         self._sync_trusted_iphone(a, a.iphone.connected, model.session.peer)
         a.transfer_active = model.transfer_active
         a.transfer_source = model.speaker_name or ""
+        a.device_mode = getattr(model, "device_mode", "remote")
+        a.power_tier = getattr(model, "power_tier", "boot")
         a.clock_text = time.strftime("%H:%M")
         a.device_name = identity_service.visible_name()
 
@@ -333,3 +352,20 @@ class GuiController:
 
     def set_pairing_mode(self, on: bool):
         self.app_state.pairing_mode = bool(on)
+
+    def show_screen(self, index: int):
+        self._cancel_scroll_inertia()
+        self.compositor.active = index
+        self.compositor.render()
+
+    def show_mode_screen(self):
+        self.show_screen(MODES)
+
+    def show_transfer_screen(self):
+        self.show_screen(TRANSFER)
+
+    def show_mac_screen(self):
+        self.show_screen(MAC)
+
+    def show_home(self):
+        self.show_screen(HOME)

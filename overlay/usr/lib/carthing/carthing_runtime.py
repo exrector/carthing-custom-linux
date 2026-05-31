@@ -48,6 +48,8 @@ hw_caps = {}             # hardware_inventory.probe()
 mac = None               # MacService
 power = None             # IdlePowerController
 
+VALID_DEVICE_MODES = {"remote", "transfer", "mac", "pairing", "quiet", "service"}
+
 
 def _on_command(source, command):
     if source == "iphone" and _iphone is not None:
@@ -77,6 +79,54 @@ def _on_transfer_select(address):
         power.note_activity("transfer_select")
     if transfer is not None:
         asyncio.ensure_future(transfer.select(address))
+
+
+def _on_mode_select(mode):
+    asyncio.ensure_future(_apply_device_mode(mode))
+
+
+async def _apply_device_mode(mode, persist=True):
+    mode = mode if mode in VALID_DEVICE_MODES else "remote"
+    model.device_mode = mode
+    if settings is not None and persist and mode != "pairing":
+        settings.set("device_mode", mode)
+    if power is not None:
+        power.note_activity(f"mode:{mode}")
+
+    if mode != "pairing":
+        if power is not None:
+            power.set_pairing(False)
+        if gui is not None:
+            gui.set_pairing_mode(False)
+        if orch is not None:
+            await orch.arm_pairing(False)
+
+    if mode in ("remote", "quiet", "service", "mac") and transfer is not None:
+        await transfer.deactivate()
+
+    if mode == "remote":
+        if gui is not None:
+            gui.show_home()
+    elif mode == "transfer":
+        if transfer is not None:
+            await transfer.activate()
+        if power is not None:
+            power.note_transfer_scan(hold_sec=15.0)
+        if gui is not None:
+            gui.show_transfer_screen()
+    elif mode == "mac":
+        if gui is not None:
+            gui.show_mac_screen()
+    elif mode == "pairing":
+        if gui is not None:
+            gui.show_mode_screen()
+        _on_pairing(True)
+    elif mode in ("quiet", "service"):
+        if gui is not None:
+            gui.show_mode_screen()
+
+    logger.info("device mode: %s", mode)
+    _on_publish()
 
 
 async def _emit_source_intent(intent):
@@ -210,7 +260,8 @@ async def main():
                                 on_command=_on_command, on_pairing=_on_pairing,
                                 on_transfer_rescan=_on_transfer_rescan,
                                 on_transfer_select=_on_transfer_select,
-                                on_notif_dismiss=_on_notif_dismiss)
+                                on_notif_dismiss=_on_notif_dismiss,
+                                on_mode_select=_on_mode_select)
             logger.info("GUI active (modular Compositor)")
             from power_policy import IdlePowerController
             power = IdlePowerController(settings)
@@ -233,6 +284,7 @@ async def main():
     # macOS-источник (Фаза 4, каркас).
     from mac_service import MacService
     mac = MacService(model, on_update=_on_publish)
+    await _apply_device_mode(settings.get("device_mode", "remote"), persist=False)
 
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
@@ -250,6 +302,7 @@ async def main():
             if power is not None:
                 power.note_model(model)
                 power.tick()
+                model.power_tier = power.runtime_tier
             if gui is not None and not shade:
                 gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
                 if power is None or power.display_awake:

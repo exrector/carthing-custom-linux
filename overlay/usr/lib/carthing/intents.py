@@ -14,12 +14,13 @@ Media routing (agreed model):
 
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
-                 on_pairing=None):
+                 on_pairing=None, on_mode_select=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
         self.on_transfer_select = on_transfer_select or (lambda address: None)
         self.on_pairing = on_pairing or (lambda enabled: None)
+        self.on_mode_select = on_mode_select or (lambda mode: None)
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -57,6 +58,8 @@ class Dispatcher:
         elif intent == "pairing_cancel":
             self.state.pairing_mode = False
             self.on_pairing(False)
+        elif intent == "mode_select":
+            self._mode_select(payload)
 
     # ── media ────────────────────────────────────────────────────────────────
     def _media(self, command):
@@ -96,6 +99,8 @@ class Dispatcher:
         if key == "pairing":
             self.state.pairing_mode = True
             self.on_pairing(True)
+        elif key == "modes":
+            self.state.active_desktop = self.state.MODES
         # trusted / display / about: handled by UI navigation later
 
     def _transfer_select(self, key):
@@ -106,3 +111,9 @@ class Dispatcher:
             except Exception:
                 pass
             self.on_transfer_select(address)
+
+    def _mode_select(self, mode):
+        if not mode:
+            return
+        self.state.device_mode = mode
+        self.on_mode_select(mode)

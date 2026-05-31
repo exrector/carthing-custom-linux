@@ -184,6 +184,106 @@ class TransferScreen(Screen):
         return img
 
 
+class ModesScreen(Screen):
+    """Runtime mode switcher for hardware tests.
+
+    These are product-level profiles inside one accessory, not separate
+    Bluetooth identities. The screen only emits mode intents; carthing_runtime
+    owns the actual transport/service changes.
+    """
+
+    name = "modes"
+    title = "Режимы"
+
+    MODES = [
+        ("remote", "Remote", "iPhone media control"),
+        ("transfer", "Transfer", "iPhone audio output -> speaker"),
+        ("mac", "macOS", "Mac control surface"),
+        ("pairing", "Pairing", "Add source or speaker"),
+        ("quiet", "Quiet", "Connected, low UI activity"),
+        ("service", "Service", "USB/NCM diagnostics safe state"),
+    ]
+
+    def __init__(self, emit=None):
+        self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
+        self.sel = 0
+        self.scroll_y = 0
+        self._max_scroll = 0
+        self._last_current = None
+
+    def on_state(self, state):
+        self.state = state
+        current = getattr(state, "device_mode", "remote") if state else "remote"
+        if current != self._last_current:
+            self._last_current = current
+            for i, (key, _label, _desc) in enumerate(self.MODES):
+                if key == current:
+                    self.sel = i
+                    break
+
+    def _activate(self, index):
+        if not (0 <= index < len(self.MODES)):
+            return
+        key = self.MODES[index][0]
+        self.sel = index
+        self.emit("mode_select", key)
+
+    def tap(self, index):
+        self._activate(index)
+
+    def on_input(self, event):
+        if isinstance(event, tuple) and event and event[0] == "scroll":
+            self.scroll_y = max(0, min(self._max_scroll, self.scroll_y - event[1]))
+            return True
+        if event == Input.SWIPE_DOWN:
+            self.sel = min(len(self.MODES) - 1, self.sel + 1)
+            return True
+        if event == Input.SWIPE_UP:
+            self.sel = max(0, self.sel - 1)
+            return True
+        if event == Input.PRESS:
+            self._activate(self.sel)
+            return True
+        return False
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        draw.text((24, CONTENT_TOP - 8), "Режимы", font=T.font(34), fill=T.MUTED)
+        draw.line([24, CONTENT_TOP + 34, T.LIST_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
+
+        current = getattr(self.state, "device_mode", "remote") if self.state else "remote"
+        power_tier = getattr(self.state, "power_tier", "boot") if self.state else "boot"
+        top = CONTENT_TOP + 52
+        bottom = T.OCCLUSION_BOTTOM
+        row_h = T.ROW_H + 16
+        total_h = len(self.MODES) * row_h + 52
+        self._max_scroll = max(0, total_h - (bottom - top))
+        self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
+
+        status_y = top - self.scroll_y
+        draw.text((52, status_y), f"Power: {power_tier}", font=T.font(T.SZ_META), fill=T.FAINT)
+
+        for i, (key, label, desc) in enumerate(self.MODES):
+            y = top + 52 + i * row_h - self.scroll_y
+            if y + row_h < top or y > bottom:
+                continue
+            active = key == current
+            selected = i == self.sel
+            rect = C.list_row(draw, y, label, selected=selected, indent=0)
+            dot = T.ACCENT if active else T.FAINT
+            T.icon_dot(draw, 40, y + T.SZ_BODY // 2, 7, color=dot)
+            desc_color = T.FG if active else T.FAINT
+            draw.text((52, y + 42), desc, font=T.font(T.SZ_SMALL), fill=desc_color)
+            if active:
+                draw.text((T.LIST_X1 - 120, y), "active", font=T.font(T.SZ_SMALL), fill=T.ACCENT)
+            if regions is not None:
+                rx0, ry0, rx1, ry1 = rect
+                regions.add((rx0, max(top, ry0), rx1, min(bottom, ry1 + 42)),
+                            "mode_select", payload=key)
+        return img
+
+
 class SettingsScreen(Screen):
     """Accordion menu: parents expand inline to reveal children. Encoder moves
     selection over the visible (flattened) list; press toggles a parent or
@@ -195,6 +295,7 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
+            {"key": "modes", "label": "Режимы работы"},
             {"key": "pairing", "label": "Режим сопряжения"},
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [

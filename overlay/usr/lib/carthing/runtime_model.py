@@ -79,6 +79,8 @@ class MediaSession:
 class RuntimeModel:
     def __init__(self):
         self.session = MediaSession()
+        self.device_mode = "remote"
+        self.power_tier = "boot"
         # AudioRoute: куда идёт звук (builtin = телефон сам; speaker = Transfer-relay).
         self.audio_sink = "builtin"          # builtin|speaker
         self.speaker_name = None
@@ -142,6 +144,8 @@ class RuntimeModel:
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
             "notifications": {"count": len(self.notifications),
                               "last": (self.notifications[-1]["title"] if self.notifications else None)},
+            "device_mode": self.device_mode,
+            "power_tier": self.power_tier,
             "transfer_active": self.transfer_active,
             "transfer_control_available": self.transfer_control_available,
         }

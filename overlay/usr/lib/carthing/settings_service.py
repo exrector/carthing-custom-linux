@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULTS = {
     "preferred_view": "now_playing",   # стартовый view (gui-contract)
+    "device_mode": "remote",           # тестовый runtime-профиль, не отдельная BT-персона
     "default_speaker": None,           # адрес динамика по умолчанию для Transfer
     "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
     "screen_dim_after_sec": 45,         # сначала только подсветка, без BT/suspend
