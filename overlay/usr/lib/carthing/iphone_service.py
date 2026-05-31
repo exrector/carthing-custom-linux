@@ -87,15 +87,25 @@ class IPhoneService:
         sess.playing = s.playing
         self._publish()
 
-    # ── ANCS -> notif-индикатор (не баннер) ──────────────────────────────────
+    # ── ANCS -> список уведомлений (зеркало iPhone) ──────────────────────────
     def _on_notif(self, notif):
-        self.model.notif_count += 1
-        self.model.notif_last = getattr(notif, "title", "") or getattr(notif, "app_id", "")
+        # Без заголовков: имя приложения + текст (body); если body пуст — title как fallback.
+        text = (getattr(notif, "message", "") or getattr(notif, "title", "") or "").strip()
+        self.model.add_notification(notif.uid, notif.app_name, text)
         self._publish()
 
     def _on_removed(self, uid):
-        if self.model.notif_count > 0:
-            self.model.notif_count -= 1
+        self.model.remove_notification(uid)
+        self._publish()
+
+    async def dismiss(self, uid):
+        """Свайп-влево на гаджете -> очистить уведомление И на iPhone (ANCS negative)."""
+        if self.ancs is not None:
+            try:
+                await self.ancs.perform_action(uid)   # ACTION_NEGATIVE по умолчанию
+            except Exception as e:
+                logger.warning("ANCS dismiss failed: %s", e)
+        self.model.remove_notification(uid)
         self._publish()
 
     def reset(self):

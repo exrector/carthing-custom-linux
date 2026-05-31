@@ -279,40 +279,66 @@ class SettingsScreen(Screen):
 
 
 class NotificationsScreen(Screen):
-    """Desktop 4 — mirror of iPhone notifications (ANCS). Reached by swipe or by
-    tapping the pulsing status-bar indicator."""
+    """Зеркало уведомлений iPhone (ANCS). Открывается свайпом вниз с home.
+    Каждая запись: ИМЯ ПРИЛОЖЕНИЯ + ТЕКСТ (без заголовков, без слова iPhone).
+    Энкодер — выбор; свайп влево — очистить выбранное (и на iPhone тоже)."""
 
     name = "notifications"
     title = "Уведомления"
 
-    def __init__(self):
+    def __init__(self, emit=None):
         self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
+        self.sel = 0
 
     def on_state(self, state):
         self.state = state
+
+    def _notes(self):
+        return (self.state.notifications if self.state else []) or []
+
+    def on_input(self, event):
+        notes = self._notes()
+        if not notes:
+            return False
+        self.sel = max(0, min(self.sel, len(notes) - 1))
+        if event == Input.ENCODER_CW:
+            self.sel = min(self.sel + 1, len(notes) - 1); return True
+        if event == Input.ENCODER_CCW:
+            self.sel = max(self.sel - 1, 0); return True
+        if event == Input.SWIPE_LEFT:
+            uid = notes[self.sel].get("uid")
+            if uid is not None:
+                self.emit("notif_dismiss", uid)        # очистить выбранное (двусторонне)
+            self.sel = max(0, min(self.sel, len(notes) - 2))
+            return True
+        return False
 
     def render(self, regions=None):
         img, draw = self.blank()
         draw.text((24, CONTENT_TOP - 8), "Уведомления", font=T.font(34), fill=T.MUTED)
         draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
-        notes = self.state.notifications if self.state else []
+        notes = self._notes()
         if not notes:
             C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_BODY), T.FAINT, T.MAIN_CY, cx=T.CONTENT_CX)
             return img
 
-        y = CONTENT_TOP + 52
-        maxw = T.CONTENT_W - 16
-        for n in notes:
-            if y + 90 > T.OCCLUSION_BOTTOM:
-                break
+        sel = max(0, min(self.sel, len(notes) - 1))
+        per = 3                                          # видимое окно
+        top = max(0, min(sel - per // 2, len(notes) - per))
+        y = CONTENT_TOP + 50
+        maxw = T.CONTENT_W - 24
+        for i in range(top, min(top + per, len(notes))):
+            n = notes[i]
+            if i == sel:
+                draw.rectangle([20, y - 8, T.CONTENT_X1, y + 70], fill=T.HAIRLINE)
             draw.text((40, y), n.get("app", ""), font=T.font(T.SZ_SMALL), fill=T.ACCENT)
-            draw.text((40, y + 24), C.truncate(draw, n.get("title", ""), T.font(T.SZ_BODY), maxw),
+            draw.text((40, y + 30), C.truncate(draw, n.get("text", ""), T.font(T.SZ_BODY), maxw),
                       font=T.font(T.SZ_BODY), fill=T.FG)
-            draw.text((40, y + 58), C.truncate(draw, n.get("message", ""), T.font(T.SZ_META), maxw),
-                      font=T.font(T.SZ_META), fill=T.MUTED)
-            y += 100
-            draw.line([40, y - 14, T.CONTENT_X1, y - 14], fill=T.HAIRLINE, width=1)
+            y += 92
+        C.text_centered(draw, "← смахни, чтобы очистить", T.font(T.SZ_META), T.FAINT,
+                        T.OCCLUSION_BOTTOM - 14, cx=T.CONTENT_CX)
         return img
 
 

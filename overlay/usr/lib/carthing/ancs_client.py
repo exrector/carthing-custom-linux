@@ -52,6 +52,25 @@ CATEGORY_NAMES = {
 CMD_GET_NOTIFICATION_ATTRIBUTES = 0
 CMD_GET_APP_ATTRIBUTES          = 1
 CMD_PERFORM_NOTIFICATION_ACTION = 2
+ACTION_POSITIVE = 0
+ACTION_NEGATIVE = 1   # dismiss/clear (убирает уведомление и на iPhone)
+
+# Дружелюбные имена приложений по bundle id (fallback — последний сегмент bundle).
+BUNDLE_NAMES = {
+    "com.apple.MobileSMS": "Сообщения",
+    "com.apple.mobilephone": "Телефон",
+    "com.apple.mobilemail": "Почта",
+    "com.apple.mobilecal": "Календарь",
+    "com.apple.reminders": "Напоминания",
+    "com.apple.Music": "Музыка",
+    "ru.keepcoder.Telegram": "Telegram",
+    "com.tdesktop.Telegram": "Telegram",
+    "net.whatsapp.WhatsApp": "WhatsApp",
+    "com.facebook.Messenger": "Messenger",
+    "com.burbn.instagram": "Instagram",
+    "com.google.Gmail": "Gmail",
+    "com.atebits.Tweetie2": "X",
+}
 
 ATTR_APP_IDENTIFIER         = 0
 ATTR_TITLE                  = 1
@@ -85,6 +104,14 @@ class Notification:
     subtitle: str = ""
     message: str = ""
     date: str = ""
+
+    @property
+    def app_name(self) -> str:
+        """Дружелюбное имя приложения (карта + fallback на последний сегмент bundle id)."""
+        if self.app_id in BUNDLE_NAMES:
+            return BUNDLE_NAMES[self.app_id]
+        seg = self.app_id.rsplit(".", 1)[-1] if self.app_id else ""
+        return seg or self.app_id
 
     @property
     def category(self) -> str:
@@ -237,6 +264,18 @@ class ANCSClient:
             logger.warning("ANCS: control point write failed for #%d: %s", uid, exc)
             self._pending = None
             self._kick_fetch()
+
+    async def perform_action(self, uid: int, action_id: int = ACTION_NEGATIVE):
+        """Двусторонне: выполнить действие над уведомлением (negative = очистить/dismiss).
+        Убирает уведомление и на iPhone."""
+        if self._control_point is None:
+            return
+        payload = bytes([CMD_PERFORM_NOTIFICATION_ACTION]) + struct.pack("<I", uid) + bytes([action_id])
+        try:
+            await self._control_point.write_value(payload, with_response=True)
+            logger.info("ANCS: perform action %d on #%d", action_id, uid)
+        except Exception as exc:
+            logger.warning("ANCS: perform action failed #%d: %s", uid, exc)
 
     def _handle_data_source(self, value: bytes):
         if self._pending is None:

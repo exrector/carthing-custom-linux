@@ -27,8 +27,9 @@ HOME, SETTINGS, NOTIF = 0, 1, 2   # индексы экранов (home всег
 
 class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
-                 on_transfer_rescan=None, on_transfer_select=None):
+                 on_transfer_rescan=None, on_transfer_select=None, on_notif_dismiss=None):
         self.app_state = AppState()
+        self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
             self.app_state,
             on_command=on_command or (lambda *a, **k: None),
@@ -40,7 +41,7 @@ class GuiController:
         screens = [
             NowPlayingScreen(emit=emit),                                          # 0 HOME
             SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 1 (по кнопке)
-            NotificationsScreen(),                                                # 2 (по тапу)
+            NotificationsScreen(emit=self._nav_intent),                           # 2 (свайп вниз)
         ]
         self.compositor = Compositor(
             DRMDisplayAdapter(display), screens,
@@ -61,6 +62,9 @@ class GuiController:
         if intent == StatusBar.INTENT_ASSISTANT:
             logger.info("assistant tap (Фаза 5 — логика позже)")
             return
+        if intent == "notif_dismiss":
+            self._on_notif_dismiss(payload)         # payload = uid; очистить и на iPhone
+            return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
 
     def handle_input(self, event):
@@ -74,7 +78,12 @@ class GuiController:
                 self.compositor.render()
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
-            return                                  # НЕТ свайпа по столам
+            # свайп-влево в списке уведомлений = очистить выбранное (прямо в экран, минуя
+            # переключение столов, которого больше нет); иначе игнор.
+            if event == Input.SWIPE_LEFT and self.compositor.active == NOTIF:
+                if self.compositor.current.on_input(event):
+                    self.compositor.render()
+            return
         # Свайп вниз на home -> уведомления (как «шторка» iOS); вверх в уведомлениях -> назад.
         if event == Input.SWIPE_DOWN and self.compositor.active == HOME:
             self.compositor.active = NOTIF
@@ -105,11 +114,8 @@ class GuiController:
             a.iphone.title = a.iphone.artist = ""
             a.iphone.duration = a.iphone.position = 0.0
             a.iphone.playing = False
-        a.unread_count = model.notif_count
-        a.notifications = (
-            [{"app": "iPhone", "title": model.notif_last, "message": ""}]
-            if model.notif_last else []
-        )
+        a.notifications = list(model.notifications)   # [{uid, app, text}] — без iPhone/заголовков
+        a.unread_count = len(a.notifications)
         a.transfer_active = model.transfer_active
         a.transfer_source = model.speaker_name or ""
         a.clock_text = time.strftime("%H:%M")

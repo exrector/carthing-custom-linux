@@ -84,9 +84,8 @@ class RuntimeModel:
         # ControlRoute: кто рулит источником (local/speaker_remote -> source).
         self.control_routes = []             # list[(controller, source)]
         self.transfer_control_available = False
-        # уведомления (ANCS) — индикатор, не баннер.
-        self.notif_count = 0
-        self.notif_last = None
+        # уведомления (ANCS) — полный список зеркала iPhone: [{uid, app, text}].
+        self.notifications = []
         # presence
         self.rssi = None
         self.proximity_zone = "gone"
@@ -107,6 +106,17 @@ class RuntimeModel:
         if controller == "speaker_remote":
             self.transfer_control_available = True
 
+    # ── уведомления (зеркало iPhone) ─────────────────────────────────────────
+    def add_notification(self, uid, app, text):
+        for n in self.notifications:
+            if n["uid"] == uid:
+                n["app"], n["text"] = app, text
+                return
+        self.notifications.append({"uid": uid, "app": app, "text": text})
+
+    def remove_notification(self, uid):
+        self.notifications = [n for n in self.notifications if n["uid"] != uid]
+
     # ── сериализация bt-части (runtime-state-schema.md §bt) ───────────────────
     def bt_block(self) -> dict:
         s = self.session
@@ -123,7 +133,8 @@ class RuntimeModel:
                 "duration": round(s.duration, 1),
             },
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
-            "notifications": {"count": self.notif_count, "last": self.notif_last},
+            "notifications": {"count": len(self.notifications),
+                              "last": (self.notifications[-1]["text"] if self.notifications else None)},
             "transfer_active": self.transfer_active,
             "transfer_control_available": self.transfer_control_available,
         }

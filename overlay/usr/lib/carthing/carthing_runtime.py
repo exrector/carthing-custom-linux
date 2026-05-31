@@ -78,6 +78,12 @@ async def _emit_source_intent(intent):
         await _iphone.command(intent)
 
 
+def _on_notif_dismiss(uid):
+    """Свайп-влево на уведомлении -> очистить и на iPhone (ANCS negative)."""
+    if _iphone is not None:
+        asyncio.ensure_future(_iphone.dismiss(uid))
+
+
 def _verify_persistent():
     try:
         state_paths.ensure_files()
@@ -194,7 +200,8 @@ async def main():
             gui = GuiController(DRMDisplay(),
                                 on_command=_on_command, on_pairing=_on_pairing,
                                 on_transfer_rescan=_on_transfer_rescan,
-                                on_transfer_select=_on_transfer_select)
+                                on_transfer_select=_on_transfer_select,
+                                on_notif_dismiss=_on_notif_dismiss)
             logger.info("GUI active (modular Compositor)")
         except Exception as e:
             gui = None
