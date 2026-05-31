@@ -247,6 +247,10 @@ class DRMDisplay:
         self.buf.seek(0)
         self.buf.write(img_bytes[:self.size])
 
+    def buffer_address(self) -> int:
+        """Return the mmap base address for native render backends."""
+        return ctypes.addressof(ctypes.c_char.from_buffer(self.buf))
+
     def close(self):
         self.buf.close()
         os.close(self.fd)

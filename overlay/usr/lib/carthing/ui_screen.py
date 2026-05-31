@@ -7,11 +7,16 @@ intent for the app to dispatch. Swipe switches desktops with a light slide.
 No device-only imports → runs on macOS for PNG preview. The device injects a
 real DRM display via DRMDisplayAdapter.
 """
+import ctypes
+import logging
+import os
 import time
 from PIL import Image, ImageDraw
 
 import ui_theme as T
 from ui_components import RegionSet
+
+log = logging.getLogger("carthing.ui")
 
 
 # ─── high-level input (decoupled from evdev) ──────────────────────────────────
@@ -44,8 +49,56 @@ class Display:
 class DRMDisplayAdapter(Display):
     def __init__(self, drm):
         self.drm = drm
+        self._native = None
+        self._dst_addr = None
+        self._native_failed = False
+        self._load_native_rotator()
+
+    def _load_native_rotator(self):
+        lib_path = os.path.join(os.path.dirname(__file__), "libcarthing_frame.so")
+        if not os.path.exists(lib_path):
+            log.info("Display: native frame rotator unavailable; using Pillow fallback")
+            return
+        try:
+            lib = ctypes.CDLL(lib_path)
+            fn = lib.carthing_rotate_rgb_to_bgrx_cw
+            fn.argtypes = [
+                ctypes.c_char_p,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            fn.restype = ctypes.c_int
+            self._native = fn
+            self._dst_addr = self.drm.buffer_address()
+            log.info("Display: native frame rotator active")
+        except Exception:
+            log.exception("Display: failed to load native frame rotator; using Pillow fallback")
+            self._native = None
+            self._dst_addr = None
 
     def present(self, img, name=None):
+        if self._native is not None and not self._native_failed:
+            try:
+                src = img.tobytes("raw", "RGB")
+                ret = self._native(
+                    src,
+                    img.width,
+                    img.height,
+                    ctypes.c_void_p(self._dst_addr),
+                    self.drm.width,
+                    self.drm.height,
+                    self.drm.pitch,
+                )
+                if ret == 0:
+                    return
+                log.error("Display: native frame rotator rejected frame ret=%s", ret)
+            except Exception:
+                log.exception("Display: native frame rotator failed; using Pillow fallback")
+            self._native_failed = True
         img = img.rotate(-90, expand=True)        # 800x480 -> 480x800
         self.drm.blit(img.tobytes("raw", "BGRX"))
 

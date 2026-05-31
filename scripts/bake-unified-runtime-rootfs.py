@@ -26,7 +26,10 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "a4dd271e7335734285ae9a27fd5993c0485d76c5"
+EXPECTED_RUNTIME_TREE_SHA1 = "18858c3441bee6ae97bf8a5e6274567acb43eecc"
+NATIVE_RUNTIME_FILES = (
+    "libcarthing_frame.so",
+)
 RETIRED_RUNTIME_FILES = (
     "classic_profile_probe.py",
     "hid_pair.py",
@@ -182,6 +185,11 @@ def copy_runtime(image: Path) -> None:
     if bitstruct.exists():
         e2copy_file(image, bitstruct, "/usr/lib/carthing/vendor/bitstruct.py", mode="0644")
 
+    for name in NATIVE_RUNTIME_FILES:
+        src = runtime_dir / name
+        if src.exists():
+            e2copy_file(image, src, f"/usr/lib/carthing/{name}", mode="0755")
+
 
 def copy_support_files(image: Path) -> None:
     copy_overlay_tree(image, OVERLAY / "usr/libexec/carthing", "/usr/libexec/carthing")
@@ -213,6 +221,10 @@ def verify_image(image: Path) -> None:
         actual = runtime_tree_sha1(runtime_dir)
         if actual != EXPECTED_RUNTIME_TREE_SHA1:
             raise SystemExit(f"baked runtime sha mismatch: {actual} != {EXPECTED_RUNTIME_TREE_SHA1}")
+
+        for name in NATIVE_RUNTIME_FILES:
+            if (OVERLAY / "usr/lib/carthing" / name).exists() and not e2path_exists(image, f"/usr/lib/carthing/{name}"):
+                raise SystemExit(f"native runtime file missing from rootfs: {name}")
 
         leaked = [
             name for name in RETIRED_RUNTIME_FILES
