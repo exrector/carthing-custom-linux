@@ -107,6 +107,7 @@ class Compositor:
         self.modal = None
         self._pairing_modal = pairing_modal
         self._regions = RegionSet()
+        self._shade = None        # интерактивная «шторка»: {p, bg, panel} или None
 
     @property
     def active(self):
@@ -191,6 +192,8 @@ class Compositor:
     # ── render ───────────────────────────────────────────────────────────────
     def render(self):
         self._sync_modal()
+        if self._shade is not None:                  # интерактивная шторка тянется/доводится
+            return self._present_shade()
         self._regions.clear()
         transitioning = self.anim and self.anim.transition_active
 
@@ -199,33 +202,70 @@ class Compositor:
         else:
             img = self.current.render(self._regions)
 
-        draw = ImageDraw.Draw(img)
         # Полноэкранный вью (напр. Уведомления) занимает весь экран — НЕ накладываем поверх
         # него ни дугу-громкость, ни бар, ни точки (иначе они перекроют контент). Только модал.
         fullscreen = getattr(self.current, "fullscreen", False) and not transitioning
         if not fullscreen:
-            # The dial is a persistent volume gauge on every desktop (it reflects the
-            # control source's volume regardless of what the encoder does here).
-            vol = None
-            if self.state is not None:
-                cs = getattr(self.state, "control_source", None)
-                vol = cs.volume if cs is not None else None
-            unread = getattr(self.state, "unread_count", 0) if self.state else 0
-            astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
-            if self.anim is not None:
-                self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс орба
-            # Уведомление: РЕЗКОЕ моргание белый↔фон (square-wave ~1.5 Гц), без полутонов.
-            if unread and int(time.monotonic() * 1.5) % 2 == 0:
-                T.encoder_zone_glow(draw)
-            T.encoder_arc(draw, level=vol)
-            if self.status_bar:
-                self.status_bar.render(img, self._regions, self.anim, self.state)
-            if self.show_dots and len(self.screens) > 1:
-                self._draw_dots(draw)
+            self._draw_overlays(img)
         if self.modal is not None:
             self._draw_modal(img)
 
         return self.display.present(img, name=self.current.name)
+
+    def _draw_overlays(self, img):
+        """Дуга-громкость + индикатор уведомлений + нижний бар + точки (для НЕ полноэкранных)."""
+        draw = ImageDraw.Draw(img)
+        vol = None
+        if self.state is not None:
+            cs = getattr(self.state, "control_source", None)
+            vol = cs.volume if cs is not None else None
+        unread = getattr(self.state, "unread_count", 0) if self.state else 0
+        astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
+        if self.anim is not None:
+            self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс орба
+        if unread and int(time.monotonic() * 1.5) % 2 == 0:
+            T.encoder_zone_glow(draw)
+        T.encoder_arc(draw, level=vol)
+        if self.status_bar:
+            self.status_bar.render(img, self._regions, self.anim, self.state)
+        if self.show_dots and len(self.screens) > 1:
+            self._draw_dots(draw)
+
+    # ── интерактивная «шторка» (вытягивание панели за пальцем) ─────────────────
+    def _compose_full(self, index):
+        """Полный кадр экрана index (со всеми overlays, если он не полноэкранный)."""
+        scr = self.screens[index]
+        img = scr.render(None)                       # без регистрации регионов (фон/панель)
+        if not getattr(scr, "fullscreen", False):
+            self._draw_overlays(img)
+        return img
+
+    def begin_shade(self, bg_index, panel_index, p):
+        """Старт интерактивной шторки: фон и панель рендерим ПО РАЗУ (дальше только сдвиг)."""
+        self._shade = {"p": max(0.0, min(1.0, p)),
+                       "bg": self._compose_full(bg_index),
+                       "panel": self._compose_full(panel_index)}
+
+    def update_shade(self, p):
+        if self._shade is not None:
+            self._shade["p"] = max(0.0, min(1.0, p))
+
+    def end_shade(self):
+        self._shade = None
+
+    @property
+    def shade_active(self):
+        return self._shade is not None
+
+    def _present_shade(self):
+        # «Оконная штора»: панель раскрывается СВЕРХУ вниз, её нижний край = позиция пальца.
+        # Шапка/контент видны сразу (они вверху панели), фон виден ниже раскрытой части.
+        s = self._shade
+        base = s["bg"].copy()
+        h = int(s["p"] * T.H)                        # высота раскрытой части (нижний край за пальцем)
+        if h > 0:
+            base.paste(s["panel"].crop((0, 0, T.W, h)), (0, 0))
+        return self.display.present(base, name="shade")
 
     def _render_transition(self):
         p = self.anim.transition_progress

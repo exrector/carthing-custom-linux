@@ -166,18 +166,18 @@ async def start(get_ams=None, on_event=None):
         if t["sx"] is None or t["cx"] is None:
             return
         dx, dy = t["cx"] - t["sx"], t["cy"] - t["sy"]
-        if abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
+        if abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
+            on_event((EV_TAP, t["cx"], t["cy"]))  # маленькое движение в любом месте = тап
+        elif abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
-        elif t["zone"] == "top" and dy >= SWIPE_MIN_PX and abs(dy) > abs(dx):
-            on_event(EV_EDGE_TOP)                 # от верхнего края вниз -> открыть вью
-        elif t["zone"] == "bottom" and dy <= -SWIPE_MIN_PX and abs(dy) > abs(dx):
-            on_event(EV_EDGE_BOTTOM)              # от нижнего края вверх -> закрыть вью
+        elif t["zone"] == "top":
+            on_event(("drag_end", "open", max(0, dy)))    # доводка шторки сверху
+        elif t["zone"] == "bottom":
+            on_event(("drag_end", "close", max(0, -dy)))  # доводка шторки снизу
         elif t["vstepped"]:
             pass                                  # середина: вертикаль уже проскроллена шагами
-        elif t["zone"] == "mid" and abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
+        elif abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
             on_event(EV_SWIPE_UP if dy < 0 else EV_SWIPE_DOWN)
-        elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
-            on_event((EV_TAP, t["cx"], t["cy"]))
         t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["stepy"] = None
         t["vstepped"] = False
         t["zone"] = "mid"
@@ -212,12 +212,21 @@ async def start(get_ams=None, on_event=None):
                                  else "bottom" if cy > CANVAS_H - EDGE_PX
                                  else "mid")
                 t["cx"], t["cy"] = cx, cy
-                # непрерывное листание шагами — ТОЛЬКО из середины (края = открыть/закрыть)
                 if t["zone"] == "mid":
+                    # середина: непрерывное листание шагами
                     while t["cy"] - t["stepy"] >= DRAG_STEP_PX:
                         on_event(EV_SWIPE_DOWN); t["stepy"] += DRAG_STEP_PX; t["vstepped"] = True
                     while t["stepy"] - t["cy"] >= DRAG_STEP_PX:
                         on_event(EV_SWIPE_UP); t["stepy"] -= DRAG_STEP_PX; t["vstepped"] = True
+                elif t["zone"] == "top":
+                    # от верхнего края: панель едет ЗА пальцем (интерактивная шторка)
+                    d = t["cy"] - t["sy"]
+                    if d >= TAP_MAX_PX:
+                        on_event(("drag", "open", d))
+                elif t["zone"] == "bottom":
+                    d = t["sy"] - t["cy"]
+                    if d >= TAP_MAX_PX:
+                        on_event(("drag", "close", d))
 
     await _read_events('/dev/input/event1', on_encoder)
     await _read_events('/dev/input/event0', on_buttons)

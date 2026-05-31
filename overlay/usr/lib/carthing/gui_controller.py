@@ -9,10 +9,12 @@ GUI — слой представления/intents для одного рант
 RuntimeModel, шлёт intents в сервисы (инъекция колбэков из carthing_runtime).
 """
 
+import asyncio
 import logging
 import time
 
 import identity_service
+import ui_theme as T
 from app_state import AppState
 from intents import Dispatcher
 from ui_screen import Compositor, DRMDisplayAdapter, Input
@@ -52,6 +54,8 @@ class GuiController:
         )
         self.app_state.active_desktop = HOME
         self._prev_iphone_connected = False
+        self._last_drag_render = 0.0
+        self._snapping = False
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
     def _nav_intent(self, intent, payload=None):
@@ -79,7 +83,72 @@ class GuiController:
             return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
 
+    def needs_fast_render(self):
+        """Рендер-циклу: крутиться на ~60fps, пока тянется/доводится шторка."""
+        return self.compositor.shade_active
+
+    # ── интерактивная шторка: панель едет за пальцем, на отпускании доводится ──
+    def _on_drag(self, kind, offset):
+        frac = max(0.0, min(1.0, offset / float(T.H)))
+        if kind == "open":
+            if self.compositor.active == NOTIF:
+                return                                  # уже открыто
+            if not self.compositor.shade_active:
+                self.compositor.begin_shade(self.compositor.active, NOTIF, frac)
+            self.compositor.update_shade(frac)
+        else:  # close
+            if self.compositor.active != NOTIF:
+                return                                  # нечего закрывать
+            if not self.compositor.shade_active:
+                self.compositor.begin_shade(HOME, NOTIF, 1.0 - frac)
+            self.compositor.update_shade(1.0 - frac)
+        now = time.monotonic()                          # троттлинг рендера ~60fps
+        if now - self._last_drag_render >= 0.015:
+            self._last_drag_render = now
+            self.compositor.render()
+
+    def _on_drag_end(self, kind, offset):
+        frac = max(0.0, min(1.0, offset / float(T.H)))
+        if not self.compositor.shade_active:
+            # быстрый флик без промежуточных кадров — мгновенно переключить по порогу
+            if offset >= 100:
+                if kind == "open" and self.compositor.active != NOTIF:
+                    self.compositor.active = NOTIF; self.compositor.render()
+                elif kind == "close" and self.compositor.active == NOTIF:
+                    self.compositor.active = HOME; self.compositor.render()
+            return
+        p = frac if kind == "open" else (1.0 - frac)
+        asyncio.ensure_future(self._snap(p > 0.4))
+
+    async def _snap(self, open_):
+        """Доводка шторки до открытой/закрытой за ~0.15с (ease-out)."""
+        if self._snapping or not self.compositor.shade_active:
+            return
+        self._snapping = True
+        try:
+            start = self.compositor._shade["p"]
+            target = 1.0 if open_ else 0.0
+            t0 = time.monotonic(); dur = 0.15
+            while True:
+                p = (time.monotonic() - t0) / dur
+                if p >= 1.0:
+                    break
+                ease = 1 - (1 - p) ** 3
+                self.compositor.update_shade(start + (target - start) * ease)
+                self.compositor.render()
+                await asyncio.sleep(0.016)
+            self.compositor.active = NOTIF if open_ else HOME
+            self.compositor.end_shade()
+            self.compositor.render()
+        finally:
+            self._snapping = False
+
     def handle_input(self, event):
+        if isinstance(event, tuple) and event:
+            if event[0] == "drag":
+                self._on_drag(event[1], event[2]); return
+            if event[0] == "drag_end":
+                self._on_drag_end(event[1], event[2]); return
         if event == Input.SETTINGS:
             self.compositor.active = SETTINGS
             self.compositor.render()
