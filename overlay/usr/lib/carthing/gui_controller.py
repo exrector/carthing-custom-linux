@@ -108,6 +108,8 @@ class GuiController:
             a.active_desktop = HOME                 # подключился iPhone -> на home
         self._prev_iphone_connected = a.iphone.connected
         if a.iphone.connected:
+            if s.title != a.iphone.title:          # смена трека -> сбросить локальный «лайк»
+                a.iphone.liked = False
             a.iphone.title = s.title
             a.iphone.artist = s.artist
             a.iphone.duration = s.duration

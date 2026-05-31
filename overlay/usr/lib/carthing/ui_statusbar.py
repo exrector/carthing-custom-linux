@@ -1,10 +1,15 @@
 """Bottom bar (full-width bottom band [OCCLUSION_BOTTOM..H]).
 
 ВСЯ ширина бара отдана под медиа-транспорт (решение пользователя 2026-05-31): часы и
-кнопка ассистента убраны, чтобы все приходящие с iPhone кнопки (AMS supported-список)
-помещались и раскладывались динамически по слотам во всю ширину. Сверху — линия-делитель,
-она же прогресс трека. Часы/ассистент переедут в другое место (Фаза 5).
+кнопка ассистента убраны, чтобы кнопки, приходящие с iPhone (AMS supported-список),
+раскладывались по слотам во всю ширину. Сверху — линия-делитель = прогресс трека.
+
+Значки рисуются ВЫСОКОКАЧЕСТВЕННЫМИ глифами (super-sampling 4×, ui_theme.paste_glyph) —
+без «лесенки». Набор сокращён по решению пользователя: перемотка ±, треки, play и ОДНО
+сердце-тумблер (избранное). Shuffle/Repeat/Bookmark/отдельный Dislike убраны.
 """
+from PIL import ImageDraw
+
 import ui_theme as T
 
 
@@ -13,29 +18,27 @@ class StatusBar:
     INTENT_PLAY_PAUSE = "media_play_pause"
     INTENT_ASSISTANT = "assistant"
 
-    # Полный набор кнопок, которые может отдать iPhone (AMS RemoteCommandID), В ПОРЯДКЕ
-    # слева→направо. Громкость (5/6) НЕ здесь — это энкодер/дуга. play/pause — всегда (центр).
-    # kind -> (AMS cmd id, icon_fn, intent). order: режимы | перемотка | play | перемотка | реакции
+    # Порядок слева→направо: (kind, AMS cmd id, intent). Громкость (5/6) НЕ здесь — энкодер.
+    # play — всегда (центр). like — ОДИН значок-тумблер: контур = не в избранном, залит = в
+    # избранном; тап переключает (add/remove). AMS состояние не отдаёт → lit локальный/optimistic.
     _LAYOUT = [
-        ("shuffle",   8,  "icon_shuffle",   "media_shuffle"),
-        ("repeat",    7,  "icon_repeat",    "media_repeat"),
-        ("skip_back", 10, "icon_skip_back", "media_skip_back"),
-        ("prev",      4,  "icon_prev",      "media_prev"),
-        ("play",      2,  None,             "media_play_pause"),     # всегда
-        ("next",      3,  "icon_next",      "media_next"),
-        ("skip_fwd",  9,  "icon_skip_fwd",  "media_skip_fwd"),
-        ("like",      11, "icon_heart",     "media_like"),
-        ("dislike",   12, "icon_dislike",   "media_dislike"),
-        ("bookmark",  13, "icon_bookmark",  "media_bookmark"),
+        ("skip_back", 10, "media_skip_back"),
+        ("prev",       4, "media_prev"),
+        ("play",       2, "media_play_pause"),
+        ("next",       3, "media_next"),
+        ("skip_fwd",   9, "media_skip_fwd"),
+        ("like",      11, "media_like_toggle"),
     ]
 
-    def render(self, draw, regions, anim, st):
+    def render(self, img, regions, anim, st):
+        draw = ImageDraw.Draw(img)
         bar_top = T.STATUSBAR_TOP
         draw.rectangle([0, bar_top, T.W, T.H], fill=T.BG)
         cy = bar_top + (T.H - bar_top) // 2 + 6   # вертикальный центр транспорта
 
         control = getattr(st, "control_source", None)   # MediaSession the transport drives
         playing = control.playing if control else False
+        liked = bool(getattr(control, "liked", False)) if control else False
 
         # ── верхний делитель = линия прогресса трека (на всю ширину) ───────────
         pct = 0.0
@@ -43,30 +46,40 @@ class StatusBar:
             pct = min(control.position / control.duration, 1.0)
         T.progress_segments(draw, 0, bar_top, T.W, pct)
 
-        # ── ВСЕ заявленные приложением кнопки -> в бар (capability-driven) ──────
-        # Рисуем каждую команду из _LAYOUT, которую приложение заявило в AMS supported.
-        # play — всегда. Если supported пуст (только подключились) — дефолт prev/play/next.
+        # ── заявленные приложением кнопки -> в бар (capability-driven) ──────────
         sup = set(getattr(control, "supported_commands", set()) or set())
         order = []
-        for kind, cmd, icon_name, intent in self._LAYOUT:
+        for kind, cmd, intent in self._LAYOUT:
             if kind == "play":
-                order.append((kind, icon_name, intent)); continue
+                order.append((kind, intent)); continue
             if sup:
                 if cmd in sup:
-                    order.append((kind, icon_name, intent))
+                    order.append((kind, intent))
             elif kind in ("prev", "next"):          # дефолт без supported
-                order.append((kind, icon_name, intent))
+                order.append((kind, intent))
 
-        # ── динамический размер: чем больше кнопок, тем меньше значки ───────────
+        # ── равномерная раскладка по слотам; размер значка масштабируется ───────
         n = len(order)
         usable = T.W - 2 * T.MARGIN
         slot = usable / n
-        r = max(11, min(26, int(slot * 0.30)))       # радиус значка масштабируется со слотом
-        half = int(min(slot / 2 - 3, 80))            # тап-зона (с запасом, без нахлёста)
-        for i, (kind, icon_name, intent) in enumerate(order):
+        size = int(max(28, min(56, slot * 0.62)))     # пиксельный размер глифа
+        half = int(min(slot / 2 - 3, 80))             # тап-зона (с запасом, без нахлёста)
+        for i, (kind, intent) in enumerate(order):
             bx = int(T.MARGIN + slot * (i + 0.5))
             if kind == "play":
-                (T.icon_pause if playing else T.icon_play)(draw, bx, cy, r + 3, color=T.FG)
-            else:
-                getattr(T, icon_name)(draw, bx, cy, r, color=T.FG)
+                T.paste_glyph(img, T.glyph_pause if playing else T.glyph_play,
+                              bx, cy, size + 6, T.FG)
+            elif kind == "skip_back":
+                T.paste_glyph(img, T.glyph_skip_fwd, bx, cy, size, T.FG, mirror=True)
+            elif kind == "skip_fwd":
+                T.paste_glyph(img, T.glyph_skip_fwd, bx, cy, size, T.FG)
+            elif kind == "prev":
+                T.paste_glyph(img, T.glyph_prev, bx, cy, size, T.FG)
+            elif kind == "next":
+                T.paste_glyph(img, T.glyph_next, bx, cy, size, T.FG)
+            elif kind == "like":
+                if liked:
+                    T.paste_glyph(img, T.glyph_heart_filled, bx, cy, size, T.STATUS_OFF)
+                else:
+                    T.paste_glyph(img, T.glyph_heart, bx, cy, size, T.FG)
             regions.add((bx - half, cy - half, bx + half, cy + half), intent)

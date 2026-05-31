@@ -215,7 +215,7 @@ class Compositor:
             T.encoder_zone_glow(draw)
         T.encoder_arc(draw, level=vol)
         if self.status_bar:
-            self.status_bar.render(draw, self._regions, self.anim, self.state)
+            self.status_bar.render(img, self._regions, self.anim, self.state)
         if self.show_dots and len(self.screens) > 1:
             self._draw_dots(draw)
         if self.modal is not None:

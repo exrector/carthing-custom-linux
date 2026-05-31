@@ -5,7 +5,8 @@ hardcode colours or sizes; they read from here. Changing the look = editing this
 file, never the logic. Vectors (not font glyphs) are used for symbols so the
 look is font-independent and emoji-free.
 """
-from PIL import ImageFont
+from PIL import ImageFont, Image, ImageDraw
+import math
 import os
 
 # ─── canvas (landscape; device rotates -90 to the 480x800 panel) ──────────────
@@ -282,3 +283,94 @@ def icon_chevron(draw, cx, cy, r, color=MUTED, expanded=False, width=3):
     else:
         draw.line([(cx - r * 0.4, cy - r), (cx + r * 0.5, cy)], fill=color, width=width)
         draw.line([(cx + r * 0.5, cy), (cx - r * 0.4, cy + r)], fill=color, width=width)
+
+
+# ─── ВЫСОКОКАЧЕСТВЕННЫЕ ГЛИФЫ (супер-сэмплинг 4× + LANCZOS = без «лесенки») ────
+# Рисуем в квадрате [0..S] на прозрачном тайле в 4× размере, потом даунскейл с
+# LANCZOS и вставляем с альфой. Так значки в баре получаются гладкими. Каждый
+# glyph_*(d, S, color) рисует в боксе стороной S, центр (S/2, S/2).
+_GLYPH_SS = 4
+_GLYPH_RESAMPLE = getattr(Image, "LANCZOS", Image.BICUBIC)
+
+
+def paste_glyph(base_img, glyph_fn, cx, cy, size, color, mirror=False):
+    """Отрисовать glyph_fn в 4× тайл, сгладить и вставить в base_img по центру (cx,cy)."""
+    size = int(size)
+    if size < 2:
+        return
+    S = size * _GLYPH_SS
+    tile = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+    glyph_fn(d, S, color)
+    if mirror:
+        from PIL import ImageOps
+        tile = ImageOps.mirror(tile)
+    tile = tile.resize((size, size), _GLYPH_RESAMPLE)
+    base_img.paste(tile, (int(cx - size / 2), int(cy - size / 2)), tile)
+
+
+def _arrow_tri(d, x, y, ang, size, color):
+    """Залитый равнобедренный наконечник: вершина в (x,y), указывает в направлении ang."""
+    a1 = ang + math.radians(148)
+    a2 = ang - math.radians(148)
+    d.polygon([(x, y),
+               (x + size * math.cos(a1), y + size * math.sin(a1)),
+               (x + size * math.cos(a2), y + size * math.sin(a2))], fill=color)
+
+
+def glyph_play(d, S, color):
+    c = S / 2; R = S * 0.34
+    d.polygon([(c - R * 0.82, c - R), (c - R * 0.82, c + R), (c + R * 1.04, c)], fill=color)
+
+
+def glyph_pause(d, S, color):
+    c = S / 2; R = S * 0.34; w = R * 0.58; gap = R * 0.30; rad = w * 0.40
+    d.rounded_rectangle([c - gap - w, c - R, c - gap, c + R], radius=rad, fill=color)
+    d.rounded_rectangle([c + gap, c - R, c + gap + w, c + R], radius=rad, fill=color)
+
+
+def glyph_prev(d, S, color):
+    c = S / 2; R = S * 0.33; w = R * 0.40; rad = w * 0.40
+    d.rounded_rectangle([c - R, c - R, c - R + w, c + R], radius=rad, fill=color)
+    d.polygon([(c + R, c - R), (c + R, c + R), (c - R * 0.02, c)], fill=color)
+
+
+def glyph_next(d, S, color):
+    c = S / 2; R = S * 0.33; w = R * 0.40; rad = w * 0.40
+    d.rounded_rectangle([c + R - w, c - R, c + R, c + R], radius=rad, fill=color)
+    d.polygon([(c - R, c - R), (c - R, c + R), (c + R * 0.02, c)], fill=color)
+
+
+def glyph_skip_fwd(d, S, color):
+    """Перемотка вперёд: круговая стрелка по часовой, разрыв и наконечник сверху."""
+    c = S / 2; R = S * 0.32; w = max(2, int(S * 0.085))
+    # дуга по часовой с разрывом сверху (≈270°); рисуем от 300° на 250° вперёд
+    start, span = 305, 250
+    d.arc([c - R, c - R, c + R, c + R], start=start, end=start + span, fill=color, width=w)
+    # наконечник на ведущем конце (start), касательная по часовой = ang - 90°
+    a = math.radians(start)
+    ex, ey = c + R * math.cos(a), c + R * math.sin(a)
+    _arrow_tri(d, ex, ey, a - math.radians(90), R * 0.62, color)
+
+
+def glyph_skip_back(d, S, color):
+    """Перемотка назад = зеркало skip_fwd (идеально симметрично)."""
+    glyph_skip_fwd(d, S, color)   # реальное зеркало делает paste_glyph(mirror=True)
+
+
+def glyph_heart(d, S, color, filled=False):
+    c = S / 2; R = S * 0.34; w = max(2, int(S * 0.10))
+    pts = []
+    for i in range(0, 360, 6):
+        t = math.radians(i)
+        x = 16 * math.sin(t) ** 3
+        y = 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)
+        pts.append((c + x * R / 16.0, c - y * R / 16.0 - R * 0.08))
+    if filled:
+        d.polygon(pts, fill=color)
+    else:
+        d.line(pts + [pts[0]], fill=color, width=w, joint="curve")
+
+
+def glyph_heart_filled(d, S, color):
+    glyph_heart(d, S, color, filled=True)

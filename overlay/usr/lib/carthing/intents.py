@@ -32,6 +32,8 @@ class Dispatcher:
             self._media("skip_fwd")
         elif intent == "media_skip_back":
             self._media("skip_back")
+        elif intent == "media_like_toggle":
+            self._like_toggle()
         elif intent == "media_like":
             self._media("like")
         elif intent == "media_dislike":
@@ -74,6 +76,15 @@ class Dispatcher:
         else:
             self.state.last_media_source = key
             self.on_command(key, command)
+
+    def _like_toggle(self):
+        """ОДНО сердце-тумблер: тап переключает «в избранном». AMS не сообщает реальное
+        состояние, поэтому lit — локальный optimistic-флаг. add -> Like(11), remove -> Dislike(12)."""
+        key = self.state.control_source_key
+        sess = self.state.sources[key]
+        sess.liked = not getattr(sess, "liked", False)
+        self.state.last_media_source = key
+        self.on_command(key, "like" if sess.liked else "dislike")
 
     def _exclude(self, active_key):
         """Pause every other source when one starts playing."""

@@ -38,6 +38,9 @@ class MediaSession:
         self.volume = 0.0
         # AMS RemoteCommand-список текущего приложения (какие кнопки рисовать).
         self.supported_commands = set()
+        # «В избранном» — ЛОКАЛЬНЫЙ optimistic-флаг (AMS не сообщает реальное состояние).
+        # Сбрасывается при смене трека; тап по сердцу переключает (add/remove).
+        self.liked = False
 
 
 class AppState:
