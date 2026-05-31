@@ -52,7 +52,7 @@
 ```text
 (local repo root)
 branch: release-integration
-runtime tree sha1: 9c40ba6493ce4576efc91b300ad231ba930f3a14
+runtime tree sha1: 83f85b3b16877ec387fb347ea2ee7ecb91bb7edf
 ```
 
 Запекаются 31 файл:

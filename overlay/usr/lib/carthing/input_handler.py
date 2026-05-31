@@ -153,7 +153,7 @@ async def start(get_ams=None, on_event=None):
     # Touch: a single-finger gesture → horizontal swipe (desktop switch) or tap.
     # MT type B; we track the active contact only (good enough for swipe/tap).
     EDGE_DRAG_START = 10   # как мало нужно увести палец от края, чтобы шторка начала ехать
-    SCROLL_START   = 10    # порог начала пиксельного скролла (чтобы тап не скроллил)
+    SCROLL_START   = 6     # небольшой touch-slop: список начинает ехать почти сразу, но тап остаётся тапом
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
          "lasty": None, "vstepped": False, "zone": "mid", "dragging": False}

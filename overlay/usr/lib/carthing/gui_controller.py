@@ -147,10 +147,10 @@ class GuiController:
                 self.compositor.render()
 
     def _on_scroll(self, delta):
-        """Пиксельный скролл активного вью «за пальцем» (троттлинг рендера ~30fps)."""
+        """Пиксельный скролл активного вью «за пальцем» (троттлинг рендера ~60fps)."""
         if self.compositor.current.on_input(("scroll", delta)):
             now = time.monotonic()
-            if now - self._last_scroll_render >= 0.03:
+            if now - self._last_scroll_render >= 0.016:
                 self._last_scroll_render = now
                 self.compositor.render()
 

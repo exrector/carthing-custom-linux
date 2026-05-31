@@ -6,7 +6,7 @@
 ## ЧТО ЗАПЕЧЬ (источник истины)
 - Репо/ветка: `carthing-release-integration` , ветка **`release-integration`**, коммит `010f1c4`+.
 - Userspace = **все `overlay/usr/lib/carthing/*.py`** (31 файл). sha-дерева для сверки после bake:
-  `9c40ba6493ce4576efc91b300ad231ba930f3a14`
+  `83f85b3b16877ec387fb347ea2ee7ecb91bb7edf`
   (в каталоге: `ls *.py | sort | xargs shasum | shasum`).
 - Entry: в `/etc/default/carthing` → **`CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/carthing_runtime.py`**.
 - `vendor/bumble` — наш тree использует bumble из rootfs; оставить рабочий (тот же baseline).

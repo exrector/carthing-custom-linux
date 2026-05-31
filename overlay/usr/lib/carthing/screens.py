@@ -2,7 +2,7 @@
 calls raw PIL styling or font glyphs (vector icons only). Content starts below
 the status bar. Screens read duck-typed state and emit intents via callbacks.
 """
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 
 import ui_theme as T
 import ui_components as C
@@ -329,12 +329,26 @@ class NotificationsScreen(Screen):
         self.detail_uid = None         # None = список; иначе uid развёрнутой карточки
         self.scroll_y = 0              # пиксельный скролл «за пальцем»
         self._max_scroll = 0
+        self._layout_sig = None
+        self._layout_items = []
+        self._layout_total = 0
+        self._content_layer = None
 
     def on_state(self, state):
         self.state = state
+        sig = self._notes_signature()
+        if sig != self._layout_sig:
+            self._layout_sig = None
+            self._content_layer = None
 
     def _notes(self):
         return (self.state.notifications if self.state else []) or []
+
+    def _notes_signature(self):
+        return tuple(
+            (n.get("uid"), n.get("app", ""), n.get("title", ""), n.get("body", ""))
+            for n in self._notes()
+        )
 
     def select(self, i):
         notes = self._notes()
@@ -366,14 +380,51 @@ class NotificationsScreen(Screen):
             return True
         return False
 
-    def render(self, regions=None):
-        # Все уведомления СРАЗУ целиком (тело с переносом), ПИКСЕЛЬНЫЙ скролл за пальцем.
-        img, draw = self.blank()
-        notes = self._notes()
+    def _ensure_layout(self, draw, notes, maxw):
         f = T.font(T.SZ_META)                             # единый мелкий размер на все строки
         x0 = 28; tx = x0 + 24
-        maxw = T.OCCLUSION_LEFT - tx - 8                  # не залезать под дугу громкости справа
         LH = 34; GAP = 22
+        sig = (maxw, T.SZ_META, self._notes_signature())
+        if sig == self._layout_sig and self._content_layer is not None:
+            return
+
+        items = []
+        for n in notes:
+            tl = C.wrap_lines(draw, n.get("title", "") or "—", f, maxw) or [""]
+            bl = C.wrap_lines(draw, n.get("body", ""), f, maxw) if n.get("body") else []
+            items.append({
+                "title_lines": tl,
+                "body_lines": bl,
+                "height": LH + len(tl) * LH + len(bl) * LH + GAP,
+                "content_h": LH + len(tl) * LH + len(bl) * LH,
+            })
+
+        total = max(1, sum(item["height"] for item in items))
+        layer = Image.new("RGB", (T.W, total), T.BG)
+        ldraw = ImageDraw.Draw(layer)
+        y = 0
+        for i, item in enumerate(items):
+            yy = y
+            n = notes[i]
+            ldraw.text((tx, yy), n.get("app", ""), font=f, fill=T.ACCENT); yy += LH
+            for ln in item["title_lines"]:
+                ldraw.text((tx, yy), ln, font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG); yy += LH
+            for ln in item["body_lines"]:
+                ldraw.text((tx, yy), ln, font=f, fill=T.MUTED); yy += LH
+            item["y"] = y
+            y += item["height"]
+
+        self._layout_sig = sig
+        self._layout_items = items
+        self._layout_total = total
+        self._content_layer = layer
+
+    def render(self, regions=None):
+        # Текст уведомлений layout'ится один раз, а при drag мы только двигаем готовый слой.
+        img, draw = self.blank()
+        notes = self._notes()
+        x0 = 28; tx = x0 + 24
+        maxw = T.OCCLUSION_LEFT - tx - 8                  # не залезать под дугу громкости справа
         top_y = 74; bot_y = T.H - 6
 
         def header():
@@ -386,40 +437,29 @@ class NotificationsScreen(Screen):
             C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_TITLE), T.FAINT, T.H // 2, cx=T.W // 2)
             return img
 
-        items = []
-        for n in notes:
-            tl = C.wrap_lines(draw, n.get("title", "") or "—", f, maxw) or [""]
-            bl = C.wrap_lines(draw, n.get("body", ""), f, maxw) if n.get("body") else []
-            items.append((tl, bl, LH + len(tl) * LH + len(bl) * LH + GAP))
-
-        total = sum(h for _, _, h in items)
+        self._ensure_layout(draw, notes, maxw)
+        viewport_h = bot_y - top_y
+        total = self._layout_total
         self._max_scroll = max(0, total - (bot_y - top_y))
         self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
 
         visible = []
-        y = top_y - self.scroll_y
-        for i, item in enumerate(items):
-            _tl, _bl, h = item
-            content_h = h - GAP
-            if y + content_h > top_y - 2 and y < bot_y:
+        for i, item in enumerate(self._layout_items):
+            y = top_y + item["y"] - self.scroll_y
+            if y + item["content_h"] > top_y - 2 and y < bot_y:
                 visible.append((i, y, item))
-            y += h
         if visible and not any(i == self.sel for i, _y, _item in visible):
             self.sel = visible[0][0]
 
+        crop_h = min(viewport_h, total - self.scroll_y)
+        if crop_h > 0:
+            crop = self._content_layer.crop((0, self.scroll_y, T.W, self.scroll_y + crop_h))
+            img.paste(crop, (0, top_y))
         for i, y, item in visible:
-            tl, bl, h = item
-            content_h = h - GAP
             if i == self.sel:
-                draw.rectangle([x0, y - 4, x0 + 7, y - 4 + content_h], fill=T.ACCENT)
-            yy = y
-            draw.text((tx, yy), notes[i].get("app", ""), font=f, fill=T.ACCENT); yy += LH
-            for ln in tl:                             # заголовок — ЖИРНЫМ
-                draw.text((tx, yy), ln, font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG); yy += LH
-            for ln in bl:                             # тело целиком — приглушённым
-                draw.text((tx, yy), ln, font=f, fill=T.MUTED); yy += LH
+                draw.rectangle([x0, y - 4, x0 + 7, y - 4 + item["content_h"]], fill=T.ACCENT)
             if regions is not None:
-                regions.add((x0, max(top_y, y - 4), T.W - 24, min(bot_y, y - 4 + content_h)),
+                regions.add((x0, max(top_y, y - 4), T.W - 24, min(bot_y, y - 4 + item["content_h"])),
                             "notif_select", payload=i)
         header()                                          # шапка ПОВЕРХ списка
         return img
