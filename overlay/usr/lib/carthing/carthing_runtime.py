@@ -46,6 +46,7 @@ backchannel = None       # TransferControlBackchannel
 settings = None          # SettingsService
 hw_caps = {}             # hardware_inventory.probe()
 mac = None               # MacService
+power = None             # IdlePowerController
 
 
 def _on_command(source, command):
@@ -161,7 +162,7 @@ async def _on_connection(connection):
 
 
 async def main():
-    global orch, gui, transfer, backchannel, settings, hw_caps, mac
+    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power
     _verify_persistent()
 
     # Per-boot инвентарь возможностей + настройки.
@@ -203,6 +204,8 @@ async def main():
                                 on_transfer_select=_on_transfer_select,
                                 on_notif_dismiss=_on_notif_dismiss)
             logger.info("GUI active (modular Compositor)")
+            from power_policy import IdlePowerController
+            power = IdlePowerController(settings)
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)
@@ -236,9 +239,13 @@ async def main():
             # Во время шторки экраном владеет отдельный тикер (_shade_loop) — основной
             # цикл молчит, чтобы не было двойного рендера/гонки за дисплей.
             shade = gui is not None and gui.needs_fast_render()
+            if power is not None:
+                power.note_model(model)
+                power.tick()
             if gui is not None and not shade:
                 gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
-                gui.render()
+                if power is None or power.display_awake:
+                    gui.render()
             if not shade and tick % PUBLISH_EVERY == 0:
                 _on_publish()         # runtime-bt.json для дирижёра/sync
             tick += 1
@@ -250,7 +257,11 @@ async def main():
     if gui is not None:
         try:
             import input_handler
-            asyncio.ensure_future(input_handler.start(on_event=gui.handle_input))
+            def _on_input(event):
+                if power is not None:
+                    power.note_activity("input")
+                gui.handle_input(event)
+            asyncio.ensure_future(input_handler.start(on_event=_on_input))
         except Exception as e:
             logger.warning("input disabled: %s", e)
 

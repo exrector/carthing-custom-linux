@@ -16,6 +16,10 @@ _DEFAULTS = {
     "preferred_view": "now_playing",   # стартовый view (gui-contract)
     "default_speaker": None,           # адрес динамика по умолчанию для Transfer
     "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
+    "screen_dim_after_sec": 45,         # сначала только подсветка, без BT/suspend
+    "screen_off_after_sec": 150,
+    "screen_active_brightness": 100,
+    "screen_dim_brightness": 12,
 }
 
 
