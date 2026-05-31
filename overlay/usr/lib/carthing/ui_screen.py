@@ -206,6 +206,10 @@ class Compositor:
         # Уведомления: пульс ВСЕЙ зоны под энкодером (сегмент диска), под дугой/громкостью.
         # Зона физически перекрыта энкодером -> только индикатор; список — свайп вниз на home.
         unread = getattr(self.state, "unread_count", 0) if self.state else 0
+        astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
+        if self.anim is not None:
+            # вялое мигание идёт только при _pulsing=True (иначе pulse_alpha=1.0 константа)
+            self.anim.set_pulsing(bool(unread) or astate in ("listening", "thinking"))
         if unread and self.anim is not None:
             T.encoder_zone_glow(draw, self.anim.pulse_alpha())
         T.encoder_arc(draw, level=vol)
