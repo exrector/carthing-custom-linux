@@ -236,6 +236,22 @@ class SettingsScreen(Screen):
                     rows.append((1, ckey, clabel, False, False))
         return rows
 
+    def _activate(self, i):
+        """Действие над строкой i: раскрыть родителя или выбрать лист (= PRESS)."""
+        rows = self._visible()
+        if not (0 <= i < len(rows)):
+            return
+        self.sel = i
+        level, key, _label, expandable, expanded = rows[i]
+        if expandable:
+            self.expanded.symmetric_difference_update({key})
+        else:
+            self.on_select(key)
+
+    def tap(self, i):
+        """Тап по строке экрана (touch): выбрать её и активировать."""
+        self._activate(i)
+
     def on_input(self, event):
         rows = self._visible()
         if event in (Input.ENCODER_CW, Input.SWIPE_UP):     # swipe up = move down the list
@@ -243,11 +259,7 @@ class SettingsScreen(Screen):
         if event in (Input.ENCODER_CCW, Input.SWIPE_DOWN):
             self.sel = (self.sel - 1) % len(rows); return True
         if event == Input.PRESS:
-            level, key, _label, expandable, expanded = rows[self.sel]
-            if expandable:
-                self.expanded.symmetric_difference_update({key})
-            else:
-                self.on_select(key)
+            self._activate(self.sel)
             return True
         return False
 
@@ -273,7 +285,7 @@ class SettingsScreen(Screen):
                               expandable=expandable, expanded=expanded,
                               indent=24 if level else 0)
             if regions is not None:
-                regions.add(rect, "settings_select", payload=key)
+                regions.add(rect, "settings_tap", payload=i)   # тап -> выбрать+активировать строку i
             y += T.ROW_H
         return img
 
