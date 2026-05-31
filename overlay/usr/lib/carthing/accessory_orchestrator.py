@@ -123,10 +123,13 @@ class AccessoryOrchestrator:
                 except Exception:
                     pass
 
-        # 1) classic: connectable только в Transfer; discoverable только в pairing.
+        # 1) classic: connectable ТОЛЬКО в Transfer; НИКОГДА не discoverable.
+        # Иначе в режиме сопряжения classic светится как ВТОРОЕ устройство рядом с BLE.
+        # iPhone парится по BLE, classic-ключ выводится через CTKD (не отдельной classic-парой);
+        # динамики добавляются инквайр-сканом (устройство ищет их, а не рекламирует себя).
         await self._set_classic(
-            connectable=self.transfer_connectable or self.pairing_armed,
-            discoverable=self.pairing_armed,
+            connectable=self.transfer_connectable,
+            discoverable=False,
         )
 
         # 2) BLE advertising по фазе/режиму. Когда УЖЕ подключены — не рекламируемся
