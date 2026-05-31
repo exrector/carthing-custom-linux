@@ -243,6 +243,37 @@ def icon_heart(draw, cx, cy, r, color=FG, filled=False, width=3):
         draw.line(pts + [pts[0]], fill=color, width=width)
 
 
+def icon_dislike(draw, cx, cy, r, color=FG, width=3):
+    """Дизлайк / убрать из избранного: сердце-контур, перечёркнутое диагональю."""
+    icon_heart(draw, cx, cy, r, color=color, filled=False, width=width)
+    draw.line([(cx - r, cy - r), (cx + r, cy + r)], fill=color, width=width)
+
+
+def icon_shuffle(draw, cx, cy, r, color=FG, width=3):
+    """Перемешать: две пересекающиеся стрелки вправо."""
+    draw.line([(cx - r, cy + r * 0.6), (cx + r * 0.5, cy - r * 0.6)], fill=color, width=width)
+    _arrowhead(draw, cx + r * 0.5, cy - r * 0.6, 1.0, -0.5, r * 0.5, color)
+    draw.line([(cx - r, cy - r * 0.6), (cx + r * 0.5, cy + r * 0.6)], fill=color, width=width)
+    _arrowhead(draw, cx + r * 0.5, cy + r * 0.6, 1.0, 0.5, r * 0.5, color)
+
+
+def icon_repeat(draw, cx, cy, r, color=FG, width=3):
+    """Повтор: замкнутая петля (овал) со стрелкой — отличается от skip (у того разрыв)."""
+    draw.arc([cx - r, cy - r * 0.72, cx + r, cy + r * 0.72], start=0, end=360,
+             fill=color, width=width)
+    _arrowhead(draw, cx + r, cy, 0.0, 1.0, r * 0.5, color)
+
+
+def icon_bookmark(draw, cx, cy, r, color=FG, width=3, filled=False):
+    """Закладка: прямоугольник с вырезом-«ласточкой» снизу."""
+    pts = [(cx - r * 0.6, cy - r), (cx + r * 0.6, cy - r),
+           (cx + r * 0.6, cy + r), (cx, cy + r * 0.4), (cx - r * 0.6, cy + r)]
+    if filled:
+        draw.polygon(pts, fill=color)
+    else:
+        draw.line(pts + [pts[0]], fill=color, width=width)
+
+
 def icon_chevron(draw, cx, cy, r, color=MUTED, expanded=False, width=3):
     # accordion indicator: ▸ collapsed / ▾ expanded
     if expanded:

@@ -36,6 +36,12 @@ class Dispatcher:
             self._media("like")
         elif intent == "media_dislike":
             self._media("dislike")
+        elif intent == "media_shuffle":
+            self._media("shuffle")
+        elif intent == "media_repeat":
+            self._media("repeat")
+        elif intent == "media_bookmark":
+            self._media("bookmark")
         elif intent == "media_vol_up":
             self._media("vol_up")
         elif intent == "media_vol_down":

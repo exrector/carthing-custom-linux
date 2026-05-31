@@ -38,10 +38,13 @@ CMD_VOL_DOWN = 6
 # 11=LikeTrack, 12=DislikeTrack, 13=BookmarkTrack. Seek по абсолютной позиции AMS
 # НЕ умеет (бар прогресса остаётся индикатором). Skip±: интервал задаёт само
 # приложение (Podcasts ~15-30с; Music обычно НЕ заявляет 9/10 для песен).
+CMD_REPEAT    = 7
+CMD_SHUFFLE   = 8
 CMD_SKIP_FWD  = 9
 CMD_SKIP_BACK = 10
 CMD_LIKE      = 11
 CMD_DISLIKE   = 12
+CMD_BOOKMARK  = 13
 
 # Человекочитаемые имена для лога supported-списка.
 CMD_NAMES = {

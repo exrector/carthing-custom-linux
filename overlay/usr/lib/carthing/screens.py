@@ -38,10 +38,6 @@ class NowPlayingScreen(Screen):
             self.emit("media_next"); return True
         if event == Input.BTN_3:
             self.emit("media_prev"); return True
-        if event == Input.BTN_1:                        # like/избранное (если приложение умеет)
-            if self.state and 11 in getattr(self.state.iphone, "supported_commands", set()):
-                self.emit("media_like"); return True
-            return False
         return False
 
     def render(self, regions=None):
@@ -78,13 +74,6 @@ class NowPlayingScreen(Screen):
             y += 10
             for aline in alines:
                 C.text_centered(draw, aline, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX); y += ALH
-
-        # Сердечко «в избранное» — только когда приложение заявляет AMS Like (cmd 11);
-        # это, например, Музыка. У подкастов команды нет -> значка нет (capability-driven).
-        if regions is not None and 11 in getattr(sess, "supported_commands", set()):
-            hx, hy = T.CONTENT_X1 - 40, T.CONTENT_TOP + 18
-            T.icon_heart(draw, hx, hy, 19, color=T.ACCENT, filled=False, width=3)
-            regions.add((hx - 34, hy - 34, hx + 34, hy + 34), "media_like")
         return img
 
 
