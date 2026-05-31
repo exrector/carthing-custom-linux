@@ -149,8 +149,12 @@ async def start(get_ams=None, on_event=None):
 
     # Touch: a single-finger gesture → horizontal swipe (desktop switch) or tap.
     # MT type B; we track the active contact only (good enough for swipe/tap).
+    # DRAG_STEP_PX: пока тянешь палец, каждые столько px вертикали = один шаг прокрутки
+    # (непрерывное листание «за пальцем», а не один резкий свайп на отпускании).
+    DRAG_STEP_PX = 50
     t = {"rawx": None, "rawy": None, "down": False,
-         "sx": None, "sy": None, "cx": None, "cy": None}
+         "sx": None, "sy": None, "cx": None, "cy": None,
+         "stepy": None, "vstepped": False}
 
     def _finish_touch():
         if not t["down"]:
@@ -161,11 +165,14 @@ async def start(get_ams=None, on_event=None):
         dx, dy = t["cx"] - t["sx"], t["cy"] - t["sy"]
         if abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
+        elif t["vstepped"]:
+            pass                                  # вертикаль уже проскроллена шагами при drag
         elif abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
             on_event(EV_SWIPE_UP if dy < 0 else EV_SWIPE_DOWN)
         elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
             on_event((EV_TAP, t["cx"], t["cy"]))
-        t["sx"] = t["sy"] = t["cx"] = t["cy"] = None
+        t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["stepy"] = None
+        t["vstepped"] = False
 
     async def on_touch(ev):
         if not use_gui:
@@ -181,7 +188,8 @@ async def start(get_ams=None, on_event=None):
                     _finish_touch()
                 else:
                     t["down"] = True
-                    t["sx"] = t["sy"] = None
+                    t["sx"] = t["sy"] = t["stepy"] = None
+                    t["vstepped"] = False
         elif evtype == EV_KEY and code == BTN_TOUCH and value == 0:
             _finish_touch()
         elif evtype == EV_SYN and code == SYN_REPORT:
@@ -189,8 +197,13 @@ async def start(get_ams=None, on_event=None):
                 cx = t["rawy"]                       # canvas_x = touch_y
                 cy = (CANVAS_H - 1) - t["rawx"]       # canvas_y = (H-1) - touch_x
                 if t["sx"] is None:
-                    t["sx"], t["sy"] = cx, cy
+                    t["sx"], t["sy"], t["stepy"] = cx, cy, cy
                 t["cx"], t["cy"] = cx, cy
+                # непрерывное листание: эмитим шаг на каждые DRAG_STEP_PX вертикали
+                while t["cy"] - t["stepy"] >= DRAG_STEP_PX:
+                    on_event(EV_SWIPE_DOWN); t["stepy"] += DRAG_STEP_PX; t["vstepped"] = True
+                while t["stepy"] - t["cy"] >= DRAG_STEP_PX:
+                    on_event(EV_SWIPE_UP); t["stepy"] -= DRAG_STEP_PX; t["vstepped"] = True
 
     await _read_events('/dev/input/event1', on_encoder)
     await _read_events('/dev/input/event0', on_buttons)
