@@ -230,7 +230,8 @@ class ModesScreen(Screen):
         self.emit("mode_select", key)
 
     def tap(self, index):
-        self._activate(index)
+        if 0 <= index < len(self.MODES):
+            self.sel = index
 
     def on_input(self, event):
         if isinstance(event, tuple) and event and event[0] == "scroll":
@@ -280,7 +281,7 @@ class ModesScreen(Screen):
             if regions is not None:
                 rx0, ry0, rx1, ry1 = rect
                 regions.add((rx0, max(top, ry0), rx1, min(bottom, ry1 + 42)),
-                            "mode_select", payload=key)
+                            "mode_focus", payload={"index": i, "mode": key})
         return img
 
 

@@ -38,6 +38,7 @@ class Input:
     EDGE_BOTTOM = "edge_bottom"  # свайп от нижнего края вверх (закрыть вью)
     # tap carries coordinates: ("tap", x, y)
     TAP = "tap"
+    LONG_TAP = "long_tap"
 
 
 # ─── display backends ─────────────────────────────────────────────────────────
@@ -196,6 +197,8 @@ class Compositor:
         self._sync_modal()
         if isinstance(event, tuple) and event and event[0] == Input.TAP:
             return self._handle_tap(event[1], event[2])
+        if isinstance(event, tuple) and event and event[0] == Input.LONG_TAP:
+            return self._handle_long_tap(event[1], event[2])
         if self.modal is not None:
             if self.modal.on_input(event):
                 self.render()
@@ -215,6 +218,16 @@ class Compositor:
             self.on_intent(hit.intent, hit.payload)
             return True
         return False
+
+    def _handle_long_tap(self, x, y):
+        hit = self._regions.hit(x, y)
+        if not hit:
+            return False
+        if hit.intent == "mode_focus" and isinstance(hit.payload, dict):
+            self.on_intent("mode_select", hit.payload.get("mode"))
+        else:
+            self.on_intent(hit.intent, hit.payload)
+        return True
 
     def _switch(self, delta):
         n = len(self.screens)

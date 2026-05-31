@@ -68,6 +68,7 @@ EV_SWIPE_DOWN  = "swipe_down"
 EV_EDGE_TOP    = "edge_top"      # свайп ОТ верхнего края вниз (открыть вью)
 EV_EDGE_BOTTOM = "edge_bottom"   # свайп ОТ нижнего края вверх (закрыть вью)
 EV_TAP         = "tap"
+EV_LONG_TAP    = "long_tap"
 _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"}
 
 # Touch → landscape canvas. Panel is portrait 480x800; the screen is rotated -90,
@@ -75,6 +76,7 @@ _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"
 CANVAS_H     = 480
 SWIPE_MIN_PX = 100   # min horizontal canvas travel to switch desktops
 TAP_MAX_PX   = 30    # max travel to count as a tap
+LONG_TAP_SEC = 0.65  # deliberate hold for destructive/test-mode activation
 EDGE_PX      = 36    # узкая системная edge-зона; остальной экран ведёт себя как обычный scroll-view
 
 
@@ -156,6 +158,7 @@ async def start(get_ams=None, on_event=None):
     SCROLL_START   = 6     # небольшой touch-slop: список начинает ехать почти сразу, но тап остаётся тапом
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
+         "down_t": None,
          "lasty": None, "last_scroll_t": None, "velocity": 0.0,
          "vstepped": False, "zone": "mid", "dragging": False}
 
@@ -174,8 +177,11 @@ async def start(get_ams=None, on_event=None):
         elif abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
         elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
-            on_event((EV_TAP, t["cx"], t["cy"]))  # маленькое движение = тап
+            duration = time.monotonic() - (t["down_t"] or time.monotonic())
+            event = EV_LONG_TAP if duration >= LONG_TAP_SEC else EV_TAP
+            on_event((event, t["cx"], t["cy"]))  # маленькое движение = tap/long-tap
         t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = t["last_scroll_t"] = None
+        t["down_t"] = None
         t["velocity"] = 0.0
         t["vstepped"] = False
         t["zone"] = "mid"
@@ -196,6 +202,7 @@ async def start(get_ams=None, on_event=None):
                 else:
                     t["down"] = True
                     t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = None
+                    t["down_t"] = time.monotonic()
                     t["last_scroll_t"] = None
                     t["velocity"] = 0.0
                     t["vstepped"] = False
