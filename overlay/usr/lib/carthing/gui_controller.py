@@ -56,8 +56,9 @@ class GuiController:
         self._prev_iphone_connected = False
         self._shade_task = None        # единственный рендер-тикер шторки (~60fps)
         self._snap = None              # None = следуем за пальцем; иначе доводка
-        self._scroll_task = None       # единая инерция scroll-view для всех экранов
+        self._scroll_task = None       # единый scroll render/inertia ticker для всех экранов
         self._scroll_velocity = 0.0
+        self._scroll_dirty = False
         self._last_scroll_render = 0.0
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
@@ -151,7 +152,7 @@ class GuiController:
     def _scrollable_screen(self):
         return self.compositor.current
 
-    def _apply_scroll_delta(self, delta, *, force=False):
+    def _apply_scroll_delta(self, delta):
         screen = self._scrollable_screen()
         before = getattr(screen, "scroll_y", None)
         handled = screen.on_input(("scroll", delta))
@@ -160,44 +161,53 @@ class GuiController:
             return False
         changed = before is None or after is None or abs(after - before) >= 0.01
         if changed:
-            now = time.monotonic()
-            if force or now - self._last_scroll_render >= 0.016:
-                self._last_scroll_render = now
-                self.compositor.render()
+            self._scroll_dirty = True
         return changed
+
+    def _ensure_scroll_task(self):
+        if self._scroll_task is None or self._scroll_task.done():
+            self._scroll_task = asyncio.ensure_future(self._scroll_loop())
 
     def _cancel_scroll_inertia(self):
         self._scroll_velocity = 0.0
         if self._scroll_task is not None and not self._scroll_task.done():
             self._scroll_task.cancel()
+        self._scroll_dirty = False
 
     def _on_scroll(self, delta):
         """Пиксельный скролл активного вью «за пальцем»."""
-        self._cancel_scroll_inertia()
-        self._apply_scroll_delta(delta, force=False)
+        self._scroll_velocity = 0.0                         # новый палец отменяет старую инерцию
+        if self._apply_scroll_delta(delta):
+            self._ensure_scroll_task()
 
     def _on_scroll_end(self, velocity):
         """Единая инерция scroll-view после отпускания пальца."""
         if abs(velocity) < 180:
             return
         self._scroll_velocity = max(-2600.0, min(2600.0, float(velocity)))
-        if self._scroll_task is None or self._scroll_task.done():
-            self._scroll_task = asyncio.ensure_future(self._scroll_loop())
+        self._ensure_scroll_task()
 
     async def _scroll_loop(self):
         last = time.monotonic()
         try:
-            while abs(self._scroll_velocity) >= 20:
+            while self._scroll_dirty or abs(self._scroll_velocity) >= 20:
                 now = time.monotonic()
                 dt = min(0.04, max(0.001, now - last))
                 last = now
-                delta = self._scroll_velocity * dt
-                if not self._apply_scroll_delta(delta, force=True):
-                    break
-                self._scroll_velocity *= 0.90 ** (dt / 0.016)
+                if abs(self._scroll_velocity) >= 20:
+                    delta = self._scroll_velocity * dt
+                    if not self._apply_scroll_delta(delta):
+                        self._scroll_velocity = 0.0
+                    else:
+                        self._scroll_velocity *= 0.90 ** (dt / 0.016)
+                if self._scroll_dirty:
+                    self._last_scroll_render = now
+                    self._scroll_dirty = False
+                    self.compositor.render()
                 await asyncio.sleep(0.016)
         finally:
             self._scroll_velocity = 0.0
+            self._scroll_dirty = False
 
     def handle_input(self, event):
         if isinstance(event, tuple) and event:
