@@ -233,15 +233,16 @@ async def main():
     async def _render_loop():
         tick = 0
         while True:
-            fast = gui is not None and gui.needs_fast_render()   # тянется/доводится шторка
-            if gui is not None:
-                if not fast:
-                    gui.apply(model)  # RuntimeModel -> AppState (живой прогресс)
+            # Во время шторки экраном владеет отдельный тикер (_shade_loop) — основной
+            # цикл молчит, чтобы не было двойного рендера/гонки за дисплей.
+            shade = gui is not None and gui.needs_fast_render()
+            if gui is not None and not shade:
+                gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
                 gui.render()
-            if not fast and tick % PUBLISH_EVERY == 0:
+            if not shade and tick % PUBLISH_EVERY == 0:
                 _on_publish()         # runtime-bt.json для дирижёра/sync
             tick += 1
-            await asyncio.sleep(0.016 if fast else RENDER_INTERVAL)
+            await asyncio.sleep(RENDER_INTERVAL)
 
     asyncio.ensure_future(_render_loop())
 

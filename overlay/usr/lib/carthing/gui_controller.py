@@ -54,8 +54,8 @@ class GuiController:
         )
         self.app_state.active_desktop = HOME
         self._prev_iphone_connected = False
-        self._last_drag_render = 0.0
-        self._snapping = False
+        self._shade_task = None        # единственный рендер-тикер шторки (~60fps)
+        self._snap = None              # None = следуем за пальцем; иначе доводка
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
     def _nav_intent(self, intent, payload=None):
@@ -84,10 +84,11 @@ class GuiController:
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
 
     def needs_fast_render(self):
-        """Рендер-циклу: крутиться на ~60fps, пока тянется/доводится шторка."""
+        """Рендер-циклу рантайма: пока активна шторка, экраном владеет ОТДЕЛЬНЫЙ тикер
+        (_shade_loop) — основной цикл не должен рисовать (иначе двойной рендер/гонка)."""
         return self.compositor.shade_active
 
-    # ── интерактивная шторка: панель едет за пальцем, на отпускании доводится ──
+    # ── интерактивная шторка (game-loop: касание ТОЛЬКО двигает p, рисует тикер) ──
     def _on_drag(self, kind, offset):
         frac = max(0.0, min(1.0, offset / float(T.H)))
         if kind == "open":
@@ -102,46 +103,51 @@ class GuiController:
             if not self.compositor.shade_active:
                 self.compositor.begin_shade(HOME, NOTIF, 1.0 - frac)
             self.compositor.update_shade(1.0 - frac)
-        now = time.monotonic()                          # троттлинг рендера ~60fps
-        if now - self._last_drag_render >= 0.015:
-            self._last_drag_render = now
-            self.compositor.render()
+        self._snap = None                               # следуем за пальцем (без доводки)
+        self._ensure_shade_task()
 
     def _on_drag_end(self, kind, offset):
-        frac = max(0.0, min(1.0, offset / float(T.H)))
         if not self.compositor.shade_active:
-            # быстрый флик без промежуточных кадров — мгновенно переключить по порогу
+            # быстрый флик без промежуточных кадров — мгновенно по порогу
             if offset >= 100:
                 if kind == "open" and self.compositor.active != NOTIF:
                     self.compositor.active = NOTIF; self.compositor.render()
                 elif kind == "close" and self.compositor.active == NOTIF:
                     self.compositor.active = HOME; self.compositor.render()
             return
-        p = frac if kind == "open" else (1.0 - frac)
-        asyncio.ensure_future(self._snap(p > 0.4))
+        p = self.compositor._shade["p"]
+        self._snap = {"start": p, "target": 1.0 if p > 0.4 else 0.0,
+                      "t0": time.monotonic(), "dur": 0.14}
+        self._ensure_shade_task()
 
-    async def _snap(self, open_):
-        """Доводка шторки до открытой/закрытой за ~0.15с (ease-out)."""
-        if self._snapping or not self.compositor.shade_active:
-            return
-        self._snapping = True
+    def _ensure_shade_task(self):
+        if self._shade_task is None or self._shade_task.done():
+            self._shade_task = asyncio.ensure_future(self._shade_loop())
+
+    async def _shade_loop(self):
+        """ЕДИНСТВЕННЫЙ рендер-тикер шторки ~60fps: рисует последнее p (за пальцем),
+        а на отпускании — доводит по ease-out. Касания сюда p только ПИШУТ, не рисуют."""
         try:
-            start = self.compositor._shade["p"]
-            target = 1.0 if open_ else 0.0
-            t0 = time.monotonic(); dur = 0.15
-            while True:
-                p = (time.monotonic() - t0) / dur
-                if p >= 1.0:
-                    break
-                ease = 1 - (1 - p) ** 3
-                self.compositor.update_shade(start + (target - start) * ease)
+            while self.compositor.shade_active:
+                if self._snap is not None:                  # доводка к открытой/закрытой
+                    s = self._snap
+                    k = (time.monotonic() - s["t0"]) / s["dur"]
+                    if k >= 1.0:
+                        self.compositor.update_shade(s["target"])
+                        self.compositor.render()
+                        self.compositor.active = NOTIF if s["target"] >= 0.5 else HOME
+                        self.compositor.end_shade()
+                        self._snap = None
+                        break
+                    ease = 1 - (1 - k) ** 3
+                    self.compositor.update_shade(s["start"] + (s["target"] - s["start"]) * ease)
                 self.compositor.render()
                 await asyncio.sleep(0.016)
-            self.compositor.active = NOTIF if open_ else HOME
-            self.compositor.end_shade()
-            self.compositor.render()
         finally:
-            self._snapping = False
+            # подстраховка: если вышли с активной шторкой без снапа — закрыть аккуратно
+            if self.compositor.shade_active and self._snap is None:
+                self.compositor.end_shade()
+                self.compositor.render()
 
     def handle_input(self, event):
         if isinstance(event, tuple) and event:
