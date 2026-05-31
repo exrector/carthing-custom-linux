@@ -138,7 +138,9 @@ class GuiController:
                                   "address": peer or ""})
         else:
             entry["connected"] = bool(connected)
-            entry["online"] = bool(connected) or entry.get("online", False)
+            # У источника нет сигнала «онлайн, но не подключён» -> online == connected
+            # (отключён = offline = красный, не залипает жёлтым). Жёлтый — только для динамиков.
+            entry["online"] = bool(connected)
             if connected and peer:
                 entry["address"] = peer
 
