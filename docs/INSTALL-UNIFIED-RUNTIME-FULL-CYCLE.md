@@ -52,7 +52,7 @@
 ```text
 (local repo root)
 branch: release-integration
-runtime tree sha1: 079ea52f0a50ab002c65b721ca89d47557f5d84f
+runtime tree sha1: 9c40ba6493ce4576efc91b300ad231ba930f3a14
 ```
 
 Запекаются 31 файл:
@@ -103,8 +103,10 @@ README.md
 - копирует проверенный `flash-stock-plus-rescue-profile-20260525`;
 - не мутирует исходный bundle;
 - накатывает unified runtime в `rootfs.img`;
+- накатывает единые support tools из `overlay/usr/libexec/carthing`;
 - выставляет `CARTHING_RUNTIME_ENTRY`;
 - очищает отдельное A2DP имя/receiver, чтобы не возвращать `Car Thing Audio`;
+- удаляет retired runtime-файлы, которые больше не должны оживать из старого rootfs;
 - проверяет runtime tree hash внутри образа.
 
 ## Прошивка

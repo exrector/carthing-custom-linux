@@ -6,11 +6,13 @@
 ## ЧТО ЗАПЕЧЬ (источник истины)
 - Репо/ветка: `carthing-release-integration` , ветка **`release-integration`**, коммит `010f1c4`+.
 - Userspace = **все `overlay/usr/lib/carthing/*.py`** (31 файл). sha-дерева для сверки после bake:
-  `079ea52f0a50ab002c65b721ca89d47557f5d84f`
+  `9c40ba6493ce4576efc91b300ad231ba930f3a14`
   (в каталоге: `ls *.py | sort | xargs shasum | shasum`).
 - Entry: в `/etc/default/carthing` → **`CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/carthing_runtime.py`**.
 - `vendor/bumble` — наш тree использует bumble из rootfs; оставить рабочий (тот же baseline).
 - Boot-цепочка без изменений: `init-wrapper → S50-carthing-remote → run-media-remote → exec $ENTRY`.
+- Support tools тоже источник истины в этом репо: `overlay/usr/libexec/carthing/profilectl` +
+  `usb-profile`/`bt-profile`/`audio-profile`/`sensor-profile`/`debug-profile`.
 
 ## Рецепт bake (как я делал на лету, без полной пересборки)
 В **копию** твоего rootfs.img (не мутируя общий build-том):

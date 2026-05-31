@@ -56,6 +56,7 @@ class GuiController:
         self._prev_iphone_connected = False
         self._shade_task = None        # единственный рендер-тикер шторки (~60fps)
         self._snap = None              # None = следуем за пальцем; иначе доводка
+        self._last_scroll_render = 0.0
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
     def _nav_intent(self, intent, payload=None):
@@ -145,12 +146,31 @@ class GuiController:
                 self.compositor.end_shade()
                 self.compositor.render()
 
+    def _on_scroll(self, delta):
+        """Пиксельный скролл активного вью «за пальцем» (троттлинг рендера ~30fps)."""
+        if self.compositor.current.on_input(("scroll", delta)):
+            now = time.monotonic()
+            if now - self._last_scroll_render >= 0.03:
+                self._last_scroll_render = now
+                self.compositor.render()
+
     def handle_input(self, event):
         if isinstance(event, tuple) and event:
             if event[0] == "drag":
                 self._on_drag(event[1], event[2]); return
             if event[0] == "drag_end":
                 self._on_drag_end(event[1], event[2]); return
+            if event[0] == "scroll":
+                self._on_scroll(event[1]); return
+        # ЭНКОДЕР (вращение) = ГРОМКОСТЬ ВСЕГДА, на любом вью (физический регулятор).
+        if event in (Input.ENCODER_CW, Input.ENCODER_CCW):
+            up = event == Input.ENCODER_CW
+            cs = self.app_state.control_source            # оптимистично двигаем дугу сразу
+            if cs is not None:
+                cs.volume = max(0.0, min(1.0, (cs.volume or 0.0) + (0.05 if up else -0.05)))
+            self.dispatcher.dispatch("media_vol_up" if up else "media_vol_down")
+            self.compositor.render()
+            return
         if event == Input.SETTINGS:
             self.compositor.active = SETTINGS
             self.compositor.render()

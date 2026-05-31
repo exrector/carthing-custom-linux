@@ -205,7 +205,9 @@ class SettingsScreen(Screen):
         ]
         self.expanded = set()
         self.sel = 0
-        self.top = 0          # first visible row (scroll offset)
+        self.top = 0          # legacy row offset fallback; pixel scroll owns normal touch lists
+        self.scroll_y = 0
+        self._max_scroll = 0
         self.state = None
 
     def on_state(self, state):
@@ -261,7 +263,12 @@ class SettingsScreen(Screen):
 
     def on_input(self, event):
         rows = self._visible()
-        # палец/контент тянем вниз -> идём ВНИЗ по списку (не инвертировано)
+        if not rows:
+            return False
+        if isinstance(event, tuple) and event and event[0] == "scroll":
+            self.scroll_y = max(0, min(self._max_scroll, self.scroll_y - event[1]))
+            return True
+        # Fallback for non-touch test paths. Normal list movement is pixel scroll by touch.
         if event == Input.ENCODER_CW or event == Input.SWIPE_DOWN:
             self.sel = (self.sel + 1) % len(rows); return True
         if event == Input.ENCODER_CCW or event == Input.SWIPE_UP:
@@ -278,16 +285,20 @@ class SettingsScreen(Screen):
 
         rows = self._visible()
         start_y = CONTENT_TOP + 52
-        vis = max(1, (T.OCCLUSION_BOTTOM - start_y) // T.ROW_H)   # rows that fit
-        # scroll so the selected row stays in view
-        if self.sel < self.top:
-            self.top = self.sel
-        elif self.sel >= self.top + vis:
-            self.top = self.sel - vis + 1
-        self.top = max(0, min(self.top, max(0, len(rows) - vis)))
+        bottom_y = T.OCCLUSION_BOTTOM
+        total_h = len(rows) * T.ROW_H
+        self._max_scroll = max(0, total_h - (bottom_y - start_y))
+        self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
 
-        y = start_y
-        for i in range(self.top, min(self.top + vis, len(rows))):
+        visible = []
+        for i, row in enumerate(rows):
+            y = start_y + i * T.ROW_H - self.scroll_y
+            if y + T.ROW_H > start_y and y < bottom_y:
+                visible.append((i, y, row))
+        if visible and not any(i == self.sel for i, _y, _row in visible):
+            self.sel = visible[0][0]
+
+        for i, y, row in visible:
             level, key, label, expandable, expanded, color = rows[i]
             rect = C.list_row(draw, y, label, selected=(i == self.sel),
                               expandable=expandable, expanded=expanded,
@@ -295,8 +306,9 @@ class SettingsScreen(Screen):
             if color is not None:                              # цветная статус-точка по центру строки
                 T.icon_dot(draw, 40, y + T.SZ_BODY // 2, 7, color=color)
             if regions is not None:
-                regions.add(rect, "settings_tap", payload=i)   # тап -> выбрать+активировать строку i
-            y += T.ROW_H
+                rx0, ry0, rx1, ry1 = rect
+                regions.add((rx0, max(start_y, ry0), rx1, min(bottom_y, ry1)),
+                            "settings_tap", payload=i)         # тап -> выбрать+активировать строку i
         return img
 
 
@@ -315,6 +327,8 @@ class NotificationsScreen(Screen):
         self.sel = 0
         self.top = 0
         self.detail_uid = None         # None = список; иначе uid развёрнутой карточки
+        self.scroll_y = 0              # пиксельный скролл «за пальцем»
+        self._max_scroll = 0
 
     def on_state(self, state):
         self.state = state
@@ -340,69 +354,74 @@ class NotificationsScreen(Screen):
         notes = self._notes()
         if not notes:
             return False
-        self.sel = max(0, min(self.sel, len(notes) - 1))
-        if event in (Input.ENCODER_CW, Input.SWIPE_DOWN):      # вниз по списку
-            self.sel = min(self.sel + 1, len(notes) - 1); return True
-        if event in (Input.ENCODER_CCW, Input.SWIPE_UP):       # вверх по списку
-            self.sel = max(self.sel - 1, 0); return True
+        if isinstance(event, tuple) and event and event[0] == "scroll":
+            # пиксельный скролл «за пальцем»: палец вниз (delta>0) -> к началу списка
+            self.scroll_y = max(0, min(self._max_scroll, self.scroll_y - event[1]))
+            return True
         if event == Input.SWIPE_LEFT:
+            self.sel = max(0, min(self.sel, len(notes) - 1))
             uid = notes[self.sel].get("uid")
             if uid is not None:
                 self.emit("notif_dismiss", uid)        # очистить выбранное (двусторонне)
-            self.sel = max(0, min(self.sel, len(notes) - 2))
             return True
         return False
 
     def render(self, regions=None):
-        # Список со ВСЕМИ уведомлениями СРАЗУ целиком (тело с переносом, переменная высота).
-        # Без отдельного «разворота»: всё видно прямо в списке, прокрутка энкодером/свайпом.
+        # Все уведомления СРАЗУ целиком (тело с переносом), ПИКСЕЛЬНЫЙ скролл за пальцем.
         img, draw = self.blank()
-        draw.text((28, 16), "Уведомления", font=T.font(34), fill=T.MUTED)
-        draw.line([28, 60, T.W - 28, 60], fill=T.HAIRLINE, width=2)
-
         notes = self._notes()
+        f = T.font(T.SZ_META)                             # единый мелкий размер на все строки
+        x0 = 28; tx = x0 + 24
+        maxw = T.OCCLUSION_LEFT - tx - 8                  # не залезать под дугу громкости справа
+        LH = 34; GAP = 22
+        top_y = 74; bot_y = T.H - 6
+
+        def header():
+            draw.rectangle([0, 0, T.W, 62], fill=T.BG)    # маска для контента, заехавшего под шапку
+            draw.text((28, 16), "Уведомления", font=T.font(34), fill=T.MUTED)
+            draw.line([28, 60, T.W - 28, 60], fill=T.HAIRLINE, width=2)
+
         if not notes:
+            header()
             C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_TITLE), T.FAINT, T.H // 2, cx=T.W // 2)
             return img
 
-        f = T.font(T.SZ_META)                             # единый мелкий размер на все строки
-        x0 = 28; tx = x0 + 24
-        maxw = T.W - tx - 24
-        LH = 34; GAP = 22                                 # высота строки / зазор между блоками
-        top_y = 74; bot_y = T.H - 6
-        sel = max(0, min(self.sel, len(notes) - 1))
-
-        # заранее раскладываем каждый блок на строки и считаем высоту (переменную)
         items = []
         for n in notes:
             tl = C.wrap_lines(draw, n.get("title", "") or "—", f, maxw) or [""]
             bl = C.wrap_lines(draw, n.get("body", ""), f, maxw) if n.get("body") else []
             items.append((tl, bl, LH + len(tl) * LH + len(bl) * LH + GAP))
 
-        # прокрутка: top = первый видимый блок; держим выбранный в окне
-        if sel < self.top:
-            self.top = sel
-        while self.top < sel and top_y + sum(items[j][2] for j in range(self.top, sel + 1)) > bot_y:
-            self.top += 1
-        self.top = max(0, min(self.top, len(notes) - 1))
+        total = sum(h for _, _, h in items)
+        self._max_scroll = max(0, total - (bot_y - top_y))
+        self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
 
-        y = top_y
-        for i in range(self.top, len(notes)):
-            tl, bl, h = items[i]
-            if y >= bot_y:
-                break
+        visible = []
+        y = top_y - self.scroll_y
+        for i, item in enumerate(items):
+            _tl, _bl, h = item
             content_h = h - GAP
-            if i == sel:                                  # зелёная полоса на весь блок
+            if y + content_h > top_y - 2 and y < bot_y:
+                visible.append((i, y, item))
+            y += h
+        if visible and not any(i == self.sel for i, _y, _item in visible):
+            self.sel = visible[0][0]
+
+        for i, y, item in visible:
+            tl, bl, h = item
+            content_h = h - GAP
+            if i == self.sel:
                 draw.rectangle([x0, y - 4, x0 + 7, y - 4 + content_h], fill=T.ACCENT)
             yy = y
             draw.text((tx, yy), notes[i].get("app", ""), font=f, fill=T.ACCENT); yy += LH
-            for ln in tl:                                 # заголовок — ЖИРНЫМ
+            for ln in tl:                             # заголовок — ЖИРНЫМ
                 draw.text((tx, yy), ln, font=f, fill=T.FG, stroke_width=1, stroke_fill=T.FG); yy += LH
-            for ln in bl:                                 # тело целиком — приглушённым
+            for ln in bl:                             # тело целиком — приглушённым
                 draw.text((tx, yy), ln, font=f, fill=T.MUTED); yy += LH
-            if regions is not None:                       # тап по блоку = выбрать (для свайп-очистки)
-                regions.add((x0, y - 4, T.W - 24, y - 4 + content_h), "notif_select", payload=i)
-            y += h
+            if regions is not None:
+                regions.add((x0, max(top_y, y - 4), T.W - 24, min(bot_y, y - 4 + content_h)),
+                            "notif_select", payload=i)
+        header()                                          # шапка ПОВЕРХ списка
         return img
 
     def _render_detail(self, n, regions=None):

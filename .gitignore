@@ -3,3 +3,5 @@ flash-bake-*/
 previews/
 __pycache__/
 *.pyc
+.DS_Store
+._*

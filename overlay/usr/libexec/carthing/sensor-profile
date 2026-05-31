@@ -1,0 +1,86 @@
+#!/bin/sh
+set -eu
+
+[ -r /etc/default/carthing ] && . /etc/default/carthing
+
+profile_file=${CARTHING_SENSOR_PROFILE_FILE:-/run/carthing/sensor-profile}
+runtime_file=${CARTHING_SENSOR_RUNTIME_PROFILE:-/run/carthing/sensor-runtime.env}
+
+usage() {
+    echo "usage: sensor-profile get|set <profile>|apply|list|status" >&2
+    exit 2
+}
+
+ensure_dirs() {
+    mkdir -p "$(dirname "$profile_file")" "$(dirname "$runtime_file")"
+}
+
+write_runtime() {
+    ensure_dirs
+    profile=$1
+    case "$profile" in
+        off)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_SENSOR_ACCEL=0
+CARTHING_SENSOR_LIGHT=0
+CARTHING_SENSOR_TOUCH=0
+EOF
+            ;;
+        basic)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_SENSOR_ACCEL=0
+CARTHING_SENSOR_LIGHT=1
+CARTHING_SENSOR_TOUCH=1
+EOF
+            ;;
+        full)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_SENSOR_ACCEL=1
+CARTHING_SENSOR_LIGHT=1
+CARTHING_SENSOR_TOUCH=1
+EOF
+            ;;
+        *)
+            echo "unsupported sensor profile: $profile" >&2
+            exit 1
+            ;;
+    esac
+}
+
+current_profile() {
+    if [ -r "$profile_file" ]; then
+        head -n 1 "$profile_file"
+    else
+        echo "${CARTHING_SENSOR_PROFILE:-basic}"
+    fi
+}
+
+case "${1:-}" in
+    get)
+        current_profile
+        ;;
+    set)
+        [ $# -eq 2 ] || usage
+        ensure_dirs
+        printf '%s\n' "$2" >"$profile_file"
+        write_runtime "$2"
+        ;;
+    apply)
+        profile="${2:-$(current_profile)}"
+        write_runtime "$profile"
+        ;;
+    list)
+        cat <<'EOF'
+off
+basic
+full
+EOF
+        ;;
+    status)
+        echo "profile=$(current_profile)"
+        [ -r "$runtime_file" ] && cat "$runtime_file"
+        ;;
+    *)
+        usage
+        ;;
+esac

@@ -152,13 +152,11 @@ async def start(get_ams=None, on_event=None):
 
     # Touch: a single-finger gesture → horizontal swipe (desktop switch) or tap.
     # MT type B; we track the active contact only (good enough for swipe/tap).
-    # DRAG_STEP_PX: пока тянешь палец, каждые столько px вертикали = один шаг прокрутки
-    # (непрерывное листание «за пальцем», а не один резкий свайп на отпускании).
-    DRAG_STEP_PX = 50
     EDGE_DRAG_START = 10   # как мало нужно увести палец от края, чтобы шторка начала ехать
+    SCROLL_START   = 10    # порог начала пиксельного скролла (чтобы тап не скроллил)
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
-         "stepy": None, "vstepped": False, "zone": "mid", "dragging": False}
+         "lasty": None, "vstepped": False, "zone": "mid", "dragging": False}
 
     def _finish_touch():
         if not t["down"]:
@@ -170,17 +168,16 @@ async def start(get_ams=None, on_event=None):
         if t["dragging"]:                         # начатый edge-drag -> доводка (по позиции пальца)
             kind = "open" if t["zone"] == "top" else "close"
             on_event(("drag_end", kind, t["cy"]))
-        elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
-            on_event((EV_TAP, t["cx"], t["cy"]))  # маленькое движение в любом месте = тап
         elif abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
         elif t["vstepped"]:
-            pass                                  # середина: вертикаль уже проскроллена шагами
-        elif abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
-            on_event(EV_SWIPE_UP if dy < 0 else EV_SWIPE_DOWN)
-        t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["stepy"] = None
+            pass                                  # середина: уже проскроллено пикселями за пальцем
+        elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
+            on_event((EV_TAP, t["cx"], t["cy"]))  # маленькое движение = тап
+        t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = None
         t["vstepped"] = False
         t["zone"] = "mid"
+        t["dragging"] = False
 
     async def on_touch(ev):
         if not use_gui:
@@ -196,7 +193,7 @@ async def start(get_ams=None, on_event=None):
                     _finish_touch()
                 else:
                     t["down"] = True
-                    t["sx"] = t["sy"] = t["stepy"] = None
+                    t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["lasty"] = None
                     t["vstepped"] = False
                     t["zone"] = "mid"
                     t["dragging"] = False
@@ -207,18 +204,18 @@ async def start(get_ams=None, on_event=None):
                 cx = t["rawy"]                       # canvas_x = touch_y
                 cy = (CANVAS_H - 1) - t["rawx"]       # canvas_y = (H-1) - touch_x
                 if t["sx"] is None:
-                    t["sx"], t["sy"], t["stepy"] = cx, cy, cy
+                    t["sx"], t["sy"], t["lasty"] = cx, cy, cy
                     # классифицируем старт: верхний край / нижний край / середина
                     t["zone"] = ("top" if cy < EDGE_PX
                                  else "bottom" if cy > CANVAS_H - EDGE_PX
                                  else "mid")
                 t["cx"], t["cy"] = cx, cy
                 if t["zone"] == "mid":
-                    # середина: непрерывное листание шагами
-                    while t["cy"] - t["stepy"] >= DRAG_STEP_PX:
-                        on_event(EV_SWIPE_DOWN); t["stepy"] += DRAG_STEP_PX; t["vstepped"] = True
-                    while t["stepy"] - t["cy"] >= DRAG_STEP_PX:
-                        on_event(EV_SWIPE_UP); t["stepy"] -= DRAG_STEP_PX; t["vstepped"] = True
+                    # середина: НЕПРЕРЫВНЫЙ пиксельный скролл «за пальцем» (delta = смещение)
+                    if t["vstepped"] or abs(t["cy"] - t["sy"]) >= SCROLL_START:
+                        d = t["cy"] - t["lasty"]
+                        if d != 0:
+                            on_event(("scroll", d)); t["lasty"] = t["cy"]; t["vstepped"] = True
                 elif t["zone"] == "top":
                     # от верхнего края: НИЖНИЙ край шторки = позиция пальца (cy), едет за ним
                     if t["dragging"] or t["cy"] - t["sy"] >= EDGE_DRAG_START:

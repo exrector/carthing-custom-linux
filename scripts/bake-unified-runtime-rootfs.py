@@ -26,7 +26,15 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "079ea52f0a50ab002c65b721ca89d47557f5d84f"
+EXPECTED_RUNTIME_TREE_SHA1 = "9c40ba6493ce4576efc91b300ad231ba930f3a14"
+RETIRED_RUNTIME_FILES = (
+    "classic_profile_probe.py",
+    "hid_pair.py",
+    "media_remote_v3.py",
+    "now_playing_ui.py",
+    "system_menu.py",
+    "trusted_devices.py",
+)
 
 
 def run(args: list[str], *, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -79,6 +87,43 @@ def e2read_file(image: Path, src: str, dest: Path) -> None:
     run(["e2cp", f"{image}:{src}", str(dest)])
 
 
+def e2rm_file(image: Path, dest: str) -> None:
+    proc = subprocess.run(
+        ["e2rm", f"{image}:{dest}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0 and "No such file" not in proc.stderr and "not found" not in proc.stderr:
+        raise subprocess.CalledProcessError(proc.returncode, proc.args, proc.stdout, proc.stderr)
+
+
+def e2path_exists(image: Path, dest: str) -> bool:
+    proc = subprocess.run(
+        ["e2ls", f"{image}:{dest}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return proc.returncode == 0
+
+
+def copy_overlay_tree(image: Path, source: Path, dest_root: str) -> None:
+    for src in sorted(source.rglob("*")):
+        if not src.is_file():
+            continue
+        if src.name == ".DS_Store" or src.name.startswith("._") or "__pycache__" in src.parts:
+            continue
+        rel = src.relative_to(source).as_posix()
+        mode = f"{src.stat().st_mode & 0o777:04o}"
+        e2copy_file(image, src, f"{dest_root.rstrip('/')}/{rel}", mode=mode)
+
+
+def clean_retired_runtime(image: Path) -> None:
+    for name in RETIRED_RUNTIME_FILES:
+        e2rm_file(image, f"/usr/lib/carthing/{name}")
+
+
 def patch_default_carthing(image: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="carthing-default-") as tmp_s:
         tmp = Path(tmp_s)
@@ -128,12 +173,19 @@ def copy_runtime(image: Path) -> None:
             "Re-check HANDOFF-CODEX-UNIFIED-RUNTIME.md before baking."
         )
 
+    clean_retired_runtime(image)
+
     for src in sorted(runtime_dir.glob("*.py")):
         e2copy_file(image, src, f"/usr/lib/carthing/{src.name}", mode="0644")
 
     bitstruct = runtime_dir / "vendor/bitstruct.py"
     if bitstruct.exists():
         e2copy_file(image, bitstruct, "/usr/lib/carthing/vendor/bitstruct.py", mode="0644")
+
+
+def copy_support_files(image: Path) -> None:
+    copy_overlay_tree(image, OVERLAY / "usr/libexec/carthing", "/usr/libexec/carthing")
+    copy_overlay_tree(image, OVERLAY / "etc/init.d", "/etc/init.d")
 
 
 def verify_image(image: Path) -> None:
@@ -162,6 +214,25 @@ def verify_image(image: Path) -> None:
         if actual != EXPECTED_RUNTIME_TREE_SHA1:
             raise SystemExit(f"baked runtime sha mismatch: {actual} != {EXPECTED_RUNTIME_TREE_SHA1}")
 
+        leaked = [
+            name for name in RETIRED_RUNTIME_FILES
+            if e2path_exists(image, f"/usr/lib/carthing/{name}")
+        ]
+        if leaked:
+            raise SystemExit(f"retired runtime files leaked into rootfs: {leaked}")
+
+        required_exec = [
+            "/usr/libexec/carthing/profilectl",
+            "/usr/libexec/carthing/usb-profile",
+            "/usr/libexec/carthing/bt-profile",
+            "/usr/libexec/carthing/audio-profile",
+            "/usr/libexec/carthing/sensor-profile",
+            "/usr/libexec/carthing/debug-profile",
+        ]
+        missing_exec = [path for path in required_exec if not e2path_exists(image, path)]
+        if missing_exec:
+            raise SystemExit(f"profile tooling missing from rootfs: {missing_exec}")
+
 
 def write_manifest(bundle: Path, base_bundle: Path) -> None:
     files = ["bootfs.bin", "rootfs.img", "env.txt", "meta.json"]
@@ -185,6 +256,7 @@ Hardware baseline:
 - default/rescue NCM (`CONFIG_USB_G_NCM=y`) for SSH/recovery after every boot
 - optional USB functions are exposed only through profilectl/usb-profile
 - USB Audio/Serial/HID/MIDI/Storage are switch targets, not boot defaults
+- rootfs bake removes retired runtime files: {", ".join(RETIRED_RUNTIME_FILES)}
 
 This bundle is intended for `scripts/full-flash-bundle.py`.
 """
@@ -223,6 +295,7 @@ def main() -> int:
     copy_base_bundle(base, output)
     rootfs = output / "rootfs.img"
     copy_runtime(rootfs)
+    copy_support_files(rootfs)
     patch_default_carthing(rootfs)
     verify_image(rootfs)
     write_manifest(output, base)

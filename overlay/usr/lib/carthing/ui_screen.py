@@ -202,18 +202,18 @@ class Compositor:
         else:
             img = self.current.render(self._regions)
 
-        # Полноэкранный вью (напр. Уведомления) занимает весь экран — НЕ накладываем поверх
-        # него ни дугу-громкость, ни бар, ни точки (иначе они перекроют контент). Только модал.
+        # Полноэкранный вью (напр. Уведомления) скрывает БАР и точки, но дуга громкости
+        # рисуется ВСЕГДА (верхний слой) — энкодер = громкость на любом вью.
         fullscreen = getattr(self.current, "fullscreen", False) and not transitioning
-        if not fullscreen:
-            self._draw_overlays(img)
+        self._draw_overlays(img, full=fullscreen)
         if self.modal is not None:
             self._draw_modal(img)
 
         return self.display.present(img, name=self.current.name)
 
-    def _draw_overlays(self, img):
-        """Дуга-громкость + индикатор уведомлений + нижний бар + точки (для НЕ полноэкранных)."""
+    def _draw_overlays(self, img, full=False):
+        """Дуга-громкость + индикатор уведомлений — ВСЕГДА (верхний слой); бар и точки —
+        только для НЕ полноэкранных вью (на полноэкранном они бы перекрыли контент)."""
         draw = ImageDraw.Draw(img)
         vol = None
         if self.state is not None:
@@ -225,11 +225,12 @@ class Compositor:
             self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс орба
         if unread and int(time.monotonic() * 1.5) % 2 == 0:
             T.encoder_zone_glow(draw)
-        T.encoder_arc(draw, level=vol)
-        if self.status_bar:
-            self.status_bar.render(img, self._regions, self.anim, self.state)
-        if self.show_dots and len(self.screens) > 1:
-            self._draw_dots(draw)
+        T.encoder_arc(draw, level=vol)                   # ВСЕГДА (и поверх полноэкранных)
+        if not full:
+            if self.status_bar:
+                self.status_bar.render(img, self._regions, self.anim, self.state)
+            if self.show_dots and len(self.screens) > 1:
+                self._draw_dots(draw)
 
     # ── интерактивная «шторка» (вытягивание панели за пальцем) ─────────────────
     def _compose_full(self, index):
@@ -265,6 +266,7 @@ class Compositor:
         h = int(s["p"] * T.H)                        # высота раскрытой части (нижний край за пальцем)
         if h > 0:
             base.paste(s["panel"].crop((0, 0, T.W, h)), (0, 0))
+        self._draw_overlays(base, full=True)          # верхний слой: дуга громкости поверх шторки
         return self.display.present(base, name="shade")
 
     def _render_transition(self):

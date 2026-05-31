@@ -1,0 +1,89 @@
+#!/bin/sh
+set -eu
+
+[ -r /etc/default/carthing ] && . /etc/default/carthing
+
+profile_file=${CARTHING_DEBUG_PROFILE_FILE:-/run/carthing/debug-profile}
+runtime_file=${CARTHING_DEBUG_RUNTIME_PROFILE:-/run/carthing/debug-runtime.env}
+
+usage() {
+    echo "usage: debug-profile get|set <profile>|apply|list|status" >&2
+    exit 2
+}
+
+ensure_dirs() {
+    mkdir -p "$(dirname "$profile_file")" "$(dirname "$runtime_file")"
+}
+
+write_runtime() {
+    ensure_dirs
+    profile=$1
+    case "$profile" in
+        normal)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_DEBUG_HTTP_ENABLE=1
+CARTHING_DEBUG_TELNET_ENABLE=0
+CARTHING_DEBUG_BEACON_ENABLE=0
+CARTHING_REVERSE_AGENT_ENABLE=1
+EOF
+            ;;
+        quiet)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_DEBUG_HTTP_ENABLE=0
+CARTHING_DEBUG_TELNET_ENABLE=0
+CARTHING_DEBUG_BEACON_ENABLE=0
+CARTHING_REVERSE_AGENT_ENABLE=0
+EOF
+            ;;
+        service)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_DEBUG_HTTP_ENABLE=1
+CARTHING_DEBUG_TELNET_ENABLE=1
+CARTHING_DEBUG_BEACON_ENABLE=1
+CARTHING_REVERSE_AGENT_ENABLE=1
+EOF
+            ;;
+        *)
+            echo "unsupported debug profile: $profile" >&2
+            exit 1
+            ;;
+    esac
+}
+
+current_profile() {
+    if [ -r "$profile_file" ]; then
+        head -n 1 "$profile_file"
+    else
+        echo "${CARTHING_DEBUG_PROFILE:-normal}"
+    fi
+}
+
+case "${1:-}" in
+    get)
+        current_profile
+        ;;
+    set)
+        [ $# -eq 2 ] || usage
+        ensure_dirs
+        printf '%s\n' "$2" >"$profile_file"
+        write_runtime "$2"
+        ;;
+    apply)
+        profile="${2:-$(current_profile)}"
+        write_runtime "$profile"
+        ;;
+    list)
+        cat <<'EOF'
+normal
+quiet
+service
+EOF
+        ;;
+    status)
+        echo "profile=$(current_profile)"
+        [ -r "$runtime_file" ] && cat "$runtime_file"
+        ;;
+    *)
+        usage
+        ;;
+esac
