@@ -7,6 +7,7 @@ intent for the app to dispatch. Swipe switches desktops with a light slide.
 No device-only imports → runs on macOS for PNG preview. The device injects a
 real DRM display via DRMDisplayAdapter.
 """
+import time
 from PIL import Image, ImageDraw
 
 import ui_theme as T
@@ -208,10 +209,10 @@ class Compositor:
         unread = getattr(self.state, "unread_count", 0) if self.state else 0
         astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
         if self.anim is not None:
-            # вялое мигание идёт только при _pulsing=True (иначе pulse_alpha=1.0 константа)
-            self.anim.set_pulsing(bool(unread) or astate in ("listening", "thinking"))
-        if unread and self.anim is not None:
-            T.encoder_zone_glow(draw, self.anim.pulse_alpha())
+            self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс только для орба ассистента
+        # Уведомление: РЕЗКОЕ моргание белый↔фон (square-wave ~1.5 Гц), без полутонов.
+        if unread and int(time.monotonic() * 1.5) % 2 == 0:
+            T.encoder_zone_glow(draw)
         T.encoder_arc(draw, level=vol)
         if self.status_bar:
             self.status_bar.render(draw, self._regions, self.anim, self.state)
