@@ -65,6 +65,8 @@ EV_SWIPE_LEFT  = "swipe_left"
 EV_SWIPE_RIGHT = "swipe_right"
 EV_SWIPE_UP    = "swipe_up"
 EV_SWIPE_DOWN  = "swipe_down"
+EV_EDGE_TOP    = "edge_top"      # свайп ОТ верхнего края вниз (открыть вью)
+EV_EDGE_BOTTOM = "edge_bottom"   # свайп ОТ нижнего края вверх (закрыть вью)
 EV_TAP         = "tap"
 _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"}
 
@@ -73,6 +75,7 @@ _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"
 CANVAS_H     = 480
 SWIPE_MIN_PX = 100   # min horizontal canvas travel to switch desktops
 TAP_MAX_PX   = 30    # max travel to count as a tap
+EDGE_PX      = 70    # зона «края» по вертикали: старт свайпа здесь = жест открыть/закрыть
 
 
 async def _read_events(path, callback):
@@ -154,7 +157,7 @@ async def start(get_ams=None, on_event=None):
     DRAG_STEP_PX = 50
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
-         "stepy": None, "vstepped": False}
+         "stepy": None, "vstepped": False, "zone": "mid"}
 
     def _finish_touch():
         if not t["down"]:
@@ -165,14 +168,19 @@ async def start(get_ams=None, on_event=None):
         dx, dy = t["cx"] - t["sx"], t["cy"] - t["sy"]
         if abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
+        elif t["zone"] == "top" and dy >= SWIPE_MIN_PX and abs(dy) > abs(dx):
+            on_event(EV_EDGE_TOP)                 # от верхнего края вниз -> открыть вью
+        elif t["zone"] == "bottom" and dy <= -SWIPE_MIN_PX and abs(dy) > abs(dx):
+            on_event(EV_EDGE_BOTTOM)              # от нижнего края вверх -> закрыть вью
         elif t["vstepped"]:
-            pass                                  # вертикаль уже проскроллена шагами при drag
-        elif abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
+            pass                                  # середина: вертикаль уже проскроллена шагами
+        elif t["zone"] == "mid" and abs(dy) >= SWIPE_MIN_PX and abs(dy) > abs(dx):
             on_event(EV_SWIPE_UP if dy < 0 else EV_SWIPE_DOWN)
         elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
             on_event((EV_TAP, t["cx"], t["cy"]))
         t["sx"] = t["sy"] = t["cx"] = t["cy"] = t["stepy"] = None
         t["vstepped"] = False
+        t["zone"] = "mid"
 
     async def on_touch(ev):
         if not use_gui:
@@ -190,6 +198,7 @@ async def start(get_ams=None, on_event=None):
                     t["down"] = True
                     t["sx"] = t["sy"] = t["stepy"] = None
                     t["vstepped"] = False
+                    t["zone"] = "mid"
         elif evtype == EV_KEY and code == BTN_TOUCH and value == 0:
             _finish_touch()
         elif evtype == EV_SYN and code == SYN_REPORT:
@@ -198,12 +207,17 @@ async def start(get_ams=None, on_event=None):
                 cy = (CANVAS_H - 1) - t["rawx"]       # canvas_y = (H-1) - touch_x
                 if t["sx"] is None:
                     t["sx"], t["sy"], t["stepy"] = cx, cy, cy
+                    # классифицируем старт: верхний край / нижний край / середина
+                    t["zone"] = ("top" if cy < EDGE_PX
+                                 else "bottom" if cy > CANVAS_H - EDGE_PX
+                                 else "mid")
                 t["cx"], t["cy"] = cx, cy
-                # непрерывное листание: эмитим шаг на каждые DRAG_STEP_PX вертикали
-                while t["cy"] - t["stepy"] >= DRAG_STEP_PX:
-                    on_event(EV_SWIPE_DOWN); t["stepy"] += DRAG_STEP_PX; t["vstepped"] = True
-                while t["stepy"] - t["cy"] >= DRAG_STEP_PX:
-                    on_event(EV_SWIPE_UP); t["stepy"] -= DRAG_STEP_PX; t["vstepped"] = True
+                # непрерывное листание шагами — ТОЛЬКО из середины (края = открыть/закрыть)
+                if t["zone"] == "mid":
+                    while t["cy"] - t["stepy"] >= DRAG_STEP_PX:
+                        on_event(EV_SWIPE_DOWN); t["stepy"] += DRAG_STEP_PX; t["vstepped"] = True
+                    while t["stepy"] - t["cy"] >= DRAG_STEP_PX:
+                        on_event(EV_SWIPE_UP); t["stepy"] -= DRAG_STEP_PX; t["vstepped"] = True
 
     await _read_events('/dev/input/event1', on_encoder)
     await _read_events('/dev/input/event0', on_buttons)

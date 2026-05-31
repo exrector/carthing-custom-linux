@@ -331,9 +331,9 @@ class NotificationsScreen(Screen):
         if not notes:
             return False
         self.sel = max(0, min(self.sel, len(notes) - 1))
-        if event == Input.ENCODER_CW:
+        if event in (Input.ENCODER_CW, Input.SWIPE_DOWN):      # вниз по списку
             self.sel = min(self.sel + 1, len(notes) - 1); return True
-        if event == Input.ENCODER_CCW:
+        if event in (Input.ENCODER_CCW, Input.SWIPE_UP):       # вверх по списку
             self.sel = max(self.sel - 1, 0); return True
         if event == Input.SWIPE_LEFT:
             uid = notes[self.sel].get("uid")

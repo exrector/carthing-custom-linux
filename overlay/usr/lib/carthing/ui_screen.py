@@ -29,6 +29,8 @@ class Input:
     SWIPE_RIGHT = "swipe_right"
     SWIPE_UP = "swipe_up"
     SWIPE_DOWN = "swipe_down"
+    EDGE_TOP = "edge_top"        # свайп от верхнего края вниз (открыть вью)
+    EDGE_BOTTOM = "edge_bottom"  # свайп от нижнего края вверх (закрыть вью)
     # tap carries coordinates: ("tap", x, y)
     TAP = "tap"
 

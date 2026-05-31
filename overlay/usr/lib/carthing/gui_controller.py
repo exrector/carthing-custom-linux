@@ -85,22 +85,25 @@ class GuiController:
                 self.compositor.active = HOME
                 self.compositor.render()
             return
+        # Жест ОТ ВЕРХНЕГО КРАЯ вниз -> открыть уведомления (как «шторка» iOS).
+        if event == Input.EDGE_TOP:
+            if self.compositor.active != NOTIF:
+                self.compositor.active = NOTIF
+                self.compositor.render()
+            return
+        # Жест ОТ НИЖНЕГО КРАЯ вверх -> закрыть полноэкранный вью, вернуться на home.
+        if event == Input.EDGE_BOTTOM:
+            if self.compositor.active != HOME:
+                self.compositor.active = HOME
+                self.compositor.render()
+            return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
-            # свайп-влево в списке уведомлений = очистить выбранное (прямо в экран, минуя
-            # переключение столов, которого больше нет); иначе игнор.
+            # свайп-влево в списке уведомлений = очистить выбранное; иначе игнор.
             if event == Input.SWIPE_LEFT and self.compositor.active == NOTIF:
                 if self.compositor.current.on_input(event):
                     self.compositor.render()
             return
-        # Свайп вниз на home -> уведомления (как «шторка» iOS); вверх в уведомлениях -> назад.
-        if event == Input.SWIPE_DOWN and self.compositor.active == HOME:
-            self.compositor.active = NOTIF
-            self.compositor.render()
-            return
-        if event == Input.SWIPE_UP and self.compositor.active == NOTIF:
-            self.compositor.active = HOME
-            self.compositor.render()
-            return
+        # Средние свайпы вверх/вниз (и энкодер) -> прокрутка активного вью.
         self.compositor.handle_input(event)
 
     # ── RuntimeModel -> AppState (каждый рендер-тик: живой прогресс) ──────────
