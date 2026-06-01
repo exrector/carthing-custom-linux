@@ -38,7 +38,7 @@ HOME, SETTINGS, NOTIF, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
 class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
                  on_transfer_rescan=None, on_transfer_select=None, on_notif_dismiss=None,
-                 on_mode_select=None, on_toggle_sleep=None):
+                 on_mode_select=None, on_toggle_sleep=None, on_set_off_timeout=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
@@ -49,6 +49,7 @@ class GuiController:
             on_pairing=on_pairing or (lambda *a, **k: None),
             on_mode_select=on_mode_select or (lambda *a, **k: None),
             on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
+            on_set_off_timeout=on_set_off_timeout or (lambda *a, **k: None),  # [CLAUDE] ±тайм-аут
         )
         emit = self.dispatcher.dispatch
         screens = [
@@ -93,6 +94,10 @@ class GuiController:
             return
         if intent == "settings_tap":                # тап по строке Settings = выбрать+активировать
             self.compositor.screens[SETTINGS].tap(payload)
+            self.compositor.render()
+            return
+        if intent == "screen_off_adjust":           # [CLAUDE] ± тайм-аут гашения -> применить + перерисовать
+            self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
         if intent == "mode_select":

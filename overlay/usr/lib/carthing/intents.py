@@ -14,7 +14,8 @@ Media routing (agreed model):
 
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
-                 on_pairing=None, on_mode_select=None, on_toggle_sleep=None):
+                 on_pairing=None, on_mode_select=None, on_toggle_sleep=None,
+                 on_set_off_timeout=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
@@ -22,6 +23,7 @@ class Dispatcher:
         self.on_pairing = on_pairing or (lambda enabled: None)
         self.on_mode_select = on_mode_select or (lambda mode: None)
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
+        self.on_set_off_timeout = on_set_off_timeout or (lambda sec: None)  # [CLAUDE] тайм-аут гашения
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -61,6 +63,8 @@ class Dispatcher:
             self.on_pairing(False)
         elif intent == "mode_select":
             self._mode_select(payload)
+        elif intent == "screen_off_adjust":      # [CLAUDE] ±тайм-аут гашения экрана
+            self._adjust_off_timeout(payload)
 
     # ── media ────────────────────────────────────────────────────────────────
     def _media(self, command):
@@ -122,3 +126,17 @@ class Dispatcher:
             return
         self.state.device_mode = mode
         self.on_mode_select(mode)
+
+    # [CLAUDE 2026-06-01] ±тайм-аут полного гашения экрана (шаг 30с, 30с..10мин)
+    SCREEN_OFF_STEP = 30
+    SCREEN_OFF_MIN = 30
+    SCREEN_OFF_MAX = 600
+
+    def _adjust_off_timeout(self, direction):
+        cur = int(getattr(self.state, "screen_off_sec", 150))
+        new = cur + (self.SCREEN_OFF_STEP if direction == "+" else -self.SCREEN_OFF_STEP)
+        new = max(self.SCREEN_OFF_MIN, min(self.SCREEN_OFF_MAX, new))
+        if new == cur:
+            return
+        self.state.screen_off_sec = new      # оптимистично для UI
+        self.on_set_off_timeout(new)         # runtime: power.set_off_after + settings.set

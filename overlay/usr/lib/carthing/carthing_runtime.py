@@ -93,6 +93,15 @@ def _on_toggle_sleep(on):
         settings.set("sleep_on_idle", bool(on))
 
 
+def _on_set_off_timeout(sec):
+    # [CLAUDE 2026-06-01] ±тайм-аут полного гашения из Settings: применяем к power + персистим.
+    sec = int(sec)
+    if power is not None:
+        power.set_off_after(sec)
+    if settings is not None:
+        settings.set("screen_off_after_sec", sec)
+
+
 async def _apply_device_mode(mode, persist=True):
     mode = mode if mode in VALID_DEVICE_MODES else "remote"
     model.device_mode = mode
@@ -330,12 +339,14 @@ async def main():
                                 on_transfer_select=_on_transfer_select,
                                 on_notif_dismiss=_on_notif_dismiss,
                                 on_mode_select=_on_mode_select,
-                                on_toggle_sleep=_on_toggle_sleep)
+                                on_toggle_sleep=_on_toggle_sleep,
+                                on_set_off_timeout=_on_set_off_timeout)
             logger.info("GUI active (modular Compositor)")
             from power_policy import IdlePowerController
             power = IdlePowerController(settings)
-            # [CLAUDE] начальное состояние тумблера сна для Settings = реальное power.enabled
+            # [CLAUDE] начальные значения для Settings = реальные из power
             gui.app_state.sleep_on_idle = bool(getattr(power, "enabled", True))
+            gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)

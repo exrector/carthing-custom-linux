@@ -158,6 +158,15 @@ class IdlePowerController:
             self._display_state = "active"
             logger.info("Power: idle sleep DISABLED (settings) — screen stays on")
 
+    def set_off_after(self, sec) -> None:
+        """[CLAUDE 2026-06-01] Рантайм-настройка тайм-аута полного гашения экрана (Settings ±)."""
+        try:
+            self.off_after = max(30.0, float(sec))
+        except (TypeError, ValueError):
+            return
+        self._last_activity = time.monotonic()   # перезапустить отсчёт от изменения
+        logger.info("Power: screen-off timeout -> %ss", self.off_after)
+
     def set_device_mode(self, mode: str) -> None:
         mode = mode or "remote"
         if mode == self._device_mode:

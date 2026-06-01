@@ -26,7 +26,7 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "0e041767c9fce0110b7692ee38915d404e135e00"
+EXPECTED_RUNTIME_TREE_SHA1 = "5c183ed55c24be872171329aebbe5e11905e9bd0"
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
 )

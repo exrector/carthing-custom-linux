@@ -16,6 +16,15 @@ def _fmt(s):
     return f"{s // 60}:{s % 60:02d}"
 
 
+def _fmt_off(sec):
+    """[CLAUDE] тайм-аут гашения для отображения: '30 с' / '2 мин' / '2.5 мин'."""
+    sec = int(sec)
+    if sec < 60:
+        return f"{sec} с"
+    m = sec / 60.0
+    return f"{int(m)} мин" if m == int(m) else f"{m:.1f} мин"
+
+
 class NowPlayingScreen(Screen):
     name = "nowplaying"
     title = "iPhone"
@@ -314,6 +323,43 @@ class SettingsScreen(Screen):
         self._max_scroll = 0
         self.state = None
 
+    def _viewport(self):
+        start_y = CONTENT_TOP + 52
+        bottom_y = T.OCCLUSION_BOTTOM
+        return start_y, bottom_y
+
+    def _update_scroll_bounds(self, rows=None):
+        rows = rows if rows is not None else self._visible()
+        start_y, bottom_y = self._viewport()
+        total_h = len(rows) * T.ROW_H
+        self._max_scroll = max(0, total_h - (bottom_y - start_y))
+        self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
+        return start_y, bottom_y
+
+    def _ensure_row_visible(self, index, rows=None):
+        if index is None:
+            return
+        rows = rows if rows is not None else self._visible()
+        if not (0 <= index < len(rows)):
+            return
+        start_y, bottom_y = self._update_scroll_bounds(rows)
+        row_top = start_y + index * T.ROW_H
+        row_bottom = row_top + T.ROW_H
+        if row_top - self.scroll_y < start_y:
+            self.scroll_y = row_top - start_y
+        elif row_bottom - self.scroll_y > bottom_y:
+            self.scroll_y = row_bottom - bottom_y
+        self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
+
+    def _last_child_index(self, rows, parent_index):
+        last = parent_index
+        for index in range(parent_index + 1, len(rows)):
+            level = rows[index][0]
+            if level == 0:
+                break
+            last = index
+        return last
+
     def on_state(self, state):
         self.state = state
 
@@ -334,11 +380,12 @@ class SettingsScreen(Screen):
                 # имя + MAC; цветную статус-точку рисует render (3-й элемент = цвет)
                 rows.append(("trusted:" + d["key"], f"{d['label']}   {addr}", color))
             return rows
-        if it["key"] == "display":      # [CLAUDE] тумблер сна показывает текущее состояние
+        if it["key"] == "display":      # [CLAUDE] тумблер сна + ±тайм-аут гашения (кастомный рендер)
             on = bool(getattr(self.state, "sleep_on_idle", True)) if self.state else True
             return [
                 ("brightness", "Яркость"),
                 ("toggle_sleep", f"Сон экрана: {'Вкл' if on else 'Выкл'}"),
+                ("off_timeout", "Гашение экрана"),   # рисуется спец-строкой с −/+
             ]
         return it.get("children", [])
 
@@ -364,6 +411,11 @@ class SettingsScreen(Screen):
         level, key, _label, expandable, expanded, _color = rows[i]
         if expandable:
             self.expanded.symmetric_difference_update({key})
+            rows_after = self._visible()
+            if key in self.expanded:
+                self._ensure_row_visible(self._last_child_index(rows_after, i), rows_after)
+            else:
+                self._ensure_row_visible(i, rows_after)
         else:
             self.on_select(key)
 
@@ -394,11 +446,7 @@ class SettingsScreen(Screen):
         draw.line([24, CONTENT_TOP + 34, T.LIST_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
         rows = self._visible()
-        start_y = CONTENT_TOP + 52
-        bottom_y = T.OCCLUSION_BOTTOM
-        total_h = len(rows) * T.ROW_H
-        self._max_scroll = max(0, total_h - (bottom_y - start_y))
-        self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
+        start_y, bottom_y = self._update_scroll_bounds(rows)
 
         visible = []
         for i, row in enumerate(rows):
@@ -410,6 +458,21 @@ class SettingsScreen(Screen):
 
         for i, y, row in visible:
             level, key, label, expandable, expanded, color = rows[i]
+            # [CLAUDE 2026-06-01] спец-строка тайм-аута гашения: «Гашение  −  N мин  +»
+            if key == "off_timeout":
+                rect = C.list_row(draw, y, "Гашение экрана", selected=(i == self.sel),
+                                  indent=24 if level else 0)
+                rx0, ry0, rx1, ry1 = rect
+                sec = int(getattr(self.state, "screen_off_sec", 150)) if self.state else 150
+                fbig = T.font(T.SZ_TITLE)
+                draw.text((455, y - 6), "−", font=fbig, fill=T.FG)
+                C.text_centered(draw, _fmt_off(sec), T.font(T.SZ_BODY), T.ACCENT, y, cx=560)
+                draw.text((628, y - 6), "+", font=fbig, fill=T.FG)
+                if regions is not None:
+                    ra, rb = max(start_y, ry0), min(bottom_y, ry1)
+                    regions.add((435, ra, 500, rb), "screen_off_adjust", payload="-")
+                    regions.add((600, ra, 668, rb), "screen_off_adjust", payload="+")
+                continue
             rect = C.list_row(draw, y, label, selected=(i == self.sel),
                               expandable=expandable, expanded=expanded,
                               indent=24 if level else 0)
