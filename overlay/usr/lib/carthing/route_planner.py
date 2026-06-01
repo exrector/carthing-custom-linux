@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from route_graph import Capability, PlannedSession, Route
+from route_graph import Capability, Constraint, PlannedSession, Route
 
 
 class RoutePlanError(RuntimeError):
@@ -27,6 +27,10 @@ class RoutePlanner:
             raise RoutePlanError(f"device has no audio input endpoint: {input_device.name}")
         if output_endpoint is None:
             raise RoutePlanError(f"device has no audio output endpoint: {output_device.name}")
+        if not input_endpoint.protocols:
+            raise RoutePlanError(f"input endpoint has no protocols: {input_device.name}/{input_endpoint.id}")
+        if not output_endpoint.protocols:
+            raise RoutePlanError(f"output endpoint has no protocols: {output_device.name}/{output_endpoint.id}")
 
         session = PlannedSession(
             name=name,
@@ -46,7 +50,18 @@ class RoutePlanner:
         session.constraints.update(output_device.constraints)
 
         if input_device.id == output_device.id:
+            if self._has_constraint(session.constraints, Constraint.FULL_DUPLEX_FORBIDDEN):
+                raise RoutePlanError(
+                    "route rejected: same device cannot be both input and output "
+                    "(full_duplex_forbidden)"
+                )
             session.warnings.append("input and output are the same device; full-duplex constraints must be checked")
+        if self._has_constraint(output_device.constraints, Constraint.CONTROL_BACKCHANNEL_ONLY):
+            has_control = bool(output_device.control_endpoints())
+            if not has_control:
+                session.warnings.append(
+                    "output device requires control backchannel but exposes no control endpoint"
+                )
 
         return session
 
@@ -57,3 +72,11 @@ class RoutePlanner:
                 return endpoint
         return endpoints[0] if endpoints else None
 
+    @staticmethod
+    def _has_constraint(constraints, constraint):
+        target = constraint.value if hasattr(constraint, "value") else str(constraint)
+        for value in constraints:
+            current = value.value if hasattr(value, "value") else str(value)
+            if current == target:
+                return True
+        return False

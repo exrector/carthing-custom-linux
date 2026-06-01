@@ -16,8 +16,8 @@ sys.path.insert(0, str(LIB))
 
 from app_state import AppState  # noqa: E402
 from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E402
-from route_graph import Protocol  # noqa: E402
-from route_planner import RoutePlanner  # noqa: E402
+from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Protocol, TrustedDevice  # noqa: E402
+from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
 from session_presets import build_preset_session, normalize_preset  # noqa: E402
 from session_runner import AdapterConnector, SessionRunner  # noqa: E402
 from trusted_device_registry import TrustedDeviceRegistry  # noqa: E402
@@ -78,6 +78,43 @@ def check_registry_and_planner():
         app_state = AppState()
         assert app_state.route_inputs
         assert app_state.route_outputs
+
+
+def check_planner_constraints():
+    blocked_peer = TrustedDevice(
+        id="peer-blocked",
+        address="AA:AA:AA:AA:AA:AA",
+        name="Blocked Peer",
+        endpoints=[
+            Endpoint(
+                id="in",
+                direction=EndpointDirection.INPUT,
+                protocols={Protocol.CLASSIC_A2DP_SINK},
+                capabilities={Capability.AUDIO_INPUT},
+            ),
+            Endpoint(
+                id="out",
+                direction=EndpointDirection.OUTPUT,
+                protocols={Protocol.CLASSIC_A2DP_SOURCE},
+                capabilities={Capability.AUDIO_OUTPUT},
+            ),
+        ],
+        constraints={Constraint.FULL_DUPLEX_FORBIDDEN},
+    )
+
+    class _Registry:
+        def __init__(self, devices):
+            self.devices = {device.id: device for device in devices}
+
+        def by_id(self, device_id):
+            return self.devices.get(device_id)
+
+    planner = RoutePlanner(_Registry([blocked_peer]))
+    try:
+        planner.plan_simple_route("peer-blocked", "peer-blocked", name="blocked")
+        raise AssertionError("planner accepted full-duplex-forbidden route")
+    except RoutePlanError:
+        pass
 
 
 def check_enrollment():
@@ -148,6 +185,7 @@ def check_patchbay():
 def main():
     assert normalize_preset("transfer") == "router"
     check_registry_and_planner()
+    check_planner_constraints()
     check_enrollment()
     check_multirole_app_state()
     check_patchbay()
