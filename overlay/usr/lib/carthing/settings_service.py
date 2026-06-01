@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 _DEFAULTS = {
     "preferred_view": "now_playing",   # стартовый view (gui-contract)
     "active_session": "remote",        # route-graph session preset
-    "device_mode": "remote",           # legacy alias; do not build new architecture on it
     "default_speaker": None,           # адрес динамика по умолчанию для Transfer
     "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
     "screen_dim_after_sec": 45,         # сначала только подсветка, без BT/suspend
@@ -59,9 +58,8 @@ class SettingsService:
         return self.values.get(key, default)
 
     def set(self, key, value):
+        if key == "device_mode":
+            # Legacy write path from older callers: map to active_session.
+            key = "active_session"
         self.values[key] = value
-        if key == "active_session":
-            self.values["device_mode"] = value
-        elif key == "device_mode":
-            self.values["active_session"] = value
         self.save()

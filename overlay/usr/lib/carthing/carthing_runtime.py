@@ -527,7 +527,7 @@ async def main():
     # macOS-источник (Фаза 4, каркас).
     from mac_service import MacService
     mac = MacService(model, on_update=_on_publish)
-    await _apply_session(settings.get("active_session", settings.get("device_mode", "remote")), persist=False)
+    await _apply_session(settings.get("active_session", "remote"), persist=False)
 
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
