@@ -333,6 +333,16 @@ class AppState:
         address = normalize_address(address)
         for device in self.trusted_speakers:
             device["connected"] = device.get("address") == address
+            if device["connected"]:
+                device["online"] = True
+
+    def set_speaker_connected(self, address, connected=True):
+        address = normalize_address(address)
+        for device in self.trusted_speakers:
+            if device.get("address") == address:
+                device["connected"] = bool(connected)
+                if connected:
+                    device["online"] = True
 
     def clear_connected_speakers(self):
         for device in self.trusted_speakers:

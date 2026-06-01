@@ -106,13 +106,17 @@ class A2DPBridge:
         self.receiver_stream = None
         self.receiver_rtp_channel = None
         self.receiver_address = None
+        self.receiver_connecting_address = None
+        self.receiver_last_error = ""
         self.started = False
         self.packets_forwarded = 0
         self.bytes_forwarded = 0
         self._receiver_task: asyncio.Task | None = None
+        self._standby_task: asyncio.Task | None = None
         self._scan_task: asyncio.Task | None = None
         self._enroll_task: asyncio.Task | None = None
         self._connect_task: asyncio.Task | None = None
+        self._standby_connecting = set()
         self._speaker_connections = {}
         self._stale_link_key_addresses = set()
 
@@ -185,6 +189,38 @@ class A2DPBridge:
         if self.autoconnect and self.state.trusted_speakers:
             self._receiver_task = asyncio.create_task(self.receiver_loop())
 
+    def start_standby_loop(self):
+        if self._standby_task is None or self._standby_task.done():
+            self._standby_task = asyncio.create_task(self.speaker_standby_loop())
+
+    async def speaker_standby_loop(self):
+        """Keep trusted speakers in a bonded Classic standby connection.
+
+        This is deliberately below Transfer. A trusted speaker should stick to
+        the device when available; Transfer only decides whether that existing
+        connection is used as the audio route.
+        """
+        while True:
+            try:
+                await self.ensure_trusted_speakers_connected()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.logger.info("A2DP speaker standby ignored: %s", error_text(exc))
+            await asyncio.sleep(self.reconnect_interval)
+
+    async def ensure_trusted_speakers_connected(self):
+        for speaker in list(self.state.trusted_speakers):
+            address = normalize_address(speaker.get("address"))
+            if not address or address in self._speaker_connections:
+                continue
+            if address in self._standby_connecting:
+                continue
+            if not await self._has_link_key(address):
+                self.logger.info("A2DP speaker standby skipped without link-key: %s", address)
+                continue
+            await self.ensure_speaker_connection(address)
+
     async def enable_classic_visibility(self):
         # Connectable always (bonded peers reconnect, incoming A2DP works), but
         # NOT discoverable by default — discovery is opened only in pairing mode.
@@ -237,16 +273,14 @@ class A2DPBridge:
         if not self.state.is_trusted_speaker(address):
             raise RuntimeError(f"receiver is not trusted as speaker: {address}")
 
-        self.receiver_address = normalize_address(address)
-        connection = connection or self._speaker_connections.get(self.receiver_address)
-        if connection is None:
-            self.logger.info("A2DP receiver connect: %s", self.receiver_address)
-            connection = await asyncio.wait_for(
-                self.device.connect(self.receiver_address, transport=BT_BR_EDR_TRANSPORT),
-                timeout=self.connect_timeout,
-            )
-        else:
-            self.logger.info("A2DP receiver reuse connection: %s", self.receiver_address)
+        target_address = normalize_address(address)
+        self.receiver_connecting_address = target_address
+        self.receiver_last_error = ""
+        self.state.transfer_status = "connecting"
+        self.on_state_change()
+
+        connection = connection or await self.ensure_speaker_connection(target_address)
+        self.logger.info("A2DP receiver reuse standby connection: %s", target_address)
         self.receiver_connection = connection
         connection.on(
             "disconnection",
@@ -258,8 +292,10 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.info("A2DP receiver auth/encrypt continued: %s", error_text(exc))
 
+        self.logger.info("A2DP receiver AVDTP connect: %s", target_address)
         protocol = await asyncio.wait_for(avdtp.Protocol.connect(connection), timeout=self.connect_timeout)
         self.receiver_protocol = protocol
+        self.logger.info("A2DP receiver discover endpoints: %s", target_address)
         await asyncio.wait_for(protocol.discover_remote_endpoints(), timeout=self.connect_timeout)
         sink = protocol.find_remote_sink_by_codec(
             avdtp.AVDTP_AUDIO_MEDIA_TYPE,
@@ -268,6 +304,7 @@ class A2DPBridge:
         if sink is None:
             raise RuntimeError("receiver has no AAC sink endpoint")
 
+        self.logger.info("A2DP receiver AAC sink selected: address=%s seid=%s", target_address, getattr(sink, "seid", "?"))
         source = protocol.add_source(make_aac_capabilities(), None)
         source.configuration = make_aac_stream_configuration()
         stream = await protocol.create_stream(source, sink)
@@ -277,9 +314,58 @@ class A2DPBridge:
         self.receiver_source = source
         self.receiver_stream = stream
         self.receiver_rtp_channel = stream.rtp_channel
-        self.state.set_connected_speaker(self.receiver_address)
+        self.receiver_address = target_address
+        self.receiver_connecting_address = None
+        self.state.transfer_status = "connected"
+        self.state.set_connected_speaker(target_address)
         self.on_state_change()
         self.logger.info("A2DP_SPEAKER_STREAM_STARTED seid=%s", getattr(sink, "seid", "?"))
+
+    async def ensure_speaker_connection(self, address, require_trusted=True):
+        address = normalize_address(address)
+        connection = self._speaker_connections.get(address)
+        if connection is not None:
+            self.state.set_speaker_connected(address, True)
+            self.on_state_change()
+            return connection
+        if not address:
+            raise RuntimeError("no speaker address")
+        if require_trusted and not self.state.is_trusted_speaker(address):
+            raise RuntimeError(f"speaker is not trusted: {address}")
+        deadline = asyncio.get_running_loop().time() + self.connect_timeout
+        while address in self._standby_connecting:
+            await asyncio.sleep(0.1)
+            connection = self._speaker_connections.get(address)
+            if connection is not None:
+                self.state.set_speaker_connected(address, True)
+                self.on_state_change()
+                return connection
+            if asyncio.get_running_loop().time() >= deadline:
+                raise RuntimeError(f"speaker connect already in progress: {address}")
+
+        self._standby_connecting.add(address)
+        try:
+            self.logger.info("A2DP speaker standby connect: %s", address)
+            connection = await asyncio.wait_for(
+                self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+                timeout=self.connect_timeout,
+            )
+            self._speaker_connections[address] = connection
+            connection.on(
+                "disconnection",
+                lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(address, reason)),
+            )
+            try:
+                await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
+                await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+            except Exception as exc:
+                self.logger.info("A2DP speaker standby auth/encrypt continued: %s", error_text(exc))
+            self.state.set_speaker_connected(address, True)
+            self.on_state_change()
+            self.logger.info("A2DP_SPEAKER_STANDBY_CONNECTED %s", address)
+            return connection
+        finally:
+            self._standby_connecting.discard(address)
 
     async def request_receiver_connection(self, address=None, require_online=False):
         address = normalize_address(address or self.state.default_speaker_address())
@@ -305,8 +391,14 @@ class A2DPBridge:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            self.receiver_address = None
+            self.receiver_connecting_address = None
             self.receiver_rtp_channel = None
-            self.state.clear_connected_speakers()
+            self.receiver_last_error = error_text(exc)
+            self.state.transfer_status = "failed"
+            self.state.transfer_error = self.receiver_last_error
+            if address in self._speaker_connections:
+                self.state.set_speaker_connected(address, True)
             self.on_state_change()
             self.logger.warning("A2DP receiver connect failed: %s", error_text(exc))
 
@@ -348,6 +440,8 @@ class A2DPBridge:
             self.on_state_change()
             if self.state.transfer_active:
                 await self.request_receiver_connection(require_online=True)
+            else:
+                await self.ensure_trusted_speakers_connected()
 
     async def scan_pairable_speakers(self, duration: float = 10.0):
         """Classic inquiry for new speaker enrollment.
@@ -459,27 +553,11 @@ class A2DPBridge:
         self.on_state_change()
         if self.state.transfer_active:
             await self.request_receiver_connection(address)
+        else:
+            await self.ensure_speaker_connection(address)
 
     async def _bond_speaker(self, address):
-        connection = self._speaker_connections.get(address)
-        if connection is None:
-            self.logger.info("A2DP speaker enrollment connect: %s", address)
-            connection = await asyncio.wait_for(
-                self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
-                timeout=self.connect_timeout,
-            )
-        self._speaker_connections[address] = connection
-        connection.on(
-            "disconnection",
-            lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(address, reason)),
-        )
-        try:
-            await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
-            await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
-        except Exception as exc:
-            self.logger.info("A2DP speaker enrollment auth/encrypt continued: %s", error_text(exc))
-        self.state.set_speaker_online(address, True)
-        self.on_state_change()
+        await self.ensure_speaker_connection(address, require_trusted=False)
 
     async def _has_link_key(self, address):
         if self.device.keystore is None:
@@ -512,7 +590,31 @@ class A2DPBridge:
         self.receiver_source = None
         self.receiver_stream = None
         self.receiver_rtp_channel = None
-        self.state.clear_connected_speakers()
+        self.receiver_address = None
+        self.receiver_connecting_address = None
+        self.receiver_last_error = f"disconnected 0x{reason:02x}"
+        self.state.transfer_status = "failed"
+        self.state.transfer_error = self.receiver_last_error
+        self.on_state_change()
+
+    async def stop_receiver_stream(self):
+        stream = self.receiver_stream
+        if stream is not None:
+            try:
+                await stream.stop()
+            except Exception as exc:
+                self.logger.info("A2DP receiver stream stop ignored: %s", error_text(exc))
+            try:
+                await stream.close()
+            except Exception as exc:
+                self.logger.info("A2DP receiver stream close ignored: %s", error_text(exc))
+        self.receiver_protocol = None
+        self.receiver_source = None
+        self.receiver_stream = None
+        self.receiver_rtp_channel = None
+        self.receiver_address = None
+        self.receiver_connecting_address = None
+        self.state.transfer_status = "standby"
         self.on_state_change()
 
     def on_avdtp_connection(self, protocol: avdtp.Protocol):
@@ -582,7 +684,7 @@ class A2DPBridge:
         )
         if self.state.is_trusted_speaker(peer_address):
             self._speaker_connections[peer_address] = connection
-            self.state.set_speaker_online(peer_address, True)
+            self.state.set_speaker_connected(peer_address, True)
             self.on_state_change()
             connection.on(
                 "disconnection",
@@ -603,6 +705,7 @@ class A2DPBridge:
         address = normalize_address(address)
         self._speaker_connections.pop(address, None)
         self.state.set_speaker_online(address, False)
+        self.state.set_speaker_connected(address, False)
         if self.receiver_address == address:
             await self.on_receiver_disconnected(reason)
         else:

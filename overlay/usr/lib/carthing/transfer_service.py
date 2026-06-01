@@ -37,6 +37,7 @@ class TransferService:
         self.bridge.install_sdp_records()
         self.bridge.install_safe_link_key_provider()
         await self.bridge.start()               # AVDTP listener up
+        self.bridge.start_standby_loop()        # trusted speakers stick when available
         # ВАЖНО: вызвать orchestrator.apply_visibility() ПОСЛЕ — он перегейтит classic в not-connectable.
 
     async def start_speaker_enrollment(self):
@@ -93,12 +94,14 @@ class TransferService:
         self.model.transfer_active = True
         await self.orch.set_transfer_connectable(True)   # classic connectable для входящего A2DP
         await self.orch.on_a2dp_state(True)
+        await self.bridge.request_receiver_connection()
         self._sync()
 
     async def deactivate(self):
-        # Снимаем classic-connectable -> входящий A2DP больше не принимается, приёмник
-        # отваливается сам (on_receiver_disconnected). Чистого disconnect-метода у bridge нет.
+        # Transfer выключен: останавливаем только аудиопоток. Classic standby с
+        # доверенными динамиками остаётся жить и будет переподключаться само.
         self.model.transfer_active = False
+        await self.bridge.stop_receiver_stream()
         await self.orch.set_transfer_connectable(False)
         await self.orch.on_a2dp_state(False)
         self._sync()
@@ -129,6 +132,17 @@ class TransferService:
         self._sync()
 
     def _sync(self):
-        self.model.speaker_connected = bool(getattr(self.bridge, "receiver_address", None))
-        self.model.speaker_name = getattr(self.bridge, "receiver_address", None)
+        ready = getattr(self.bridge, "receiver_rtp_channel", None) is not None
+        standby = [
+            speaker for speaker in self.bridge.state.trusted_speakers
+            if speaker.get("connected")
+        ]
+        self.model.speaker_connected = bool(ready or standby)
+        self.model.speaker_name = (
+            getattr(self.bridge, "receiver_address", None)
+            or (standby[0].get("address") if standby else None)
+        )
+        status = getattr(self.bridge.state, "transfer_status", "")
+        if status:
+            self.model.mode_status = status if not ready else "transfer connected"
         self.on_change()
