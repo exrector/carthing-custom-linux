@@ -84,6 +84,11 @@ class LinkManager:
                     return
             except Exception as exc:
                 logger.info("link adapter ignored: %s %s: %s", adapter.name, device.name, exc)
+        if device.connected:
+            for adapter in self.adapters:
+                try:
+                    await adapter.disconnect_idle(device)
+                except Exception as exc:
+                    logger.info("link adapter disconnect ignored: %s %s: %s", adapter.name, device.name, exc)
         device.online = False
         device.connected = False
-

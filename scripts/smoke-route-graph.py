@@ -16,6 +16,7 @@ sys.path.insert(0, str(LIB))
 
 from app_state import AppState  # noqa: E402
 from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E402
+from link_manager import LinkAdapter, LinkManager  # noqa: E402
 from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Protocol, TrustedDevice  # noqa: E402
 from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
 from session_presets import build_preset_session, normalize_preset  # noqa: E402
@@ -198,6 +199,47 @@ def check_patchbay():
     assert not bay.cables
 
 
+async def check_link_manager():
+    class _Registry:
+        def __init__(self, devices):
+            self.devices = list(devices)
+
+    class _Adapter(LinkAdapter):
+        def __init__(self):
+            super().__init__(name="smoke")
+            self.probe_result = True
+            self.disconnect_calls = 0
+
+        async def probe(self, device):
+            return self.probe_result
+
+        async def connect_idle(self, device):
+            return True
+
+        async def disconnect_idle(self, device):
+            self.disconnect_calls += 1
+
+    device = TrustedDevice(
+        id="idle-peer",
+        address="AA:AA:AA:AA:AA:AA",
+        name="Idle Peer",
+        constraints={Constraint.IDLE_LINK_ALLOWED},
+    )
+    manager = LinkManager(_Registry([device]))
+    adapter = _Adapter()
+    manager.register(adapter)
+
+    await manager.tick()
+    assert device.online is True
+    assert device.connected is True
+
+    adapter.probe_result = False
+    await manager.tick()
+    assert device.online is False
+    assert device.connected is False
+    assert adapter.disconnect_calls == 1
+
+
 def main():
     assert normalize_preset("transfer") == "router"
     check_registry_and_planner()
@@ -206,6 +248,7 @@ def main():
     check_degraded_enrollment()
     check_multirole_app_state()
     check_patchbay()
+    asyncio.run(check_link_manager())
     asyncio.run(check_runner())
     print("ROUTE GRAPH SMOKE OK")
 
