@@ -51,6 +51,24 @@ def _bonded_source_rows(keystore_path=None):
                 "online": False,
                 "connected": False,
                 "default": False,
+                "capabilities": ["audio_input", "metadata_input", "control_output", "notifications_input"],
+                "endpoints": [
+                    {
+                        "id": "media-control",
+                        "direction": "control",
+                        "protocols": ["ble_ams", "ble_hid"],
+                        "capabilities": ["control_output", "metadata_input"],
+                        "label": "Media control",
+                    },
+                    {
+                        "id": "notifications",
+                        "direction": "metadata",
+                        "protocols": ["ble_ancs"],
+                        "capabilities": ["notifications_input"],
+                        "label": "Notifications",
+                    },
+                ],
+                "constraints": ["idle_link_allowed", "active_media_requires_route"],
             })
     return rows
 
@@ -81,6 +99,92 @@ def _device_is_output(device):
         or _has_capability(device, "audio_output")
         or "output" in _endpoint_dirs(device)
     )
+
+
+def _value(value):
+    return value.value if hasattr(value, "value") else value
+
+
+def _endpoint_id(endpoint):
+    if isinstance(endpoint, dict):
+        return endpoint.get("id") or endpoint.get("direction")
+    return getattr(endpoint, "id", None)
+
+
+def _endpoint_to_row(endpoint):
+    if isinstance(endpoint, dict):
+        return endpoint
+    return {
+        "id": endpoint.id,
+        "direction": _value(endpoint.direction),
+        "protocols": sorted(str(_value(value)) for value in endpoint.protocols),
+        "capabilities": sorted(str(_value(value)) for value in endpoint.capabilities),
+        "label": endpoint.label,
+        "metadata": dict(endpoint.metadata or {}),
+    }
+
+
+def _trusted_device_to_row(device):
+    capabilities = sorted(str(_value(value)) for value in device.capabilities)
+    endpoints = [_endpoint_to_row(endpoint) for endpoint in device.endpoints]
+    has_input = any(endpoint.get("direction") == "input" for endpoint in endpoints)
+    has_output = any(endpoint.get("direction") == "output" for endpoint in endpoints)
+    if has_input and has_output:
+        role = "device"
+        dtype = "Маршрутизируемое устройство"
+    elif has_output:
+        role = "speaker"
+        dtype = "Динамик"
+    elif has_input:
+        role = "source"
+        dtype = "Источник"
+    else:
+        role = "device"
+        dtype = "Устройство"
+    return {
+        "key": device.id,
+        "address": normalize_address(device.address),
+        "label": device.name,
+        "type": dtype,
+        "role": role,
+        "online": bool(device.online),
+        "connected": bool(device.connected),
+        "default": False,
+        "capabilities": capabilities,
+        "endpoints": endpoints,
+        "constraints": sorted(str(_value(value)) for value in device.constraints),
+        "metadata": dict(device.metadata or {}),
+    }
+
+
+def _merge_unique_strings(left, right):
+    result = list(left or [])
+    seen = set(result)
+    for value in right or []:
+        if value not in seen:
+            result.append(value)
+            seen.add(value)
+    return result
+
+
+def _merge_endpoints(left, right):
+    result = list(left or [])
+    by_id = {_endpoint_id(endpoint): endpoint for endpoint in result if _endpoint_id(endpoint)}
+    for endpoint in right or []:
+        endpoint = _endpoint_to_row(endpoint)
+        eid = _endpoint_id(endpoint)
+        existing = by_id.get(eid)
+        if existing is None:
+            result.append(endpoint)
+            if eid:
+                by_id[eid] = endpoint
+            continue
+        existing["protocols"] = _merge_unique_strings(existing.get("protocols"), endpoint.get("protocols"))
+        existing["capabilities"] = _merge_unique_strings(existing.get("capabilities"), endpoint.get("capabilities"))
+        existing.setdefault("metadata", {}).update(endpoint.get("metadata") or {})
+        if endpoint.get("label"):
+            existing["label"] = endpoint["label"]
+    return result
 
 
 class MediaSession:
@@ -191,6 +295,8 @@ class AppState:
                     "online": bool(peer.get("online", False)),
                     "connected": bool(peer.get("connected", False)),
                     "default": bool(peer.get("default", False)),
+                    "route_input": bool(peer.get("route_input", False)),
+                    "route_output": bool(peer.get("route_output", False)),
                     "capabilities": capabilities,
                     "endpoints": endpoints,
                     "constraints": list(peer.get("constraints") or []),
@@ -240,6 +346,14 @@ class AppState:
                 if not existing.get("address"):
                     existing["address"] = bonded["address"]
         self.trusted = devices
+        self.route_input = next(
+            (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),
+            "",
+        )
+        self.route_output = next(
+            (device.get("key") or device.get("address") for device in self.route_outputs if device.get("route_output")),
+            "",
+        )
 
     def save_trusted(self, path=None):
         path = Path(path or self.trusted_path)
@@ -269,6 +383,10 @@ class AppState:
             }
             if device.get("default"):
                 row["default"] = True
+            if device.get("route_input"):
+                row["route_input"] = True
+            if device.get("route_output"):
+                row["route_output"] = True
             data["devices"].append(row)
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
@@ -276,6 +394,58 @@ class AppState:
 
     def trusted_by_role(self, role):
         return [device for device in self.trusted if device.get("role") == role]
+
+    def upsert_trusted_device(self, device):
+        row = _trusted_device_to_row(device)
+        address = normalize_address(row.get("address"))
+        existing = next(
+            (
+                item for item in self.trusted
+                if item.get("key") == row.get("key")
+                or (address and normalize_address(item.get("address")) == address)
+            ),
+            None,
+        )
+        if existing is None:
+            if _device_is_output(row) and not any(d.get("default") for d in self.trusted_speakers):
+                row["default"] = True
+            self.trusted.append(row)
+            return row
+
+        existing["label"] = row.get("label") or existing.get("label")
+        existing["type"] = row.get("type") or existing.get("type") or "Устройство"
+        existing["role"] = "device" if (
+            (_device_is_input(existing) or _device_is_input(row))
+            and (_device_is_output(existing) or _device_is_output(row))
+        ) else row.get("role") or existing.get("role") or "device"
+        existing["online"] = bool(existing.get("online") or row.get("online"))
+        existing["connected"] = bool(existing.get("connected") or row.get("connected"))
+        existing["capabilities"] = _merge_unique_strings(existing.get("capabilities"), row.get("capabilities"))
+        existing["endpoints"] = _merge_endpoints(existing.get("endpoints"), row.get("endpoints"))
+        existing["constraints"] = _merge_unique_strings(existing.get("constraints"), row.get("constraints"))
+        existing.setdefault("metadata", {}).update(row.get("metadata") or {})
+        return existing
+
+    def enroll_trusted_device(self, address, name=None, class_of_device=None,
+                              service_uuids=None, ble_services=None, metadata=None):
+        from enrollment_manager import EnrollmentEvidence, EnrollmentManager
+
+        class _Registry:
+            devices = []
+
+            def by_id(self, _device_id):
+                return None
+
+        evidence = EnrollmentEvidence(
+            address=address,
+            name=name or "",
+            class_of_device=class_of_device,
+            service_uuids=set(service_uuids or []),
+            ble_services=set(ble_services or []),
+            metadata=dict(metadata or {}),
+        )
+        device = EnrollmentManager(_Registry()).build_device(evidence)
+        return self.upsert_trusted_device(device)
 
     @property
     def trusted_sources(self):
@@ -363,28 +533,20 @@ class AppState:
         address = normalize_address(address)
         if not address:
             return None
-        if self.is_trusted_source(address):
-            return None
         candidate = next((c for c in self.speaker_candidates if c.get("address") == address), None)
         if candidate is not None and not candidate.get("audio"):
             return None
-        label = str(name or "").strip() or address
-        existing = next((d for d in self.trusted_speakers if d.get("address") == address), None)
-        if existing is None:
-            existing = {
-                "key": address,
-                "address": address,
-                "label": label,
-                "type": "Динамик",
-                "role": "speaker",
-                "online": True,
-                "connected": False,
-                "default": not bool(self.trusted_speakers),
-            }
-            self.trusted.append(existing)
-        else:
-            existing["label"] = label
-            existing["online"] = True
+        label = str(name or "").strip() or (candidate or {}).get("label") or address
+        existing = self.enroll_trusted_device(
+            address,
+            name=label,
+            class_of_device=(candidate or {}).get("class_of_device"),
+            service_uuids={"110b", "audio_sink"},
+            metadata={"enrolled_from": "classic_pairing", "audio": True},
+        )
+        existing["online"] = True
+        if _device_is_output(existing) and not any(d.get("default") for d in self.trusted_speakers):
+            existing["default"] = True
         for candidate in self.speaker_candidates:
             if candidate.get("address") == address:
                 candidate["trusted"] = True

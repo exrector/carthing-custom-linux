@@ -679,11 +679,6 @@ class A2DPBridge:
             self.state.pairing_message = "Это не Bluetooth-динамик"
             self.on_state_change()
             return
-        if self.state.is_trusted_source(address):
-            self.state.speaker_pairing_status = "error"
-            self.state.pairing_message = "Источник нельзя добавить как динамик"
-            self.on_state_change()
-            return
         label = (candidate or {}).get("label") or address
         self.state.speaker_pairing_status = "connect"
         self.state.pairing_message = ""

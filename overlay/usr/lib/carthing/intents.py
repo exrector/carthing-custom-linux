@@ -118,7 +118,13 @@ class Dispatcher:
 
     # ── settings ───────────────────────────────────────────────────────────────
     def _settings(self, key):
-        if key == "pairing_source":
+        if key == "pairing_device":
+            self.state.pairing_role = "device"
+            self.state.pairing_mode = True
+            self.state.speaker_pairing_status = "scan"
+            self.state.clear_speaker_candidates()
+            self.on_pairing(True, "device")
+        elif key == "pairing_source":
             self.state.pairing_role = "source"
             self.state.pairing_mode = True
             self.on_pairing(True, "source")
@@ -178,11 +184,19 @@ class Dispatcher:
     def _route_input_select(self, key):
         selected = self.state.select_route_input(key)
         if selected:
+            try:
+                self.state.save_trusted()
+            except Exception:
+                pass
             self.on_route_input_select(selected)
 
     def _route_output_select(self, key):
         selected = self.state.select_route_output(key)
         if selected:
+            try:
+                self.state.save_trusted()
+            except Exception:
+                pass
             self.on_route_output_select(selected)
 
     # [CLAUDE 2026-06-01] ±тайм-аут полного гашения экрана (шаг 30с, 30с..10мин)

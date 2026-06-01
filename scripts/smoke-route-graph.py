@@ -100,6 +100,31 @@ def check_enrollment():
     assert iphone.input_endpoints()
 
 
+def check_multirole_app_state():
+    with tempfile.TemporaryDirectory() as tmp:
+        trusted_path = Path(tmp) / "trusted-devices.json"
+        os.environ["CARTHING_TRUSTED_DEVICES"] = str(trusted_path)
+        os.environ["CAR_THING_KEYSTORE"] = str(Path(tmp) / "keys.json")
+        app_state = AppState()
+        app_state.enroll_trusted_device(
+            "AA:BB:CC:DD:EE:FF",
+            name="Multi Peer",
+            service_uuids={"110a"},
+            ble_services={"ams"},
+        )
+        app_state.upsert_speaker_candidate(
+            "AA:BB:CC:DD:EE:FF",
+            name="Multi Peer",
+            class_of_device=0x240414,
+            audio=True,
+        )
+        device = app_state.trust_speaker("AA:BB:CC:DD:EE:FF", "Multi Peer")
+        assert device is not None
+        assert device["role"] == "device"
+        assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_inputs)
+        assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_outputs)
+
+
 def check_patchbay():
     bay = VirtualPatchBay()
     bay.add_plug(VirtualPlug(
@@ -124,6 +149,7 @@ def main():
     assert normalize_preset("transfer") == "router"
     check_registry_and_planner()
     check_enrollment()
+    check_multirole_app_state()
     check_patchbay()
     asyncio.run(check_runner())
     print("ROUTE GRAPH SMOKE OK")

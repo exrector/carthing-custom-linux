@@ -173,9 +173,20 @@ class RouteBuilderScreen(Screen):
         route_input = getattr(self.state, "route_input", "")
         route_output = getattr(self.state, "route_output", "")
         active = bool(route_input and route_output and getattr(self.state, "transfer_active", False))
-        status = "active" if active else "idle"
-        draw.text((52, CONTENT_TOP + 52), f"{status} · press toggles input/output",
+        status = "маршрут активен" if active else ("маршрут выбран" if route_input and route_output else "ожидание маршрута")
+        draw.text((52, CONTENT_TOP + 52), status,
                   font=T.font(T.SZ_META), fill=T.FAINT)
+
+        cap_labels = {
+            "audio_input": "аудио-вход",
+            "audio_output": "аудио-выход",
+            "control_input": "пульт",
+            "control_output": "управление",
+            "metadata_input": "метаданные",
+            "notifications_input": "уведомления",
+            "volume_control": "громкость",
+            "transport_control": "плеер",
+        }
 
         def render_group(title, devices, y, selected_key, focus_name, intent):
             focused = self.focus == focus_name
@@ -193,10 +204,14 @@ class RouteBuilderScreen(Screen):
                 label = device.get("label") or device.get("address") or "Device"
                 text = label
                 if selected:
-                    text += "  · selected"
+                    text += "  · выбран"
                 rect = C.list_row(draw, y, text, selected=selected and focused, indent=0)
-                state = "connected" if connected else ("online" if online else "offline")
-                caps = ", ".join(device.get("capabilities") or [])[:44]
+                state = "подключено" if connected else ("в сети" if online else "не в сети")
+                caps_text = ", ".join(
+                    cap_labels.get(cap, cap)
+                    for cap in (device.get("capabilities") or [])
+                )
+                caps = C.truncate(draw, caps_text, T.font(T.SZ_SMALL), T.CONTENT_W - 56)
                 meta = state if not caps else f"{state} · {caps}"
                 draw.text((52, y + 42), meta, font=T.font(T.SZ_SMALL),
                           fill=T.FG if online else T.FAINT)
@@ -206,10 +221,12 @@ class RouteBuilderScreen(Screen):
             return y + 10
 
         y = CONTENT_TOP + 92
-        y = render_group("Input", inputs, y, route_input, "input", "route_input_select")
-        y = render_group("Output", outputs, y, route_output, "output", "route_output_select")
+        y = render_group("Вход", inputs, y, route_input, "input", "route_input_select")
+        y = render_group("Выход", outputs, y, route_output, "output", "route_output_select")
         if route_input and route_output:
-            C.text_centered(draw, "Route ready", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Запуск маршрута", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
+            if regions is not None:
+                regions.add((24, T.H - 78, T.CONTENT_X1, T.H - 16), "route_activate")
         return img
 
 
@@ -339,8 +356,9 @@ class SettingsScreen(Screen):
         self.items = [
             {"key": "sessions", "label": "Сессии и маршруты"},
             {"key": "pairing", "label": "Добавить устройство", "children": [
-                ("pairing_source", "iPhone / источник"),
-                ("pairing_speaker", "Bluetooth динамик"),
+                ("pairing_device", "Универсальное устройство"),
+                ("pairing_source", "Только iPhone / BLE"),
+                ("pairing_speaker", "Только аудиовыход"),
             ]},
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
@@ -767,18 +785,21 @@ class PairingModal:
         cx = T.CONTENT_CX
         # card background for legibility over the dimmed desktop
         role = getattr(self.state, "pairing_role", "source")
+        device_mode = role == "device"
         speaker_mode = role == "speaker"
-        cw, ch = (640, 390) if speaker_mode else (580, 300)
+        list_mode = speaker_mode or device_mode
+        cw, ch = (640, 390) if list_mode else (580, 300)
         draw.rounded_rectangle([cx - cw // 2, T.MAIN_CY - ch // 2, cx + cw // 2, T.MAIN_CY + ch // 2],
                                radius=T.RADIUS, fill=T.SURFACE, outline=T.HAIRLINE, width=1)
         name = getattr(self.state, "device_name", "Car Thing")
-        if speaker_mode:
-            C.text_centered(draw, "Добавить динамик", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 160, cx=cx)
+        if list_mode:
+            title = "Добавить устройство" if device_mode else "Добавить аудиовыход"
+            C.text_centered(draw, title, T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 160, cx=cx)
             status = getattr(self.state, "speaker_pairing_status", "") or "scan"
             subtitle = {
-                "scan": "Ищу Bluetooth-динамики…",
-                "connect": "Подключаю динамик…",
-                "done": "Динамик добавлен",
+                "scan": "Ищу устройства и принимаю подключение…" if device_mode else "Ищу Bluetooth-аудио…",
+                "connect": "Завершаю сопряжение…",
+                "done": "Устройство добавлено",
                 "error": "Не удалось добавить",
             }.get(status, "Найденные динамики")
             C.text_centered(draw, subtitle, T.font(T.SZ_META), T.ACCENT, T.MAIN_CY - 104, cx=cx)
@@ -786,14 +807,15 @@ class PairingModal:
             candidates = [c for c in candidates if c.get("audio")]
             message = getattr(self.state, "pairing_message", "") or ""
             if not candidates:
-                text = message or "Переведите динамик в режим сопряжения"
+                text = message or ("Откройте Bluetooth на телефоне или включите pairing на аудиоустройстве"
+                                   if device_mode else "Переведите аудиоустройство в режим сопряжения")
                 C.text_centered(draw, text, T.font(T.SZ_SMALL),
                                 T.MUTED, T.MAIN_CY - 42, cx=cx)
             else:
                 y = T.MAIN_CY - 58
                 rx0, rx1 = cx - cw // 2 + 36, cx + cw // 2 - 36
                 for candidate in candidates[:4]:
-                    label = candidate.get("label") or candidate.get("address") or "Bluetooth speaker"
+                    label = candidate.get("label") or candidate.get("address") or "Bluetooth device"
                     if candidate.get("trusted"):
                         label += "  · добавлен"
                     rect = (rx0, y - 6, rx1, y + T.ROW_H - 14)
@@ -813,7 +835,7 @@ class PairingModal:
 
         # Cancel button (tappable) — also Back/Press cancels
         bw, bh = 200, 48
-        bx0, by0 = cx - bw // 2, T.MAIN_CY + (142 if speaker_mode else 84)
+        bx0, by0 = cx - bw // 2, T.MAIN_CY + (142 if list_mode else 84)
         draw.rectangle([bx0, by0, bx0 + bw, by0 + bh], outline=T.FAINT, width=2)
         C.text_centered(draw, "Отмена", T.font(T.SZ_META), T.MUTED, by0 + 8, cx=cx)
         regions.add((bx0, by0, bx0 + bw, by0 + bh), "pairing_cancel")

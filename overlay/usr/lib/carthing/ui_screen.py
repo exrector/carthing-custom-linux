@@ -227,6 +227,8 @@ class Compositor:
             return False
         if hit.intent == "mode_focus" and isinstance(hit.payload, dict):
             self.on_intent("session_select", hit.payload.get("mode"))
+        elif hit.intent == "route_activate":
+            self.on_intent("session_select", "router")
         elif hit.intent == "trusted_remove":
             self.on_intent(hit.intent, hit.payload)
         else:
