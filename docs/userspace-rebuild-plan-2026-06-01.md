@@ -72,3 +72,10 @@ Examples:
 6. Retire old mode screen and old TransferService ownership.
 7. Bake into rootfs only after the session runner is live-verified.
 
+## Bake-Readiness Gates (Local)
+
+Before writing userspace into rootfs, pass the local gates:
+
+1. `scripts/check-bake-readiness.sh`
+2. Ensure working tree contains only intended `[COPILOT]` architecture commits.
+3. Confirm router path is session-owned (`SessionRunner` connectors), not direct mode wiring.
