@@ -241,14 +241,15 @@ class SessionsScreen(Screen):
     title = "Сессии"
     fullscreen = True
 
-    MODES = [
-        ("remote", "Remote", "iPhone media control"),
-        ("router", "Router", "Route input to output"),
-        ("mac", "Mac", "Mac control surface"),
-        ("pairing", "Pairing", "Enroll trusted device"),
-        ("quiet", "Quiet", "Connected, low UI activity"),
-        ("service", "Service", "USB/NCM diagnostics safe state"),
+    SESSIONS = [
+        ("remote", "Пульт", "медиаконтроль по умолчанию"),
+        ("router", "Маршрут", "выбранный вход на выбранный выход"),
+        ("mac", "macOS", "управление медиасессией Mac"),
+        ("pairing", "Сопряжение", "добавление доверенного устройства"),
+        ("quiet", "Тихий режим", "связь без лишней активности экрана"),
+        ("service", "Сервис", "USB/NCM и диагностика"),
     ]
+    MODES = SESSIONS  # compatibility alias
 
     def __init__(self, emit=None):
         self.state = None
@@ -265,20 +266,20 @@ class SessionsScreen(Screen):
             current = "router"
         if current != self._last_current:
             self._last_current = current
-            for i, (key, _label, _desc) in enumerate(self.MODES):
+            for i, (key, _label, _desc) in enumerate(self.SESSIONS):
                 if key == current:
                     self.sel = i
                     break
 
     def _activate(self, index):
-        if not (0 <= index < len(self.MODES)):
+        if not (0 <= index < len(self.SESSIONS)):
             return
-        key = self.MODES[index][0]
+        key = self.SESSIONS[index][0]
         self.sel = index
         self.emit("session_select", key)
 
     def tap(self, index):
-        if 0 <= index < len(self.MODES):
+        if 0 <= index < len(self.SESSIONS):
             self.sel = index
 
     def on_input(self, event):
@@ -286,7 +287,7 @@ class SessionsScreen(Screen):
             self.scroll_y = max(0, min(self._max_scroll, self.scroll_y - event[1]))
             return True
         if event == Input.SWIPE_DOWN:
-            self.sel = min(len(self.MODES) - 1, self.sel + 1)
+            self.sel = min(len(self.SESSIONS) - 1, self.sel + 1)
             return True
         if event == Input.SWIPE_UP:
             self.sel = max(0, self.sel - 1)
@@ -309,7 +310,7 @@ class SessionsScreen(Screen):
         top = CONTENT_TOP + 52
         bottom = T.H - 24
         row_h = T.ROW_H + 16
-        total_h = len(self.MODES) * row_h + 52
+        total_h = len(self.SESSIONS) * row_h + 52
         self._max_scroll = max(0, total_h - (bottom - top))
         self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
 
@@ -317,7 +318,7 @@ class SessionsScreen(Screen):
         draw.text((52, status_y), f"{mode_status} · {power_tier}",
                   font=T.font(T.SZ_META), fill=T.FAINT)
 
-        for i, (key, label, desc) in enumerate(self.MODES):
+        for i, (key, label, desc) in enumerate(self.SESSIONS):
             y = top + 52 + i * row_h - self.scroll_y
             if y + row_h < top or y > bottom:
                 continue
@@ -329,7 +330,7 @@ class SessionsScreen(Screen):
             desc_color = T.FG if active else T.FAINT
             draw.text((52, y + 42), desc, font=T.font(T.SZ_SMALL), fill=desc_color)
             if active:
-                draw.text((T.LIST_X1 - 120, y), "active", font=T.font(T.SZ_SMALL), fill=T.ACCENT)
+                draw.text((T.LIST_X1 - 120, y), "активно", font=T.font(T.SZ_SMALL), fill=T.ACCENT)
             if regions is not None:
                 rx0, ry0, rx1, ry1 = rect
                 regions.add((rx0, max(top, ry0), rx1, min(bottom, ry1 + 42)),
