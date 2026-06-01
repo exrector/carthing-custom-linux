@@ -89,6 +89,7 @@ class NowPlayingScreen(Screen):
 class MacOSScreen(Screen):
     name = "macos"
     title = "macOS"
+    fullscreen = True
 
     def __init__(self, emit=None):
         self.state = None
@@ -137,6 +138,7 @@ class MacOSScreen(Screen):
 class TransferScreen(Screen):
     name = "transfer"
     title = "Audio"
+    fullscreen = True
 
     def __init__(self, emit=None):
         self.state = None
@@ -203,6 +205,7 @@ class ModesScreen(Screen):
 
     name = "modes"
     title = "Режимы"
+    fullscreen = True
 
     MODES = [
         ("remote", "Remote", "iPhone media control"),
@@ -266,7 +269,7 @@ class ModesScreen(Screen):
         power_tier = getattr(self.state, "power_tier", "boot") if self.state else "boot"
         mode_status = getattr(self.state, "mode_status", current) if self.state else current
         top = CONTENT_TOP + 52
-        bottom = T.OCCLUSION_BOTTOM
+        bottom = T.H - 24
         row_h = T.ROW_H + 16
         total_h = len(self.MODES) * row_h + 52
         self._max_scroll = max(0, total_h - (bottom - top))
@@ -303,6 +306,7 @@ class SettingsScreen(Screen):
 
     name = "settings"
     title = "Настройки"
+    fullscreen = True
 
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
@@ -328,7 +332,7 @@ class SettingsScreen(Screen):
 
     def _viewport(self):
         start_y = CONTENT_TOP + 52
-        bottom_y = T.OCCLUSION_BOTTOM
+        bottom_y = T.H - 24
         return start_y, bottom_y
 
     def _update_scroll_bounds(self, rows=None):
@@ -477,16 +481,16 @@ class SettingsScreen(Screen):
                     regions.add((600, ra, 668, rb), "screen_off_adjust", payload="+")
                 continue
             if key.startswith("trusted:"):
-                label_w = T.LIST_X1 - 150
+                remove_rect = (T.LIST_X1 - 46, y + 3, T.LIST_X1 - 8, y + 41)
+                label_w = remove_rect[0] - 80
                 shown = C.truncate(draw, label, T.font(T.SZ_BODY), label_w - 76)
                 rect = C.list_row(draw, y, shown, selected=(i == self.sel),
                                   indent=24 if level else 0)
                 if color is not None:
                     T.icon_dot(draw, 40, y + T.SZ_BODY // 2, 7, color=color)
-                remove_rect = (T.LIST_X1 - 118, y - 4, T.LIST_X1 - 20, y + T.ROW_H - 16)
-                draw.rectangle(remove_rect, outline=T.FAINT, width=2)
-                C.text_centered(draw, "Удерж.", T.font(T.SZ_SMALL), T.MUTED, y + 16,
-                                cx=(remove_rect[0] + remove_rect[2]) // 2)
+                x0, y0, x1, y1 = remove_rect
+                draw.line([x0 + 10, y0 + 10, x1 - 10, y1 - 10], fill=T.WARN, width=3)
+                draw.line([x1 - 10, y0 + 10, x0 + 10, y1 - 10], fill=T.WARN, width=3)
                 if regions is not None:
                     rx0, ry0, rx1, ry1 = rect
                     regions.add((rx0, max(start_y, ry0), rx1, min(bottom_y, ry1)),
@@ -652,7 +656,8 @@ class NotificationsScreen(Screen):
             img.paste(crop, (0, top_y))
         for i, y, item in visible:
             if i == self.sel:
-                draw.rectangle([x0, y - 4, x0 + 7, y - 4 + item["content_h"]], fill=T.ACCENT)
+                draw.rectangle([x0, y - 4, T.W - 28, y - 4 + item["content_h"]],
+                               outline=T.SURFACE_SEL, width=2)
             if regions is not None:
                 regions.add((x0, max(top_y, y - 4), T.W - 24, min(bot_y, y - 4 + item["content_h"])),
                             "notif_select", payload=i)
@@ -745,7 +750,6 @@ class PairingModal:
                     rect = (rx0, y - 6, rx1, y + T.ROW_H - 14)
                     if candidate.get("trusted"):
                         draw.rectangle(rect, fill=T.SURFACE_SEL)
-                        draw.rectangle([rx0, rect[1], rx0 + 6, rect[3]], fill=T.ACCENT)
                     draw.text((rx0 + 24, y), label, font=T.font(T.SZ_BODY),
                               fill=T.FG if candidate.get("trusted") else T.MUTED)
                     draw.text((rx0 + 24, y + 42), candidate.get("address") or "",

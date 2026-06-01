@@ -15,7 +15,7 @@ W, H = 800, 480
 # ─── palette ──────────────────────────────────────────────────────────────────
 BG       = (0, 0, 0)
 SURFACE  = (22, 22, 22)        # raised row / card
-SURFACE_SEL = (22, 36, 30)     # selected row
+SURFACE_SEL = (34, 34, 34)     # selected row, neutral highlight
 FG       = (255, 255, 255)
 MUTED    = (165, 165, 165)
 FAINT    = (95, 95, 95)
@@ -50,7 +50,7 @@ CONTENT_CX = OCCLUSION_LEFT // 2      # 370 — main horizontal center (left edg
 CONTENT_W  = 2 * (CONTENT_CX - CONTENT_X0)   # 660
 MAIN_CY    = OCCLUSION_BOTTOM // 2    # 172 — main vertical center
 CONTENT_TOP = 24                      # top-aligned content (lists) start
-LIST_X1     = OCCLUSION_LEFT - 72     # 668 — right edge for list rows; keeps them clear of the dial arc
+LIST_X1     = W - MARGIN              # full-width rows in pushed/fullscreen views
 
 # BOTTOM BAR fills the bottom band exactly (top aligned with occlusion bottom)
 STATUSBAR_TOP = OCCLUSION_BOTTOM      # 318

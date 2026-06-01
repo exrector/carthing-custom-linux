@@ -94,11 +94,10 @@ def progress_bar(draw, x, y, w, pct, h=3, bg=T.HAIRLINE, fg=T.FG):
 def list_row(draw, y, label, selected=False, expandable=False, expanded=False,
              indent=0):
     """Draw one row; return its rect for InteractiveRegion registration."""
-    x0, x1 = 24, T.LIST_X1           # right edge kept clear of the dial arc
+    x0, x1 = 24, T.LIST_X1
     rect = (x0, y - 6, x1, y + T.ROW_H - 14)
     if selected:
         draw.rectangle(rect, fill=T.SURFACE_SEL)
-        draw.rectangle([x0, rect[1], x0 + 6, rect[3]], fill=T.ACCENT)
     tx = 52 + indent
     draw.text((tx, y), label, font=T.font(T.SZ_BODY), fill=T.FG if selected else T.MUTED)
     if expandable:
