@@ -1,0 +1,2 @@
+# Только для запуска MCP-сервера (server.py). core.py и smoke_test.py работают на одном stdlib.
+mcp[cli]>=1.2.0
