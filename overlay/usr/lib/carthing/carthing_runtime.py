@@ -231,9 +231,36 @@ async def _on_connection(connection):
         if orch is not None:
             asyncio.ensure_future(orch.on_disconnect())
 
+    async def _on_pairing_failure(reason):
+        # [CLAUDE 2026-06-01] АВТО-«ЗАБЫТЬ» при сбое пары.
+        # Симптом: iPhone «забыл» устройство и парится заново, а device держит СТАРЫЙ бонд +
+        # включён address-resolution (загружен на power_on). Контроллер резолвит RPA телефона в
+        # старую identity -> в SC-крипто device использует identity-адрес, iPhone — свой RPA ->
+        # DHKey check НЕ сходится -> SMP_DHKEY_CHECK_FAILED, пара не создаётся (нужна ручная чистка).
+        # Фикс: на сбое пары авто-сбрасываем старый бонд + резолвинг -> СЛЕДУЮЩИЙ ретрай iPhone
+        # (он реконнектит сам) идёт без резолвинга -> on-air RPA с обеих сторон -> DHKey сходится ->
+        # свежая пара создаётся автоматически, без ручного rm keys.json.
+        # Codex: это закрывает "forget на iPhone -> не пере-парится". Долгосрочно лучше дроп бонда
+        # на СТАРТЕ пары (pairing request), но reactive-на-failure надёжно (iPhone сам ретраит).
+        logger.error("SMP pairing failed: %s — auto-forget stale bond + resolving", reason)
+        dev = orch.device if orch is not None else None
+        if dev is None:
+            return
+        try:
+            if dev.keystore is not None:
+                await dev.keystore.delete_all()
+            from bumble.hci import (HCI_LE_Set_Address_Resolution_Enable_Command,
+                                    HCI_LE_Clear_Resolving_List_Command)
+            await dev.send_command(HCI_LE_Set_Address_Resolution_Enable_Command(
+                address_resolution_enable=0))
+            await dev.send_command(HCI_LE_Clear_Resolving_List_Command())
+            logger.info("Auto-forget: dropped stale bond + cleared resolving (clean re-pair on retry)")
+        except Exception as e:
+            logger.warning("auto-forget failed: %s", e)
+
     connection.on("disconnection", _disc)
     connection.on("pairing", lambda *_: asyncio.ensure_future(_start_ams("pairing")))
-    connection.on("pairing_failure", lambda r: logger.error("SMP pairing failed: %s", r))
+    connection.on("pairing_failure", lambda r: asyncio.ensure_future(_on_pairing_failure(r)))
     connection.on("connection_encryption_change",
                   lambda *_: asyncio.ensure_future(_start_ams("encryption")))
 

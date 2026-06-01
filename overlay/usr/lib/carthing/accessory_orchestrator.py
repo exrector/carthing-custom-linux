@@ -220,7 +220,30 @@ class AccessoryOrchestrator:
     async def arm_pairing(self, on: bool):
         """GUI: вход/выход «Режим сопряжения» (двунаправленный — источники И динамики)."""
         self.pairing_armed = bool(on)
+        if on:
+            # [CLAUDE 2026-06-01] ПЕРВАЯ-ЖЕ пара чистая. Вход в режим сопряжения = явное намерение
+            # спарить заново. Если оставить включённый address-resolution (загружен на power_on из
+            # старого бонда), контроллер резолвит RPA новой пары в СТАРУЮ identity -> в SC-крипто
+            # device берёт identity-адрес, iPhone — свой RPA -> DHKey check НЕ сходится ->
+            # SMP_DHKEY_CHECK_FAILED, и пара создаётся только со ВТОРОЙ попытки (после reactive
+            # auto-forget в carthing_runtime). Гасим резолвинг СРАЗУ при входе в pairing -> первая
+            # попытка идёт на on-air RPA с обеих сторон -> DHKey сходится. Свежая пара перезапишет
+            # старый бонд (keystore keyed by identity). Резолвинг вернётся на следующем power_on.
+            # Codex: долгосрочно — refresh resolving list на on_bonded (тогда и рестарт не нужен).
+            await self._disable_resolution_for_pairing()
         await self.apply_visibility()
+
+    async def _disable_resolution_for_pairing(self):
+        try:
+            from bumble.hci import (HCI_LE_Set_Address_Resolution_Enable_Command,
+                                    HCI_LE_Clear_Resolving_List_Command)
+            await self._stop()   # резолвинг-лист правим не на ходу
+            await self.device.send_command(
+                HCI_LE_Set_Address_Resolution_Enable_Command(address_resolution_enable=0))
+            await self.device.send_command(HCI_LE_Clear_Resolving_List_Command())
+            logger.info("Pairing mode: address resolution OFF (clean first-try pairing)")
+        except Exception as e:
+            logger.warning("disable resolution for pairing failed: %s", e)
 
     async def set_transfer_connectable(self, on: bool):
         """Transfer: открыть classic для входящего A2DP (link-key уже есть из CTKD)."""
