@@ -31,8 +31,10 @@ from accessory_orchestrator import AccessoryOrchestrator
 from runtime_model import RuntimeModel
 from iphone_service import IPhoneService
 from route_graph import Protocol
+from route_planner import RoutePlanError, RoutePlanner
 from session_presets import build_preset_session, normalize_preset
 from session_runner import AdapterConnector, SessionRunner
+from trusted_device_registry import TrustedDeviceRegistry
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("carthing_runtime")
@@ -174,8 +176,13 @@ def _on_route_input_select(key):
     if power is not None:
         power.note_activity("route_input_select")
     if gui is not None:
-        gui.app_state.route_input = key
+        selected = gui.app_state.select_route_input(key)
+        if selected:
+            gui.app_state.route_input = selected
+        gui.app_state.save_trusted()
     logger.info("route input selected: %s", key)
+    if model.active_session == "router":
+        asyncio.ensure_future(_apply_session("router", persist=False))
     _on_publish()
 
 
@@ -183,11 +190,16 @@ def _on_route_output_select(key):
     if power is not None:
         power.note_activity("route_output_select")
     if gui is not None:
-        gui.app_state.route_output = key
+        selected = gui.app_state.select_route_output(key)
+        if selected:
+            gui.app_state.route_output = selected
+        gui.app_state.save_trusted()
     logger.info("route output selected: %s", key)
     # Compatibility bridge: current lower layer still names output selection
     # "transfer_select". The route graph owns the product model above it.
     _on_transfer_select(key)
+    if model.active_session == "router":
+        asyncio.ensure_future(_apply_session("router", persist=False))
     _on_publish()
 
 
@@ -208,6 +220,31 @@ def _on_set_off_timeout(sec):
         settings.set("screen_off_after_sec", sec)
 
 
+def _build_session_plan(session):
+    plan = build_preset_session(session)
+    if session != "router":
+        return plan
+    if gui is None or getattr(gui, "app_state", None) is None:
+        return plan
+
+    app_state = gui.app_state
+    route_input = str(getattr(app_state, "route_input", "") or "").strip()
+    route_output = str(getattr(app_state, "route_output", "") or "").strip()
+    if not route_input or not route_output:
+        return plan
+
+    registry = TrustedDeviceRegistry(getattr(app_state, "trusted_path", None)).load()
+    planner = RoutePlanner(registry)
+    try:
+        routed = planner.plan_simple_route(route_input, route_output, name="router")
+    except RoutePlanError as exc:
+        logger.warning("router plan rejected: %s", exc)
+        plan.warnings.append(str(exc))
+        return plan
+    routed.constraints.update(plan.constraints)
+    return routed
+
+
 async def _apply_session(session, persist=True):
     session = normalize_preset(session)
     if session not in VALID_SESSIONS:
@@ -216,7 +253,7 @@ async def _apply_session(session, persist=True):
     model.device_mode = session
     model.mode_status = "applying"
     if session_runner is not None:
-        await session_runner.start(build_preset_session(session))
+        await session_runner.start(_build_session_plan(session))
     if settings is not None and persist and session != "pairing":
         settings.set("active_session", session)
     if power is not None:
