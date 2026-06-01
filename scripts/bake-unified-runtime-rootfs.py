@@ -26,13 +26,14 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "46648ed805d4183cd8720647160fd540d0ec2166"
+EXPECTED_RUNTIME_TREE_SHA1 = "52b33c838b00ab8e4a7f4f22eaf9b90d8cf957bd"
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
 )
 RETIRED_RUNTIME_FILES = (
     "classic_profile_probe.py",
     "hid_pair.py",
+    "media_remote.py",
     "media_remote_v3.py",
     "now_playing_ui.py",
     "system_menu.py",
@@ -62,6 +63,8 @@ def sha256(path: Path) -> str:
 def runtime_tree_sha1(runtime_dir: Path) -> str:
     lines: list[str] = []
     for path in sorted(runtime_dir.glob("*.py")):
+        if path.name in RETIRED_RUNTIME_FILES:
+            continue
         h = hashlib.sha1(path.read_bytes()).hexdigest()
         lines.append(f"{h}  {path.name}\n")
     return hashlib.sha1("".join(lines).encode()).hexdigest()
@@ -179,6 +182,8 @@ def copy_runtime(image: Path) -> None:
     clean_retired_runtime(image)
 
     for src in sorted(runtime_dir.glob("*.py")):
+        if src.name in RETIRED_RUNTIME_FILES:
+            continue
         e2copy_file(image, src, f"/usr/lib/carthing/{src.name}", mode="0644")
 
     bitstruct = runtime_dir / "vendor/bitstruct.py"

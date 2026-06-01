@@ -29,7 +29,7 @@ CARTHING_STATE_DEVICE=/dev/mmcblk0p1
 CARTHING_STATE_MOUNT=/run/carthing-state
 
 CARTHING_RUNTIME_ROOT=/usr/lib/carthing
-CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/media_remote.py
+CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/carthing_runtime.py
 CARTHING_RUNTIME_LIB=/usr/lib/carthing/vendor
 CARTHING_RUNTIME_KEYS=/run/carthing-state/carthing/keys.json
 CARTHING_RUNTIME_LOG=/run/carthing/carthing-remote.log
