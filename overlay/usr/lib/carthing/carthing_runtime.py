@@ -30,6 +30,7 @@ from ble_transport import init_ble
 from accessory_orchestrator import AccessoryOrchestrator
 from runtime_model import RuntimeModel
 from iphone_service import IPhoneService
+from link_manager import LinkAdapter, LinkManager
 from route_graph import Protocol
 from route_planner import RoutePlanError, RoutePlanner
 from session_presets import build_preset_session, normalize_preset
@@ -53,6 +54,7 @@ hw_caps = {}             # hardware_inventory.probe()
 mac = None               # MacService
 power = None             # IdlePowerController
 session_runner = None    # SessionRunner
+link_manager = None      # LinkManager
 
 VALID_SESSIONS = {"remote", "router", "mac", "pairing", "quiet", "service"}
 
@@ -109,6 +111,36 @@ class TransferRouteConnector(AdapterConnector):
             self._attached -= 1
         if self._attached == 0:
             await self.service.deactivate()
+
+
+class AppStateLinkAdapter(LinkAdapter):
+    """Reflect trusted-device online/connected hints from AppState into LinkManager."""
+
+    def __init__(self, app_state):
+        super().__init__(name="app-state")
+        self.app_state = app_state
+
+    def _row(self, device):
+        if self.app_state is None:
+            return None
+        addr = str(getattr(device, "address", "") or "").upper()
+        key = str(getattr(device, "id", "") or "")
+        for row in getattr(self.app_state, "trusted", []) or []:
+            row_addr = str(row.get("address") or "").upper()
+            row_key = str(row.get("key") or "")
+            if (addr and row_addr == addr) or (key and row_key == key):
+                return row
+        return None
+
+    async def probe(self, device):
+        row = self._row(device)
+        if row is None:
+            return False
+        return bool(row.get("online") or row.get("connected"))
+
+    async def connect_idle(self, device):
+        row = self._row(device)
+        return bool(row and row.get("connected"))
 
 
 def _on_command(source, command):
@@ -466,7 +498,7 @@ async def _on_connection(connection):
 
 
 async def main():
-    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power, session_runner
+    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power, session_runner, link_manager
     _verify_persistent()
 
     # Per-boot инвентарь возможностей + настройки.
@@ -548,6 +580,12 @@ async def main():
     # macOS-источник (Фаза 4, каркас).
     from mac_service import MacService
     mac = MacService(model, on_update=_on_publish)
+    trusted_path = getattr(gui.app_state, "trusted_path", None) if gui is not None else None
+    trusted_registry = TrustedDeviceRegistry(trusted_path).load()
+    link_manager = LinkManager(trusted_registry, interval=15.0)
+    if gui is not None:
+        link_manager.register(AppStateLinkAdapter(gui.app_state))
+        link_manager.start()
     await _apply_session(settings.get("active_session", "remote"), persist=False)
 
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
