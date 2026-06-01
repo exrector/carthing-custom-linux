@@ -245,6 +245,16 @@ def verify_image(image: Path) -> None:
         if missing_exec:
             raise SystemExit(f"profile tooling missing from rootfs: {missing_exec}")
 
+        required_init = [
+            "/etc/init.d/S03-runtime-state",
+            "/etc/init.d/S04-usbgadget",
+            "/etc/init.d/S05-usbnet",
+            "/etc/init.d/S06-ssh",
+        ]
+        missing_init = [path for path in required_init if not e2path_exists(image, path)]
+        if missing_init:
+            raise SystemExit(f"early init scripts missing from rootfs: {missing_init}")
+
 
 def write_manifest(bundle: Path, base_bundle: Path) -> None:
     files = ["bootfs.bin", "rootfs.img", "env.txt", "meta.json"]
