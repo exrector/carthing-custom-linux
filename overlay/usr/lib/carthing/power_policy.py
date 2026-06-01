@@ -36,7 +36,7 @@ class IdlePowerController:
         self._last_content_signature = None
         self._display_state = "init"
         self._runtime_tier = "boot"
-        self._device_mode = "remote"
+        self._active_session = "remote"
         self._pairing_armed = False
         self._transfer_active = False
         self._transfer_scanning_until = 0.0
@@ -167,13 +167,17 @@ class IdlePowerController:
         self._last_activity = time.monotonic()   # перезапустить отсчёт от изменения
         logger.info("Power: screen-off timeout -> %ss", self.off_after)
 
-    def set_device_mode(self, mode: str) -> None:
-        mode = mode or "remote"
-        if mode == self._device_mode:
+    def set_active_session(self, session: str) -> None:
+        session = session or "remote"
+        if session == self._active_session:
             return
-        self._device_mode = mode
-        if mode != "quiet":
-            self.note_activity(f"mode:{mode}")
+        self._active_session = session
+        if session != "quiet":
+            self.note_activity(f"session:{session}")
+
+    def set_device_mode(self, mode: str) -> None:
+        # Legacy wrapper while callers migrate to set_active_session.
+        self.set_active_session(mode)
 
     def note_transfer_scan(self, hold_sec: float = 20.0) -> None:
         if not self.enabled:
@@ -211,7 +215,7 @@ class IdlePowerController:
             return self._display_state
         now = time.monotonic()
         idle = now - self._last_activity
-        if self._device_mode == "quiet":
+        if self._active_session == "quiet":
             idle = max(idle, self.quiet_after)
         scanning = now < self._transfer_scanning_until
 

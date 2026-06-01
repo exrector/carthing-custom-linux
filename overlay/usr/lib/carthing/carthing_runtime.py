@@ -256,7 +256,7 @@ async def _apply_session(session, persist=True):
     if settings is not None and persist and session != "pairing":
         settings.set("active_session", session)
     if power is not None:
-        power.set_device_mode(session)
+        power.set_active_session(session)
 
     if session != "pairing":
         if power is not None:
