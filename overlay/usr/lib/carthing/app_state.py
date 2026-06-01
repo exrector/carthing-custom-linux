@@ -96,6 +96,7 @@ class AppState:
         self.device_mode = "remote"
         self.mode_status = "remote"
         self.power_tier = "boot"
+        self.sleep_on_idle = True       # [CLAUDE] сон/гашение экрана (тумблер в Settings)
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False

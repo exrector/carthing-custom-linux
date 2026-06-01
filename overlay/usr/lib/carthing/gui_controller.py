@@ -38,7 +38,7 @@ HOME, SETTINGS, NOTIF, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
 class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
                  on_transfer_rescan=None, on_transfer_select=None, on_notif_dismiss=None,
-                 on_mode_select=None):
+                 on_mode_select=None, on_toggle_sleep=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
@@ -48,6 +48,7 @@ class GuiController:
             on_transfer_select=on_transfer_select or (lambda *a, **k: None),
             on_pairing=on_pairing or (lambda *a, **k: None),
             on_mode_select=on_mode_select or (lambda *a, **k: None),
+            on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
         )
         emit = self.dispatcher.dispatch
         screens = [

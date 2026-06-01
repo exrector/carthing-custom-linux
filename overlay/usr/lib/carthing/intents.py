@@ -14,13 +14,14 @@ Media routing (agreed model):
 
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
-                 on_pairing=None, on_mode_select=None):
+                 on_pairing=None, on_mode_select=None, on_toggle_sleep=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
         self.on_transfer_select = on_transfer_select or (lambda address: None)
         self.on_pairing = on_pairing or (lambda enabled: None)
         self.on_mode_select = on_mode_select or (lambda mode: None)
+        self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -101,6 +102,10 @@ class Dispatcher:
             self.on_pairing(True)
         elif key == "modes":
             self.state.active_desktop = self.state.MODES
+        elif key == "toggle_sleep":            # [CLAUDE] тумблер сна экрана
+            new = not bool(getattr(self.state, "sleep_on_idle", True))
+            self.state.sleep_on_idle = new     # оптимистично для UI
+            self.on_toggle_sleep(new)          # runtime: power.set_idle_sleep + settings.set
         # trusted / display / about: handled by UI navigation later
 
     def _transfer_select(self, key):

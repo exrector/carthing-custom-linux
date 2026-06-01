@@ -85,6 +85,14 @@ def _on_mode_select(mode):
     asyncio.ensure_future(_apply_device_mode(mode))
 
 
+def _on_toggle_sleep(on):
+    # [CLAUDE 2026-06-01] тумблер «Сон экрана» из Settings: применяем к power + персистим.
+    if power is not None:
+        power.set_idle_sleep(bool(on))
+    if settings is not None:
+        settings.set("sleep_on_idle", bool(on))
+
+
 async def _apply_device_mode(mode, persist=True):
     mode = mode if mode in VALID_DEVICE_MODES else "remote"
     model.device_mode = mode
@@ -321,10 +329,13 @@ async def main():
                                 on_transfer_rescan=_on_transfer_rescan,
                                 on_transfer_select=_on_transfer_select,
                                 on_notif_dismiss=_on_notif_dismiss,
-                                on_mode_select=_on_mode_select)
+                                on_mode_select=_on_mode_select,
+                                on_toggle_sleep=_on_toggle_sleep)
             logger.info("GUI active (modular Compositor)")
             from power_policy import IdlePowerController
             power = IdlePowerController(settings)
+            # [CLAUDE] начальное состояние тумблера сна для Settings = реальное power.enabled
+            gui.app_state.sleep_on_idle = bool(getattr(power, "enabled", True))
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)

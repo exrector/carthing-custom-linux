@@ -334,6 +334,12 @@ class SettingsScreen(Screen):
                 # имя + MAC; цветную статус-точку рисует render (3-й элемент = цвет)
                 rows.append(("trusted:" + d["key"], f"{d['label']}   {addr}", color))
             return rows
+        if it["key"] == "display":      # [CLAUDE] тумблер сна показывает текущее состояние
+            on = bool(getattr(self.state, "sleep_on_idle", True)) if self.state else True
+            return [
+                ("brightness", "Яркость"),
+                ("toggle_sleep", f"Сон экрана: {'Вкл' if on else 'Выкл'}"),
+            ]
         return it.get("children", [])
 
     def _visible(self):

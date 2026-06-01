@@ -137,6 +137,27 @@ class IdlePowerController:
         self._pairing_armed = armed
         self.note_activity("pairing" if armed else "pairing_done")
 
+    def set_idle_sleep(self, on: bool) -> None:
+        """[CLAUDE 2026-06-01] Рантайм-переключатель сна экрана из Settings. off -> экран ВСЕГДА
+        включён на полной яркости (для отладки); при enabled=False tick/dim/_set_display_state no-op."""
+        if self.backlight is None:
+            self.enabled = False
+            return
+        on = bool(on)
+        if on == self.enabled:
+            return
+        self.enabled = on
+        if on:
+            self._last_activity = time.monotonic()
+            self._display_state = "init"           # форсим применение "active"
+            self._set_display_state("active")
+            logger.info("Power: idle sleep ENABLED (settings)")
+        else:
+            self._write_int("bl_power", 0)
+            self._write_int("brightness", self._active_brightness)
+            self._display_state = "active"
+            logger.info("Power: idle sleep DISABLED (settings) — screen stays on")
+
     def set_device_mode(self, mode: str) -> None:
         mode = mode or "remote"
         if mode == self._device_mode:
@@ -200,9 +221,12 @@ class IdlePowerController:
             self._set_display_state("active")
         elif idle >= self.off_after:
             self._set_display_state("off")
-        elif idle >= self.dim_after:
-            self._set_display_state("dim")
         else:
+            # [CLAUDE 2026-06-01] Стадия "dim" УБРАНА: на панели aml-bl яркость 12/255 визуально
+            # не темнеет (драйвер принимает значение, но подсветка не меняется перцептивно), а
+            # запись только давала «моргание» + иногда будилась "content". Теперь: active -> сразу
+            # off на off_after. dim_after/dim_brightness больше не применяются (оставлены в
+            # настройках на случай панели с рабочим PWM).
             self._set_display_state("active")
         return self._display_state
 
