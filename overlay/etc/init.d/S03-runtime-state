@@ -27,4 +27,4 @@ for domain in bt audio sensor debug; do
     fi
 done
 
-echo "[S11-runtime-state] state mounted on $state_mount, keys at $keys_file"
+echo "[S03-runtime-state] state mounted on $state_mount, keys at $keys_file"

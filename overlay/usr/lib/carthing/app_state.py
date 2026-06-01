@@ -16,11 +16,43 @@ from runtime_paths import device_name
 
 
 DEFAULT_TRUSTED_DEVICES_PATH = "/run/carthing-state/carthing/trusted-devices.json"
+DEFAULT_KEYSTORE_PATH = "/run/carthing-state/carthing/keys.json"
 
 
 def normalize_address(address) -> str:
     text = str(address or "").strip().upper()
     return text.split("/", 1)[0]
+
+
+def _bonded_source_rows(keystore_path=None):
+    """BLE bonds from Bumble keystore are trusted sources even before reconnect."""
+    keystore_path = Path(keystore_path or os.environ.get("CAR_THING_KEYSTORE", DEFAULT_KEYSTORE_PATH))
+    try:
+        data = json.loads(keystore_path.read_text())
+    except Exception:
+        return []
+    namespace = data.get("CarThing", data) if isinstance(data, dict) else {}
+    if not isinstance(namespace, dict):
+        return []
+    rows = []
+    for raw_address, keys in namespace.items():
+        if not isinstance(keys, dict):
+            continue
+        if not (keys.get("ltk") or keys.get("irk")):
+            continue
+        address = normalize_address(raw_address)
+        if address:
+            rows.append({
+                "key": "iphone" if not rows else f"source:{address}",
+                "address": address,
+                "label": "iPhone" if not rows else "Bluetooth Source",
+                "type": "iPhone" if not rows else "Источник",
+                "role": "source",
+                "online": False,
+                "connected": False,
+                "default": False,
+            })
+    return rows
 
 
 class MediaSession:
@@ -69,6 +101,7 @@ class AppState:
         self.pairing_mode = False
         self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
+        self.load_trusted()
 
     @property
     def sources(self):
@@ -95,6 +128,10 @@ class AppState:
             data = {}
         except Exception:
             data = {}
+        if isinstance(data, list):
+            data = {"sources": [], "speakers": data}
+        elif not isinstance(data, dict):
+            data = {}
 
         devices = []
         for role, section in (("source", "sources"), ("speaker", "speakers")):
@@ -117,6 +154,20 @@ class AppState:
                     "connected": bool(peer.get("connected", False)),
                     "default": bool(peer.get("default", index == 0 and role == "speaker")),
                 })
+        by_key = {device.get("key"): device for device in devices if device.get("key")}
+        by_address = {device.get("address"): device for device in devices if device.get("address")}
+        for bonded in _bonded_source_rows():
+            existing = by_key.get(bonded["key"]) or by_address.get(bonded["address"])
+            if existing is None:
+                devices.append(bonded)
+                by_key[bonded["key"]] = bonded
+                by_address[bonded["address"]] = bonded
+            else:
+                existing.setdefault("role", "source")
+                existing.setdefault("type", bonded["type"])
+                existing.setdefault("label", bonded["label"])
+                if not existing.get("address"):
+                    existing["address"] = bonded["address"]
         self.trusted = devices
 
     def save_trusted(self, path=None):

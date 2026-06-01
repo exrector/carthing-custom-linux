@@ -144,7 +144,7 @@ class AccessoryOrchestrator:
         elif self.pairing_armed:
             await self._advertise_general()        # видим ТОЛЬКО в режиме сопряжения (из меню)
         elif le_addr is not None:
-            await self._advertise_bonded_only()     # sticky: реконнект к УЖЕ-bonded iPhone (nameless)
+            await self._advertise_bonded_only()     # sticky: реконнект к УЖЕ-bonded iPhone
         else:
             await self._advertise_silent()          # нет бонда + не сопряжение -> ПОЛНАЯ ТИШИНА
 
@@ -152,21 +152,27 @@ class AccessoryOrchestrator:
                     phase, self.pairing_armed, self.transfer_connectable)
 
     # ── BLE advertising примитивы (порт проверенного из media_remote) ─────────
-    def _adv_payload(self, with_name: bool):
+    def _adv_payload(self):
         items = [
             (AdvertisingData.FLAGS, bytes([0x06])),
             (AdvertisingData.APPEARANCE, struct.pack("<H", APPEARANCE_REMOTE)),
             (AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
              struct.pack("<H", HID_SERVICE_UUID)),
         ]
-        if with_name:
-            items.append((AdvertisingData.COMPLETE_LOCAL_NAME,
-                          identity_service.visible_name().encode("utf-8")))
         return bytes(AdvertisingData(items))
+
+    def _scan_response_payload(self, with_name: bool):
+        if not with_name:
+            return b""
+        return bytes(AdvertisingData([
+            (AdvertisingData.COMPLETE_LOCAL_NAME,
+             identity_service.visible_name().encode("utf-8")),
+        ]))
 
     async def _advertise_general(self):
         await self._stop()
-        self.device.advertising_data = self._adv_payload(with_name=True)
+        self.device.advertising_data = self._adv_payload()
+        self.device.scan_response_data = self._scan_response_payload(with_name=True)
         try:
             await self.device.start_advertising(
                 own_address_type=OwnAddressType.PUBLIC, auto_restart=True)
@@ -183,7 +189,7 @@ class AccessoryOrchestrator:
             await self.device.start_advertising(
                 advertising_type=AdvertisingType.DIRECTED_CONNECTABLE_LOW_DUTY,
                 target=target,
-                own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                own_address_type=OwnAddressType.PUBLIC,
                 auto_restart=True)
         except Exception as e:
             logger.warning("directed advertising failed: %s", e)
@@ -236,26 +242,32 @@ class AccessoryOrchestrator:
         await self.kick_reconnect()
 
     async def _advertise_bonded_only(self):
-        """НЕПРЕРЫВНАЯ undirected bonded-only (nameless, accept-list 0x03).
+        """НЕПРЕРЫВНАЯ undirected bonded reconnect (named scan response).
         Приватный iPhone (RPA) реконнектит bonded HID-периферию по ней в ЛЮБОЙ момент
-        (10 минут/час отсутствия — без разницы); имя в эфир НЕ уходит. directed-к-identity
-        RPA-iPhone игнорирует — поэтому именно непрерывный bonded-only, а не окно/directed."""
+        (10 минут/час отсутствия — без разницы). На BCM4345/iOS hardware accept-list после
+        cold boot может быть слишком строгим к RPA, поэтому reconnect-реклама совместимая:
+        public own-address + scan-response name, а новая пара всё равно гейтится рантаймом."""
         await self._stop()
         try:
             await self.device.refresh_filter_accept_list()
         except Exception:
             pass
-        self.device.advertising_data = self._adv_payload(with_name=False)
+        self.device.advertising_data = self._adv_payload()
+        self.device.scan_response_data = self._scan_response_payload(with_name=True)
         try:
             await self.device.start_advertising(
-                own_address_type=OwnAddressType.RESOLVABLE_OR_PUBLIC,
+                own_address_type=OwnAddressType.PUBLIC,
                 auto_restart=True,
-                advertising_filter_policy=0x03)
-            logger.info("Sticky: continuous bonded-only advertising (reattaches anytime)")
+                advertising_filter_policy=0x00)
+            logger.info("Sticky: continuous bonded reconnect advertising (public, scan-name)")
         except Exception as e:
             logger.warning("bonded-only advertising failed: %s", e)
 
     async def kick_reconnect(self):
-        """Прилипание = НЕПРЕРЫВНАЯ bonded-only реклама (apply_visibility). Точка вызова
-        на старте/диссконнекте; auto_restart держит рекламу живой бесконечно."""
+        """Короткий directed burst к bonded peer, затем совместимая sticky-реклама."""
+        le_addr, _ = await self._bonds()
+        if le_addr is not None:
+            await self._advertise_directed(le_addr)
+            logger.info("Reconnect: directed burst to bonded LE peer %s", le_addr)
+            await asyncio.sleep(4.0)
         await self.apply_visibility()

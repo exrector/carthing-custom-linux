@@ -16,7 +16,7 @@ for script in /etc/init.d/S??*; do
     base=${script##*/}
     if [ -f "$STAGE2_ONCE_MARK" ]; then
         case "$base" in
-            S05-*|S06-*|S07-*|S08-*|S09-*|S10-*|S11-*|S20-*|S45-*|S50-*)
+            S03-*|S05-*|S06-*|S07-*|S08-*|S09-*|S10-*|S11-*|S20-*|S45-*|S50-*)
                 echo "[rcS] skipping $script; already handled by init-wrapper"
                 continue
                 ;;
