@@ -15,7 +15,7 @@ Media routing (agreed model):
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
                  on_pairing=None, on_speaker_pair_select=None, on_trusted_remove=None,
-                 on_mode_select=None, on_session_select=None, on_route_input_select=None,
+                 on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_toggle_sleep=None,
                  on_set_off_timeout=None):
         self.state = state
@@ -25,7 +25,7 @@ class Dispatcher:
         self.on_pairing = on_pairing or (lambda enabled, role="source": None)
         self.on_speaker_pair_select = on_speaker_pair_select or (lambda address: None)
         self.on_trusted_remove = on_trusted_remove or (lambda key: None)
-        self.on_session_select = on_session_select or on_mode_select or (lambda session: None)
+        self.on_session_select = on_session_select or (lambda session: None)
         self.on_route_input_select = on_route_input_select or (lambda key: None)
         self.on_route_output_select = on_route_output_select or (lambda key: None)
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана

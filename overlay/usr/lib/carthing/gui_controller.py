@@ -41,7 +41,7 @@ class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
                  on_transfer_rescan=None, on_transfer_select=None, on_speaker_pair_select=None,
                  on_trusted_remove=None, on_notif_dismiss=None,
-                 on_mode_select=None, on_session_select=None, on_route_input_select=None,
+                 on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_toggle_sleep=None, on_set_off_timeout=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
@@ -53,7 +53,6 @@ class GuiController:
             on_speaker_pair_select=on_speaker_pair_select or (lambda *a, **k: None),
             on_trusted_remove=on_trusted_remove or (lambda *a, **k: None),
             on_pairing=on_pairing or (lambda *a, **k: None),
-            on_mode_select=on_mode_select or (lambda *a, **k: None),
             on_session_select=on_session_select,
             on_route_input_select=on_route_input_select,
             on_route_output_select=on_route_output_select,
@@ -124,7 +123,7 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "mode_select":
-            self.dispatcher.dispatch(intent, payload)
+            self.dispatcher.dispatch("session_select", payload)
             self.compositor.render()
             return
         if intent == "session_select":
@@ -444,9 +443,6 @@ class GuiController:
 
     def show_router_screen(self):
         self.show_screen(ROUTER)
-
-    def show_mode_screen(self):
-        self.show_session_screen()
 
     def show_transfer_screen(self):
         self.show_router_screen()

@@ -164,10 +164,6 @@ def _on_trusted_remove(key):
     asyncio.ensure_future(_run())
 
 
-def _on_mode_select(mode):
-    asyncio.ensure_future(_apply_session(mode))
-
-
 def _on_session_select(session):
     asyncio.ensure_future(_apply_session(session))
 
@@ -301,7 +297,7 @@ async def _apply_session(session, persist=True):
         model.audio_sink = "builtin"
         model.mode_status = "pairing window"
         if gui is not None:
-            gui.show_mode_screen()
+            gui.show_session_screen()
         _on_pairing(True, "source")
     elif session == "quiet":
         model.audio_sink = "builtin"
@@ -311,7 +307,7 @@ async def _apply_session(session, persist=True):
         if _iphone is not None:
             _iphone.activate_source()
         if gui is not None:
-            gui.show_mode_screen()
+            gui.show_session_screen()
     elif session == "service":
         model.audio_sink = "builtin"
         model.mode_status = "service safe"
@@ -320,16 +316,10 @@ async def _apply_session(session, persist=True):
         if _iphone is not None:
             _iphone.activate_source()
         if gui is not None:
-            gui.show_mode_screen()
+            gui.show_session_screen()
 
     logger.info("active session: %s (%s)", session, model.mode_status)
     _on_publish()
-
-
-async def _apply_device_mode(mode, persist=True):
-    # Legacy wrapper. Old callers may still say "transfer"; new architecture
-    # calls it "router".
-    await _apply_session(mode, persist=persist)
 
 
 async def _emit_source_intent(intent):
@@ -496,7 +486,6 @@ async def main():
                                 on_speaker_pair_select=_on_speaker_pair_select,
                                 on_trusted_remove=_on_trusted_remove,
                                 on_notif_dismiss=_on_notif_dismiss,
-                                on_mode_select=_on_mode_select,
                                 on_session_select=_on_session_select,
                                 on_route_input_select=_on_route_input_select,
                                 on_route_output_select=_on_route_output_select,
