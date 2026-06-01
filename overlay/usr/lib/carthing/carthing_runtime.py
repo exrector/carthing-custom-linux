@@ -58,13 +58,22 @@ def _on_command(source, command):
         asyncio.ensure_future(mac.command(command))
 
 
-def _on_pairing(enabled):
+def _on_pairing(enabled, role="source"):
+    role = role or "source"
     if power is not None:
         power.set_pairing(bool(enabled))
-    if orch is not None:
+    if role == "speaker":
+        if orch is not None:
+            asyncio.ensure_future(orch.arm_pairing(False))
+        if transfer is not None:
+            if enabled:
+                asyncio.ensure_future(transfer.start_speaker_enrollment())
+            else:
+                asyncio.ensure_future(transfer.stop_speaker_enrollment())
+    elif orch is not None:
         asyncio.ensure_future(orch.arm_pairing(bool(enabled)))
     if gui is not None:
-        gui.set_pairing_mode(bool(enabled))
+        gui.set_pairing_mode(bool(enabled), role=role)
 
 
 def _on_transfer_rescan():
@@ -79,6 +88,13 @@ def _on_transfer_select(address):
         power.note_activity("transfer_select")
     if transfer is not None:
         asyncio.ensure_future(transfer.select(address))
+
+
+def _on_speaker_pair_select(address):
+    if power is not None:
+        power.note_activity("speaker_pair_select")
+    if transfer is not None:
+        asyncio.ensure_future(transfer.pair_speaker(address))
 
 
 def _on_mode_select(mode):
@@ -155,7 +171,7 @@ async def _apply_device_mode(mode, persist=True):
         model.mode_status = "pairing window"
         if gui is not None:
             gui.show_mode_screen()
-        _on_pairing(True)
+        _on_pairing(True, "source")
     elif mode == "quiet":
         model.audio_sink = "builtin"
         model.mode_status = "connected quiet"
@@ -337,6 +353,7 @@ async def main():
                                 on_command=_on_command, on_pairing=_on_pairing,
                                 on_transfer_rescan=_on_transfer_rescan,
                                 on_transfer_select=_on_transfer_select,
+                                on_speaker_pair_select=_on_speaker_pair_select,
                                 on_notif_dismiss=_on_notif_dismiss,
                                 on_mode_select=_on_mode_select,
                                 on_toggle_sleep=_on_toggle_sleep,

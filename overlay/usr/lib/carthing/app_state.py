@@ -101,6 +101,9 @@ class AppState:
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False
+        self.pairing_role = "source"   # source|speaker
+        self.speaker_candidates = []   # classic inquiry candidates while adding a speaker
+        self.speaker_pairing_status = ""
         self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.load_trusted()
@@ -210,6 +213,66 @@ class AppState:
     def is_trusted_speaker(self, address):
         address = normalize_address(address)
         return any(device.get("address") == address for device in self.trusted_speakers)
+
+    def upsert_speaker_candidate(self, address, name=None, class_of_device=None, rssi=None, audio=None):
+        address = normalize_address(address)
+        if not address:
+            return None
+        label = str(name or "").strip() or address
+        for candidate in self.speaker_candidates:
+            if candidate.get("address") == address:
+                if name:
+                    candidate["label"] = label
+                if class_of_device is not None:
+                    candidate["class_of_device"] = class_of_device
+                if rssi is not None:
+                    candidate["rssi"] = rssi
+                if audio is not None:
+                    candidate["audio"] = bool(audio)
+                candidate["trusted"] = self.is_trusted_speaker(address)
+                return candidate
+        candidate = {
+            "key": address,
+            "address": address,
+            "label": label,
+            "type": "Динамик",
+            "role": "speaker",
+            "class_of_device": class_of_device,
+            "rssi": rssi,
+            "audio": bool(audio),
+            "trusted": self.is_trusted_speaker(address),
+        }
+        self.speaker_candidates.append(candidate)
+        return candidate
+
+    def clear_speaker_candidates(self):
+        self.speaker_candidates = []
+
+    def trust_speaker(self, address, name=None):
+        address = normalize_address(address)
+        if not address:
+            return None
+        label = str(name or "").strip() or address
+        existing = next((d for d in self.trusted_speakers if d.get("address") == address), None)
+        if existing is None:
+            existing = {
+                "key": address,
+                "address": address,
+                "label": label,
+                "type": "Динамик",
+                "role": "speaker",
+                "online": True,
+                "connected": False,
+                "default": not bool(self.trusted_speakers),
+            }
+            self.trusted.append(existing)
+        else:
+            existing["label"] = label
+            existing["online"] = True
+        for candidate in self.speaker_candidates:
+            if candidate.get("address") == address:
+                candidate["trusted"] = True
+        return existing
 
     def default_speaker_address(self):
         speakers = self.trusted_speakers

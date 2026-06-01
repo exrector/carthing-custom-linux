@@ -37,7 +37,8 @@ HOME, SETTINGS, NOTIF, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
 
 class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
-                 on_transfer_rescan=None, on_transfer_select=None, on_notif_dismiss=None,
+                 on_transfer_rescan=None, on_transfer_select=None, on_speaker_pair_select=None,
+                 on_notif_dismiss=None,
                  on_mode_select=None, on_toggle_sleep=None, on_set_off_timeout=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
@@ -46,6 +47,7 @@ class GuiController:
             on_command=on_command or (lambda *a, **k: None),
             on_transfer_rescan=on_transfer_rescan or (lambda *a, **k: None),
             on_transfer_select=on_transfer_select or (lambda *a, **k: None),
+            on_speaker_pair_select=on_speaker_pair_select or (lambda *a, **k: None),
             on_pairing=on_pairing or (lambda *a, **k: None),
             on_mode_select=on_mode_select or (lambda *a, **k: None),
             on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
@@ -97,6 +99,10 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "screen_off_adjust":           # [CLAUDE] ± тайм-аут гашения -> применить + перерисовать
+            self.dispatcher.dispatch(intent, payload)
+            self.compositor.render()
+            return
+        if intent == "speaker_pair_select":
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
@@ -375,7 +381,9 @@ class GuiController:
         except Exception as e:
             logger.error("render error: %s", e)
 
-    def set_pairing_mode(self, on: bool):
+    def set_pairing_mode(self, on: bool, role=None):
+        if role:
+            self.app_state.pairing_role = role
         self.app_state.pairing_mode = bool(on)
 
     def show_screen(self, index: int):

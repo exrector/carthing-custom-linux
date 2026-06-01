@@ -14,13 +14,14 @@ Media routing (agreed model):
 
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
-                 on_pairing=None, on_mode_select=None, on_toggle_sleep=None,
+                 on_pairing=None, on_speaker_pair_select=None, on_mode_select=None, on_toggle_sleep=None,
                  on_set_off_timeout=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
         self.on_transfer_select = on_transfer_select or (lambda address: None)
-        self.on_pairing = on_pairing or (lambda enabled: None)
+        self.on_pairing = on_pairing or (lambda enabled, role="source": None)
+        self.on_speaker_pair_select = on_speaker_pair_select or (lambda address: None)
         self.on_mode_select = on_mode_select or (lambda mode: None)
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
         self.on_set_off_timeout = on_set_off_timeout or (lambda sec: None)  # [CLAUDE] тайм-аут гашения
@@ -60,7 +61,10 @@ class Dispatcher:
             self._transfer_select(payload)
         elif intent == "pairing_cancel":
             self.state.pairing_mode = False
-            self.on_pairing(False)
+            role = getattr(self.state, "pairing_role", "source")
+            self.on_pairing(False, role)
+        elif intent == "speaker_pair_select":
+            self._speaker_pair_select(payload)
         elif intent == "mode_select":
             self._mode_select(payload)
         elif intent == "screen_off_adjust":      # [CLAUDE] ±тайм-аут гашения экрана
@@ -101,9 +105,16 @@ class Dispatcher:
 
     # ── settings ───────────────────────────────────────────────────────────────
     def _settings(self, key):
-        if key == "pairing":
+        if key == "pairing_source":
+            self.state.pairing_role = "source"
             self.state.pairing_mode = True
-            self.on_pairing(True)
+            self.on_pairing(True, "source")
+        elif key == "pairing_speaker":
+            self.state.pairing_role = "speaker"
+            self.state.pairing_mode = True
+            self.state.speaker_pairing_status = "scan"
+            self.state.clear_speaker_candidates()
+            self.on_pairing(True, "speaker")
         elif key == "modes":
             self.state.active_desktop = self.state.MODES
         elif key == "toggle_sleep":            # [CLAUDE] тумблер сна экрана
@@ -111,6 +122,12 @@ class Dispatcher:
             self.state.sleep_on_idle = new     # оптимистично для UI
             self.on_toggle_sleep(new)          # runtime: power.set_idle_sleep + settings.set
         # trusted / display / about: handled by UI navigation later
+
+    def _speaker_pair_select(self, address):
+        if not address:
+            return
+        self.state.speaker_pairing_status = "connect"
+        self.on_speaker_pair_select(address)
 
     def _transfer_select(self, key):
         address = self.state.select_default_speaker(key)

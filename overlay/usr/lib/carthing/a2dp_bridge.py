@@ -19,6 +19,7 @@ SERVICE_RECORD_AUDIO_SOURCE = 0x10001
 SERVICE_RECORD_AUDIO_SINK = 0x10002
 BT_AUDIO_SOURCE_UUID16 = 0x110A
 BT_AUDIO_SINK_UUID16 = 0x110B
+COD_MAJOR_AUDIO_VIDEO = 0x0400
 
 
 def error_text(error: Exception) -> str:
@@ -56,6 +57,27 @@ def make_aac_stream_configuration():
     ]
 
 
+def _eir_name(data):
+    for key in (AdvertisingData.COMPLETE_LOCAL_NAME, AdvertisingData.SHORTENED_LOCAL_NAME):
+        try:
+            value = data.get(key, raw=True)
+        except Exception:
+            value = None
+        if value:
+            try:
+                return value.decode("utf-8", errors="replace").strip()
+            except Exception:
+                return str(value).strip()
+    return ""
+
+
+def _is_audio_video_class(class_of_device):
+    try:
+        return (int(class_of_device) & 0x1F00) == COD_MAJOR_AUDIO_VIDEO
+    except Exception:
+        return False
+
+
 class A2DPBridge:
     def __init__(
         self,
@@ -89,6 +111,7 @@ class A2DPBridge:
         self.bytes_forwarded = 0
         self._receiver_task: asyncio.Task | None = None
         self._scan_task: asyncio.Task | None = None
+        self._enroll_task: asyncio.Task | None = None
         self._connect_task: asyncio.Task | None = None
         self._speaker_connections = {}
         self._stale_link_key_addresses = set()
@@ -325,6 +348,121 @@ class A2DPBridge:
             self.on_state_change()
             if self.state.transfer_active:
                 await self.request_receiver_connection(require_online=True)
+
+    async def scan_pairable_speakers(self, duration: float = 10.0):
+        """Classic inquiry for new speaker enrollment.
+
+        This does not make Car Thing discoverable and does not create another
+        registry. Found devices are temporary candidates; the selected row is
+        persisted as a trusted speaker by pair_speaker().
+        """
+        complete = asyncio.get_running_loop().create_future()
+        pending_names = set()
+
+        async def update_name(address):
+            normalized = normalize_address(address)
+            if not normalized or normalized in pending_names:
+                return
+            pending_names.add(normalized)
+            try:
+                name = await asyncio.wait_for(self.device.request_remote_name(address), timeout=5.0)
+            except Exception:
+                return
+            finally:
+                pending_names.discard(normalized)
+            self.state.upsert_speaker_candidate(normalized, name=name)
+            self.on_state_change()
+            self.logger.info("A2DP pairable speaker name: %s %s", normalized, name)
+
+        def on_inquiry_result(address, class_of_device, data, rssi):
+            name = _eir_name(data)
+            audio_like = _is_audio_video_class(class_of_device)
+            # Keep non-audio devices visible too: many cheap speakers report a
+            # weak COD. Audio-like devices are simply shown first by insertion.
+            self.state.upsert_speaker_candidate(
+                address,
+                name=name,
+                class_of_device=int(class_of_device) if class_of_device is not None else None,
+                rssi=rssi,
+                audio=audio_like,
+            )
+            self.on_state_change()
+            self.logger.info(
+                "A2DP pairable candidate: %s name=%s cod=%s audio=%s rssi=%s",
+                normalize_address(address), name or "-", class_of_device, audio_like, rssi,
+            )
+            if not name:
+                asyncio.create_task(update_name(address))
+
+        def on_inquiry_complete():
+            if not complete.done():
+                complete.set_result(None)
+
+        self.state.speaker_pairing_status = "scan"
+        self.state.clear_speaker_candidates()
+        self.on_state_change()
+        self.device.on("inquiry_result", on_inquiry_result)
+        self.device.on("inquiry_complete", on_inquiry_complete)
+        try:
+            await self.device.start_discovery(auto_restart=False)
+            try:
+                await asyncio.wait_for(complete, timeout=duration)
+            except Exception:
+                pass
+        finally:
+            self.device.remove_listener("inquiry_result", on_inquiry_result)
+            self.device.remove_listener("inquiry_complete", on_inquiry_complete)
+            try:
+                await self.device.stop_discovery()
+            except Exception as exc:
+                self.logger.info("A2DP pairable scan stop ignored: %s", error_text(exc))
+            self.state.speaker_pairing_status = "idle"
+            self.on_state_change()
+
+    async def pair_speaker(self, address):
+        address = normalize_address(address)
+        if not address:
+            return
+        candidate = next((c for c in self.state.speaker_candidates
+                          if c.get("address") == address), None)
+        label = (candidate or {}).get("label") or address
+        self.state.speaker_pairing_status = "connect"
+        self.state.trust_speaker(address, label)
+        self.state.select_default_speaker(address)
+        try:
+            self.state.save_trusted()
+        except Exception as exc:
+            self.logger.warning("speaker trust save failed: %s", error_text(exc))
+        self.on_state_change()
+        try:
+            await self.device.stop_discovery()
+        except Exception:
+            pass
+        await self._bond_speaker(address)
+        if self.state.transfer_active:
+            await self.request_receiver_connection(address)
+
+    async def _bond_speaker(self, address):
+        connection = self._speaker_connections.get(address)
+        if connection is None:
+            self.logger.info("A2DP speaker enrollment connect: %s", address)
+            connection = await asyncio.wait_for(
+                self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+                timeout=self.connect_timeout,
+            )
+        self._speaker_connections[address] = connection
+        connection.on(
+            "disconnection",
+            lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(address, reason)),
+        )
+        try:
+            await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
+            await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+        except Exception as exc:
+            self.logger.info("A2DP speaker enrollment auth/encrypt continued: %s", error_text(exc))
+        self.state.set_speaker_online(address, True)
+        self.state.speaker_pairing_status = "idle"
+        self.on_state_change()
 
     async def on_receiver_disconnected(self, reason):
         self.logger.warning("A2DP receiver disconnected: reason=0x%02x", reason)

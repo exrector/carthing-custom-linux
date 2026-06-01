@@ -38,6 +38,39 @@ class TransferService:
         await self.bridge.start()               # AVDTP listener up
         # ВАЖНО: вызвать orchestrator.apply_visibility() ПОСЛЕ — он перегейтит classic в not-connectable.
 
+    async def start_speaker_enrollment(self):
+        try:
+            await self.bridge.scan_pairable_speakers()
+        except Exception as e:
+            logger.warning("speaker enrollment scan failed: %s", e)
+            try:
+                self.bridge.state.speaker_pairing_status = "error"
+            except Exception:
+                pass
+        self._sync()
+
+    async def stop_speaker_enrollment(self):
+        try:
+            await self.bridge.device.stop_discovery()
+        except Exception:
+            pass
+        try:
+            self.bridge.state.speaker_pairing_status = "idle"
+        except Exception:
+            pass
+        self._sync()
+
+    async def pair_speaker(self, address):
+        try:
+            await self.bridge.pair_speaker(address)
+        except Exception as e:
+            logger.warning("speaker pair failed: %s", e)
+            try:
+                self.bridge.state.speaker_pairing_status = "error"
+            except Exception:
+                pass
+        self._sync()
+
     # ── активация Transfer (вручную из Routes-view, runtime-contract) ────────
     async def activate(self):
         self.model.transfer_active = True

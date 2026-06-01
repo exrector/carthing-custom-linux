@@ -186,7 +186,7 @@ class TransferScreen(Screen):
             if connected:
                 color = T.ACCENT
             rect = C.list_row(draw, y, text, selected=connected or (default and online), indent=0)
-            draw.text((T.LIST_X0 + 26, y + 42), status, font=T.font(T.SZ_SMALL), fill=color)
+            draw.text((52, y + 42), status, font=T.font(T.SZ_SMALL), fill=color)
             if regions is not None:
                 regions.add(rect, "transfer_select", payload=speaker.get("key"))
             y += T.ROW_H
@@ -308,7 +308,10 @@ class SettingsScreen(Screen):
         self.on_select = on_select or (lambda key: None)
         self.items = [
             {"key": "modes", "label": "Режимы работы"},
-            {"key": "pairing", "label": "Режим сопряжения"},
+            {"key": "pairing", "label": "Добавить устройство", "children": [
+                ("pairing_source", "iPhone / источник"),
+                ("pairing_speaker", "Bluetooth динамик"),
+            ]},
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
                 ("brightness", "Яркость"),
@@ -690,18 +693,54 @@ class PairingModal:
         draw = ImageDraw.Draw(img)
         cx = T.CONTENT_CX
         # card background for legibility over the dimmed desktop
-        cw, ch = 580, 300
+        role = getattr(self.state, "pairing_role", "source")
+        speaker_mode = role == "speaker"
+        cw, ch = (640, 390) if speaker_mode else (580, 300)
         draw.rounded_rectangle([cx - cw // 2, T.MAIN_CY - ch // 2, cx + cw // 2, T.MAIN_CY + ch // 2],
                                radius=T.RADIUS, fill=T.SURFACE, outline=T.HAIRLINE, width=1)
         name = getattr(self.state, "device_name", "Car Thing")
-        C.text_centered(draw, "Сопряжение", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 70, cx=cx)
-        C.text_centered(draw, "«" + name + "»", T.font(T.SZ_BODY), T.FG, T.MAIN_CY - 8, cx=cx)
-        C.text_centered(draw, "Выберите на iPhone…", T.font(T.SZ_SMALL), T.ACCENT,
-                        T.MAIN_CY + 30, cx=cx)
+        if speaker_mode:
+            C.text_centered(draw, "Добавить динамик", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 160, cx=cx)
+            status = getattr(self.state, "speaker_pairing_status", "") or "scan"
+            subtitle = {
+                "scan": "Ищу Bluetooth-динамики…",
+                "connect": "Подключаю динамик…",
+                "error": "Не удалось добавить",
+            }.get(status, "Найденные динамики")
+            C.text_centered(draw, subtitle, T.font(T.SZ_META), T.ACCENT, T.MAIN_CY - 104, cx=cx)
+            candidates = list(getattr(self.state, "speaker_candidates", []) or [])
+            audio_candidates = [c for c in candidates if c.get("audio")]
+            if audio_candidates:
+                candidates = audio_candidates
+            if not candidates:
+                C.text_centered(draw, "Переведите динамик в режим сопряжения", T.font(T.SZ_SMALL),
+                                T.MUTED, T.MAIN_CY - 42, cx=cx)
+            else:
+                y = T.MAIN_CY - 58
+                rx0, rx1 = cx - cw // 2 + 36, cx + cw // 2 - 36
+                for candidate in candidates[:4]:
+                    label = candidate.get("label") or candidate.get("address") or "Bluetooth speaker"
+                    if candidate.get("trusted"):
+                        label += "  · добавлен"
+                    rect = (rx0, y - 6, rx1, y + T.ROW_H - 14)
+                    if candidate.get("trusted"):
+                        draw.rectangle(rect, fill=T.SURFACE_SEL)
+                        draw.rectangle([rx0, rect[1], rx0 + 6, rect[3]], fill=T.ACCENT)
+                    draw.text((rx0 + 24, y), label, font=T.font(T.SZ_BODY),
+                              fill=T.FG if candidate.get("trusted") else T.MUTED)
+                    draw.text((rx0 + 24, y + 42), candidate.get("address") or "",
+                              font=T.font(T.SZ_SMALL), fill=T.FAINT)
+                    regions.add(rect, "speaker_pair_select", payload=candidate.get("address"))
+                    y += T.ROW_H
+        else:
+            C.text_centered(draw, "Добавить источник", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 70, cx=cx)
+            C.text_centered(draw, "«" + name + "»", T.font(T.SZ_BODY), T.FG, T.MAIN_CY - 8, cx=cx)
+            C.text_centered(draw, "Выберите на iPhone…", T.font(T.SZ_SMALL), T.ACCENT,
+                            T.MAIN_CY + 30, cx=cx)
 
         # Cancel button (tappable) — also Back/Press cancels
         bw, bh = 200, 48
-        bx0, by0 = cx - bw // 2, T.MAIN_CY + 84
+        bx0, by0 = cx - bw // 2, T.MAIN_CY + (142 if speaker_mode else 84)
         draw.rectangle([bx0, by0, bx0 + bw, by0 + bh], outline=T.FAINT, width=2)
         C.text_centered(draw, "Отмена", T.font(T.SZ_META), T.MUTED, by0 + 8, cx=cx)
         regions.add((bx0, by0, bx0 + bw, by0 + bh), "pairing_cancel")
