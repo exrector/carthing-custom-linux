@@ -476,6 +476,25 @@ class SettingsScreen(Screen):
                     regions.add((435, ra, 500, rb), "screen_off_adjust", payload="-")
                     regions.add((600, ra, 668, rb), "screen_off_adjust", payload="+")
                 continue
+            if key.startswith("trusted:"):
+                label_w = T.LIST_X1 - 150
+                shown = C.truncate(draw, label, T.font(T.SZ_BODY), label_w - 76)
+                rect = C.list_row(draw, y, shown, selected=(i == self.sel),
+                                  indent=24 if level else 0)
+                if color is not None:
+                    T.icon_dot(draw, 40, y + T.SZ_BODY // 2, 7, color=color)
+                remove_rect = (T.LIST_X1 - 118, y - 4, T.LIST_X1 - 20, y + T.ROW_H - 16)
+                draw.rectangle(remove_rect, outline=T.FAINT, width=2)
+                C.text_centered(draw, "Удерж.", T.font(T.SZ_SMALL), T.MUTED, y + 16,
+                                cx=(remove_rect[0] + remove_rect[2]) // 2)
+                if regions is not None:
+                    rx0, ry0, rx1, ry1 = rect
+                    regions.add((rx0, max(start_y, ry0), rx1, min(bottom_y, ry1)),
+                                "settings_tap", payload=i)
+                    regions.add((remove_rect[0], max(start_y, remove_rect[1]),
+                                 remove_rect[2], min(bottom_y, remove_rect[3])),
+                                "trusted_remove", payload=key.split("trusted:", 1)[1])
+                continue
             rect = C.list_row(draw, y, label, selected=(i == self.sel),
                               expandable=expandable, expanded=expanded,
                               indent=24 if level else 0)
@@ -705,15 +724,16 @@ class PairingModal:
             subtitle = {
                 "scan": "Ищу Bluetooth-динамики…",
                 "connect": "Подключаю динамик…",
+                "done": "Динамик добавлен",
                 "error": "Не удалось добавить",
             }.get(status, "Найденные динамики")
             C.text_centered(draw, subtitle, T.font(T.SZ_META), T.ACCENT, T.MAIN_CY - 104, cx=cx)
             candidates = list(getattr(self.state, "speaker_candidates", []) or [])
-            audio_candidates = [c for c in candidates if c.get("audio")]
-            if audio_candidates:
-                candidates = audio_candidates
+            candidates = [c for c in candidates if c.get("audio")]
+            message = getattr(self.state, "pairing_message", "") or ""
             if not candidates:
-                C.text_centered(draw, "Переведите динамик в режим сопряжения", T.font(T.SZ_SMALL),
+                text = message or "Переведите динамик в режим сопряжения"
+                C.text_centered(draw, text, T.font(T.SZ_SMALL),
                                 T.MUTED, T.MAIN_CY - 42, cx=cx)
             else:
                 y = T.MAIN_CY - 58

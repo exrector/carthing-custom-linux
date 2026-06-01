@@ -104,6 +104,7 @@ class AppState:
         self.pairing_role = "source"   # source|speaker
         self.speaker_candidates = []   # classic inquiry candidates while adding a speaker
         self.speaker_pairing_status = ""
+        self.pairing_message = ""
         self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.load_trusted()
@@ -179,17 +180,25 @@ class AppState:
         path = Path(path or self.trusted_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {"sources": [], "speakers": []}
+        seen = {"source": set(), "speaker": set()}
         for device in self.trusted:
+            role = device.get("role")
+            address = normalize_address(device.get("address"))
+            if not address or role not in seen:
+                continue
+            if address in seen[role]:
+                continue
+            seen[role].add(address)
             row = {
                 "name": device.get("label"),
-                "address": device.get("address"),
+                "address": address,
                 "type": device.get("type"),
             }
             if device.get("default"):
                 row["default"] = True
-            if device.get("role") == "source":
+            if role == "source":
                 data["sources"].append(row)
-            elif device.get("role") == "speaker":
+            elif role == "speaker":
                 data["speakers"].append(row)
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
@@ -252,6 +261,11 @@ class AppState:
         address = normalize_address(address)
         if not address:
             return None
+        if self.is_trusted_source(address):
+            return None
+        candidate = next((c for c in self.speaker_candidates if c.get("address") == address), None)
+        if candidate is not None and not candidate.get("audio"):
+            return None
         label = str(name or "").strip() or address
         existing = next((d for d in self.trusted_speakers if d.get("address") == address), None)
         if existing is None:
@@ -273,6 +287,20 @@ class AppState:
             if candidate.get("address") == address:
                 candidate["trusted"] = True
         return existing
+
+    def remove_trusted(self, key_or_address):
+        needle = normalize_address(key_or_address)
+        before = len(self.trusted)
+        self.trusted = [
+            device for device in self.trusted
+            if device.get("key") != key_or_address and normalize_address(device.get("address")) != needle
+        ]
+        if len(self.trusted) == before:
+            return False
+        speakers = self.trusted_speakers
+        if speakers and not any(s.get("default") for s in speakers):
+            speakers[0]["default"] = True
+        return True
 
     def default_speaker_address(self):
         speakers = self.trusted_speakers

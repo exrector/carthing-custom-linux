@@ -425,20 +425,38 @@ class A2DPBridge:
             return
         candidate = next((c for c in self.state.speaker_candidates
                           if c.get("address") == address), None)
+        if candidate is None or not candidate.get("audio"):
+            self.state.speaker_pairing_status = "error"
+            self.state.pairing_message = "Это не Bluetooth-динамик"
+            self.on_state_change()
+            return
+        if self.state.is_trusted_source(address):
+            self.state.speaker_pairing_status = "error"
+            self.state.pairing_message = "Источник нельзя добавить как динамик"
+            self.on_state_change()
+            return
         label = (candidate or {}).get("label") or address
         self.state.speaker_pairing_status = "connect"
-        self.state.trust_speaker(address, label)
-        self.state.select_default_speaker(address)
-        try:
-            self.state.save_trusted()
-        except Exception as exc:
-            self.logger.warning("speaker trust save failed: %s", error_text(exc))
+        self.state.pairing_message = ""
         self.on_state_change()
         try:
             await self.device.stop_discovery()
         except Exception:
             pass
         await self._bond_speaker(address)
+        if not await self._has_link_key(address):
+            raise RuntimeError(f"classic link key not stored for {address}")
+        speaker = self.state.trust_speaker(address, label)
+        if speaker is None:
+            raise RuntimeError(f"refused to trust non-speaker {address}")
+        self.state.select_default_speaker(address)
+        self.state.speaker_pairing_status = "done"
+        self.state.pairing_message = f"{label} добавлен"
+        try:
+            self.state.save_trusted()
+        except Exception as exc:
+            self.logger.warning("speaker trust save failed: %s", error_text(exc))
+        self.on_state_change()
         if self.state.transfer_active:
             await self.request_receiver_connection(address)
 
@@ -461,8 +479,31 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.info("A2DP speaker enrollment auth/encrypt continued: %s", error_text(exc))
         self.state.set_speaker_online(address, True)
-        self.state.speaker_pairing_status = "idle"
         self.on_state_change()
+
+    async def _has_link_key(self, address):
+        if self.device.keystore is None:
+            return False
+        candidates = [normalize_address(address), f"{normalize_address(address)}/P", str(address)]
+        for candidate in dict.fromkeys(candidates):
+            try:
+                keys = await self.device.keystore.get(candidate)
+            except Exception:
+                keys = None
+            if keys is not None and getattr(keys, "link_key", None) is not None:
+                return True
+        return False
+
+    async def forget_peer_key(self, address):
+        if self.device.keystore is None:
+            return
+        normalized = normalize_address(address)
+        for candidate in dict.fromkeys([normalized, f"{normalized}/P", str(address)]):
+            try:
+                await self.device.keystore.delete(candidate)
+                self.logger.info("A2DP removed key for %s", candidate)
+            except Exception:
+                pass
 
     async def on_receiver_disconnected(self, reason):
         self.logger.warning("A2DP receiver disconnected: reason=0x%02x", reason)

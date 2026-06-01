@@ -11,6 +11,7 @@ accessory_orchestrator (connectable=False вне Transfer; True только п�
 Получатель НЕ хардкожен (runtime-contract): из настройки/intent -> trusted speakers -> нет приёмника.
 """
 
+import asyncio
 import logging
 
 import identity_service
@@ -63,12 +64,28 @@ class TransferService:
     async def pair_speaker(self, address):
         try:
             await self.bridge.pair_speaker(address)
+            if getattr(self.bridge.state, "speaker_pairing_status", "") == "done":
+                await asyncio.sleep(1.2)
+                self.bridge.state.pairing_mode = False
+                self.bridge.state.speaker_pairing_status = "idle"
         except Exception as e:
             logger.warning("speaker pair failed: %s", e)
             try:
                 self.bridge.state.speaker_pairing_status = "error"
+                self.bridge.state.pairing_message = "Пара не завершена"
             except Exception:
                 pass
+        self._sync()
+
+    async def forget_trusted(self, address):
+        try:
+            await self.bridge.forget_peer_key(address)
+        except Exception as e:
+            logger.warning("speaker forget key failed: %s", e)
+        try:
+            self.bridge.state.clear_connected_speakers()
+        except Exception:
+            pass
         self._sync()
 
     # ── активация Transfer (вручную из Routes-view, runtime-contract) ────────

@@ -94,7 +94,36 @@ def _on_speaker_pair_select(address):
     if power is not None:
         power.note_activity("speaker_pair_select")
     if transfer is not None:
-        asyncio.ensure_future(transfer.pair_speaker(address))
+        async def _run():
+            await transfer.pair_speaker(address)
+            if gui is not None and not getattr(gui.app_state, "pairing_mode", False):
+                gui.set_pairing_mode(False, role="speaker")
+            if power is not None and not getattr(gui.app_state, "pairing_mode", False):
+                power.set_pairing(False)
+        asyncio.ensure_future(_run())
+
+
+def _on_trusted_remove(key):
+    async def _run():
+        address = key
+        if gui is not None:
+            for device in gui.app_state.trusted:
+                if device.get("key") == key:
+                    address = device.get("address") or key
+                    break
+        if transfer is not None:
+            await transfer.forget_trusted(address)
+        dev = orch.device if orch is not None else None
+        if dev is not None and getattr(dev, "keystore", None) is not None:
+            from app_state import normalize_address
+            normalized = normalize_address(address)
+            for candidate in dict.fromkeys([normalized, f"{normalized}/P", str(address)]):
+                try:
+                    await dev.keystore.delete(candidate)
+                    logger.info("trusted key removed: %s", candidate)
+                except Exception:
+                    pass
+    asyncio.ensure_future(_run())
 
 
 def _on_mode_select(mode):
@@ -354,6 +383,7 @@ async def main():
                                 on_transfer_rescan=_on_transfer_rescan,
                                 on_transfer_select=_on_transfer_select,
                                 on_speaker_pair_select=_on_speaker_pair_select,
+                                on_trusted_remove=_on_trusted_remove,
                                 on_notif_dismiss=_on_notif_dismiss,
                                 on_mode_select=_on_mode_select,
                                 on_toggle_sleep=_on_toggle_sleep,

@@ -215,6 +215,8 @@ class Compositor:
     def _handle_tap(self, x, y):
         hit = self._regions.hit(x, y)
         if hit:
+            if hit.intent == "trusted_remove":
+                return True
             self.on_intent(hit.intent, hit.payload)
             return True
         return False
@@ -225,6 +227,8 @@ class Compositor:
             return False
         if hit.intent == "mode_focus" and isinstance(hit.payload, dict):
             self.on_intent("mode_select", hit.payload.get("mode"))
+        elif hit.intent == "trusted_remove":
+            self.on_intent(hit.intent, hit.payload)
         else:
             self.on_intent(hit.intent, hit.payload)
         return True

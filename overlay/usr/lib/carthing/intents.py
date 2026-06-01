@@ -14,7 +14,8 @@ Media routing (agreed model):
 
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
-                 on_pairing=None, on_speaker_pair_select=None, on_mode_select=None, on_toggle_sleep=None,
+                 on_pairing=None, on_speaker_pair_select=None, on_trusted_remove=None,
+                 on_mode_select=None, on_toggle_sleep=None,
                  on_set_off_timeout=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
@@ -22,6 +23,7 @@ class Dispatcher:
         self.on_transfer_select = on_transfer_select or (lambda address: None)
         self.on_pairing = on_pairing or (lambda enabled, role="source": None)
         self.on_speaker_pair_select = on_speaker_pair_select or (lambda address: None)
+        self.on_trusted_remove = on_trusted_remove or (lambda key: None)
         self.on_mode_select = on_mode_select or (lambda mode: None)
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
         self.on_set_off_timeout = on_set_off_timeout or (lambda sec: None)  # [CLAUDE] тайм-аут гашения
@@ -65,6 +67,8 @@ class Dispatcher:
             self.on_pairing(False, role)
         elif intent == "speaker_pair_select":
             self._speaker_pair_select(payload)
+        elif intent == "trusted_remove":
+            self._trusted_remove(payload)
         elif intent == "mode_select":
             self._mode_select(payload)
         elif intent == "screen_off_adjust":      # [CLAUDE] ±тайм-аут гашения экрана
@@ -127,7 +131,22 @@ class Dispatcher:
         if not address:
             return
         self.state.speaker_pairing_status = "connect"
+        self.state.pairing_message = ""
         self.on_speaker_pair_select(address)
+
+    def _trusted_remove(self, key):
+        target = next(
+            (device for device in self.state.trusted
+             if device.get("key") == key or device.get("address") == key),
+            None,
+        )
+        address = (target or {}).get("address") or key
+        if self.state.remove_trusted(key):
+            try:
+                self.state.save_trusted()
+            except Exception:
+                pass
+            self.on_trusted_remove(address)
 
     def _transfer_select(self, key):
         address = self.state.select_default_speaker(key)

@@ -38,7 +38,7 @@ HOME, SETTINGS, NOTIF, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
 class GuiController:
     def __init__(self, display, on_command=None, on_pairing=None,
                  on_transfer_rescan=None, on_transfer_select=None, on_speaker_pair_select=None,
-                 on_notif_dismiss=None,
+                 on_trusted_remove=None, on_notif_dismiss=None,
                  on_mode_select=None, on_toggle_sleep=None, on_set_off_timeout=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
@@ -48,6 +48,7 @@ class GuiController:
             on_transfer_rescan=on_transfer_rescan or (lambda *a, **k: None),
             on_transfer_select=on_transfer_select or (lambda *a, **k: None),
             on_speaker_pair_select=on_speaker_pair_select or (lambda *a, **k: None),
+            on_trusted_remove=on_trusted_remove or (lambda *a, **k: None),
             on_pairing=on_pairing or (lambda *a, **k: None),
             on_mode_select=on_mode_select or (lambda *a, **k: None),
             on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
@@ -103,6 +104,10 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "speaker_pair_select":
+            self.dispatcher.dispatch(intent, payload)
+            self.compositor.render()
+            return
+        if intent == "trusted_remove":
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
@@ -373,7 +378,8 @@ class GuiController:
             # (отключён = offline = красный, не залипает жёлтым). Жёлтый — только для динамиков.
             entry["online"] = bool(connected)
             if connected and peer:
-                entry["address"] = peer
+                from app_state import normalize_address
+                entry["address"] = normalize_address(peer)
 
     def render(self):
         try:
