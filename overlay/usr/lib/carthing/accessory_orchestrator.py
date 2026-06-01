@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 APPEARANCE_REMOTE = 0x0180          # Generic Remote Control
 HID_SERVICE_UUID = 0x1812          # HID-over-GATT
 
+# [CLAUDE 2026-06-01] Быстрый интервал рекламы для sticky-реконнекта. Дефолт Bumble = 1000мс
+# (раз в секунду) => iPhone долго обнаруживает устройство для реконнекта («долго думает»).
+# 60мс ~ как у AirPods; устройство на USB-питании, энергия не критична.
+STICKY_ADV_INTERVAL_MS = 60
+
 
 # ── фазы ──────────────────────────────────────────────────────────────────────
 PAIRING = "pairing"
@@ -277,20 +282,23 @@ class AccessoryOrchestrator:
             pass
         self.device.advertising_data = self._adv_payload()
         self.device.scan_response_data = self._scan_response_payload(with_name=True)
+        # [CLAUDE 2026-06-01] быстрый интервал -> iPhone обнаруживает для реконнекта почти мгновенно
+        self.device.advertising_interval_min = STICKY_ADV_INTERVAL_MS
+        self.device.advertising_interval_max = STICKY_ADV_INTERVAL_MS
         try:
             await self.device.start_advertising(
                 own_address_type=OwnAddressType.PUBLIC,
                 auto_restart=True,
                 advertising_filter_policy=0x00)
-            logger.info("Sticky: continuous bonded reconnect advertising (public, scan-name)")
+            logger.info("Sticky: continuous bonded reconnect advertising (public, scan-name, %dms)",
+                        STICKY_ADV_INTERVAL_MS)
         except Exception as e:
             logger.warning("bonded-only advertising failed: %s", e)
 
     async def kick_reconnect(self):
-        """Короткий directed burst к bonded peer, затем совместимая sticky-реклама."""
-        le_addr, _ = await self._bonds()
-        if le_addr is not None:
-            await self._advertise_directed(le_addr)
-            logger.info("Reconnect: directed burst to bonded LE peer %s", le_addr)
-            await asyncio.sleep(4.0)
+        """Прилипание = НЕПРЕРЫВНАЯ bonded-only реклама (apply_visibility). Точка вызова
+        на старте/диссконнекте; auto_restart держит рекламу живой бесконечно.
+        [CLAUDE 2026-06-01] Убрал directed-burst (+4с): directed-к-identity приватный iPhone (RPA)
+        ИГНОРИРУЕТ, он только задерживал поднятие undirected sticky на 4с => медленный реконнект.
+        Теперь sticky встаёт сразу с быстрым интервалом."""
         await self.apply_visibility()
