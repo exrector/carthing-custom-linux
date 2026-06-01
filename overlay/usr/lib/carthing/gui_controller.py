@@ -138,6 +138,11 @@ class GuiController:
             self.dispatcher.dispatch("session_select", "router")
             self.compositor.render()
             return
+        if intent == "session_focus":
+            index = payload.get("index") if isinstance(payload, dict) else payload
+            self.compositor.screens[MODES].tap(index)
+            self.compositor.render()
+            return
         if intent == "mode_focus":
             index = payload.get("index") if isinstance(payload, dict) else payload
             self.compositor.screens[MODES].tap(index)

@@ -342,7 +342,7 @@ class SessionsScreen(Screen):
             if regions is not None:
                 rx0, ry0, rx1, ry1 = rect
                 regions.add((rx0, max(top, ry0), rx1, min(bottom, ry1 + 42)),
-                            "mode_focus", payload={"index": i, "mode": key})
+                        "session_focus", payload={"index": i, "session": key})
         return img
 
 

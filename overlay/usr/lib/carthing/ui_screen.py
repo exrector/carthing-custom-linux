@@ -225,7 +225,9 @@ class Compositor:
         hit = self._regions.hit(x, y)
         if not hit:
             return False
-        if hit.intent == "mode_focus" and isinstance(hit.payload, dict):
+        if hit.intent == "session_focus" and isinstance(hit.payload, dict):
+            self.on_intent("session_select", hit.payload.get("session"))
+        elif hit.intent == "mode_focus" and isinstance(hit.payload, dict):
             self.on_intent("session_select", hit.payload.get("mode"))
         elif hit.intent == "route_activate":
             self.on_intent("session_select", "router")
