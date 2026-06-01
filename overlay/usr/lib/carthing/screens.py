@@ -136,82 +136,99 @@ class MacOSScreen(Screen):
 
 
 class TransferScreen(Screen):
-    name = "transfer"
-    title = "Audio"
+    name = "router"
+    title = "Маршрут"
     fullscreen = True
 
     def __init__(self, emit=None):
         self.state = None
         self.emit = emit or (lambda intent, payload=None: None)
+        self.focus = "input"
 
     def on_state(self, state):
         self.state = state
 
     def on_input(self, event):
         if event == Input.PRESS:
-            self.emit("transfer_rescan")
+            self.focus = "output" if self.focus == "input" else "input"
+            return True
+        if event == Input.SWIPE_UP:
+            self.focus = "input"
+            return True
+        if event == Input.SWIPE_DOWN:
+            self.focus = "output"
             return True
         return False
 
     def render(self, regions=None):
         img, draw = self.blank()
-        draw.text((24, CONTENT_TOP - 8), "Audio Output", font=T.font(34), fill=T.MUTED)
+        draw.text((24, CONTENT_TOP - 8), "Маршрут", font=T.font(34), fill=T.MUTED)
         draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
-        if not self.state or not self.state.transfer_active:
-            C.text_centered(draw, "Transfer готов", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 38, cx=T.CONTENT_CX)
-            C.text_centered(draw, "Выберите Car Thing как аудиовыход на iPhone", T.font(T.SZ_META),
-                            T.MUTED, T.MAIN_CY + 22, cx=T.CONTENT_CX)
+        if not self.state:
             return img
 
-        subtitle = "Сканирую доверенные динамики…" if self.state.transfer_scanning else "Доверенные динамики"
-        C.text_centered(draw, subtitle, T.font(T.SZ_META), T.MUTED, CONTENT_TOP + 58, cx=T.CONTENT_CX)
+        inputs = self.state.route_inputs
+        outputs = self.state.route_outputs
+        route_input = getattr(self.state, "route_input", "")
+        route_output = getattr(self.state, "route_output", "")
+        active = bool(route_input and route_output and getattr(self.state, "transfer_active", False))
+        status = "active" if active else "idle"
+        draw.text((52, CONTENT_TOP + 52), f"{status} · press toggles input/output",
+                  font=T.font(T.SZ_META), fill=T.FAINT)
 
-        speakers = self.state.trusted_speakers
-        if not speakers:
-            C.text_centered(draw, "Нет доверенных динамиков", T.font(T.SZ_BODY), T.FAINT,
-                            T.MAIN_CY, cx=T.CONTENT_CX)
-            C.text_centered(draw, "Добавьте динамик в настройках", T.font(T.SZ_META), T.MUTED,
-                            T.MAIN_CY + 46, cx=T.CONTENT_CX)
-            return img
+        def render_group(title, devices, y, selected_key, focus_name, intent):
+            focused = self.focus == focus_name
+            title_color = T.ACCENT if focused else T.MUTED
+            draw.text((32, y), title, font=T.font(T.SZ_BODY), fill=title_color)
+            y += 36
+            if not devices:
+                draw.text((52, y), "нет известных устройств", font=T.font(T.SZ_SMALL), fill=T.FAINT)
+                return y + 46
+            for device in devices[:3]:
+                connected = bool(device.get("connected"))
+                online = bool(device.get("online")) or connected
+                key = device.get("key") or device.get("address")
+                selected = key == selected_key or device.get(f"route_{focus_name}")
+                label = device.get("label") or device.get("address") or "Device"
+                text = label
+                if selected:
+                    text += "  · selected"
+                rect = C.list_row(draw, y, text, selected=selected and focused, indent=0)
+                state = "connected" if connected else ("online" if online else "offline")
+                caps = ", ".join(device.get("capabilities") or [])[:44]
+                meta = state if not caps else f"{state} · {caps}"
+                draw.text((52, y + 42), meta, font=T.font(T.SZ_SMALL),
+                          fill=T.FG if online else T.FAINT)
+                if regions is not None:
+                    regions.add(rect, intent, payload=key)
+                y += T.ROW_H
+            return y + 10
 
-        y = CONTENT_TOP + 104
-        for speaker in speakers[:5]:
-            connected = bool(speaker.get("connected"))
-            online = bool(speaker.get("online")) or connected
-            default = bool(speaker.get("default"))
-            status = "connected" if connected else ("online" if online else "offline")
-            label = speaker.get("label") or speaker.get("address") or "Speaker"
-            suffix = "  · default" if default else ""
-            text = f"{label}{suffix}"
-            color = T.FG if online else T.FAINT
-            if connected:
-                color = T.ACCENT
-            rect = C.list_row(draw, y, text, selected=connected or (default and online), indent=0)
-            draw.text((52, y + 42), status, font=T.font(T.SZ_SMALL), fill=color)
-            if regions is not None:
-                regions.add(rect, "transfer_select", payload=speaker.get("key"))
-            y += T.ROW_H
+        y = CONTENT_TOP + 92
+        y = render_group("Input", inputs, y, route_input, "input", "route_input_select")
+        y = render_group("Output", outputs, y, route_output, "output", "route_output_select")
+        if route_input and route_output:
+            C.text_centered(draw, "Route ready", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
         return img
 
 
 class ModesScreen(Screen):
-    """Runtime mode switcher for hardware tests.
+    """Session preset switcher.
 
-    These are product-level profiles inside one accessory, not separate
-    Bluetooth identities. The screen only emits mode intents; carthing_runtime
-    owns the actual transport/service changes.
+    Legacy name kept for import compatibility. These entries are route-graph
+    sessions/presets, not product-level Bluetooth modes.
     """
 
-    name = "modes"
-    title = "Режимы"
+    name = "sessions"
+    title = "Сессии"
     fullscreen = True
 
     MODES = [
         ("remote", "Remote", "iPhone media control"),
-        ("transfer", "Transfer", "iPhone audio output -> speaker"),
-        ("mac", "macOS", "Mac control surface"),
-        ("pairing", "Pairing", "Add source or speaker"),
+        ("router", "Router", "Route input to output"),
+        ("mac", "Mac", "Mac control surface"),
+        ("pairing", "Pairing", "Enroll trusted device"),
         ("quiet", "Quiet", "Connected, low UI activity"),
         ("service", "Service", "USB/NCM diagnostics safe state"),
     ]
@@ -226,7 +243,9 @@ class ModesScreen(Screen):
 
     def on_state(self, state):
         self.state = state
-        current = getattr(state, "device_mode", "remote") if state else "remote"
+        current = getattr(state, "active_session", getattr(state, "device_mode", "remote")) if state else "remote"
+        if current == "transfer":
+            current = "router"
         if current != self._last_current:
             self._last_current = current
             for i, (key, _label, _desc) in enumerate(self.MODES):
@@ -239,7 +258,7 @@ class ModesScreen(Screen):
             return
         key = self.MODES[index][0]
         self.sel = index
-        self.emit("mode_select", key)
+        self.emit("session_select", key)
 
     def tap(self, index):
         if 0 <= index < len(self.MODES):
@@ -262,10 +281,12 @@ class ModesScreen(Screen):
 
     def render(self, regions=None):
         img, draw = self.blank()
-        draw.text((24, CONTENT_TOP - 8), "Режимы", font=T.font(34), fill=T.MUTED)
+        draw.text((24, CONTENT_TOP - 8), "Сессии", font=T.font(34), fill=T.MUTED)
         draw.line([24, CONTENT_TOP + 34, T.LIST_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
-        current = getattr(self.state, "device_mode", "remote") if self.state else "remote"
+        current = getattr(self.state, "active_session", getattr(self.state, "device_mode", "remote")) if self.state else "remote"
+        if current == "transfer":
+            current = "router"
         power_tier = getattr(self.state, "power_tier", "boot") if self.state else "boot"
         mode_status = getattr(self.state, "mode_status", current) if self.state else current
         top = CONTENT_TOP + 52
@@ -311,7 +332,7 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
-            {"key": "modes", "label": "Режимы работы"},
+            {"key": "modes", "label": "Сессии и маршруты"},
             {"key": "pairing", "label": "Добавить устройство", "children": [
                 ("pairing_source", "iPhone / источник"),
                 ("pairing_speaker", "Bluetooth динамик"),

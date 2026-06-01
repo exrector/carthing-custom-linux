@@ -55,6 +55,34 @@ def _bonded_source_rows(keystore_path=None):
     return rows
 
 
+def _has_capability(device, capability):
+    return capability in set(device.get("capabilities") or [])
+
+
+def _endpoint_dirs(device):
+    return {
+        endpoint.get("direction")
+        for endpoint in (device.get("endpoints") or [])
+        if isinstance(endpoint, dict)
+    }
+
+
+def _device_is_input(device):
+    return (
+        device.get("role") == "source"
+        or _has_capability(device, "audio_input")
+        or "input" in _endpoint_dirs(device)
+    )
+
+
+def _device_is_output(device):
+    return (
+        device.get("role") == "speaker"
+        or _has_capability(device, "audio_output")
+        or "output" in _endpoint_dirs(device)
+    )
+
+
 class MediaSession:
     """Per-source playback state (one for iPhone, one for Mac)."""
 
@@ -93,6 +121,9 @@ class AppState:
         self.transfer_active = False
         self.transfer_scanning = False
         self.transfer_source = ""
+        self.route_input = ""
+        self.route_output = ""
+        self.active_session = "remote"
         self.device_mode = "remote"
         self.mode_status = "remote"
         self.power_tier = "boot"
@@ -140,26 +171,58 @@ class AppState:
             data = {}
 
         devices = []
-        for role, section in (("source", "sources"), ("speaker", "speakers")):
-            peers = data.get(section, [])
-            if isinstance(peers, dict):
-                peers = [{"address": address, **details} for address, details in peers.items()]
-            for index, peer in enumerate(peers):
+        if data.get("schema") == 2 and isinstance(data.get("devices"), list):
+            for peer in data.get("devices", []):
                 if not isinstance(peer, dict):
-                    peer = {"address": peer}
-                address = normalize_address(peer.get("address"))
-                if not address:
                     continue
+                address = normalize_address(peer.get("address"))
+                key = peer.get("id") or peer.get("key") or address
+                label = peer.get("name") or peer.get("label") or address or key
+                capabilities = list(peer.get("capabilities") or [])
+                endpoints = list(peer.get("endpoints") or [])
                 devices.append({
-                    "key": peer.get("key") or address,
+                    "key": key,
                     "address": address,
-                    "label": peer.get("name") or peer.get("label") or address,
-                    "type": peer.get("type") or ("Источник" if role == "source" else "Динамик"),
-                    "role": role,
+                    "label": label,
+                    "type": peer.get("type") or "Устройство",
+                    "role": peer.get("role") or "device",
                     "online": bool(peer.get("online", False)),
                     "connected": bool(peer.get("connected", False)),
-                    "default": bool(peer.get("default", index == 0 and role == "speaker")),
+                    "default": bool(peer.get("default", False)),
+                    "capabilities": capabilities,
+                    "endpoints": endpoints,
+                    "constraints": list(peer.get("constraints") or []),
+                    "metadata": dict(peer.get("metadata") or {}),
                 })
+        else:
+            for role, section in (("source", "sources"), ("speaker", "speakers")):
+                peers = data.get(section, [])
+                if isinstance(peers, dict):
+                    peers = [{"address": address, **details} for address, details in peers.items()]
+                for index, peer in enumerate(peers):
+                    if not isinstance(peer, dict):
+                        peer = {"address": peer}
+                    address = normalize_address(peer.get("address"))
+                    if not address:
+                        continue
+                    capabilities = ["audio_input", "metadata_input", "control_output"] if role == "source" else [
+                        "audio_output", "control_input", "volume_control", "transport_control"
+                    ]
+                    endpoint_direction = "input" if role == "source" else "output"
+                    devices.append({
+                        "key": peer.get("key") or address,
+                        "address": address,
+                        "label": peer.get("name") or peer.get("label") or address,
+                        "type": peer.get("type") or ("Источник" if role == "source" else "Динамик"),
+                        "role": role,
+                        "online": bool(peer.get("online", False)),
+                        "connected": bool(peer.get("connected", False)),
+                        "default": bool(peer.get("default", index == 0 and role == "speaker")),
+                        "capabilities": capabilities,
+                        "endpoints": [{"id": role, "direction": endpoint_direction, "capabilities": capabilities}],
+                        "constraints": ["idle_link_allowed", "active_media_requires_route"],
+                        "metadata": {"legacy_role": role},
+                    })
         by_key = {device.get("key"): device for device in devices if device.get("key")}
         by_address = {device.get("address"): device for device in devices if device.get("address")}
         for bonded in _bonded_source_rows():
@@ -179,27 +242,32 @@ class AppState:
     def save_trusted(self, path=None):
         path = Path(path or self.trusted_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = {"sources": [], "speakers": []}
-        seen = {"source": set(), "speaker": set()}
+        data = {"schema": 2, "devices": []}
+        seen = set()
         for device in self.trusted:
-            role = device.get("role")
             address = normalize_address(device.get("address"))
-            if not address or role not in seen:
+            key = device.get("key") or address
+            if not key:
                 continue
-            if address in seen[role]:
+            dedupe = address or key
+            if dedupe in seen:
                 continue
-            seen[role].add(address)
+            seen.add(dedupe)
             row = {
-                "name": device.get("label"),
+                "id": key,
                 "address": address,
-                "type": device.get("type"),
+                "name": device.get("label") or key,
+                "type": device.get("type") or "Устройство",
+                "role": device.get("role") or "device",
+                "trusted": True,
+                "capabilities": list(device.get("capabilities") or []),
+                "endpoints": list(device.get("endpoints") or []),
+                "constraints": list(device.get("constraints") or []),
+                "metadata": dict(device.get("metadata") or {}),
             }
             if device.get("default"):
                 row["default"] = True
-            if role == "source":
-                data["sources"].append(row)
-            elif role == "speaker":
-                data["speakers"].append(row)
+            data["devices"].append(row)
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
         tmp.replace(path)
@@ -209,11 +277,43 @@ class AppState:
 
     @property
     def trusted_sources(self):
-        return self.trusted_by_role("source")
+        return [device for device in self.trusted if _device_is_input(device)]
 
     @property
     def trusted_speakers(self):
-        return self.trusted_by_role("speaker")
+        return [device for device in self.trusted if _device_is_output(device)]
+
+    @property
+    def route_inputs(self):
+        return self.trusted_sources
+
+    @property
+    def route_outputs(self):
+        return self.trusted_speakers
+
+    def select_route_input(self, key_or_address):
+        selected = None
+        needle = normalize_address(key_or_address)
+        for device in self.route_inputs:
+            match = device.get("key") == key_or_address or device.get("address") == needle
+            device["route_input"] = match
+            if match:
+                selected = device.get("key") or device.get("address")
+        if selected:
+            self.route_input = selected
+        return selected
+
+    def select_route_output(self, key_or_address):
+        selected = None
+        needle = normalize_address(key_or_address)
+        for device in self.route_outputs:
+            match = device.get("key") == key_or_address or device.get("address") == needle
+            device["route_output"] = match
+            if match:
+                selected = device.get("key") or device.get("address")
+        if selected:
+            self.route_output = selected
+        return selected
 
     def is_trusted_source(self, address):
         address = normalize_address(address)

@@ -231,3 +231,14 @@ class TrustedDeviceRegistry:
             if device.output_endpoints()
         ]
 
+    def migrate_legacy_in_place(self):
+        """Read any supported old shape and write schema=2.
+
+        This is intentionally explicit. Runtime code may read legacy files, but
+        migration should happen as a controlled action so old agents do not
+        silently fight the new registry model.
+        """
+        self.load()
+        self.save()
+        return self
+

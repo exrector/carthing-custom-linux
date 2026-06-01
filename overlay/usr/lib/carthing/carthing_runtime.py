@@ -30,6 +30,9 @@ from ble_transport import init_ble
 from accessory_orchestrator import AccessoryOrchestrator
 from runtime_model import RuntimeModel
 from iphone_service import IPhoneService
+from route_graph import Protocol
+from session_presets import build_preset_session, normalize_preset
+from session_runner import AdapterConnector, SessionRunner
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("carthing_runtime")
@@ -47,8 +50,33 @@ settings = None          # SettingsService
 hw_caps = {}             # hardware_inventory.probe()
 mac = None               # MacService
 power = None             # IdlePowerController
+session_runner = None    # SessionRunner
 
-VALID_DEVICE_MODES = {"remote", "transfer", "mac", "pairing", "quiet", "service"}
+VALID_SESSIONS = {"remote", "router", "mac", "pairing", "quiet", "service"}
+
+
+class CompatibilityConnector(AdapterConnector):
+    """Lifecycle placeholder while old protocol services are being wrapped.
+
+    This lets SessionRunner become the single top-level owner now. The existing
+    services still do the real protocol work below it until each connector is
+    replaced with a concrete BLE/A2DP/USB adapter.
+    """
+
+    def __init__(self, protocol):
+        self.protocol = protocol
+
+    async def start(self):
+        logger.info("session connector start: %s", self.protocol)
+
+    async def stop(self):
+        logger.info("session connector stop: %s", self.protocol)
+
+    async def attach_session(self, session):
+        logger.info("session connector attach: %s -> %s", self.protocol, session.name)
+
+    async def detach_session(self, session):
+        logger.info("session connector detach: %s -> %s", self.protocol, session.name)
 
 
 def _on_command(source, command):
@@ -127,7 +155,32 @@ def _on_trusted_remove(key):
 
 
 def _on_mode_select(mode):
-    asyncio.ensure_future(_apply_device_mode(mode))
+    asyncio.ensure_future(_apply_session(mode))
+
+
+def _on_session_select(session):
+    asyncio.ensure_future(_apply_session(session))
+
+
+def _on_route_input_select(key):
+    if power is not None:
+        power.note_activity("route_input_select")
+    if gui is not None:
+        gui.app_state.route_input = key
+    logger.info("route input selected: %s", key)
+    _on_publish()
+
+
+def _on_route_output_select(key):
+    if power is not None:
+        power.note_activity("route_output_select")
+    if gui is not None:
+        gui.app_state.route_output = key
+    logger.info("route output selected: %s", key)
+    # Compatibility bridge: current lower layer still names output selection
+    # "transfer_select". The route graph owns the product model above it.
+    _on_transfer_select(key)
+    _on_publish()
 
 
 def _on_toggle_sleep(on):
@@ -147,16 +200,21 @@ def _on_set_off_timeout(sec):
         settings.set("screen_off_after_sec", sec)
 
 
-async def _apply_device_mode(mode, persist=True):
-    mode = mode if mode in VALID_DEVICE_MODES else "remote"
-    model.device_mode = mode
+async def _apply_session(session, persist=True):
+    session = normalize_preset(session)
+    if session not in VALID_SESSIONS:
+        session = "remote"
+    model.active_session = session
+    model.device_mode = session
     model.mode_status = "applying"
-    if settings is not None and persist and mode != "pairing":
-        settings.set("device_mode", mode)
+    if session_runner is not None:
+        await session_runner.start(build_preset_session(session))
+    if settings is not None and persist and session != "pairing":
+        settings.set("active_session", session)
     if power is not None:
-        power.set_device_mode(mode)
+        power.set_device_mode(session)
 
-    if mode != "pairing":
+    if session != "pairing":
         if power is not None:
             power.set_pairing(False)
         if gui is not None:
@@ -164,10 +222,10 @@ async def _apply_device_mode(mode, persist=True):
         if orch is not None:
             await orch.arm_pairing(False)
 
-    if mode in ("remote", "quiet", "service", "mac", "pairing") and transfer is not None:
+    if session in ("remote", "quiet", "service", "mac", "pairing") and transfer is not None:
         await transfer.deactivate()
 
-    if mode == "remote":
+    if session == "remote":
         model.audio_sink = "builtin"
         model.mode_status = "iPhone remote"
         if mac is not None:
@@ -176,9 +234,9 @@ async def _apply_device_mode(mode, persist=True):
             _iphone.activate_source()
         if gui is not None:
             gui.show_home()
-    elif mode == "transfer":
+    elif session == "router":
         model.audio_sink = "speaker"
-        model.mode_status = "transfer armed"
+        model.mode_status = "router ready"
         if _iphone is not None:
             _iphone.activate_source()
         if transfer is not None:
@@ -188,20 +246,20 @@ async def _apply_device_mode(mode, persist=True):
             power.note_transfer_scan(hold_sec=15.0)
         if gui is not None:
             gui.show_transfer_screen()
-    elif mode == "mac":
+    elif session == "mac":
         model.audio_sink = "builtin"
         model.mode_status = "macOS control"
         if mac is not None:
             mac.attach()
         if gui is not None:
             gui.show_mac_screen()
-    elif mode == "pairing":
+    elif session == "pairing":
         model.audio_sink = "builtin"
         model.mode_status = "pairing window"
         if gui is not None:
             gui.show_mode_screen()
         _on_pairing(True, "source")
-    elif mode == "quiet":
+    elif session == "quiet":
         model.audio_sink = "builtin"
         model.mode_status = "connected quiet"
         if mac is not None:
@@ -210,7 +268,7 @@ async def _apply_device_mode(mode, persist=True):
             _iphone.activate_source()
         if gui is not None:
             gui.show_mode_screen()
-    elif mode == "service":
+    elif session == "service":
         model.audio_sink = "builtin"
         model.mode_status = "service safe"
         if mac is not None:
@@ -220,8 +278,14 @@ async def _apply_device_mode(mode, persist=True):
         if gui is not None:
             gui.show_mode_screen()
 
-    logger.info("device mode: %s (%s)", mode, model.mode_status)
+    logger.info("active session: %s (%s)", session, model.mode_status)
     _on_publish()
+
+
+async def _apply_device_mode(mode, persist=True):
+    # Legacy wrapper. Old callers may still say "transfer"; new architecture
+    # calls it "router".
+    await _apply_session(mode, persist=persist)
 
 
 async def _emit_source_intent(intent):
@@ -342,7 +406,7 @@ async def _on_connection(connection):
 
 
 async def main():
-    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power
+    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power, session_runner
     _verify_persistent()
 
     # Per-boot инвентарь возможностей + настройки.
@@ -350,6 +414,9 @@ async def main():
     from settings_service import SettingsService
     hw_caps = hardware_inventory.probe()
     settings = SettingsService()
+    session_runner = SessionRunner()
+    for protocol in Protocol:
+        session_runner.register(CompatibilityConnector(protocol))
     logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
 
     def _configure(device):
@@ -386,6 +453,9 @@ async def main():
                                 on_trusted_remove=_on_trusted_remove,
                                 on_notif_dismiss=_on_notif_dismiss,
                                 on_mode_select=_on_mode_select,
+                                on_session_select=_on_session_select,
+                                on_route_input_select=_on_route_input_select,
+                                on_route_output_select=_on_route_output_select,
                                 on_toggle_sleep=_on_toggle_sleep,
                                 on_set_off_timeout=_on_set_off_timeout)
             logger.info("GUI active (modular Compositor)")
@@ -413,7 +483,7 @@ async def main():
     # macOS-источник (Фаза 4, каркас).
     from mac_service import MacService
     mac = MacService(model, on_update=_on_publish)
-    await _apply_device_mode(settings.get("device_mode", "remote"), persist=False)
+    await _apply_session(settings.get("active_session", settings.get("device_mode", "remote")), persist=False)
 
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).

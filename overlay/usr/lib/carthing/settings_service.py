@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULTS = {
     "preferred_view": "now_playing",   # стартовый view (gui-contract)
-    "device_mode": "remote",           # тестовый runtime-профиль, не отдельная BT-персона
+    "active_session": "remote",        # route-graph session preset
+    "device_mode": "remote",           # legacy alias; do not build new architecture on it
     "default_speaker": None,           # адрес динамика по умолчанию для Transfer
     "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
     "screen_dim_after_sec": 45,         # сначала только подсветка, без BT/suspend
@@ -41,6 +42,8 @@ class SettingsService:
             if state_paths.SETTINGS_PATH.exists():
                 data = json.loads(state_paths.SETTINGS_PATH.read_text() or "{}")
                 self.values.update({k: data[k] for k in _DEFAULTS if k in data})
+                if "active_session" not in data and "device_mode" in data:
+                    self.values["active_session"] = data["device_mode"]
         except Exception as e:
             logger.warning("settings load failed: %s", e)
 
@@ -57,4 +60,8 @@ class SettingsService:
 
     def set(self, key, value):
         self.values[key] = value
+        if key == "active_session":
+            self.values["device_mode"] = value
+        elif key == "device_mode":
+            self.values["active_session"] = value
         self.save()

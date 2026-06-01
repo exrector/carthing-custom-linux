@@ -15,7 +15,8 @@ Media routing (agreed model):
 class Dispatcher:
     def __init__(self, state, on_command=None, on_transfer_rescan=None, on_transfer_select=None,
                  on_pairing=None, on_speaker_pair_select=None, on_trusted_remove=None,
-                 on_mode_select=None, on_toggle_sleep=None,
+                 on_mode_select=None, on_session_select=None, on_route_input_select=None,
+                 on_route_output_select=None, on_toggle_sleep=None,
                  on_set_off_timeout=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
@@ -24,7 +25,9 @@ class Dispatcher:
         self.on_pairing = on_pairing or (lambda enabled, role="source": None)
         self.on_speaker_pair_select = on_speaker_pair_select or (lambda address: None)
         self.on_trusted_remove = on_trusted_remove or (lambda key: None)
-        self.on_mode_select = on_mode_select or (lambda mode: None)
+        self.on_session_select = on_session_select or on_mode_select or (lambda session: None)
+        self.on_route_input_select = on_route_input_select or (lambda key: None)
+        self.on_route_output_select = on_route_output_select or (lambda key: None)
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
         self.on_set_off_timeout = on_set_off_timeout or (lambda sec: None)  # [CLAUDE] тайм-аут гашения
 
@@ -70,7 +73,13 @@ class Dispatcher:
         elif intent == "trusted_remove":
             self._trusted_remove(payload)
         elif intent == "mode_select":
-            self._mode_select(payload)
+            self._session_select(payload)
+        elif intent == "session_select":
+            self._session_select(payload)
+        elif intent == "route_input_select":
+            self._route_input_select(payload)
+        elif intent == "route_output_select":
+            self._route_output_select(payload)
         elif intent == "screen_off_adjust":      # [CLAUDE] ±тайм-аут гашения экрана
             self._adjust_off_timeout(payload)
 
@@ -157,11 +166,24 @@ class Dispatcher:
                 pass
             self.on_transfer_select(address)
 
-    def _mode_select(self, mode):
-        if not mode:
+    def _session_select(self, session):
+        if not session:
             return
-        self.state.device_mode = mode
-        self.on_mode_select(mode)
+        if session == "transfer":
+            session = "router"
+        self.state.active_session = session
+        self.state.device_mode = session
+        self.on_session_select(session)
+
+    def _route_input_select(self, key):
+        selected = self.state.select_route_input(key)
+        if selected:
+            self.on_route_input_select(selected)
+
+    def _route_output_select(self, key):
+        selected = self.state.select_route_output(key)
+        if selected:
+            self.on_route_output_select(selected)
 
     # [CLAUDE 2026-06-01] ±тайм-аут полного гашения экрана (шаг 30с, 30с..10мин)
     SCREEN_OFF_STEP = 30
