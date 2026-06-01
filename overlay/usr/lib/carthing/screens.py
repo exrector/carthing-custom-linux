@@ -221,12 +221,20 @@ class RouteBuilderScreen(Screen):
             return y + 10
 
         y = CONTENT_TOP + 92
-        y = render_group("Вход", inputs, y, route_input, "input", "route_input_select")
-        y = render_group("Выход", outputs, y, route_output, "output", "route_output_select")
+        y = render_group("Input", inputs, y, route_input, "input", "route_input_select")
+        y = render_group("Output", outputs, y, route_output, "output", "route_output_select")
+        if route_input or route_output:
+            preview_in = route_input or "?"
+            preview_out = route_output or "?"
+            draw.text((32, y), f"Plan: {preview_in} -> {preview_out}",
+                      font=T.font(T.SZ_META), fill=T.FAINT)
+            y += 32
         if route_input and route_output:
-            C.text_centered(draw, "Запуск маршрута", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
+            C.text_centered(draw, "Применить план", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
             if regions is not None:
                 regions.add((24, T.H - 78, T.CONTENT_X1, T.H - 16), "route_activate")
+        else:
+            C.text_centered(draw, "Выбери Input и Output", T.font(T.SZ_META), T.FAINT, T.H - 46, cx=T.CONTENT_CX)
         return img
 
 
