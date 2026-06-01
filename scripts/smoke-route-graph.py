@@ -118,6 +118,69 @@ def check_planner_constraints():
         pass
 
 
+def check_planner_exclusive_conflicts():
+    src_hci = TrustedDevice(
+        id="src-hci",
+        address="AA:AA:AA:AA:AA:10",
+        name="Source HCI Exclusive",
+        endpoints=[
+            Endpoint(
+                id="in",
+                direction=EndpointDirection.INPUT,
+                protocols={Protocol.CLASSIC_A2DP_SINK},
+                capabilities={Capability.AUDIO_INPUT},
+            ),
+        ],
+        constraints={Constraint.EXCLUSIVE_HCI},
+    )
+    out_hci = TrustedDevice(
+        id="out-hci",
+        address="AA:AA:AA:AA:AA:11",
+        name="Output HCI Exclusive",
+        endpoints=[
+            Endpoint(
+                id="out",
+                direction=EndpointDirection.OUTPUT,
+                protocols={Protocol.CLASSIC_A2DP_SOURCE},
+                capabilities={Capability.AUDIO_OUTPUT},
+            ),
+        ],
+        constraints={Constraint.EXCLUSIVE_HCI},
+    )
+    stop_before = TrustedDevice(
+        id="stop-before",
+        address="AA:AA:AA:AA:AA:12",
+        name="Stop-before-start output",
+        endpoints=[
+            Endpoint(
+                id="out",
+                direction=EndpointDirection.OUTPUT,
+                protocols={Protocol.CLASSIC_A2DP_SOURCE},
+                capabilities={Capability.AUDIO_OUTPUT},
+            ),
+        ],
+        constraints={Constraint.REQUIRES_STOP_BEFORE_START},
+    )
+
+    class _Registry:
+        def __init__(self, devices):
+            self.devices = {device.id: device for device in devices}
+
+        def by_id(self, device_id):
+            return self.devices.get(device_id)
+
+    planner = RoutePlanner(_Registry([src_hci, out_hci, stop_before]))
+    try:
+        planner.plan_simple_route("src-hci", "out-hci", name="hci-conflict")
+        raise AssertionError("planner accepted exclusive hci conflict")
+    except RoutePlanError:
+        pass
+
+    planned = planner.plan_simple_route("src-hci", "stop-before", name="warn-stop-before")
+    warnings = planned.warnings
+    assert any("stop-before-start" in warning for warning in warnings)
+
+
 def check_enrollment():
     registry = TrustedDeviceRegistry("/tmp/nonexistent-carthing-trusted.json").load()
     manager = EnrollmentManager(registry)
@@ -244,6 +307,7 @@ def main():
     assert normalize_preset("transfer") == "router"
     check_registry_and_planner()
     check_planner_constraints()
+    check_planner_exclusive_conflicts()
     check_enrollment()
     check_degraded_enrollment()
     check_multirole_app_state()

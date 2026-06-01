@@ -62,6 +62,7 @@ class RoutePlanner:
                 session.warnings.append(
                     "output device requires control backchannel but exposes no control endpoint"
                 )
+        self._check_conflicts(session, input_device, output_device, input_endpoint, output_endpoint)
 
         return session
 
@@ -80,3 +81,46 @@ class RoutePlanner:
             if current == target:
                 return True
         return False
+
+    def _check_conflicts(self, session, input_device, output_device, input_endpoint, output_endpoint):
+        input_constraints = self._constraint_values(input_device.constraints)
+        output_constraints = self._constraint_values(output_device.constraints)
+        merged_constraints = input_constraints | output_constraints
+        input_protocols = self._protocol_values(input_endpoint.protocols)
+        output_protocols = self._protocol_values(output_endpoint.protocols)
+
+        if (
+            Constraint.EXCLUSIVE_HCI.value in input_constraints
+            and Constraint.EXCLUSIVE_HCI.value in output_constraints
+            and input_device.id != output_device.id
+        ):
+            raise RoutePlanError("route rejected: both devices require exclusive hci0 resource")
+
+        if (
+            Constraint.EXCLUSIVE_A2DP_SOURCE.value in input_constraints
+            and "classic_a2dp_source" in output_protocols
+        ):
+            raise RoutePlanError("route rejected: output requires a2dp_source while input keeps it exclusive")
+
+        if (
+            Constraint.EXCLUSIVE_A2DP_SINK.value in output_constraints
+            and "classic_a2dp_sink" in input_protocols
+        ):
+            raise RoutePlanError("route rejected: input requires a2dp_sink while output keeps it exclusive")
+
+        if Constraint.REQUIRES_STOP_BEFORE_START.value in merged_constraints:
+            session.warnings.append("route requires stop-before-start transition")
+
+    @staticmethod
+    def _constraint_values(values):
+        result = set()
+        for value in values:
+            result.add(value.value if hasattr(value, "value") else str(value))
+        return result
+
+    @staticmethod
+    def _protocol_values(values):
+        result = set()
+        for value in values:
+            result.add(value.value if hasattr(value, "value") else str(value))
+        return result
