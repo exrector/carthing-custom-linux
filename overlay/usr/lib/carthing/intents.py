@@ -175,10 +175,7 @@ class Dispatcher:
     def _session_select(self, session):
         if not session:
             return
-        if session == "transfer":
-            session = "router"
         self.state.active_session = session
-        self.state.device_mode = session
         self.on_session_select(session)
 
     def _route_input_select(self, key):

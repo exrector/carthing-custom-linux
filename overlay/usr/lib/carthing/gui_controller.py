@@ -385,9 +385,8 @@ class GuiController:
         self._sync_trusted_iphone(a, a.iphone.connected, model.session.peer)
         a.transfer_active = model.transfer_active
         a.transfer_source = model.speaker_name or ""
-        a.active_session = getattr(model, "active_session", getattr(model, "device_mode", "remote"))
-        a.device_mode = getattr(model, "device_mode", "remote")
-        a.mode_status = getattr(model, "mode_status", a.device_mode)
+        a.active_session = getattr(model, "active_session", "remote")
+        a.mode_status = getattr(model, "mode_status", a.active_session)
         a.power_tier = getattr(model, "power_tier", "boot")
         if s.source == "mac":
             a.mac.connected = bool(s.connected)

@@ -250,7 +250,6 @@ async def _apply_session(session, persist=True):
     if session not in VALID_SESSIONS:
         session = "remote"
     model.active_session = session
-    model.device_mode = session
     model.mode_status = "applying"
     if session_runner is not None:
         await session_runner.start(_build_session_plan(session))

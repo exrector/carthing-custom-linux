@@ -261,7 +261,7 @@ class SessionsScreen(Screen):
 
     def on_state(self, state):
         self.state = state
-        current = getattr(state, "active_session", getattr(state, "device_mode", "remote")) if state else "remote"
+        current = getattr(state, "active_session", "remote") if state else "remote"
         if current == "transfer":
             current = "router"
         if current != self._last_current:
@@ -302,7 +302,7 @@ class SessionsScreen(Screen):
         draw.text((24, CONTENT_TOP - 8), "Сессии", font=T.font(34), fill=T.MUTED)
         draw.line([24, CONTENT_TOP + 34, T.LIST_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
 
-        current = getattr(self.state, "active_session", getattr(self.state, "device_mode", "remote")) if self.state else "remote"
+        current = getattr(self.state, "active_session", "remote") if self.state else "remote"
         if current == "transfer":
             current = "router"
         power_tier = getattr(self.state, "power_tier", "boot") if self.state else "boot"

@@ -79,8 +79,7 @@ class MediaSession:
 class RuntimeModel:
     def __init__(self):
         self.session = MediaSession()
-        self.active_session = "remote"
-        self.device_mode = "remote"  # legacy runtime-state alias
+        self._active_session = "remote"
         self.power_tier = "boot"
         self.mode_status = "remote"
         # AudioRoute: куда идёт звук (builtin = телефон сам; speaker = Transfer-relay).
@@ -96,6 +95,26 @@ class RuntimeModel:
         # presence
         self.rssi = None
         self.proximity_zone = "gone"
+
+    @property
+    def active_session(self):
+        return self._active_session
+
+    @active_session.setter
+    def active_session(self, value):
+        value = str(value or "remote")
+        if value == "transfer":
+            value = "router"
+        self._active_session = value
+
+    @property
+    def device_mode(self):
+        # Legacy runtime-state alias; keep for compatibility with older readers.
+        return self._active_session
+
+    @device_mode.setter
+    def device_mode(self, value):
+        self.active_session = value
 
     # ── источник / взаимоисключение (Play на Mac глушит iPhone) ──────────────
     def select_source(self, source):

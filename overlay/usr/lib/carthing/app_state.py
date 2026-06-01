@@ -229,8 +229,7 @@ class AppState:
         self.transfer_source = ""
         self.route_input = ""
         self.route_output = ""
-        self.active_session = "remote"
-        self.device_mode = "remote"
+        self._active_session = "remote"
         self.mode_status = "remote"
         self.power_tier = "boot"
         self.sleep_on_idle = True       # [CLAUDE] сон/гашение экрана (тумблер в Settings)
@@ -245,6 +244,28 @@ class AppState:
         self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.load_trusted()
+
+    @staticmethod
+    def _normalize_session(value):
+        value = str(value or "remote").strip()
+        return "router" if value == "transfer" else value
+
+    @property
+    def active_session(self):
+        return self._active_session
+
+    @active_session.setter
+    def active_session(self, value):
+        self._active_session = self._normalize_session(value)
+
+    @property
+    def device_mode(self):
+        # Legacy alias for older UI/runtime code paths.
+        return self._active_session
+
+    @device_mode.setter
+    def device_mode(self, value):
+        self.active_session = value
 
     @property
     def sources(self):
