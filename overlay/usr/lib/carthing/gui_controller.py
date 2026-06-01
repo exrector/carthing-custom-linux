@@ -78,10 +78,12 @@ class GuiController:
         self._scroll_velocity = 0.0
         self._scroll_dirty = False
         self._last_scroll_render = 0.0
+        self._view_stack = []
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
     def _nav_intent(self, intent, payload=None):
         if intent == StatusBar.INTENT_NOTIFICATIONS:
+            self._push_view(self.compositor.active)
             self.compositor.active = NOTIF
             self.compositor.render()
             return
@@ -96,7 +98,11 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "settings_tap":                # тап по строке Settings = выбрать+активировать
+            old_active = self.compositor.active
             self.compositor.screens[SETTINGS].tap(payload)
+            new_active = self.compositor.active
+            if old_active == SETTINGS and new_active != SETTINGS:
+                self._push_view(SETTINGS)
             self.compositor.render()
             return
         if intent == "screen_off_adjust":           # [CLAUDE] ± тайм-аут гашения -> применить + перерисовать
@@ -270,32 +276,28 @@ class GuiController:
             return
         if event == Input.SETTINGS:
             self._cancel_scroll_inertia()
+            if self.compositor.active != SETTINGS:
+                self._push_view(self.compositor.active)
             self.compositor.active = SETTINGS
             self.compositor.render()
             return
         if event == Input.BACK:
             self._cancel_scroll_inertia()
-            if self._notif_step_back():             # из развёрнутой карточки -> к списку
+            if self._handle_back():
                 return
-            if self.compositor.active != HOME:
-                self.compositor.active = HOME
-                self.compositor.render()
             return
         # Жест ОТ ВЕРХНЕГО КРАЯ вниз -> открыть уведомления (как «шторка» iOS).
         if event == Input.EDGE_TOP:
             self._cancel_scroll_inertia()
             if self.compositor.active != NOTIF:
+                self._push_view(self.compositor.active)
                 self.compositor.active = NOTIF
                 self.compositor.render()
             return
         # Жест ОТ НИЖНЕГО КРАЯ вверх -> сначала свернуть карточку, потом закрыть вью на home.
         if event == Input.EDGE_BOTTOM:
             self._cancel_scroll_inertia()
-            if self._notif_step_back():
-                return
-            if self.compositor.active != HOME:
-                self.compositor.active = HOME
-                self.compositor.render()
+            self._handle_back()
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
             # свайп-влево в списке уведомлений = очистить выбранное; иначе игнор.
@@ -305,6 +307,31 @@ class GuiController:
             return
         # Средние свайпы вверх/вниз (и энкодер) -> прокрутка активного вью.
         self.compositor.handle_input(event)
+
+    def _push_view(self, index):
+        if index is None or index == NOTIF:
+            return
+        if self._view_stack and self._view_stack[-1] == index:
+            return
+        self._view_stack.append(index)
+
+    def _handle_back(self):
+        if self._notif_step_back():             # из развёрнутой карточки -> к списку
+            return True
+        if self.compositor.active == SETTINGS:
+            settings = self.compositor.screens[SETTINGS]
+            if hasattr(settings, "back") and settings.back():
+                self.compositor.render()
+                return True
+        if self._view_stack:
+            self.compositor.active = self._view_stack.pop()
+            self.compositor.render()
+            return True
+        if self.compositor.active != HOME:
+            self.compositor.active = HOME
+            self.compositor.render()
+            return True
+        return True
 
     def _notif_step_back(self):
         """Если открыта развёрнутая карточка уведомления — свернуть её к списку (True)."""
@@ -394,6 +421,7 @@ class GuiController:
 
     def show_screen(self, index: int):
         self._cancel_scroll_inertia()
+        self._view_stack.clear()
         self.compositor.active = index
         self.compositor.render()
 

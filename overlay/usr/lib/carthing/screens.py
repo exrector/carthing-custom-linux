@@ -324,6 +324,7 @@ class SettingsScreen(Screen):
             {"key": "about", "label": "О системе"},
         ]
         self.expanded = set()
+        self.expanded_stack = []
         self.sel = 0
         self.top = 0          # legacy row offset fallback; pixel scroll owns normal touch lists
         self.scroll_y = 0
@@ -417,7 +418,13 @@ class SettingsScreen(Screen):
         self.sel = i
         level, key, _label, expandable, expanded, _color = rows[i]
         if expandable:
-            self.expanded.symmetric_difference_update({key})
+            if key in self.expanded:
+                self.expanded.remove(key)
+                self.expanded_stack = [item for item in self.expanded_stack if item != key]
+            else:
+                self.expanded.add(key)
+                self.expanded_stack = [item for item in self.expanded_stack if item != key]
+                self.expanded_stack.append(key)
             rows_after = self._visible()
             if key in self.expanded:
                 self._ensure_row_visible(self._last_child_index(rows_after, i), rows_after)
@@ -425,6 +432,22 @@ class SettingsScreen(Screen):
                 self._ensure_row_visible(i, rows_after)
         else:
             self.on_select(key)
+
+    def back(self):
+        """Back inside Settings closes the last opened section before leaving Settings."""
+        while self.expanded_stack and self.expanded_stack[-1] not in self.expanded:
+            self.expanded_stack.pop()
+        if not self.expanded_stack:
+            return False
+        key = self.expanded_stack.pop()
+        self.expanded.discard(key)
+        rows = self._visible()
+        for index, row in enumerate(rows):
+            if row[1] == key:
+                self.sel = index
+                self._ensure_row_visible(index, rows)
+                break
+        return True
 
     def tap(self, i):
         """Тап по строке экрана (touch): выбрать её и активировать."""
