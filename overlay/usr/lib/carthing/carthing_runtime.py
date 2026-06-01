@@ -81,6 +81,36 @@ class CompatibilityConnector(AdapterConnector):
         logger.info("session connector detach: %s -> %s", self.protocol, session.name)
 
 
+class TransferRouteConnector(AdapterConnector):
+    """SessionRunner-owned bridge between route protocols and TransferService."""
+
+    def __init__(self, protocol, service):
+        self.protocol = protocol
+        self.service = service
+        self._attached = 0
+
+    async def start(self):
+        return
+
+    async def stop(self):
+        return
+
+    async def attach_session(self, session):
+        if self.service is None:
+            return
+        self._attached += 1
+        if self._attached == 1:
+            await self.service.activate()
+
+    async def detach_session(self, session):
+        if self.service is None:
+            return
+        if self._attached > 0:
+            self._attached -= 1
+        if self._attached == 0:
+            await self.service.deactivate()
+
+
 def _on_command(source, command):
     if source == "iphone" and _iphone is not None:
         asyncio.ensure_future(_iphone.command(command))
@@ -262,9 +292,6 @@ async def _apply_session(session, persist=True):
         if orch is not None:
             await orch.arm_pairing(False)
 
-    if session in ("remote", "quiet", "service", "mac", "pairing") and transfer is not None:
-        await transfer.deactivate()
-
     if session == "remote":
         model.audio_sink = "builtin"
         model.mode_status = "iPhone remote"
@@ -280,7 +307,6 @@ async def _apply_session(session, persist=True):
         if _iphone is not None:
             _iphone.activate_source()
         if transfer is not None:
-            await transfer.activate()
             asyncio.ensure_future(transfer.rescan())
         if power is not None:
             power.note_transfer_scan(hold_sec=15.0)
@@ -509,6 +535,12 @@ async def main():
         transfer = TransferService(device, app_state, orch, model, on_change=_on_publish)
         backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
         await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
+        for protocol in (
+            Protocol.CLASSIC_A2DP_SINK,
+            Protocol.CLASSIC_A2DP_SOURCE,
+            Protocol.CLASSIC_AVRCP,
+        ):
+            session_runner.register(TransferRouteConnector(protocol, transfer))
     except Exception as e:
         transfer = None
         logger.warning("transfer disabled: %s", e)
