@@ -25,6 +25,10 @@ class EnrollmentEvidence:
     class_of_device: int | None = None
     service_uuids: set[int | str] = field(default_factory=set)
     ble_services: set[int | str] = field(default_factory=set)
+    capabilities: set[Capability | str] = field(default_factory=set)
+    endpoints: list[Endpoint] = field(default_factory=list)
+    constraints: set[Constraint | str] = field(default_factory=set)
+    missing_capabilities: set[Capability | str] = field(default_factory=set)
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -100,6 +104,21 @@ class EnrollmentManager:
                 label="Notifications",
             ))
 
+        capabilities.update(self._enum_set(Capability, evidence.capabilities))
+        constraints.update(self._enum_set(Constraint, evidence.constraints))
+        if evidence.endpoints:
+            endpoints = self._merge_endpoints(endpoints, evidence.endpoints)
+
+        missing_caps = self._enum_set(Capability, evidence.missing_capabilities)
+        if missing_caps:
+            for capability in sorted(str(self._enum_value(value)) for value in missing_caps):
+                constraints.add(f"missing_capability:{capability}")
+
+        degraded = bool(missing_caps or not endpoints or not capabilities)
+        if degraded:
+            constraints.add(Constraint.REQUIRES_STOP_BEFORE_START)
+
+        enrollment_state = "degraded" if degraded else "ready"
         return TrustedDevice(
             id=address or name,
             address=address,
@@ -112,6 +131,10 @@ class EnrollmentManager:
                     "class_of_device": evidence.class_of_device,
                     "service_uuids": sorted(str(value) for value in evidence.service_uuids),
                     "ble_services": sorted(str(value) for value in evidence.ble_services),
+                    "missing_capabilities": sorted(
+                        str(self._enum_value(value)) for value in missing_caps
+                    ),
+                    "enrollment_state": enrollment_state,
                     **evidence.metadata,
                 }
             },
@@ -153,3 +176,36 @@ class EnrollmentManager:
         ble = {str(value).lower() for value in evidence.ble_services}
         return "ancs" in ble or "7905f431-b5ce-4e99-a40f-4b1e122d00d0" in ble
 
+    @staticmethod
+    def _enum_value(value):
+        return value.value if hasattr(value, "value") else value
+
+    @classmethod
+    def _enum_set(cls, enum_cls, values):
+        result = set()
+        for value in values or []:
+            if isinstance(value, enum_cls):
+                result.add(value)
+                continue
+            try:
+                result.add(enum_cls(str(value)))
+            except Exception:
+                result.add(str(value))
+        return result
+
+    @staticmethod
+    def _merge_endpoints(base: list[Endpoint], extra: list[Endpoint]) -> list[Endpoint]:
+        by_id = {endpoint.id: endpoint for endpoint in base}
+        result = list(base)
+        for endpoint in extra:
+            existing = by_id.get(endpoint.id)
+            if existing is None:
+                result.append(endpoint)
+                by_id[endpoint.id] = endpoint
+                continue
+            existing.protocols.update(endpoint.protocols)
+            existing.capabilities.update(endpoint.capabilities)
+            if endpoint.label:
+                existing.label = endpoint.label
+            existing.metadata.update(endpoint.metadata or {})
+        return result

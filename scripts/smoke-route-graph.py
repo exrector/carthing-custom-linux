@@ -137,6 +137,22 @@ def check_enrollment():
     assert iphone.input_endpoints()
 
 
+def check_degraded_enrollment():
+    registry = TrustedDeviceRegistry("/tmp/nonexistent-carthing-trusted.json").load()
+    manager = EnrollmentManager(registry)
+    degraded = manager.enroll(EnrollmentEvidence(
+        "22:33:44:55:66:77",
+        "Unknown Peer",
+        missing_capabilities={Capability.AUDIO_OUTPUT},
+    ))
+    constraints = {str(value.value if hasattr(value, "value") else value) for value in degraded.constraints}
+    assert "requires_stop_before_start" in constraints
+    assert "missing_capability:audio_output" in constraints
+    evidence = degraded.metadata.get("enrollment_evidence") or {}
+    assert evidence.get("enrollment_state") == "degraded"
+    assert "audio_output" in set(evidence.get("missing_capabilities") or [])
+
+
 def check_multirole_app_state():
     with tempfile.TemporaryDirectory() as tmp:
         trusted_path = Path(tmp) / "trusted-devices.json"
@@ -187,6 +203,7 @@ def main():
     check_registry_and_planner()
     check_planner_constraints()
     check_enrollment()
+    check_degraded_enrollment()
     check_multirole_app_state()
     check_patchbay()
     asyncio.run(check_runner())

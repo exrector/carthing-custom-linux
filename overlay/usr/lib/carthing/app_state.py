@@ -448,7 +448,9 @@ class AppState:
         return existing
 
     def enroll_trusted_device(self, address, name=None, class_of_device=None,
-                              service_uuids=None, ble_services=None, metadata=None):
+                              service_uuids=None, ble_services=None, metadata=None,
+                              capabilities=None, endpoints=None, constraints=None,
+                              missing_capabilities=None):
         from enrollment_manager import EnrollmentEvidence, EnrollmentManager
 
         class _Registry:
@@ -463,6 +465,10 @@ class AppState:
             class_of_device=class_of_device,
             service_uuids=set(service_uuids or []),
             ble_services=set(ble_services or []),
+            capabilities=set(capabilities or []),
+            endpoints=list(endpoints or []),
+            constraints=set(constraints or []),
+            missing_capabilities=set(missing_capabilities or []),
             metadata=dict(metadata or {}),
         )
         device = EnrollmentManager(_Registry()).build_device(evidence)
