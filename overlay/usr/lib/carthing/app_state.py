@@ -105,7 +105,9 @@ class MediaSession:
 
 class AppState:
     # screen indices (navigation is explicit; no desktop swipe ring)
-    IPHONE, SETTINGS, NOTIFICATIONS, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
+    IPHONE, SETTINGS, NOTIFICATIONS, SESSIONS, ROUTER, MAC = 0, 1, 2, 3, 4, 5
+    MODES = SESSIONS      # compatibility alias
+    TRANSFER = ROUTER     # compatibility alias
     # index -> media source. Один home (0)=iPhone; прочие view (Settings/Notifications)
     # не медиа -> control_source падает на last_media_source (=iphone), бар рулит реальным источником.
     DESKTOP_SOURCE = {IPHONE: "iphone", TRANSFER: "iphone", MAC: "mac"}

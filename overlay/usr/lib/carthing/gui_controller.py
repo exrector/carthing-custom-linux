@@ -22,17 +22,19 @@ from ui_statusbar import StatusBar
 from ui_anim import AnimDriver
 from screens import (
     MacOSScreen,
-    ModesScreen,
+    SessionsScreen,
     NowPlayingScreen,
     SettingsScreen,
-    TransferScreen,
+    RouteBuilderScreen,
     NotificationsScreen,
     PairingModal,
 )
 
 logger = logging.getLogger(__name__)
 
-HOME, SETTINGS, NOTIF, MODES, TRANSFER, MAC = 0, 1, 2, 3, 4, 5
+HOME, SETTINGS, NOTIF, SESSIONS, ROUTER, MAC = 0, 1, 2, 3, 4, 5
+MODES = SESSIONS      # compatibility alias
+TRANSFER = ROUTER    # compatibility alias
 
 
 class GuiController:
@@ -63,8 +65,8 @@ class GuiController:
             NowPlayingScreen(emit=emit),                                          # 0 HOME
             SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 1 (по кнопке)
             NotificationsScreen(emit=self._nav_intent),                           # 2 (свайп вниз)
-            ModesScreen(emit=emit),                                                # 3 (из Settings)
-            TransferScreen(emit=emit),                                             # 4 (режим Transfer)
+            SessionsScreen(emit=emit),                                             # 3
+            RouteBuilderScreen(emit=emit),                                         # 4
             MacOSScreen(emit=emit),                                                # 5 (режим macOS)
         ]
         self.compositor = Compositor(
@@ -438,11 +440,17 @@ class GuiController:
         self.compositor.active = index
         self.compositor.render()
 
+    def show_session_screen(self):
+        self.show_screen(SESSIONS)
+
+    def show_router_screen(self):
+        self.show_screen(ROUTER)
+
     def show_mode_screen(self):
-        self.show_screen(MODES)
+        self.show_session_screen()
 
     def show_transfer_screen(self):
-        self.show_screen(TRANSFER)
+        self.show_router_screen()
 
     def show_mac_screen(self):
         self.show_screen(MAC)

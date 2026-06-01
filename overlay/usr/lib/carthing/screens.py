@@ -135,7 +135,7 @@ class MacOSScreen(Screen):
         return img
 
 
-class TransferScreen(Screen):
+class RouteBuilderScreen(Screen):
     name = "router"
     title = "Маршрут"
     fullscreen = True
@@ -213,7 +213,7 @@ class TransferScreen(Screen):
         return img
 
 
-class ModesScreen(Screen):
+class SessionsScreen(Screen):
     """Session preset switcher.
 
     Legacy name kept for import compatibility. These entries are route-graph
@@ -320,6 +320,11 @@ class ModesScreen(Screen):
         return img
 
 
+# Compatibility aliases for old imports while the userspace is being rebuilt.
+TransferScreen = RouteBuilderScreen
+ModesScreen = SessionsScreen
+
+
 class SettingsScreen(Screen):
     """Accordion menu: parents expand inline to reveal children. Encoder moves
     selection over the visible (flattened) list; press toggles a parent or
@@ -332,7 +337,7 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
-            {"key": "modes", "label": "Сессии и маршруты"},
+            {"key": "sessions", "label": "Сессии и маршруты"},
             {"key": "pairing", "label": "Добавить устройство", "children": [
                 ("pairing_source", "iPhone / источник"),
                 ("pairing_speaker", "Bluetooth динамик"),

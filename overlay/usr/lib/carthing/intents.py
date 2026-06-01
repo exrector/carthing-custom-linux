@@ -128,7 +128,7 @@ class Dispatcher:
             self.state.speaker_pairing_status = "scan"
             self.state.clear_speaker_candidates()
             self.on_pairing(True, "speaker")
-        elif key == "modes":
+        elif key in ("sessions", "modes"):
             self.state.active_desktop = self.state.MODES
         elif key == "toggle_sleep":            # [CLAUDE] тумблер сна экрана
             new = not bool(getattr(self.state, "sleep_on_idle", True))
