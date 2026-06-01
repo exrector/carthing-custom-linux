@@ -1,5 +1,22 @@
 # Refactor / consolidation plan — product BT runtime (2026-05-22)
 
+## Superseded Architecture Note — 2026-06-01
+
+This document is still useful as history for identity, rootfs, launch hygiene,
+and early A2DP relay decisions. Its product-level mode model is superseded by
+`docs/route-graph-architecture-2026-06-01.md`.
+
+Do not continue the old split of persistent trusted devices into hard
+`Sources` and `Speakers` sections as the final architecture. The accepted model
+is now:
+
+- one trusted-device registry;
+- capabilities/endpoints/constraints discovered during enrollment;
+- Inputs and Outputs as GUI filters over one registry;
+- Audio Hijack-like sessions and route graphs instead of hard runtime modes;
+- Remote/Transfer/Mac as presets or saved sessions, not separate Bluetooth
+  personas or separate process trees.
+
 The architecture is sound; what's "patchy" is the **delivery / dev scaffolding**,
 not the design. This plan turns the scaffolding into a solid base. Do this
 *before* shipping, ideally before piling more features on.
