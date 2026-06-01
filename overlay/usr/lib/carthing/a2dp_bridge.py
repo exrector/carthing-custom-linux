@@ -31,8 +31,8 @@ def make_aac_capabilities(max_bitrate: int = 320000):
         avdtp.AVDTP_AUDIO_MEDIA_TYPE,
         a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE,
         a2dp.AacMediaCodecInformation.from_lists(
-            [a2dp.MPEG_2_AAC_LC_OBJECT_TYPE],
-            [44100],
+            [a2dp.MPEG_2_AAC_LC_OBJECT_TYPE, a2dp.MPEG_4_AAC_LC_OBJECT_TYPE],
+            [44100, 48000],
             [2],
             1,
             max_bitrate,
@@ -40,21 +40,107 @@ def make_aac_capabilities(max_bitrate: int = 320000):
     )
 
 
-def make_aac_stream_configuration():
+def make_aac_stream_configuration(codec_info=None):
+    object_type = _first_supported(
+        getattr(codec_info, "object_type", 0),
+        (
+            a2dp.AacMediaCodecInformation.OBJECT_TYPE_BITS[a2dp.MPEG_4_AAC_LC_OBJECT_TYPE],
+            a2dp.AacMediaCodecInformation.OBJECT_TYPE_BITS[a2dp.MPEG_2_AAC_LC_OBJECT_TYPE],
+        ),
+    ) or a2dp.AacMediaCodecInformation.OBJECT_TYPE_BITS[a2dp.MPEG_4_AAC_LC_OBJECT_TYPE]
+    sampling = _first_supported(
+        getattr(codec_info, "sampling_frequency", 0),
+        (
+            a2dp.AacMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100],
+            a2dp.AacMediaCodecInformation.SAMPLING_FREQUENCY_BITS[48000],
+        ),
+    ) or a2dp.AacMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100]
+    channels = _first_supported(
+        getattr(codec_info, "channels", 0),
+        (
+            a2dp.AacMediaCodecInformation.CHANNELS_BITS[2],
+            a2dp.AacMediaCodecInformation.CHANNELS_BITS[1],
+        ),
+    ) or a2dp.AacMediaCodecInformation.CHANNELS_BITS[2]
+    bitrate = min(int(getattr(codec_info, "bitrate", 0) or 256000), 256000)
     return [
         avdtp.ServiceCapabilities(avdtp.AVDTP_MEDIA_TRANSPORT_SERVICE_CATEGORY),
         avdtp.MediaCodecCapabilities(
             avdtp.AVDTP_AUDIO_MEDIA_TYPE,
             a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE,
-            a2dp.AacMediaCodecInformation.from_discrete_values(
-                a2dp.MPEG_2_AAC_LC_OBJECT_TYPE,
-                44100,
-                2,
-                1,
-                256000,
+            a2dp.AacMediaCodecInformation(object_type, sampling, channels, 1, bitrate),
+        ),
+    ]
+
+
+def make_sbc_capabilities():
+    return avdtp.MediaCodecCapabilities(
+        avdtp.AVDTP_AUDIO_MEDIA_TYPE,
+        a2dp.A2DP_SBC_CODEC_TYPE,
+        a2dp.SbcMediaCodecInformation.from_lists(
+            [44100, 48000],
+            [a2dp.SBC_JOINT_STEREO_CHANNEL_MODE, a2dp.SBC_STEREO_CHANNEL_MODE],
+            [16],
+            [8],
+            [a2dp.SBC_LOUDNESS_ALLOCATION_METHOD],
+            2,
+            53,
+        ),
+    )
+
+
+def make_sbc_stream_configuration(codec_info=None):
+    sampling = _first_supported(
+        getattr(codec_info, "sampling_frequency", 0),
+        (
+            a2dp.SbcMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100],
+            a2dp.SbcMediaCodecInformation.SAMPLING_FREQUENCY_BITS[48000],
+        ),
+    ) or a2dp.SbcMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100]
+    channel_mode = _first_supported(
+        getattr(codec_info, "channel_mode", 0),
+        (
+            a2dp.SbcMediaCodecInformation.CHANNEL_MODE_BITS[a2dp.SBC_JOINT_STEREO_CHANNEL_MODE],
+            a2dp.SbcMediaCodecInformation.CHANNEL_MODE_BITS[a2dp.SBC_STEREO_CHANNEL_MODE],
+        ),
+    ) or a2dp.SbcMediaCodecInformation.CHANNEL_MODE_BITS[a2dp.SBC_JOINT_STEREO_CHANNEL_MODE]
+    block_length = _first_supported(
+        getattr(codec_info, "block_length", 0),
+        (a2dp.SbcMediaCodecInformation.BLOCK_LENGTH_BITS[16],),
+    ) or a2dp.SbcMediaCodecInformation.BLOCK_LENGTH_BITS[16]
+    subbands = _first_supported(
+        getattr(codec_info, "subbands", 0),
+        (a2dp.SbcMediaCodecInformation.SUBBANDS_BITS[8],),
+    ) or a2dp.SbcMediaCodecInformation.SUBBANDS_BITS[8]
+    allocation = _first_supported(
+        getattr(codec_info, "allocation_method", 0),
+        (a2dp.SbcMediaCodecInformation.ALLOCATION_METHOD_BITS[a2dp.SBC_LOUDNESS_ALLOCATION_METHOD],),
+    ) or a2dp.SbcMediaCodecInformation.ALLOCATION_METHOD_BITS[a2dp.SBC_LOUDNESS_ALLOCATION_METHOD]
+    min_bitpool = max(2, int(getattr(codec_info, "minimum_bitpool_value", 2) or 2))
+    max_bitpool = min(53, int(getattr(codec_info, "maximum_bitpool_value", 53) or 53))
+    return [
+        avdtp.ServiceCapabilities(avdtp.AVDTP_MEDIA_TRANSPORT_SERVICE_CATEGORY),
+        avdtp.MediaCodecCapabilities(
+            avdtp.AVDTP_AUDIO_MEDIA_TYPE,
+            a2dp.A2DP_SBC_CODEC_TYPE,
+            a2dp.SbcMediaCodecInformation(
+                sampling,
+                channel_mode,
+                block_length,
+                subbands,
+                allocation,
+                min_bitpool,
+                max_bitpool,
             ),
         ),
     ]
+
+
+def _first_supported(mask, preferences):
+    for value in preferences:
+        if mask & value:
+            return value
+    return None
 
 
 def _eir_name(data):
@@ -76,6 +162,24 @@ def _is_audio_video_class(class_of_device):
         return (int(class_of_device) & 0x1F00) == COD_MAJOR_AUDIO_VIDEO
     except Exception:
         return False
+
+
+def _endpoint_codec_capability(endpoint, codec_type):
+    for capability in getattr(endpoint, "capabilities", []):
+        if (
+            capability.service_category == avdtp.AVDTP_MEDIA_CODEC_SERVICE_CATEGORY
+            and capability.media_type == avdtp.AVDTP_AUDIO_MEDIA_TYPE
+            and capability.media_codec_type == codec_type
+        ):
+            return capability
+    return None
+
+
+def _endpoint_has_media_transport(endpoint):
+    return any(
+        capability.service_category == avdtp.AVDTP_MEDIA_TRANSPORT_SERVICE_CATEGORY
+        for capability in getattr(endpoint, "capabilities", [])
+    )
 
 
 class A2DPBridge:
@@ -292,21 +396,48 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.info("A2DP receiver auth/encrypt continued: %s", error_text(exc))
 
-        self.logger.info("A2DP receiver AVDTP connect: %s", target_address)
-        protocol = await asyncio.wait_for(avdtp.Protocol.connect(connection), timeout=self.connect_timeout)
+        try:
+            version = await asyncio.wait_for(
+                avdtp.find_avdtp_service_with_connection(self.device, connection),
+                timeout=self.connect_timeout,
+            )
+        except Exception as exc:
+            version = None
+            self.logger.info("A2DP receiver SDP version lookup ignored: %s", error_text(exc))
+        version = version or (1, 2)
+        self.logger.info("A2DP receiver AVDTP connect: %s version=%s", target_address, version)
+        protocol = await asyncio.wait_for(
+            avdtp.Protocol.connect(connection, version=version),
+            timeout=self.connect_timeout,
+        )
         self.receiver_protocol = protocol
         self.logger.info("A2DP receiver discover endpoints: %s", target_address)
         await asyncio.wait_for(protocol.discover_remote_endpoints(), timeout=self.connect_timeout)
-        sink = protocol.find_remote_sink_by_codec(
-            avdtp.AVDTP_AUDIO_MEDIA_TYPE,
-            a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE,
-        )
-        if sink is None:
-            raise RuntimeError("receiver has no AAC sink endpoint")
 
-        self.logger.info("A2DP receiver AAC sink selected: address=%s seid=%s", target_address, getattr(sink, "seid", "?"))
-        source = protocol.add_source(make_aac_capabilities(), None)
-        source.configuration = make_aac_stream_configuration()
+        for endpoint in protocol.remote_endpoints.values():
+            caps = "; ".join(str(capability) for capability in getattr(endpoint, "capabilities", []))
+            self.logger.info(
+                "A2DP receiver endpoint: address=%s seid=%s in_use=%s media=%s tsep=%s caps=%s",
+                target_address,
+                getattr(endpoint, "seid", "?"),
+                getattr(endpoint, "in_use", "?"),
+                getattr(endpoint, "media_type", "?"),
+                getattr(endpoint, "tsep", "?"),
+                caps,
+            )
+
+        sink, source_capability, source_configuration, codec_name = self._select_receiver_codec(protocol)
+        if sink is None:
+            raise RuntimeError("receiver has no compatible audio sink endpoint")
+
+        self.logger.info(
+            "A2DP receiver sink selected: address=%s codec=%s seid=%s",
+            target_address,
+            codec_name,
+            getattr(sink, "seid", "?"),
+        )
+        source = protocol.add_source(source_capability, None)
+        source.configuration = source_configuration
         stream = await protocol.create_stream(source, sink)
         await stream.open()
         await stream.start()
@@ -319,7 +450,31 @@ class A2DPBridge:
         self.state.transfer_status = "connected"
         self.state.set_connected_speaker(target_address)
         self.on_state_change()
-        self.logger.info("A2DP_SPEAKER_STREAM_STARTED seid=%s", getattr(sink, "seid", "?"))
+        self.logger.info("A2DP_SPEAKER_STREAM_STARTED codec=%s seid=%s", codec_name, getattr(sink, "seid", "?"))
+
+    def _select_receiver_codec(self, protocol):
+        for codec_type, codec_name, capability_factory, configuration_factory in (
+            (a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE, "AAC", make_aac_capabilities, make_aac_stream_configuration),
+            (a2dp.A2DP_SBC_CODEC_TYPE, "SBC", make_sbc_capabilities, make_sbc_stream_configuration),
+        ):
+            for endpoint in protocol.remote_endpoints.values():
+                if (
+                    getattr(endpoint, "in_use", False)
+                    or getattr(endpoint, "media_type", None) != avdtp.AVDTP_AUDIO_MEDIA_TYPE
+                    or getattr(endpoint, "tsep", None) != avdtp.AVDTP_TSEP_SNK
+                    or not _endpoint_has_media_transport(endpoint)
+                ):
+                    continue
+                codec_capability = _endpoint_codec_capability(endpoint, codec_type)
+                if codec_capability is None:
+                    continue
+                return (
+                    endpoint,
+                    capability_factory(),
+                    configuration_factory(codec_capability.media_codec_information),
+                    codec_name,
+                )
+        return None, None, None, None
 
     async def ensure_speaker_connection(self, address, require_trusted=True):
         address = normalize_address(address)
