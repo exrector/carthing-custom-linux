@@ -213,6 +213,7 @@ class A2DPBridge:
         self.receiver_connecting_address = None
         self.receiver_last_error = ""
         self.source_stream_active = False
+        self._source_connection = None      # [CLAUDE 2026-06-02] classic-ACL источника (iPhone) для CarThing-инициируемого teardown
         self.started = False
         self.packets_forwarded = 0
         self.packets_dropped = 0
@@ -777,8 +778,27 @@ class A2DPBridge:
             self.logger.warning("A2DP source dial auth/encrypt failed: %s", error_text(exc))
             raise
         await self.handle_classic_connection(connection)
+        self._source_connection = connection
+        connection.on("disconnection", lambda _r: self._clear_source_connection())
         self.logger.info("A2DP_SOURCE_CLASSIC_DIALED %s", address)
         return connection
+
+    def _clear_source_connection(self):
+        self._source_connection = None
+
+    async def disconnect_source(self):
+        """[CLAUDE 2026-06-02] CarThing-инициируемый возврат «на BLE»: рвём classic-ACL
+        источника (iPhone). BLE-линк (AMS/ANCS/CTS) НЕ трогаем — он независимый транспорт
+        и живёт постоянно. Симметрично connect_source: весь тумблер classic держит CarThing."""
+        connection = self._source_connection
+        self._source_connection = None
+        if connection is None:
+            return
+        try:
+            await connection.disconnect()
+            self.logger.info("A2DP source classic ACL disconnected (back to BLE-only)")
+        except Exception as exc:
+            self.logger.info("A2DP source classic disconnect ignored: %s", error_text(exc))
 
     async def _has_link_key(self, address):
         if self.device.keystore is None:
@@ -943,6 +963,11 @@ class A2DPBridge:
             )
             if self.state.transfer_active and self.source_stream_active:
                 await self.request_receiver_for_active_source(peer_address)
+        elif self.state.is_trusted_source(peer_address):
+            # [CLAUDE 2026-06-02] Входящий classic от доверенного источника (айфон сам
+            # подключился). Храним ACL, чтобы CarThing мог инициировать teardown (disconnect_source).
+            self._source_connection = connection
+            connection.on("disconnection", lambda _r: self._clear_source_connection())
         elif self.state.trusted_sources and not self.state.is_trusted_source(peer_address):
             self.logger.warning("Classic BT peer is not trusted for transfer: %s", peer_address)
 

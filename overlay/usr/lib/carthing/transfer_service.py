@@ -157,6 +157,10 @@ class TransferService:
         except Exception:
             pass
         await self.bridge.stop_receiver_stream()
+        # [CLAUDE 2026-06-02] CarThing-инициируемый возврат «на BLE»: сами рвём classic-ACL
+        # источника (iPhone). BLE (AMS/ANCS/CTS) НЕ трогаем — он постоянный независимый
+        # транспорт. Симметрия connect_source: весь тумблер classic держит CarThing.
+        await self.bridge.disconnect_source()
         await self.orch.set_transfer_connectable(False)
         await self.orch.on_a2dp_state(False)
         self._sync()
