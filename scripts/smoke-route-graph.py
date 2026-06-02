@@ -10,6 +10,9 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / "overlay" / "usr" / "lib" / "carthing"
@@ -22,6 +25,7 @@ from app_state import AppState  # noqa: E402
 from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E402
 from link_manager import LinkAdapter, LinkManager  # noqa: E402
 from intents import Dispatcher  # noqa: E402
+from ui_components import RegionSet  # noqa: E402
 from route_graph import Capability, Constraint, Endpoint, EndpointDirection, PlannedSession, Protocol, TrustedDevice  # noqa: E402
 from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
 from session_runner import AdapterConnector, SessionRunner  # noqa: E402
@@ -354,6 +358,22 @@ def check_runtime_route_state():
     assert bt["route"]["name"] == ""
 
 
+def check_statusbar_route_chip():
+    from ui_statusbar import StatusBar
+
+    img = Image.new("RGB", (800, 480), (0, 0, 0))
+    regions = RegionSet()
+    state = SimpleNamespace(
+        control_source=None,
+        route_name="",
+        route_input="iphone",
+        route_output="speaker",
+        route_active=False,
+    )
+    StatusBar().render(img, regions=regions, anim=None, st=state)
+    assert img.getpixel((60, 330)) != (0, 0, 0)
+
+
 def check_patchbay():
     bay = VirtualPatchBay()
     bay.add_plug(VirtualPlug(
@@ -507,6 +527,7 @@ def main():
     check_multirole_app_state()
     check_route_activation_intent()
     check_runtime_route_state()
+    check_statusbar_route_chip()
     check_patchbay()
     asyncio.run(check_route_patchbay_router())
     asyncio.run(check_hci_gate())

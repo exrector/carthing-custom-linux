@@ -10,6 +10,7 @@
 """
 from PIL import ImageDraw
 
+import ui_components as C
 import ui_theme as T
 
 
@@ -45,6 +46,26 @@ class StatusBar:
         if control is not None and getattr(control, "duration", 0):
             pct = min(control.position / control.duration, 1.0)
         T.progress_segments(draw, 0, bar_top, T.W, pct)
+
+        route_name = str(getattr(st, "route_name", "") or "").strip()
+        route_input = str(getattr(st, "route_input", "") or "").strip()
+        route_output = str(getattr(st, "route_output", "") or "").strip()
+        route_active = bool(getattr(st, "route_active", False))
+        route_label = route_name or (f"{route_input or '?'} → {route_output or '?'}" if (route_input or route_output) else "idle")
+        prefix = "Маршрут" if route_active else "Роутер"
+        label = f"{prefix}: {route_label}"
+        if label:
+            font = T.font(T.SZ_SMALL)
+            pad_x = 14
+            pill_h = 30
+            pill_y0 = bar_top + 10
+            pill_x0 = T.MARGIN
+            pill_w = min(310, C.text_w(draw, label, font) + pad_x * 2)
+            pill_x1 = pill_x0 + pill_w
+            draw.rounded_rectangle([pill_x0, pill_y0, pill_x1, pill_y0 + pill_h],
+                                   radius=10, fill=T.SURFACE, outline=T.HAIRLINE, width=2)
+            draw.text((pill_x0 + pad_x, pill_y0 + 3), C.truncate(draw, label, font, pill_w - pad_x * 2),
+                      font=font, fill=T.ACCENT if route_active else T.MUTED)
 
         # ── заявленные приложением кнопки -> в бар (capability-driven) ──────────
         sup = set(getattr(control, "supported_commands", set()) or set())
