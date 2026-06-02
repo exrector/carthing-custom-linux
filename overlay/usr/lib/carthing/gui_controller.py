@@ -41,7 +41,8 @@ class GuiController:
                  on_transfer_rescan=None, on_transfer_select=None, on_speaker_pair_select=None,
                  on_trusted_remove=None, on_notif_dismiss=None,
                  on_session_select=None, on_route_input_select=None,
-                 on_route_output_select=None, on_toggle_sleep=None, on_set_off_timeout=None):
+                 on_route_output_select=None, on_toggle_sleep=None, on_set_off_timeout=None,
+                 on_toggle_notif_blink=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
@@ -57,6 +58,7 @@ class GuiController:
             on_route_output_select=on_route_output_select,
             on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
             on_set_off_timeout=on_set_off_timeout or (lambda *a, **k: None),  # [CLAUDE] ±тайм-аут
+            on_toggle_notif_blink=on_toggle_notif_blink or (lambda *a, **k: None),  # [CLAUDE] моргание уведомл.
         )
         emit = self.dispatcher.dispatch
         screens = [

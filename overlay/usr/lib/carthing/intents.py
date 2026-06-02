@@ -17,7 +17,7 @@ class Dispatcher:
                  on_pairing=None, on_speaker_pair_select=None, on_trusted_remove=None,
                  on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_toggle_sleep=None,
-                 on_set_off_timeout=None):
+                 on_set_off_timeout=None, on_toggle_notif_blink=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
@@ -30,6 +30,7 @@ class Dispatcher:
         self.on_route_output_select = on_route_output_select or (lambda key: None)
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
         self.on_set_off_timeout = on_set_off_timeout or (lambda sec: None)  # [CLAUDE] тайм-аут гашения
+        self.on_toggle_notif_blink = on_toggle_notif_blink or (lambda on: None)  # [CLAUDE] моргание уведомлений
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -128,6 +129,10 @@ class Dispatcher:
             new = not bool(getattr(self.state, "sleep_on_idle", True))
             self.state.sleep_on_idle = new     # оптимистично для UI
             self.on_toggle_sleep(new)          # runtime: power.set_idle_sleep + settings.set
+        elif key == "toggle_notif_blink":      # [CLAUDE] тумблер моргания уведомлений
+            new = not bool(getattr(self.state, "notif_blink", True))
+            self.state.notif_blink = new       # оптимистично для UI (render читает сразу)
+            self.on_toggle_notif_blink(new)    # runtime: settings.set (персист)
         # trusted / display / about: handled by UI navigation later
 
     def _speaker_pair_select(self, address):

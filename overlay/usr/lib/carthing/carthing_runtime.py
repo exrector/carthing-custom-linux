@@ -309,6 +309,13 @@ def _on_toggle_sleep(on):
         settings.set("sleep_on_idle", bool(on))
 
 
+def _on_toggle_notif_blink(on):
+    # [CLAUDE 2026-06-02] тумблер «Моргание уведомлений»: state уже выставлен в Dispatcher
+    # (render читает app_state.notif_blink сразу); здесь только персистим в settings.
+    if settings is not None:
+        settings.set("notif_blink", bool(on))
+
+
 def _on_set_off_timeout(sec):
     # [CLAUDE 2026-06-01] ±тайм-аут полного гашения из Settings: применяем к power + персистим.
     sec = int(sec)
@@ -522,13 +529,15 @@ async def main():
                                 on_route_input_select=_on_route_input_select,
                                 on_route_output_select=_on_route_output_select,
                                 on_toggle_sleep=_on_toggle_sleep,
-                                on_set_off_timeout=_on_set_off_timeout)
+                                on_set_off_timeout=_on_set_off_timeout,
+                                on_toggle_notif_blink=_on_toggle_notif_blink)
             logger.info("GUI active (modular Compositor)")
             from power_policy import IdlePowerController
             power = IdlePowerController(settings)
             # [CLAUDE] начальные значения для Settings = реальные из power
             gui.app_state.sleep_on_idle = bool(getattr(power, "enabled", True))
             gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
+            gui.app_state.notif_blink = bool(settings.get("notif_blink", True))  # [CLAUDE] персист моргания
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)

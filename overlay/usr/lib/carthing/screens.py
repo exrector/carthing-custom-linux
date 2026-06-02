@@ -332,10 +332,12 @@ class SettingsScreen(Screen):
             return rows
         if it["key"] == "display":      # [CLAUDE] тумблер сна + ±тайм-аут гашения (кастомный рендер)
             on = bool(getattr(self.state, "sleep_on_idle", True)) if self.state else True
+            blink = bool(getattr(self.state, "notif_blink", True)) if self.state else True
             return [
                 ("brightness", "Яркость"),
                 ("toggle_sleep", f"Сон экрана: {'Вкл' if on else 'Выкл'}"),
                 ("off_timeout", "Гашение экрана"),   # рисуется спец-строкой с −/+
+                ("toggle_notif_blink", f"Моргание уведомлений: {'Вкл' if blink else 'Выкл'}"),
             ]
         return it.get("children", [])
 

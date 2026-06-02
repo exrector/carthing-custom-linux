@@ -296,7 +296,8 @@ class Compositor:
         astate = getattr(self.state, "assistant_state", "idle") if self.state else "idle"
         if self.anim is not None:
             self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс орба
-        if unread and int(time.monotonic() * 1.5) % 2 == 0:
+        blink_on = getattr(self.state, "notif_blink", True) if self.state else True
+        if unread and blink_on and int(time.monotonic() * 1.5) % 2 == 0:
             T.encoder_zone_glow(draw)
         T.encoder_arc(draw, level=vol)
         if self.status_bar:
