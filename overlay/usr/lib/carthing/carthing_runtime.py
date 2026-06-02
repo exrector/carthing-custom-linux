@@ -33,7 +33,6 @@ from iphone_service import IPhoneService
 from link_manager import LinkAdapter, LinkManager
 from route_graph import Protocol
 from route_planner import RoutePlanError, RoutePlanner
-from session_presets import build_preset_session, normalize_preset
 from session_runner import AdapterConnector, SessionRunner
 from trusted_device_registry import TrustedDeviceRegistry
 
@@ -56,7 +55,6 @@ power = None             # IdlePowerController
 session_runner = None    # SessionRunner
 link_manager = None      # LinkManager
 
-VALID_SESSIONS = {"remote", "router", "mac", "pairing", "quiet", "service"}
 
 
 class CompatibilityConnector(AdapterConnector):
@@ -309,106 +307,8 @@ def _on_set_off_timeout(sec):
         settings.set("screen_off_after_sec", sec)
 
 
-def _build_session_plan(session):
-    plan = build_preset_session(session)
-    if session != "router":
-        return plan
-    if gui is None or getattr(gui, "app_state", None) is None:
-        return plan
-
-    app_state = gui.app_state
-    route_input = str(getattr(app_state, "route_input", "") or "").strip()
-    route_output = str(getattr(app_state, "route_output", "") or "").strip()
-    if not route_input or not route_output:
-        return plan
-
-    registry = TrustedDeviceRegistry(getattr(app_state, "trusted_path", None)).load()
-    planner = RoutePlanner(registry)
-    try:
-        routed = planner.plan_simple_route(route_input, route_output, name="router")
-    except RoutePlanError as exc:
-        logger.warning("router plan rejected: %s", exc)
-        plan.warnings.append(str(exc))
-        return plan
-    routed.constraints.update(plan.constraints)
-    return routed
-
-
-async def _apply_session(session, persist=True):
-    session = normalize_preset(session)
-    if session not in VALID_SESSIONS:
-        session = "remote"
-    model.active_session = session
-    model.mode_status = "applying"
-    if session_runner is not None:
-        await session_runner.start(_build_session_plan(session))
-    if settings is not None and persist and session != "pairing":
-        settings.set("active_session", session)
-    if power is not None:
-        power.set_active_session(session)
-
-    if session != "pairing":
-        if power is not None:
-            power.set_pairing(False)
-        if gui is not None:
-            gui.set_pairing_mode(False)
-        if orch is not None:
-            await orch.arm_pairing(False)
-
-    if session == "remote":
-        model.audio_sink = "builtin"
-        model.mode_status = "iPhone remote"
-        if mac is not None:
-            mac.detach()
-        if _iphone is not None:
-            _iphone.activate_source()
-        if gui is not None:
-            gui.show_home()
-    elif session == "router":
-        model.audio_sink = "speaker"
-        model.mode_status = "router ready"
-        if _iphone is not None:
-            _iphone.activate_source()
-        if transfer is not None:
-            asyncio.ensure_future(transfer.rescan())
-        if power is not None:
-            power.note_transfer_scan(hold_sec=15.0)
-        if gui is not None:
-            gui.show_transfer_screen()
-    elif session == "mac":
-        model.audio_sink = "builtin"
-        model.mode_status = "macOS control"
-        if mac is not None:
-            mac.attach()
-        if gui is not None:
-            gui.show_mac_screen()
-    elif session == "pairing":
-        model.audio_sink = "builtin"
-        model.mode_status = "pairing window"
-        if gui is not None:
-            gui.show_session_screen()
-        _on_pairing(True, "source")
-    elif session == "quiet":
-        model.audio_sink = "builtin"
-        model.mode_status = "connected quiet"
-        if mac is not None:
-            mac.detach()
-        if _iphone is not None:
-            _iphone.activate_source()
-        if gui is not None:
-            gui.show_session_screen()
-    elif session == "service":
-        model.audio_sink = "builtin"
-        model.mode_status = "service safe"
-        if mac is not None:
-            mac.detach()
-        if _iphone is not None:
-            _iphone.activate_source()
-        if gui is not None:
-            gui.show_session_screen()
-
-    logger.info("active session: %s (%s)", session, model.mode_status)
-    _on_publish()
+# [CLAUDE 2026-06-02] _build_session_plan / _apply_session УДАЛЕНЫ (режимы вырезаны, stage 2).
+# Активация маршрута — теперь только _activate_route() выше. Паринг — через свой интент, не режим.
 
 
 async def _emit_source_intent(intent):
