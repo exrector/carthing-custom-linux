@@ -179,3 +179,35 @@ BCM-контроллере; возможно нужно дать Fosi иници
 триггер. После валидного link-key: encrypt OK → AVDTP принимается → discover → STREAMING_OK.
 Контракт моста (подтверждён 2026-05-21): Classic A2DP/AVDTP; вход iPhone=AAC MPEG-2 LC 44100/2ch/256k;
 к Fosi SBC. Сырой лог-источник: .codex/sessions/2026/05/21/rollout-...019e4a94...jsonl (line~2079/2244).
+
+## КОНСОЛИДАЦИЯ Fosi-bond (Claude+Copilot, 2026-06-02 ночь) — единый источник правды
+СТАТУС РЕПО/УСТРОЙСТВА: режимы вырезаны (Copilot: 92fd8c7/6f8d394/da7592c/5bcf854 + patchbay 9ac3c3b);
+pairing СДЕЛАН ТИХИМ — pair_speaker НЕ открывает A2DP receiver (silent pair-and-stay), репо==устройство.
+Рантайм восстановлен (autostart=1).
+
+ЕДИНСТВЕННЫЙ ОТКРЫТЫЙ БЛОКЕР: classic bond/connect к Fosi таймаутится; Fosi не закрепляется trusted.
+На нём встали НЕЗАВИСИМО Claude и Copilot — это реальная общая проблема, не чей-то промах.
+
+ЧТО ТОЧНО УСТАНОВЛЕНО (Claude, изолированными standalone-пробами `tools/fosi-pseudo-source.py` и
+`tools/fosi-a2dp-standalone-test.py`, транспорт CAR_THING_TRANSPORT=hci-socket:0, рантайм стоп):
+- Bond/A2DP к Fosi РЕАЛЬНО РАБОТАЕТ — один раз дошло до `A2DP_STREAMING_OK` (SBC AudioSink seid=3/AAC):
+  connect → SSP → encrypt(=True) → SDP-version → AVDTP connect → discover endpoints → sink → open → start.
+- НО надёжно только при ОБОИХ свежих сторонах + ОДНА чистая попытка. На повторах — стейл-стейт копится:
+  * Car Thing КОНТРОЛЛЕР держит ACL после нечистого teardown → след. connect = `HCI_CONNECTION_ALREADY_EXISTS [0xB]`.
+    (Это НА НАШЕЙ стороне; ребут Fosi НЕ чистит! Чистит: reboot устройства или перезапуск carthing-btattach-mini=пересоздать hci0.)
+  * Fosi держит повисший AVDTP-канал → след. AVDTP = `CONNECTION_REFUSED_NO_RESOURCES` или discover-молчит→timeout→0x13.
+    (Чистит: power-cycle Fosi.)
+- ВЫВОД: это НЕ «нужны псевдо-данные» (это я ошибочно предлагал — реальные стеки/PulseAudio так НЕ делают;
+  idle-disconnect существует, но решается корректным transport-менеджментом, не фейк-фреймами).
+  ПРИЧИНА флака — отсутствие ЧИСТОГО teardown + retry-долбёжка standby-loop'а, накапливающие стейл-каналы.
+  Нормальный стек коннектится ОДИН раз и держит → проблемы нет.
+
+ПУТЬ ФИКСА (для продолжающего):
+1. ВСЕГДА чистый teardown (stream stop/close + ACL disconnect) на ЛЮБОМ исходе bond — чтобы не подвешивать Fosi.
+2. ОДНА попытка bond (без retry-storm); discover с коротким таймаутом (быстрый фейл, чистый выход).
+3. Надёжный сброс НАШЕГО контроллера между попытками (перезапуск btattach → чистый hci0) — снимает 0xB.
+4. Тогда: pair_speaker делает один чистый SSP-bond (создаёт+хранит link-key) → standby держит ОДИН ACL →
+   при активации маршрута открывается A2DP (AAC passthrough от iPhone / SBC). Без псевдо-данных.
+КОСМЕТИКА: vendored bumble в inquiry спамит `name 'name'/'n' is not defined` — не ломает, но починить.
+ИНСТРУМЕНТЫ: tools/fosi-pseudo-source.py (SBC-тон, кормит rtp_channel, чистый teardown),
+tools/fosi-a2dp-standalone-test.py (полный connect→stream через setup_receiver). tone.sbc делается ffmpeg на Mac.
