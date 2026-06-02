@@ -54,6 +54,13 @@ def _bonded_source_rows(keystore_path=None):
                 "capabilities": ["audio_input", "metadata_input", "control_output", "notifications_input"],
                 "endpoints": [
                     {
+                        "id": "audio-input",
+                        "direction": "input",
+                        "protocols": ["classic_a2dp_sink"],
+                        "capabilities": ["audio_input"],
+                        "label": "Bluetooth audio input",
+                    },
+                    {
                         "id": "media-control",
                         "direction": "control",
                         "protocols": ["ble_ams", "ble_hid"],
@@ -185,6 +192,53 @@ def _merge_endpoints(left, right):
         if endpoint.get("label"):
             existing["label"] = endpoint["label"]
     return result
+
+
+def _default_endpoint_rows_for_capabilities(device):
+    capabilities = set(device.get("capabilities") or [])
+    endpoints = list(device.get("endpoints") or [])
+    directions = {
+        endpoint.get("direction")
+        for endpoint in endpoints
+        if isinstance(endpoint, dict)
+    }
+    defaults = []
+    if "audio_input" in capabilities and "input" not in directions:
+        defaults.append({
+            "id": "audio-input",
+            "direction": "input",
+            "protocols": ["classic_a2dp_sink"],
+            "capabilities": ["audio_input"],
+            "label": "Bluetooth audio input",
+        })
+    if "audio_output" in capabilities and "output" not in directions:
+        defaults.append({
+            "id": "audio-output",
+            "direction": "output",
+            "protocols": ["classic_a2dp_source"],
+            "capabilities": ["audio_output"],
+            "label": "Bluetooth audio output",
+        })
+    return defaults
+
+
+def _normalize_trusted_row(device):
+    device["address"] = normalize_address(device.get("address"))
+    device["capabilities"] = list(device.get("capabilities") or [])
+    device["endpoints"] = _merge_endpoints(
+        _default_endpoint_rows_for_capabilities(device),
+        device.get("endpoints") or [],
+    )
+    if _device_is_input(device) and _device_is_output(device):
+        device["role"] = "device"
+        device["type"] = device.get("type") or "Маршрутизируемое устройство"
+    elif _device_is_output(device):
+        device["role"] = device.get("role") if device.get("role") not in ("source",) else "speaker"
+        device["type"] = device.get("type") or "Динамик"
+    elif _device_is_input(device):
+        device["role"] = device.get("role") if device.get("role") not in ("speaker",) else "source"
+        device["type"] = device.get("type") or "Источник"
+    return device
 
 
 class MediaSession:
@@ -352,9 +406,11 @@ class AppState:
                         "constraints": ["idle_link_allowed", "active_media_requires_route"],
                         "metadata": {"legacy_role": role},
                     })
+        devices = [_normalize_trusted_row(device) for device in devices]
         by_key = {device.get("key"): device for device in devices if device.get("key")}
         by_address = {device.get("address"): device for device in devices if device.get("address")}
         for bonded in _bonded_source_rows():
+            bonded = _normalize_trusted_row(bonded)
             existing = by_key.get(bonded["key"]) or by_address.get(bonded["address"])
             if existing is None:
                 devices.append(bonded)
@@ -366,6 +422,9 @@ class AppState:
                 existing.setdefault("label", bonded["label"])
                 if not existing.get("address"):
                     existing["address"] = bonded["address"]
+                existing["capabilities"] = _merge_unique_strings(existing.get("capabilities"), bonded.get("capabilities"))
+                existing["endpoints"] = _merge_endpoints(existing.get("endpoints"), bonded.get("endpoints"))
+                _normalize_trusted_row(existing)
         self.trusted = devices
         self.route_input = next(
             (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),
@@ -375,6 +434,20 @@ class AppState:
             (device.get("key") or device.get("address") for device in self.route_outputs if device.get("route_output")),
             "",
         )
+        self._ensure_default_route_selection()
+
+    def _ensure_default_route_selection(self):
+        if not self.route_input and len(self.route_inputs) == 1:
+            selected = self.route_inputs[0]
+            selected["route_input"] = True
+            self.route_input = selected.get("key") or selected.get("address")
+        if not self.route_output:
+            outputs = self.route_outputs
+            default_output = next((device for device in outputs if device.get("default")), None)
+            selected = default_output or (outputs[0] if len(outputs) == 1 else None)
+            if selected is not None:
+                selected["route_output"] = True
+                self.route_output = selected.get("key") or selected.get("address")
 
     def save_trusted(self, path=None):
         path = Path(path or self.trusted_path)
@@ -382,6 +455,7 @@ class AppState:
         data = {"schema": 2, "devices": []}
         seen = set()
         for device in self.trusted:
+            device = _normalize_trusted_row(dict(device))
             address = normalize_address(device.get("address"))
             key = device.get("key") or address
             if not key:

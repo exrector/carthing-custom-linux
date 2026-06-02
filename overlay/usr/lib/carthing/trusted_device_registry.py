@@ -61,12 +61,31 @@ def _endpoint_to_json(endpoint: Endpoint):
 def _device_from_json(row):
     address = normalize_address(row.get("address"))
     device_id = str(row.get("id") or address or row.get("name") or "device")
+    capabilities = _enum_set(Capability, row.get("capabilities"))
+    endpoints = [_endpoint_from_json(endpoint) for endpoint in row.get("endpoints", [])]
+    directions = {endpoint.direction for endpoint in endpoints}
+    if Capability.AUDIO_INPUT in capabilities and EndpointDirection.INPUT not in directions:
+        endpoints.append(Endpoint(
+            id="audio-input",
+            direction=EndpointDirection.INPUT,
+            protocols={Protocol.CLASSIC_A2DP_SINK},
+            capabilities={Capability.AUDIO_INPUT},
+            label="Bluetooth audio input",
+        ))
+    if Capability.AUDIO_OUTPUT in capabilities and EndpointDirection.OUTPUT not in directions:
+        endpoints.append(Endpoint(
+            id="audio-output",
+            direction=EndpointDirection.OUTPUT,
+            protocols={Protocol.CLASSIC_A2DP_SOURCE},
+            capabilities={Capability.AUDIO_OUTPUT},
+            label="Bluetooth audio output",
+        ))
     return TrustedDevice(
         id=device_id,
         address=address,
         name=str(row.get("name") or row.get("label") or address or device_id),
-        capabilities=_enum_set(Capability, row.get("capabilities")),
-        endpoints=[_endpoint_from_json(endpoint) for endpoint in row.get("endpoints", [])],
+        capabilities=capabilities,
+        endpoints=endpoints,
         constraints=_enum_set(Constraint, row.get("constraints")),
         trusted=bool(row.get("trusted", True)),
         online=bool(row.get("online", False)),
@@ -241,4 +260,3 @@ class TrustedDeviceRegistry:
         self.load()
         self.save()
         return self
-

@@ -258,9 +258,6 @@ def _on_route_output_select(key):
             gui.app_state.route_output = selected
         gui.app_state.save_trusted()
     logger.info("route output selected: %s", key)
-    # Compatibility bridge: current lower layer still names output selection
-    # "transfer_select". The route graph owns the product model above it.
-    _on_transfer_select(key)
     if model.active_session == "router":
         asyncio.ensure_future(_apply_session("router", persist=False))
     _on_publish()
@@ -465,19 +462,49 @@ async def _on_connection(connection):
         # свежая пара создаётся автоматически, без ручного rm keys.json.
         # Codex: это закрывает "forget на iPhone -> не пере-парится". Долгосрочно лучше дроп бонда
         # на СТАРТЕ пары (pairing request), но reactive-на-failure надёжно (iPhone сам ретраит).
-        logger.error("SMP pairing failed: %s — auto-forget stale bond + resolving", reason)
+        transfer_busy = bool(
+            getattr(model, "active_session", "") == "router"
+            or getattr(model, "transfer_active", False)
+            or (
+                transfer is not None
+                and bool(getattr(getattr(transfer, "bridge", None), "source_stream_active", False))
+            )
+        )
+        if transfer_busy:
+            logger.error("SMP pairing failed during active transfer/router: %s — keeping bonds", reason)
+            return
+
+        logger.error("SMP pairing failed: %s — auto-forget stale source bond + resolving", reason)
         dev = orch.device if orch is not None else None
         if dev is None:
             return
         try:
             if dev.keystore is not None:
-                await dev.keystore.delete_all()
+                source_addresses = {str(getattr(connection, "peer_address", "") or "")}
+                if gui is not None:
+                    try:
+                        source_addresses.update(
+                            str(row.get("address") or "")
+                            for row in gui.app_state.trusted_sources
+                        )
+                    except Exception:
+                        pass
+                from app_state import normalize_address
+                for address in source_addresses:
+                    normalized = normalize_address(address)
+                    for candidate in dict.fromkeys([normalized, f"{normalized}/P", str(address)]):
+                        if candidate:
+                            try:
+                                await dev.keystore.delete(candidate)
+                                logger.info("Auto-forget: dropped stale source bond %s", candidate)
+                            except Exception:
+                                pass
             from bumble.hci import (HCI_LE_Set_Address_Resolution_Enable_Command,
                                     HCI_LE_Clear_Resolving_List_Command)
             await dev.send_command(HCI_LE_Set_Address_Resolution_Enable_Command(
                 address_resolution_enable=0))
             await dev.send_command(HCI_LE_Clear_Resolving_List_Command())
-            logger.info("Auto-forget: dropped stale bond + cleared resolving (clean re-pair on retry)")
+            logger.info("Auto-forget: cleared resolving (clean source re-pair on retry)")
         except Exception as e:
             logger.warning("auto-forget failed: %s", e)
 

@@ -30,7 +30,13 @@ import time
 
 from bumble.device import AdvertisingData, AdvertisingType, Device, OwnAddressType
 from bumble.hci import Address, HCI_Write_Local_Name_Command
-from bumble.smp import PairingConfig
+from bumble.smp import (
+    PairingConfig,
+    PairingDelegate,
+    SMP_ENC_KEY_DISTRIBUTION_FLAG,
+    SMP_ID_KEY_DISTRIBUTION_FLAG,
+    SMP_LINK_KEY_DISTRIBUTION_FLAG,
+)
 
 import identity_service
 
@@ -76,9 +82,29 @@ class AccessoryOrchestrator:
     # ── CTKD-pairing (один pairing → оба ключа в одну логическую сессию) ──────
     def pairing_config_factory(self, connection):
         # sc=True (Secure Connections) — обязателен для CTKD; bonding=True — храним.
-        # При sc=True и поднятом classic Bumble выводит BR/EDR link-key из LE LTK (CTKD),
-        # так пользователь парится ОДИН раз, а Transfer потом не требует повторной пары.
-        return PairingConfig(sc=True, mitm=False, bonding=True)
+        # [CLAUDE 2026-06-02] ПОЧЕМУ CTKD НЕ РАБОТАЛ: дефолтный PairingDelegate раздаёт
+        # только ENC|ID (DEFAULT_KEY_DISTRIBUTION=0b0011), БЕЗ link-key флага (0b1000).
+        # Поэтому ветка деривации BR/EDR link-key из LTK (bumble smp.py ~стр.970:
+        # `if responder_key_distribution & SMP_LINK_KEY_DISTRIBUTION_FLAG`) НИКОГДА не
+        # срабатывала → classic-ключ не выводился → айфону приходилось ОТДЕЛЬНО classic-
+        # париться = ровно жалоба «сначала BLE, потом Classic, как два устройства».
+        # Передаём delegate с SMP_LINK_KEY_DISTRIBUTION_FLAG → теперь ОДНА BLE-пара (sc=True)
+        # выводит и LTK/IRK, и BR/EDR link-key (CTKD h6→'lebr') и bumble персистит его в
+        # keystore (smp on_pairing → keys.link_key). Одно имя, два транспорта, ОДНА пара.
+        # БЕЗОПАСНОСТЬ: меняет ТОЛЬКО рукопожатие НОВОЙ пары; sticky-реконнект по уже
+        # сохранённому LTK не трогается. Если телефон не поддержит link-key distribution —
+        # AND даст 0 и поведение = прежнее (отдельная classic-пара), без регресса.
+        # ЧТОБ ПОЛУЧИТЬ ЭФФЕКТ на уже-спаренном айфоне: «забыть» на телефоне + спарить заново
+        # один раз (старый бонд не содержит classic-ключа — он создан до CTKD).
+        keydist = (SMP_ENC_KEY_DISTRIBUTION_FLAG
+                   | SMP_ID_KEY_DISTRIBUTION_FLAG
+                   | SMP_LINK_KEY_DISTRIBUTION_FLAG)
+        delegate = PairingDelegate(
+            io_capability=PairingDelegate.NO_OUTPUT_NO_INPUT,
+            local_initiator_key_distribution=keydist,
+            local_responder_key_distribution=keydist,
+        )
+        return PairingConfig(sc=True, mitm=False, bonding=True, delegate=delegate)
 
     def install(self):
         """Повесить pairing_config_factory на Device. Classic-HW держим включённым."""
@@ -129,9 +155,16 @@ class AccessoryOrchestrator:
                     pass
 
         # 1) classic: connectable ТОЛЬКО в Transfer; НИКОГДА не discoverable.
-        # Иначе в режиме сопряжения classic светится как ВТОРОЕ устройство рядом с BLE.
-        # iPhone парится по BLE, classic-ключ выводится через CTKD (не отдельной classic-парой);
-        # динамики добавляются инквайр-сканом (устройство ищет их, а не рекламирует себя).
+        # [CLAUDE 2026-06-02] ВОССТАНОВЛЕНО — канон коммита 0d0ffa7. Codex временно вернул
+        # discoverable=transfer_connectable, и это ровно корень жалобы «iPhone сначала BLE,
+        # потом Classic как ВТОРОЕ устройство / два имени». Classic-discoverable НЕ нужен:
+        #   • iPhone парится по BLE и через CTKD (pairing_config_factory) получает BR/EDR
+        #     link-key в ОДНУ запись keystore;
+        #   • при classic-коннекте (A2DP) ключ отдаёт safe_link_key_provider (host.link_key_
+        #     provider) — авторизация тихая, без второй пары и без обнаружения;
+        #   • динамики (Fosi) добавляются инквайр-сканом — устройство ИЩЕТ их само, а не
+        #     рекламирует себя discoverable.
+        # Итог: одно имя, один HCI-identity, BLE→Classic «тихо» внутри. discoverable=False всегда.
         await self._set_classic(
             connectable=self.transfer_connectable,
             discoverable=False,

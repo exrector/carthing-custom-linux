@@ -120,15 +120,26 @@ class TransferService:
     # ── активация Transfer (вручную из Routes-view, runtime-contract) ────────
     async def activate(self):
         self.model.transfer_active = True
+        try:
+            self.bridge.state.transfer_active = True
+            self.bridge.state.transfer_status = "armed"
+        except Exception:
+            pass
         await self.orch.set_transfer_connectable(True)   # classic connectable для входящего A2DP
         await self.orch.on_a2dp_state(True)
+        await self.bridge.ensure_trusted_speakers_connected()
         await self.bridge.request_receiver_connection()
+        logger.info("transfer armed: receiver stream prepared, waits for incoming source RTP")
         self._sync()
 
     async def deactivate(self):
         # Transfer выключен: останавливаем только аудиопоток. Classic standby с
         # доверенными динамиками остаётся жить и будет переподключаться само.
         self.model.transfer_active = False
+        try:
+            self.bridge.state.transfer_active = False
+        except Exception:
+            pass
         await self.bridge.stop_receiver_stream()
         await self.orch.set_transfer_connectable(False)
         await self.orch.on_a2dp_state(False)
@@ -144,7 +155,9 @@ class TransferService:
 
     async def select(self, address):
         try:
-            await self.bridge.request_receiver_connection(address)
+            self.bridge.state.select_default_speaker(address)
+            self.bridge.state.transfer_status = "standby"
+            await self.bridge.ensure_trusted_speakers_connected()
         except Exception as e:
             logger.warning("speaker select failed: %s", e)
         self._sync()

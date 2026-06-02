@@ -212,14 +212,17 @@ class A2DPBridge:
         self.receiver_address = None
         self.receiver_connecting_address = None
         self.receiver_last_error = ""
+        self.source_stream_active = False
         self.started = False
         self.packets_forwarded = 0
+        self.packets_dropped = 0
         self.bytes_forwarded = 0
         self._receiver_task: asyncio.Task | None = None
         self._standby_task: asyncio.Task | None = None
         self._scan_task: asyncio.Task | None = None
         self._enroll_task: asyncio.Task | None = None
         self._connect_task: asyncio.Task | None = None
+        self._receiver_retry_task: asyncio.Task | None = None
         self._standby_connecting = set()
         self._speaker_connections = {}
         self._stale_link_key_addresses = set()
@@ -321,7 +324,13 @@ class A2DPBridge:
             if address in self._standby_connecting:
                 continue
             if not await self._has_link_key(address):
-                self.logger.info("A2DP speaker standby skipped without link-key: %s", address)
+                # [CLAUDE 2026-06-02] НЕ ломиться в неспаренную колонку. Динамик без
+                # link-key никогда не парился штатно — standby-loop НЕ должен его звонить
+                # (иначе «постоянно ломится в неподключённый Fosi, добавляет в доверенные,
+                # а он остаётся не в спаренном режиме»). Он остаётся в списке как offline-
+                # статус; реальное (пере)сопряжение — только явным flow добавления динамика.
+                # online/offline здесь — статус, а не триггер автозвонка.
+                self.logger.info("A2DP speaker standby skipped (not paired, no link-key): %s", address)
                 continue
             await self.ensure_speaker_connection(address)
 
@@ -384,7 +393,7 @@ class A2DPBridge:
         self.on_state_change()
 
         connection = connection or await self.ensure_speaker_connection(target_address)
-        self.logger.info("A2DP receiver reuse standby connection: %s", target_address)
+        self.logger.info("A2DP receiver ACL ready: %s", target_address)
         self.receiver_connection = connection
         connection.on(
             "disconnection",
@@ -396,18 +405,9 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.info("A2DP receiver auth/encrypt continued: %s", error_text(exc))
 
-        try:
-            version = await asyncio.wait_for(
-                avdtp.find_avdtp_service_with_connection(self.device, connection),
-                timeout=self.connect_timeout,
-            )
-        except Exception as exc:
-            version = None
-            self.logger.info("A2DP receiver SDP version lookup ignored: %s", error_text(exc))
-        version = version or (1, 2)
-        self.logger.info("A2DP receiver AVDTP connect: %s version=%s", target_address, version)
+        self.logger.info("A2DP receiver AVDTP connect: %s", target_address)
         protocol = await asyncio.wait_for(
-            avdtp.Protocol.connect(connection, version=version),
+            avdtp.Protocol.connect(connection),
             timeout=self.connect_timeout,
         )
         self.receiver_protocol = protocol
@@ -545,6 +545,40 @@ class A2DPBridge:
             return
         self._connect_task = asyncio.create_task(self._connect_receiver(address))
 
+    async def request_receiver_for_active_source(self, address=None):
+        if not self.source_stream_active:
+            self.logger.info("A2DP receiver not requested: no active source stream")
+            return
+        await self.request_receiver_connection(address)
+
+    def schedule_receiver_retry(self, delay: float = 1.0):
+        if not self.source_stream_active or not getattr(self.state, "transfer_active", False):
+            return
+        # [CLAUDE 2026-06-02] Если доверенная колонка не выбрана — ретраить НЕЧЕМ: она не
+        # появится от повторов. Без этой проверки forward_packet дёргал retry на КАЖДЫЙ
+        # дропнутый RTP-пакет → request_receiver_connection спамил «no trusted speaker»
+        # ~4 раза/сек и заливал лог (видели dropped=27500). Колонка выбрана → ретрай имеет
+        # смысл (например, classic-link дропнул и надо переподнять).
+        if not normalize_address(self.state.default_speaker_address()):
+            return
+        if self.receiver_rtp_channel is not None:
+            return
+        if self._connect_task is not None and not self._connect_task.done():
+            return
+        if self._receiver_retry_task is not None and not self._receiver_retry_task.done():
+            return
+
+        async def _retry():
+            try:
+                await asyncio.sleep(delay)
+                await self.request_receiver_for_active_source()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.logger.warning("A2DP receiver retry failed: %s", error_text(exc))
+
+        self._receiver_retry_task = asyncio.create_task(_retry())
+
     async def _connect_receiver(self, address):
         try:
             await self.setup_receiver(address=address)
@@ -598,7 +632,7 @@ class A2DPBridge:
                 self.logger.info("A2DP speaker scan stop ignored: %s", error_text(exc))
             self.state.transfer_scanning = False
             self.on_state_change()
-            if self.state.transfer_active:
+            if self.state.transfer_active and self.source_stream_active:
                 await self.request_receiver_connection(require_online=True)
             else:
                 await self.ensure_trusted_speakers_connected()
@@ -757,6 +791,7 @@ class A2DPBridge:
         self.state.transfer_status = "failed"
         self.state.transfer_error = self.receiver_last_error
         self.on_state_change()
+        self.schedule_receiver_retry(delay=1.5)
 
     async def stop_receiver_stream(self):
         stream = self.receiver_stream
@@ -790,6 +825,9 @@ class A2DPBridge:
         original_set_configuration = sink.on_set_configuration_command
         original_start = sink.on_start_command
         original_open = sink.on_open_command
+        original_suspend = sink.on_suspend_command
+        original_close = sink.on_close_command
+        original_abort = sink.on_abort_command
 
         def on_set_configuration(configuration):
             self.logger.info("A2DP_SOURCE_SET_CONFIGURATION %s", configuration)
@@ -801,17 +839,38 @@ class A2DPBridge:
 
         def on_start():
             self.logger.info("A2DP_SOURCE_START")
+            self.source_stream_active = True
             self.state.transfer_active = True
             self.state.transfer_source = normalize_address(peer_address)
             self.state.active_desktop = self.state.TRANSFER
             self.on_state_change()
-            if self._scan_task is None or self._scan_task.done():
-                self._scan_task = asyncio.create_task(self.scan_trusted_speakers())
+            asyncio.create_task(self.request_receiver_for_active_source())
             return original_start()
+
+        def on_suspend():
+            self.logger.info("A2DP_SOURCE_SUSPEND")
+            self.source_stream_active = False
+            asyncio.create_task(self.stop_receiver_stream())
+            return original_suspend()
+
+        def on_close():
+            self.logger.info("A2DP_SOURCE_CLOSE")
+            self.source_stream_active = False
+            asyncio.create_task(self.stop_receiver_stream())
+            return original_close()
+
+        def on_abort():
+            self.logger.info("A2DP_SOURCE_ABORT")
+            self.source_stream_active = False
+            asyncio.create_task(self.stop_receiver_stream())
+            return original_abort()
 
         sink.on_set_configuration_command = on_set_configuration
         sink.on_open_command = on_open
         sink.on_start_command = on_start
+        sink.on_suspend_command = on_suspend
+        sink.on_close_command = on_close
+        sink.on_abort_command = on_abort
         sink.on("rtp_packet", self.forward_packet)
 
     def forward_packet(self, packet):
@@ -822,11 +881,16 @@ class A2DPBridge:
             sent = True
             self.packets_forwarded += 1
             self.bytes_forwarded += len(payload)
+        elif self.source_stream_active and getattr(self.state, "transfer_active", False):
+            self.packets_dropped += 1
+            self.schedule_receiver_retry(delay=0.2)
 
-        if self.packets_forwarded < 10 or self.packets_forwarded % 250 == 0:
+        count = self.packets_forwarded if sent else self.packets_dropped
+        if count < 10 or count % 250 == 0:
             self.logger.info(
-                "A2DP_BRIDGE_RTP n=%d bytes=%d sent_to_speaker=%s",
+                "A2DP_BRIDGE_RTP forwarded=%d dropped=%d bytes=%d sent_to_speaker=%s",
                 self.packets_forwarded,
+                self.packets_dropped,
                 len(payload),
                 sent,
             )
@@ -851,8 +915,8 @@ class A2DPBridge:
                 "disconnection",
                 lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(peer_address, reason)),
             )
-            if self.state.transfer_active:
-                await self.request_receiver_connection(peer_address)
+            if self.state.transfer_active and self.source_stream_active:
+                await self.request_receiver_for_active_source(peer_address)
         elif self.state.trusted_sources and not self.state.is_trusted_source(peer_address):
             self.logger.warning("Classic BT peer is not trusted for transfer: %s", peer_address)
 
