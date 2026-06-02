@@ -53,21 +53,21 @@ async def main():
     from ble_transport import init_ble
     from a2dp_bridge import A2DPBridge
 
-    device, _t = await init_ble()
-    # [CLAUDE 2026-06-02] classic SSP just-works, чтобы СОЗДАТЬ свежий link-key с Fosi (чистая пара).
-    try:
+    # [CLAUDE 2026-06-02] classic + SSP ДО power_on (иначе Write_Simple_Pairing_Mode не уходит
+    # на чип -> authenticate отдаёт PIN_OR_KEY_MISSING вместо SSP-пэйринга).
+    def _cfg(device):
         device.classic_enabled = True
         device.classic_ssp_enabled = True
-    except Exception:
-        pass
-    try:
-        from bumble.smp import PairingConfig, PairingDelegate
-        device.pairing_config_factory = lambda conn: PairingConfig(
-            sc=True, mitm=False, bonding=True,
-            delegate=PairingDelegate(io_capability=PairingDelegate.NO_OUTPUT_NO_INPUT),
-        )
-    except Exception as e:
-        print(">>> pairing_config setup warn:", e)
+        try:
+            from bumble.smp import PairingConfig, PairingDelegate
+            device.pairing_config_factory = lambda conn: PairingConfig(
+                sc=True, mitm=False, bonding=True,
+                delegate=PairingDelegate(io_capability=PairingDelegate.NO_OUTPUT_NO_INPUT),
+            )
+        except Exception as e:
+            print(">>> pairing_config setup warn:", e)
+
+    device, _t = await init_ble(configure_device=_cfg)
 
     b = A2DPBridge(device, Stub())
     b.install_sdp_records()
@@ -87,6 +87,24 @@ async def main():
         import traceback
         print(f">>> setup_receiver FAILED: {type(e).__name__}: {e}")
         traceback.print_exc()
+    finally:
+        # [CLAUDE 2026-06-02] ЧИСТО закрыть всё, чтобы не оставлять Fosi полу-открытые
+        # L2CAP/ACL каналы (иначе у неё кончаются ресурсы -> NO_RESOURCES на след. заходе).
+        try:
+            for c in list(getattr(device, "connections", {}).values()
+                          if hasattr(getattr(device, "connections", {}), "values")
+                          else getattr(device, "connections", [])):
+                try:
+                    await c.disconnect()
+                except Exception:
+                    pass
+            print(">>> connections disconnected cleanly")
+        except Exception as e:
+            print(">>> cleanup warn:", e)
+        try:
+            await device.power_off()
+        except Exception:
+            pass
 
 
 asyncio.run(main())

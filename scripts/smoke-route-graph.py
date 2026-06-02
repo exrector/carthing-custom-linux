@@ -279,6 +279,34 @@ def check_multirole_app_state():
         assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_outputs)
 
 
+def check_runtime_route_state():
+    from runtime_model import RuntimeModel
+
+    model = RuntimeModel()
+    plan = PlannedSession(
+        name="route",
+        required_protocols={Protocol.CLASSIC_A2DP_SINK, Protocol.CLASSIC_AVRCP},
+        warnings=["route requires stop-before-start transition"],
+    )
+    plan.routes.append(type("Route", (), {
+        "input_device_id": "iphone",
+        "output_device_id": "speaker",
+    })())
+    cables = [type("Cable", (), {"id": "iphone:audio-input->transfer:audio-input"})()]
+    model.set_route_plan(plan, cables)
+    bt = model.bt_block()
+    assert bt["route"]["active"] is True
+    assert bt["route"]["name"] == "route"
+    assert bt["route"]["input"] == "iphone"
+    assert bt["route"]["output"] == "speaker"
+    assert "classic_a2dp_sink" in bt["route"]["protocols"]
+    assert bt["route"]["cables"] == ["iphone:audio-input->transfer:audio-input"]
+    model.clear_route_plan()
+    bt = model.bt_block()
+    assert bt["route"]["active"] is False
+    assert bt["route"]["name"] == ""
+
+
 def check_patchbay():
     bay = VirtualPatchBay()
     bay.add_plug(VirtualPlug(
@@ -430,6 +458,7 @@ def main():
     check_enrollment()
     check_degraded_enrollment()
     check_multirole_app_state()
+    check_runtime_route_state()
     check_patchbay()
     asyncio.run(check_route_patchbay_router())
     asyncio.run(check_hci_gate())

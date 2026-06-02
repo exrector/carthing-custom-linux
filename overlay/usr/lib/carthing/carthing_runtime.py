@@ -246,6 +246,7 @@ async def _activate_route():
         if route_patchbay is not None:
             await route_patchbay.deactivate()
         await session_runner.stop_current()
+        model.clear_route_plan()
         model.audio_sink = "builtin"
         _on_publish()
         return
@@ -264,6 +265,7 @@ async def _activate_route():
             logger.warning("route patch-bay wiring failed: %s", exc)
             return
     await session_runner.start(routed)
+    model.set_route_plan(routed, cables=(route_patchbay.current_cables() if route_patchbay is not None else []))
     model.audio_sink = "speaker"
     if _iphone is not None:
         _iphone.activate_source()
@@ -280,9 +282,8 @@ def _on_route_input_select(key):
         power.note_activity("route_input_select")
     if gui is not None:
         selected = gui.app_state.select_route_input(key)
-        if selected:
-            gui.app_state.route_input = selected
         gui.app_state.save_trusted()
+    model.clear_route_plan()
     logger.info("route input selected: %s", key)
     asyncio.ensure_future(_activate_route())
     _on_publish()
@@ -293,9 +294,8 @@ def _on_route_output_select(key):
         power.note_activity("route_output_select")
     if gui is not None:
         selected = gui.app_state.select_route_output(key)
-        if selected:
-            gui.app_state.route_output = selected
         gui.app_state.save_trusted()
+    model.clear_route_plan()
     logger.info("route output selected: %s", key)
     asyncio.ensure_future(_activate_route())
     _on_publish()

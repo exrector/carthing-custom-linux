@@ -172,7 +172,7 @@ class RouteBuilderScreen(Screen):
         outputs = self.state.route_outputs
         route_input = getattr(self.state, "route_input", "")
         route_output = getattr(self.state, "route_output", "")
-        active = bool(route_input and route_output and getattr(self.state, "transfer_active", False))
+        active = bool(getattr(self.state, "route_active", False))
         status = "маршрут активен" if active else ("маршрут выбран" if route_input and route_output else "ожидание маршрута")
         draw.text((52, CONTENT_TOP + 52), status,
                   font=T.font(T.SZ_META), fill=T.FAINT)

@@ -16,6 +16,7 @@ import logging
 
 import identity_service
 from a2dp_bridge import A2DPBridge
+from app_state import normalize_address
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,6 @@ class TransferService:
         self.bridge.install_sdp_records()
         self.bridge.install_safe_link_key_provider()
         await self.bridge.start()               # AVDTP listener up
-        self.bridge.start_standby_loop()        # trusted speakers stick when available
         # ВАЖНО: вызвать orchestrator.apply_visibility() ПОСЛЕ — он перегейтит classic в not-connectable.
 
     async def start_speaker_enrollment(self):
@@ -92,8 +92,45 @@ class TransferService:
         self._sync()
 
     async def pair_speaker(self, address):
+        normalized = normalize_address(address)
         try:
-            await self.bridge.pair_speaker(address)
+            # Speaker enrollment is a replacement operation: drop any stale bond/ACL first
+            # so the new pairing starts from a clean classic state.
+            self.bridge.state.remove_trusted(normalized)
+        except Exception:
+            pass
+        try:
+            await self.bridge.forget_peer_key(normalized)
+        except Exception as e:
+            logger.warning("speaker forget key before pairing failed: %s", e)
+        stale_connection = self.bridge._speaker_connections.pop(normalized, None)
+        if stale_connection is not None:
+            try:
+                await stale_connection.disconnect()
+            except Exception:
+                pass
+        candidate = None
+        try:
+            candidate = next(
+                (c for c in getattr(self.bridge.state, "speaker_candidates", [])
+                 if c.get("address") == normalized),
+                None,
+            )
+        except Exception:
+            candidate = None
+        if candidate is None:
+            candidate = {"address": normalized, "label": normalized, "audio": True}
+        elif not candidate.get("audio"):
+            candidate = {**candidate, "audio": True}
+        try:
+            existing = list(getattr(self.bridge.state, "speaker_candidates", []))
+            existing = [c for c in existing if c.get("address") != normalized]
+            existing.append(candidate)
+            self.bridge.state.speaker_candidates = existing
+        except Exception:
+            pass
+        try:
+            await self.bridge.pair_speaker(normalized)
             if getattr(self.bridge.state, "speaker_pairing_status", "") == "done":
                 await asyncio.sleep(1.2)
                 self.bridge.state.pairing_mode = False
@@ -103,6 +140,19 @@ class TransferService:
             try:
                 self.bridge.state.speaker_pairing_status = "error"
                 self.bridge.state.pairing_message = "Пара не завершена"
+            except Exception:
+                pass
+        finally:
+            # Silent enrollment: trust the speaker, but do not keep the media path open.
+            # Pairing stays as a bonding action only; transfer is explicit.
+            paired_connection = self.bridge._speaker_connections.pop(normalized, None)
+            if paired_connection is not None:
+                try:
+                    await paired_connection.disconnect()
+                except Exception:
+                    pass
+            try:
+                self.bridge.state.set_speaker_connected(normalized, False)
             except Exception:
                 pass
         self._sync()
@@ -128,6 +178,7 @@ class TransferService:
             pass
         await self.orch.set_transfer_connectable(True)   # classic connectable (bonded-only, не discoverable)
         await self.orch.on_a2dp_state(True)
+        self.bridge.start_standby_loop()
         # [CLAUDE 2026-06-02] CarThing САМ звонит bonded айфону по classic (исходящий) — это
         # «мы инициируем classic из меню, айфон подхватывает». Раньше код только ЖДАЛ входящего.
         src = None

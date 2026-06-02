@@ -90,6 +90,14 @@ class RuntimeModel:
         # ControlRoute: кто рулит источником (local/speaker_remote -> source).
         self.control_routes = []             # list[(controller, source)]
         self.transfer_control_available = False
+        # Route graph summary: the currently active planned session.
+        self.route_name = ""
+        self.route_input = ""
+        self.route_output = ""
+        self.route_protocols = []
+        self.route_warnings = []
+        self.route_cables = []
+        self.route_active = False
         # уведомления (ANCS) — полный список зеркала iPhone: [{uid, app, text}].
         self.notifications = []
         # presence
@@ -132,6 +140,32 @@ class RuntimeModel:
         if controller == "speaker_remote":
             self.transfer_control_available = True
 
+    def set_route_plan(self, plan, cables=None):
+        self.route_name = str(getattr(plan, "name", "") or "")
+        routes = list(getattr(plan, "routes", []) or [])
+        route = routes[0] if routes else None
+        self.route_input = getattr(route, "input_device_id", "") if route is not None else ""
+        self.route_output = getattr(route, "output_device_id", "") if route is not None else ""
+        self.route_protocols = sorted(
+            str(value.value if hasattr(value, "value") else value)
+            for value in getattr(plan, "required_protocols", []) or []
+        )
+        self.route_warnings = list(getattr(plan, "warnings", []) or [])
+        self.route_cables = [
+            str(getattr(cable, "id", cable))
+            for cable in (cables or [])
+        ]
+        self.route_active = bool(routes)
+
+    def clear_route_plan(self):
+        self.route_name = ""
+        self.route_input = ""
+        self.route_output = ""
+        self.route_protocols = []
+        self.route_warnings = []
+        self.route_cables = []
+        self.route_active = False
+
     # ── уведомления (зеркало iPhone) ─────────────────────────────────────────
     def add_notification(self, uid, app, title, body=""):
         # title = содержание (у Напоминаний — сам текст; у Сообщений — отправитель);
@@ -163,6 +197,15 @@ class RuntimeModel:
                 "supported_commands": sorted(s.supported_commands),
             },
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
+            "route": {
+                "name": self.route_name,
+                "input": self.route_input,
+                "output": self.route_output,
+                "protocols": list(self.route_protocols),
+                "warnings": list(self.route_warnings),
+                "cables": list(self.route_cables),
+                "active": self.route_active,
+            },
             "notifications": {"count": len(self.notifications),
                               "last": (self.notifications[-1]["title"] if self.notifications else None)},
             "active_session": self.active_session,

@@ -840,10 +840,6 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.warning("speaker trust save failed: %s", error_text(exc))
         self.on_state_change()
-        # [CLAUDE 2026-06-02] После пары сразу открываем+держим A2DP-коннект к колонке (AVDTP,
-        # не только ACL), чтобы она вышла из режима пары и встала «подключено», а не мигала.
-        # Дальше standby-loop поддерживает/переоткрывает этот же коннект.
-        await self.request_receiver_connection(address)
 
     async def _bond_speaker(self, address):
         await self.ensure_speaker_connection(address, require_trusted=False, strict_security=True)

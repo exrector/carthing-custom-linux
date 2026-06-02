@@ -281,8 +281,8 @@ class AppState:
         self.transfer_active = False
         self.transfer_scanning = False
         self.transfer_source = ""
-        self.route_input = ""
-        self.route_output = ""
+        self._route_input = ""
+        self._route_output = ""
         self._active_session = "remote"
         self.mode_status = "remote"
         self.power_tier = "boot"
@@ -321,6 +321,26 @@ class AppState:
     @device_mode.setter
     def device_mode(self, value):
         self.active_session = value
+
+    @property
+    def route_input(self):
+        return self._route_input
+
+    @route_input.setter
+    def route_input(self, key_or_address):
+        self.select_route_input(key_or_address)
+
+    @property
+    def route_output(self):
+        return self._route_output
+
+    @route_output.setter
+    def route_output(self, key_or_address):
+        self.select_route_output(key_or_address)
+
+    @property
+    def route_active(self):
+        return bool(self.route_input and self.route_output and self.transfer_active)
 
     @property
     def sources(self):
@@ -573,8 +593,7 @@ class AppState:
             device["route_input"] = match
             if match:
                 selected = device.get("key") or device.get("address")
-        if selected:
-            self.route_input = selected
+        self._route_input = selected or ""
         return selected
 
     def select_route_output(self, key_or_address):
@@ -585,8 +604,7 @@ class AppState:
             device["route_output"] = match
             if match:
                 selected = device.get("key") or device.get("address")
-        if selected:
-            self.route_output = selected
+        self._route_output = selected or ""
         return selected
 
     def is_trusted_source(self, address):
