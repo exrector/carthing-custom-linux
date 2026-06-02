@@ -21,6 +21,7 @@ sys.path.insert(0, str(VENDOR))
 from app_state import AppState  # noqa: E402
 from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E402
 from link_manager import LinkAdapter, LinkManager  # noqa: E402
+from intents import Dispatcher  # noqa: E402
 from route_graph import Capability, Constraint, Endpoint, EndpointDirection, PlannedSession, Protocol, TrustedDevice  # noqa: E402
 from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
 from session_runner import AdapterConnector, SessionRunner  # noqa: E402
@@ -279,6 +280,52 @@ def check_multirole_app_state():
         assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_outputs)
 
 
+def check_route_activation_intent():
+    with tempfile.TemporaryDirectory() as tmp:
+        trusted_path = Path(tmp) / "trusted-devices.json"
+        trusted_path.write_text(json.dumps({
+            "schema": 2,
+            "devices": [
+                {
+                    "id": "iphone",
+                    "address": "10:A2:D3:83:82:50",
+                    "name": "iPhone",
+                    "role": "source",
+                    "trusted": True,
+                    "capabilities": ["audio_input"],
+                    "endpoints": [{"id": "audio-input", "direction": "input", "capabilities": ["audio_input"]}],
+                },
+                {
+                    "id": "fosi",
+                    "address": "C4:A9:B8:70:2F:E5",
+                    "name": "Fosi Audio ZD3",
+                    "role": "speaker",
+                    "trusted": True,
+                    "capabilities": ["audio_output"],
+                    "endpoints": [{"id": "audio-output", "direction": "output", "capabilities": ["audio_output"]}],
+                },
+            ],
+        }))
+        os.environ["CARTHING_TRUSTED_DEVICES"] = str(trusted_path)
+        app_state = AppState()
+        events = []
+
+        dispatcher = Dispatcher(
+            app_state,
+            on_route_input_select=lambda key: events.append(("input", key)),
+            on_route_output_select=lambda key: events.append(("output", key)),
+            on_route_activate=lambda: events.append(("activate", None)),
+        )
+        dispatcher.dispatch("route_input_select", "iphone")
+        dispatcher.dispatch("route_output_select", "fosi")
+        assert events == [("input", "iphone"), ("output", "fosi")]
+        assert app_state.route_input == "iphone"
+        assert app_state.route_output == "fosi"
+        assert app_state.route_active is False
+        dispatcher.dispatch("route_activate")
+        assert events[-1] == ("activate", None)
+
+
 def check_runtime_route_state():
     from runtime_model import RuntimeModel
 
@@ -458,6 +505,7 @@ def main():
     check_enrollment()
     check_degraded_enrollment()
     check_multirole_app_state()
+    check_route_activation_intent()
     check_runtime_route_state()
     check_patchbay()
     asyncio.run(check_route_patchbay_router())

@@ -285,7 +285,6 @@ def _on_route_input_select(key):
         gui.app_state.save_trusted()
     model.clear_route_plan()
     logger.info("route input selected: %s", key)
-    asyncio.ensure_future(_activate_route())
     _on_publish()
 
 
@@ -297,8 +296,13 @@ def _on_route_output_select(key):
         gui.app_state.save_trusted()
     model.clear_route_plan()
     logger.info("route output selected: %s", key)
-    asyncio.ensure_future(_activate_route())
     _on_publish()
+
+
+def _on_route_activate():
+    if power is not None:
+        power.note_activity("route_activate")
+    asyncio.ensure_future(_activate_route())
 
 
 def _on_toggle_sleep(on):
@@ -528,6 +532,7 @@ async def main():
                                 on_session_select=_on_session_select,
                                 on_route_input_select=_on_route_input_select,
                                 on_route_output_select=_on_route_output_select,
+                                on_route_activate=_on_route_activate,
                                 on_toggle_sleep=_on_toggle_sleep,
                                 on_set_off_timeout=_on_set_off_timeout,
                                 on_toggle_notif_blink=_on_toggle_notif_blink)

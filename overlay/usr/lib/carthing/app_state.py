@@ -283,6 +283,10 @@ class AppState:
         self.transfer_source = ""
         self._route_input = ""
         self._route_output = ""
+        self.route_name = ""
+        self.route_protocols = []
+        self.route_warnings = []
+        self.route_cables = []
         self._active_session = "remote"
         self.mode_status = "remote"
         self.power_tier = "boot"

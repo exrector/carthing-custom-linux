@@ -41,7 +41,7 @@ class GuiController:
                  on_transfer_rescan=None, on_transfer_select=None, on_speaker_pair_select=None,
                  on_trusted_remove=None, on_notif_dismiss=None,
                  on_session_select=None, on_route_input_select=None,
-                 on_route_output_select=None, on_toggle_sleep=None, on_set_off_timeout=None,
+                 on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None, on_set_off_timeout=None,
                  on_toggle_notif_blink=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
@@ -56,6 +56,7 @@ class GuiController:
             on_session_select=on_session_select,
             on_route_input_select=on_route_input_select,
             on_route_output_select=on_route_output_select,
+            on_route_activate=on_route_activate,
             on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
             on_set_off_timeout=on_set_off_timeout or (lambda *a, **k: None),  # [CLAUDE] ±тайм-аут
             on_toggle_notif_blink=on_toggle_notif_blink or (lambda *a, **k: None),  # [CLAUDE] моргание уведомл.
@@ -128,9 +129,7 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "route_activate":
-            # [CLAUDE 2026-06-02] режимы удалены: активируем текущий маршрут напрямую
-            # (re-select входа -> _on_route_input_select -> _activate_route в рантайме).
-            self.dispatcher.dispatch("route_input_select", getattr(self.app_state, "route_input", ""))
+            self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
@@ -378,6 +377,10 @@ class GuiController:
         self._sync_trusted_iphone(a, a.iphone.connected, model.session.peer)
         a.transfer_active = model.transfer_active
         a.transfer_source = model.speaker_name or ""
+        a.route_name = getattr(model, "route_name", "")
+        a.route_protocols = list(getattr(model, "route_protocols", []) or [])
+        a.route_warnings = list(getattr(model, "route_warnings", []) or [])
+        a.route_cables = list(getattr(model, "route_cables", []) or [])
         a.active_session = getattr(model, "active_session", "remote")
         a.mode_status = getattr(model, "mode_status", a.active_session)
         a.power_tier = getattr(model, "power_tier", "boot")

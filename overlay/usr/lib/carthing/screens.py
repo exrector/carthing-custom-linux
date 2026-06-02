@@ -176,6 +176,10 @@ class RouteBuilderScreen(Screen):
         status = "маршрут активен" if active else ("маршрут выбран" if route_input and route_output else "ожидание маршрута")
         draw.text((52, CONTENT_TOP + 52), status,
                   font=T.font(T.SZ_META), fill=T.FAINT)
+        route_name = getattr(self.state, "route_name", "")
+        if route_name:
+            draw.text((52, CONTENT_TOP + 76), f"Plan: {route_name}",
+                      font=T.font(T.SZ_SMALL), fill=T.MUTED)
 
         cap_labels = {
             "audio_input": "аудио-вход",
@@ -229,6 +233,16 @@ class RouteBuilderScreen(Screen):
             draw.text((32, y), f"Plan: {preview_in} -> {preview_out}",
                       font=T.font(T.SZ_META), fill=T.FAINT)
             y += 32
+        protocols = list(getattr(self.state, "route_protocols", []) or [])
+        warnings = list(getattr(self.state, "route_warnings", []) or [])
+        if protocols:
+            draw.text((32, y), f"Protocols: {', '.join(protocols)}",
+                      font=T.font(T.SZ_SMALL), fill=T.MUTED)
+            y += 26
+        if warnings:
+            for warning in warnings[:2]:
+                draw.text((32, y), warning, font=T.font(T.SZ_SMALL), fill=T.WARN)
+                y += 22
         if route_input and route_output:
             C.text_centered(draw, "Применить план", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
             if regions is not None:
