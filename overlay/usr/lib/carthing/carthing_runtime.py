@@ -231,8 +231,39 @@ def _on_trusted_remove(key):
     asyncio.ensure_future(_run())
 
 
+async def _activate_route():
+    """[CLAUDE 2026-06-02] РЕЖИМЫ УДАЛЕНЫ. Единственная активируемая сущность — ребро
+    input->output. Нет глобального mode/session, меняющего поведение коннектов. Присутствие
+    (BLE-control + A2DP listener) живёт всегда; classic/A2DP открывается ТОЛЬКО здесь, при
+    наличии выбранного маршрута. Это убирает баг «выбран transfer -> connect iPhone лезет classic»."""
+    if session_runner is None or gui is None:
+        return
+    app_state = gui.app_state
+    route_input = str(getattr(app_state, "route_input", "") or "").strip()
+    route_output = str(getattr(app_state, "route_output", "") or "").strip()
+    if not route_input or not route_output:
+        await session_runner.stop_current()
+        model.audio_sink = "builtin"
+        _on_publish()
+        return
+    registry = TrustedDeviceRegistry(getattr(app_state, "trusted_path", None)).load()
+    planner = RoutePlanner(registry)
+    try:
+        routed = planner.plan_simple_route(route_input, route_output, name="route")
+    except RoutePlanError as exc:
+        logger.warning("route rejected: %s -> %s: %s", route_input, route_output, exc)
+        _on_publish()
+        return
+    await session_runner.start(routed)
+    model.audio_sink = "speaker"
+    if _iphone is not None:
+        _iphone.activate_source()
+    logger.info("route active: %s -> %s", route_input, route_output)
+    _on_publish()
+
+
 def _on_session_select(session):
-    asyncio.ensure_future(_apply_session(session))
+    pass  # [CLAUDE 2026-06-02] режимы удалены — выбор режима больше ничего не делает
 
 
 def _on_route_input_select(key):
@@ -244,8 +275,7 @@ def _on_route_input_select(key):
             gui.app_state.route_input = selected
         gui.app_state.save_trusted()
     logger.info("route input selected: %s", key)
-    if model.active_session == "router":
-        asyncio.ensure_future(_apply_session("router", persist=False))
+    asyncio.ensure_future(_activate_route())
     _on_publish()
 
 
@@ -258,8 +288,7 @@ def _on_route_output_select(key):
             gui.app_state.route_output = selected
         gui.app_state.save_trusted()
     logger.info("route output selected: %s", key)
-    if model.active_session == "router":
-        asyncio.ensure_future(_apply_session("router", persist=False))
+    asyncio.ensure_future(_activate_route())
     _on_publish()
 
 
@@ -618,7 +647,9 @@ async def main():
     if gui is not None:
         link_manager.register(AppStateLinkAdapter(gui.app_state))
         link_manager.start()
-    await _apply_session(settings.get("active_session", "remote"), persist=False)
+    # [CLAUDE 2026-06-02] Без режимов: на boot поднимаем присутствие, активного маршрута нет.
+    if gui is not None:
+        gui.show_home()
 
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
