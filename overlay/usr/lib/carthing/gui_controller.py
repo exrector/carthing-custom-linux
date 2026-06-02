@@ -382,7 +382,6 @@ class GuiController:
         a.route_warnings = list(getattr(model, "route_warnings", []) or [])
         a.route_cables = list(getattr(model, "route_cables", []) or [])
         a.active_session = getattr(model, "active_session", "remote")
-        a.mode_status = getattr(model, "mode_status", a.active_session)
         a.power_tier = getattr(model, "power_tier", "boot")
         if s.source == "mac":
             a.mac.connected = bool(s.connected)
