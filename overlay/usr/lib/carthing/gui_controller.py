@@ -143,11 +143,6 @@ class GuiController:
             self.compositor.screens[MODES].tap(index)
             self.compositor.render()
             return
-        if intent == "mode_focus":
-            index = payload.get("index") if isinstance(payload, dict) else payload
-            self.compositor.screens[MODES].tap(index)
-            self.compositor.render()
-            return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
 
     def needs_fast_render(self):
