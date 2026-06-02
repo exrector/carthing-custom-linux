@@ -223,7 +223,7 @@ class AccessoryOrchestrator:
                 logger.warning("%s(%s) failed: %s", fn_name, val, e)
 
     # ── intents / события (пересчитывают видимость) ──────────────────────────
-    async def arm_pairing(self, on: bool):
+    async def arm_pairing(self, on: bool, disconnect_current: bool = False):
         """GUI: вход/выход «Режим сопряжения» (двунаправленный — источники И динамики)."""
         self.pairing_armed = bool(on)
         if on:
@@ -237,7 +237,8 @@ class AccessoryOrchestrator:
             # старый бонд (keystore keyed by identity). Резолвинг вернётся на следующем power_on.
             # Codex: долгосрочно — refresh resolving list на on_bonded (тогда и рестарт не нужен).
             await self._disable_resolution_for_pairing()
-            await self._disconnect_current_connections_for_pairing()
+            if disconnect_current:
+                await self._disconnect_current_connections_for_pairing()
         await self.apply_visibility()
 
     async def _disconnect_current_connections_for_pairing(self):

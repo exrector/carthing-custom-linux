@@ -156,13 +156,16 @@ def _on_pairing(enabled, role="source"):
         power.set_pairing(bool(enabled))
     if role == "device":
         async def _run_device_pairing():
-            if transfer is not None:
-                if enabled:
-                    await transfer.start_speaker_enrollment()
-                else:
+            if enabled:
+                if orch is not None:
+                    await orch.arm_pairing(True, disconnect_current=False)
+                if transfer is not None:
+                    asyncio.create_task(transfer.start_speaker_enrollment())
+            else:
+                if transfer is not None:
                     await transfer.stop_speaker_enrollment()
-            if orch is not None:
-                await orch.arm_pairing(bool(enabled))
+                if orch is not None:
+                    await orch.arm_pairing(False)
         asyncio.ensure_future(_run_device_pairing())
     elif role == "speaker":
         if orch is not None:

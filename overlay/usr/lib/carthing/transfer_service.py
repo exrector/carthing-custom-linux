@@ -31,6 +31,7 @@ class TransferService:
             autoconnect=False,                  # никакого авто-коннекта/визибилити по умолчанию
             on_state_change=self._sync,
         )
+        self._speaker_enroll_task = None
 
     async def start(self):
         """Поднять SDP + relay-машинерию (listener). Видимость остаётся за orchestrator."""
@@ -41,17 +42,44 @@ class TransferService:
         # ВАЖНО: вызвать orchestrator.apply_visibility() ПОСЛЕ — он перегейтит classic в not-connectable.
 
     async def start_speaker_enrollment(self):
-        try:
-            await self.bridge.scan_pairable_speakers()
-        except Exception as e:
-            logger.warning("speaker enrollment scan failed: %s", e)
-            try:
-                self.bridge.state.speaker_pairing_status = "error"
-            except Exception:
-                pass
+        if self._speaker_enroll_task is not None and not self._speaker_enroll_task.done():
+            return
+        self._speaker_enroll_task = asyncio.create_task(self._speaker_enrollment_loop())
         self._sync()
 
+    async def _speaker_enrollment_loop(self):
+        while bool(getattr(self.bridge.state, "pairing_mode", False)):
+            try:
+                await self.bridge.scan_pairable_speakers(duration=8.0)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning("speaker enrollment scan failed: %s", e)
+                try:
+                    self.bridge.state.speaker_pairing_status = "error"
+                except Exception:
+                    pass
+                self._sync()
+                await asyncio.sleep(1.0)
+                continue
+            if bool(getattr(self.bridge.state, "pairing_mode", False)):
+                try:
+                    self.bridge.state.speaker_pairing_status = "scan"
+                except Exception:
+                    pass
+                self._sync()
+                await asyncio.sleep(1.0)
+
     async def stop_speaker_enrollment(self):
+        if self._speaker_enroll_task is not None and not self._speaker_enroll_task.done():
+            self._speaker_enroll_task.cancel()
+            try:
+                await self._speaker_enroll_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.warning("speaker enrollment loop stop ignored: %s", e)
+        self._speaker_enroll_task = None
         try:
             await self.bridge.device.stop_discovery()
         except Exception:
