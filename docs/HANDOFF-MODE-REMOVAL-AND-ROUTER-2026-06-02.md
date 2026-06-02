@@ -142,3 +142,20 @@ runtime_model, `set_active_session`/`note_mode` в power_policy, `active_session
 Снять можно в любой момент, но `runtime_model.publish()` эмитит эти ключи в /run/.../runtime-bt.json
 — перед удалением проверить conductor (вне overlay), который мёржит состояние, иначе схема. ROI ноль.
 Итог: РЕЖИМЫ как механизм поведения/UI УДАЛЕНЫ. Истина = граф маршрутов.
+
+## ОБНОВЛЕНИЕ (2026-06-02, поздно) — CTKD доказан + диагноз Fosi 0x13
+ДОКАЗАНО НА ЖЕЛЕЗЕ: CTKD работает — одна BLE-пара айфона дала ltk+irk+link_key в одной записи
+keys.json (`10:A2:D3:83:82:50/P`), phase=both_bonded, AMS/ANCS/CTS живые, sticky-реконнект сам.
+Режим сопряжения на девайсе инициализируется корректно (General pairing advertising).
+
+FOSI (колонка) — НЕ держит коннект, причина НАЙДЕНА и это НЕ ключи/шифрование:
+- Шифрование встаёт (`A2DP receiver link ENCRYPTED ok (encrypted=True)`).
+- Отвал на уровне AVDTP: `discover endpoints` -> через ~2с Fosi рвёт `reason=0x13` (remote terminated).
+- КОРЕНЬ = контеншн одного HCI + одного asyncio-loop: тяжёлый BLE-GATT айфона (AMS/ANCS/CTS setup +
+  дозагрузка ANCS-уведомлений) попадает В ОКНО AVDTP-рукопожатия с Fosi -> цикл занят айфоном ~2с ->
+  Fosi таймаутит и рвёт. Уязвимо только окно рукопожатия (~1-2с); после stream open+start держится.
+ФИКС (TODO, не делать вслепую ночью): сериализовать classic-AVDTP setup vs BLE-всплески —
+не поднимать A2DP к колонке во время iPhone BLE setup/нотификаций; «тихое окно» + ретрай до чистого
+прохода рукопожатия. Возможно — lock/семафор на время AVDTP-handshake. Standby уже ретраит.
+Текущее состояние a2dp_bridge: standby/pair открывают полный A2DP (request_receiver_connection),
+auth/encrypt больше не глушится (логируется). Коммит 52b8840.
