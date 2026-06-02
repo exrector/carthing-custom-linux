@@ -363,7 +363,7 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
-            {"key": "sessions", "label": "Сессии и маршруты"},
+            {"key": "routes", "label": "Маршруты"},
             {"key": "pairing", "label": "Добавить устройство", "children": [
                 ("pairing_device", "Bluetooth-устройство"),
             ]},

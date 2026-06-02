@@ -135,7 +135,9 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "route_activate":
-            self.dispatcher.dispatch("session_select", "router")
+            # [CLAUDE 2026-06-02] режимы удалены: активируем текущий маршрут напрямую
+            # (re-select входа -> _on_route_input_select -> _activate_route в рантайме).
+            self.dispatcher.dispatch("route_input_select", getattr(self.app_state, "route_input", ""))
             self.compositor.render()
             return
         if intent == "session_focus":

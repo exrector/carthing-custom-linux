@@ -125,8 +125,9 @@ class Dispatcher:
             self.state.pairing_message = ""
             self.state.clear_speaker_candidates()
             self.on_pairing(True, "device")
-        elif key in ("sessions", "modes"):
-            self.state.active_desktop = self.state.MODES
+        elif key in ("sessions", "modes", "routes"):
+            # [CLAUDE 2026-06-02] режимы удалены — пункт ведёт на маршрутный экран (ВХОД/ВЫХОД)
+            self.state.active_desktop = self.state.ROUTER
         elif key == "toggle_sleep":            # [CLAUDE] тумблер сна экрана
             new = not bool(getattr(self.state, "sleep_on_idle", True))
             self.state.sleep_on_idle = new     # оптимистично для UI
