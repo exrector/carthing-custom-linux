@@ -35,6 +35,7 @@ from route_graph import Protocol
 from route_planner import RoutePlanError, RoutePlanner
 from session_runner import AdapterConnector, SessionRunner
 from trusted_device_registry import TrustedDeviceRegistry
+from virtual_connectors import HciOperationGate, VirtualRoutePatchBay
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("carthing_runtime")
@@ -54,6 +55,8 @@ mac = None               # MacService
 power = None             # IdlePowerController
 session_runner = None    # SessionRunner
 link_manager = None      # LinkManager
+hci_gate = None          # HciOperationGate
+route_patchbay = None    # VirtualRoutePatchBay
 
 
 
@@ -240,6 +243,8 @@ async def _activate_route():
     route_input = str(getattr(app_state, "route_input", "") or "").strip()
     route_output = str(getattr(app_state, "route_output", "") or "").strip()
     if not route_input or not route_output:
+        if route_patchbay is not None:
+            await route_patchbay.deactivate()
         await session_runner.stop_current()
         model.audio_sink = "builtin"
         _on_publish()
@@ -252,6 +257,12 @@ async def _activate_route():
         logger.warning("route rejected: %s -> %s: %s", route_input, route_output, exc)
         _on_publish()
         return
+    if route_patchbay is not None:
+        try:
+            await route_patchbay.activate(routed, registry)
+        except Exception as exc:
+            logger.warning("route patch-bay wiring failed: %s", exc)
+            return
     await session_runner.start(routed)
     model.audio_sink = "speaker"
     if _iphone is not None:
@@ -357,7 +368,7 @@ async def _on_connection(connection):
             await transfer.on_incoming_classic(connection)
         return
 
-    _iphone = IPhoneService(model, on_update=_on_publish)
+    _iphone = IPhoneService(model, on_update=_on_publish, hci_gate=hci_gate)
     started = {"v": False}
 
     async def _start_ams(why):
@@ -459,7 +470,7 @@ async def _on_connection(connection):
 
 
 async def main():
-    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power, session_runner, link_manager
+    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
     _verify_persistent()
 
     # Per-boot инвентарь возможностей + настройки.
@@ -468,6 +479,8 @@ async def main():
     hw_caps = hardware_inventory.probe()
     settings = SettingsService()
     session_runner = SessionRunner()
+    hci_gate = HciOperationGate()
+    route_patchbay = VirtualRoutePatchBay()
     for protocol in Protocol:
         session_runner.register(CompatibilityConnector(protocol))
     logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
@@ -525,7 +538,7 @@ async def main():
         from transfer_service import TransferService
         from transfer_control import TransferControlBackchannel
         app_state = gui.app_state if gui is not None else None
-        transfer = TransferService(device, app_state, orch, model, on_change=_on_publish)
+        transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
         backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
         await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
         for protocol in (

@@ -23,9 +23,9 @@ from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E4
 from link_manager import LinkAdapter, LinkManager  # noqa: E402
 from route_graph import Capability, Constraint, Endpoint, EndpointDirection, PlannedSession, Protocol, TrustedDevice  # noqa: E402
 from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
-from session_presets import build_preset_session, normalize_preset  # noqa: E402
 from session_runner import AdapterConnector, SessionRunner  # noqa: E402
 from trusted_device_registry import TrustedDeviceRegistry  # noqa: E402
+from virtual_connectors import HciOperationGate, VirtualRoutePatchBay  # noqa: E402
 from virtual_socket import SocketKind, VirtualPatchBay, VirtualPlug, VirtualSocket  # noqa: E402
 
 
@@ -47,6 +47,10 @@ class DummyConnector(AdapterConnector):
         self.events.append(f"detach:{session.name}")
 
 
+def _session(name):
+    return PlannedSession(name=name, required_protocols={Protocol.CLASSIC_A2DP_SINK, Protocol.CLASSIC_A2DP_SOURCE})
+
+
 async def check_runner():
     runner = SessionRunner()
     connectors = []
@@ -54,8 +58,8 @@ async def check_runner():
         connector = DummyConnector(protocol)
         connectors.append(connector)
         runner.register(connector)
-    await runner.start(build_preset_session("remote"))
-    await runner.start(build_preset_session("router"))
+    await runner.start(_session("remote"))
+    await runner.start(_session("router"))
     assert runner.current is not None
     assert runner.current.plan.name == "router"
     assert any("detach:remote" in connector.events for connector in connectors)
@@ -295,6 +299,89 @@ def check_patchbay():
     assert not bay.cables
 
 
+async def check_route_patchbay_router():
+    with tempfile.TemporaryDirectory() as tmp:
+        trusted_path = Path(tmp) / "trusted-devices.json"
+        trusted_path.write_text(json.dumps({
+            "schema": 2,
+            "devices": [
+                {
+                    "id": "iphone",
+                    "address": "10:A2:D3:83:82:50",
+                    "name": "iPhone",
+                    "trusted": True,
+                    "online": True,
+                    "connected": False,
+                    "capabilities": ["audio_input", "control_output", "metadata_input"],
+                    "constraints": [],
+                    "endpoints": [
+                        {
+                            "id": "audio-input",
+                            "direction": "input",
+                            "protocols": ["classic_a2dp_sink"],
+                            "capabilities": ["audio_input"],
+                        },
+                        {
+                            "id": "media-control",
+                            "direction": "control",
+                            "protocols": ["ble_ams", "ble_hid"],
+                            "capabilities": ["control_output", "metadata_input"],
+                        },
+                    ],
+                },
+                {
+                    "id": "speaker",
+                    "address": "C4:A9:B8:70:2F:E5",
+                    "name": "Fosi Audio ZD3",
+                    "trusted": True,
+                    "online": True,
+                    "connected": True,
+                    "capabilities": ["audio_output", "control_input"],
+                    "constraints": [],
+                    "endpoints": [
+                        {
+                            "id": "audio-output",
+                            "direction": "output",
+                            "protocols": ["classic_a2dp_source"],
+                            "capabilities": ["audio_output"],
+                        },
+                        {
+                            "id": "speaker-remote",
+                            "direction": "control",
+                            "protocols": ["classic_avrcp"],
+                            "capabilities": ["control_input"],
+                        },
+                    ],
+                },
+            ],
+        }))
+        registry = TrustedDeviceRegistry(trusted_path).load()
+        planner = RoutePlanner(registry)
+        plan = planner.plan_simple_route("iphone", "speaker", name="route")
+        router = VirtualRoutePatchBay()
+        cables = await router.activate(plan, registry)
+        assert len(cables) >= 2
+        assert any("audio-input" in cable.id for cable in cables)
+        assert any("audio-output" in cable.id for cable in cables)
+        await router.deactivate()
+        assert not router.patchbay.cables
+
+
+async def check_hci_gate():
+    gate = HciOperationGate()
+    order = []
+
+    async def worker(name):
+        async def op():
+            order.append(f"{name}:start")
+            await asyncio.sleep(0.05)
+            order.append(f"{name}:end")
+        await gate.run(name, op)
+
+    await asyncio.gather(worker("a"), worker("b"))
+    assert order in (["a:start", "a:end", "b:start", "b:end"], ["b:start", "b:end", "a:start", "a:end"])
+
+
 async def check_link_manager():
     class _Registry:
         def __init__(self, devices):
@@ -337,7 +424,6 @@ async def check_link_manager():
 
 
 def main():
-    assert normalize_preset("transfer") == "router"
     check_registry_and_planner()
     check_planner_constraints()
     check_planner_exclusive_conflicts()
@@ -345,6 +431,8 @@ def main():
     check_degraded_enrollment()
     check_multirole_app_state()
     check_patchbay()
+    asyncio.run(check_route_patchbay_router())
+    asyncio.run(check_hci_gate())
     asyncio.run(check_link_manager())
     asyncio.run(check_runner())
     asyncio.run(check_transfer_route_connector_refcount())

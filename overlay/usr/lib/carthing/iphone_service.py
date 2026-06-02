@@ -38,9 +38,10 @@ logger = logging.getLogger(__name__)
 
 
 class IPhoneService:
-    def __init__(self, model, on_update=None):
+    def __init__(self, model, on_update=None, hci_gate=None):
         self.model = model
         self.on_update = on_update
+        self.hci_gate = hci_gate
         self._ams_state = MediaState()
         self._peer = None
         self._connected = False
@@ -48,6 +49,11 @@ class IPhoneService:
         self.ams = None
         self.ancs = None
         self.cts = None
+
+    async def _gate(self, label, operation):
+        if self.hci_gate is None:
+            return await operation()
+        return await self.hci_gate.run(label, operation)
 
     async def setup(self, connection) -> bool:
         self.model.select_source("iphone")
@@ -62,7 +68,7 @@ class IPhoneService:
 
         self.ams = AMSClient(self._ams_state, on_update=self._on_ams,
                              on_commands=self._on_commands)
-        ok = await self.ams.setup(connection)
+        ok = await self._gate("iphone-ams-setup", lambda: self.ams.setup(connection))
 
         if ANCSClient is not None:
             # ignore_preexisting=False: при подключении iOS переигрывает ВСЕ уже висящие
@@ -71,14 +77,14 @@ class IPhoneService:
             self.ancs = ANCSClient(on_fetched=self._on_notif, on_removed=self._on_removed,
                                    ignore_preexisting=False)
             try:
-                await self.ancs.setup(connection)
+                await self._gate("iphone-ancs-setup", lambda: self.ancs.setup(connection))
             except Exception as e:
                 logger.warning("ANCS setup failed: %s", e)
 
         if CTSClient is not None:
             self.cts = CTSClient()
             try:
-                await self.cts.setup(connection)
+                await self._gate("iphone-cts-setup", lambda: self.cts.setup(connection))
             except Exception as e:
                 logger.warning("CTS setup failed: %s", e)
 
@@ -128,7 +134,7 @@ class IPhoneService:
         """Свайп-влево на гаджете -> очистить уведомление И на iPhone (ANCS negative)."""
         if self.ancs is not None:
             try:
-                await self.ancs.perform_action(uid)   # ACTION_NEGATIVE по умолчанию
+                await self._gate("iphone-ancs-dismiss", lambda: self.ancs.perform_action(uid))
             except Exception as e:
                 logger.warning("ANCS dismiss failed: %s", e)
         self.model.remove_notification(uid)
@@ -168,10 +174,10 @@ class IPhoneService:
 
     async def send_command(self, cmd):
         if self.ams is not None:
-            await self.ams.send_command(cmd)
+            await self._gate("iphone-ams-send", lambda: self.ams.send_command(cmd))
 
     async def command(self, intent: str):
         """GUI/encoder intent (строка) -> AMS-команда."""
         code = _AMS_CMD.get(intent)
         if code is not None and self.ams is not None:
-            await self.ams.send_command(code)
+            await self._gate("iphone-ams-command", lambda: self.ams.send_command(code))

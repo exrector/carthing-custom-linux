@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class TransferService:
-    def __init__(self, device, app_state, orchestrator, model, on_change=None):
+    def __init__(self, device, app_state, orchestrator, model, on_change=None, hci_gate=None):
         self.orch = orchestrator
         self.model = model
         self.on_change = on_change or (lambda: None)
@@ -29,6 +29,7 @@ class TransferService:
             device, app_state,
             bt_name=identity_service.classic_audio_name(),
             autoconnect=False,                  # никакого авто-коннекта/визибилити по умолчанию
+            hci_gate=hci_gate,
             on_state_change=self._sync,
         )
         self._speaker_enroll_task = None

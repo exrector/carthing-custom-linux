@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from route_graph import Capability, Constraint, Protocol
+from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Protocol, TrustedDevice
 
 
 class SocketKind(str, Enum):
@@ -90,6 +90,12 @@ class VirtualPatchBay:
             raise ValueError(f"plug/socket kind mismatch: {plug.kind} -> {socket.kind}")
         if not socket.accepts(plug):
             raise ValueError(f"socket does not accept plug: {plug_id} -> {socket_id}")
+        previous_cable = self.cables.get(socket.occupied_by) if socket.occupied_by else None
+        if previous_cable is not None:
+            self.disconnect(previous_cable.id)
+        for cable_id, cable in list(self.cables.items()):
+            if cable.plug_id == plug_id:
+                self.disconnect(cable_id)
         cable_id = f"{plug_id}->{socket_id}"
         cable = Cable(
             id=cable_id,
@@ -115,3 +121,41 @@ class VirtualPatchBay:
         for cable_id in list(self.cables):
             self.disconnect(cable_id)
 
+
+def _socket_kind_for_endpoint(endpoint: Endpoint) -> SocketKind:
+    capabilities = set(endpoint.capabilities)
+    protocols = set(endpoint.protocols)
+    if Capability.AUDIO_INPUT in capabilities or (
+        endpoint.direction == EndpointDirection.INPUT and Protocol.CLASSIC_A2DP_SINK in protocols
+    ):
+        return SocketKind.AUDIO_INPUT
+    if Capability.AUDIO_OUTPUT in capabilities or (
+        endpoint.direction == EndpointDirection.OUTPUT and Protocol.CLASSIC_A2DP_SOURCE in protocols
+    ):
+        return SocketKind.AUDIO_OUTPUT
+    if Capability.CONTROL_OUTPUT in capabilities:
+        return SocketKind.CONTROL_OUTPUT
+    if Capability.CONTROL_INPUT in capabilities:
+        return SocketKind.CONTROL_INPUT
+    if Capability.NOTIFICATIONS_INPUT in capabilities:
+        return SocketKind.NOTIFICATION_INPUT
+    return SocketKind.METADATA_INPUT
+
+
+def device_plugs(device: TrustedDevice) -> list[VirtualPlug]:
+    plugs: list[VirtualPlug] = []
+    for endpoint in device.endpoints:
+        plugs.append(VirtualPlug(
+            id=f"{device.id}:{endpoint.id}",
+            device_id=device.id,
+            kind=_socket_kind_for_endpoint(endpoint),
+            protocols=set(endpoint.protocols),
+            capabilities=set(endpoint.capabilities),
+            label=endpoint.label or device.name,
+            metadata={
+                "device_name": device.name,
+                "endpoint_id": endpoint.id,
+                "endpoint_direction": endpoint.direction.value,
+            },
+        ))
+    return plugs

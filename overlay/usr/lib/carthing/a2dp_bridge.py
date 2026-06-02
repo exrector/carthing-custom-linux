@@ -191,6 +191,7 @@ class A2DPBridge:
         autoconnect: bool = True,
         reconnect_interval: float = 12.0,
         connect_timeout: float = 20.0,
+        hci_gate=None,
         on_state_change=None,
         logger: logging.Logger | None = None,
     ):
@@ -200,6 +201,7 @@ class A2DPBridge:
         self.autoconnect = autoconnect
         self.reconnect_interval = reconnect_interval
         self.connect_timeout = connect_timeout
+        self.hci_gate = hci_gate
         self.on_state_change = on_state_change or (lambda: None)
         self.logger = logger or logging.getLogger(__name__)
 
@@ -227,6 +229,11 @@ class A2DPBridge:
         self._standby_connecting = set()
         self._speaker_connections = {}
         self._stale_link_key_addresses = set()
+
+    async def _gate(self, label, operation):
+        if self.hci_gate is None:
+            return await operation()
+        return await self.hci_gate.run(label, operation)
 
     def install_sdp_records(self):
         records = dict(self.device.sdp_service_records)
@@ -284,7 +291,7 @@ class A2DPBridge:
         if self.started:
             return
         self.started = True
-        await self.enable_classic_visibility()
+        await self._gate("a2dp-start", self.enable_classic_visibility)
         self.listener = avdtp.Listener(avdtp.Listener.create_registrar(self.device))
         self.listener.on("connection", self.on_avdtp_connection)
         self.logger.info(
@@ -363,13 +370,13 @@ class A2DPBridge:
     async def enter_pairing(self):
         """Pairing mode: become classic-discoverable (so a phone can add us as an
         audio output) and scan for trusted speakers to add as transfer targets."""
-        await self.device.set_discoverable(True)
+        await self._gate("a2dp-enter-pairing", lambda: self.device.set_discoverable(True))
         self.logger.info("A2DP classic discoverable ON (pairing)")
         if self._scan_task is None or self._scan_task.done():
             self._scan_task = asyncio.create_task(self.scan_trusted_speakers())
 
     async def exit_pairing(self):
-        await self.device.set_discoverable(False)
+        await self._gate("a2dp-exit-pairing", lambda: self.device.set_discoverable(False))
         self.logger.info("A2DP classic discoverable OFF")
 
     async def receiver_loop(self):
@@ -406,8 +413,14 @@ class A2DPBridge:
             lambda reason: asyncio.ensure_future(self.on_receiver_disconnected(reason)),
         )
         try:
-            await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
-            await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+            await self._gate(
+                "a2dp-receiver-auth",
+                lambda: asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout),
+            )
+            await self._gate(
+                "a2dp-receiver-encrypt",
+                lambda: asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout),
+            )
             self.logger.info("A2DP receiver link ENCRYPTED ok: %s (encrypted=%s)",
                              target_address, getattr(connection, "is_encrypted", "?"))
         except Exception as exc:
@@ -419,13 +432,19 @@ class A2DPBridge:
                                  target_address, error_text(exc), getattr(connection, "is_encrypted", "?"))
 
         self.logger.info("A2DP receiver AVDTP connect: %s", target_address)
-        protocol = await asyncio.wait_for(
-            avdtp.Protocol.connect(connection),
-            timeout=self.connect_timeout,
+        protocol = await self._gate(
+            "a2dp-receiver-avdtp-connect",
+            lambda: asyncio.wait_for(
+                avdtp.Protocol.connect(connection),
+                timeout=self.connect_timeout,
+            ),
         )
         self.receiver_protocol = protocol
         self.logger.info("A2DP receiver discover endpoints: %s", target_address)
-        await asyncio.wait_for(protocol.discover_remote_endpoints(), timeout=self.connect_timeout)
+        await self._gate(
+            "a2dp-receiver-discover",
+            lambda: asyncio.wait_for(protocol.discover_remote_endpoints(), timeout=self.connect_timeout),
+        )
 
         for endpoint in protocol.remote_endpoints.values():
             caps = "; ".join(str(capability) for capability in getattr(endpoint, "capabilities", []))
@@ -451,9 +470,12 @@ class A2DPBridge:
         )
         source = protocol.add_source(source_capability, None)
         source.configuration = source_configuration
-        stream = await protocol.create_stream(source, sink)
-        await stream.open()
-        await stream.start()
+        stream = await self._gate(
+            "a2dp-receiver-create-stream",
+            lambda: protocol.create_stream(source, sink),
+        )
+        await self._gate("a2dp-receiver-open", stream.open)
+        await self._gate("a2dp-receiver-start", stream.start)
 
         self.receiver_source = source
         self.receiver_stream = stream
@@ -494,8 +516,14 @@ class A2DPBridge:
         connection = self._speaker_connections.get(address)
         if connection is not None:
             if strict_security:
-                await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
-                await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+                await self._gate(
+                    "a2dp-speaker-auth",
+                    lambda: asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout),
+                )
+                await self._gate(
+                    "a2dp-speaker-encrypt",
+                    lambda: asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout),
+                )
             self.state.set_speaker_connected(address, True)
             self.on_state_change()
             return connection
@@ -517,9 +545,12 @@ class A2DPBridge:
         self._standby_connecting.add(address)
         try:
             self.logger.info("A2DP speaker standby connect: %s", address)
-            connection = await asyncio.wait_for(
-                self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
-                timeout=self.connect_timeout,
+            connection = await self._gate(
+                "a2dp-speaker-connect",
+                lambda: asyncio.wait_for(
+                    self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+                    timeout=self.connect_timeout,
+                ),
             )
             self._speaker_connections[address] = connection
             connection.on(
@@ -527,8 +558,14 @@ class A2DPBridge:
                 lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(address, reason)),
             )
             try:
-                await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
-                await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+                await self._gate(
+                    "a2dp-speaker-auth",
+                    lambda: asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout),
+                )
+                await self._gate(
+                    "a2dp-speaker-encrypt",
+                    lambda: asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout),
+                )
             except Exception as exc:
                 if strict_security:
                     raise
@@ -631,7 +668,7 @@ class A2DPBridge:
         self.device.on("inquiry_result", on_inquiry_result)
         self.device.on("inquiry_complete", on_inquiry_complete)
         try:
-            await self.device.start_discovery(auto_restart=False)
+            await self._gate("a2dp-scan-start", lambda: self.device.start_discovery(auto_restart=False))
             try:
                 await asyncio.wait_for(complete, timeout=duration)
             except Exception:
@@ -640,7 +677,7 @@ class A2DPBridge:
             self.device.remove_listener("inquiry_result", on_inquiry_result)
             self.device.remove_listener("inquiry_complete", on_inquiry_complete)
             try:
-                await self.device.stop_discovery()
+                await self._gate("a2dp-scan-stop", self.device.stop_discovery)
             except Exception as exc:
                 self.logger.info("A2DP speaker scan stop ignored: %s", error_text(exc))
             self.state.transfer_scanning = False
@@ -705,7 +742,7 @@ class A2DPBridge:
         self.device.on("inquiry_result", on_inquiry_result)
         self.device.on("inquiry_complete", on_inquiry_complete)
         try:
-            await self.device.start_discovery(auto_restart=False)
+            await self._gate("a2dp-pair-scan-start", lambda: self.device.start_discovery(auto_restart=False))
             try:
                 await asyncio.wait_for(complete, timeout=duration)
             except Exception:
@@ -714,7 +751,7 @@ class A2DPBridge:
             self.device.remove_listener("inquiry_result", on_inquiry_result)
             self.device.remove_listener("inquiry_complete", on_inquiry_complete)
             try:
-                await self.device.stop_discovery()
+                await self._gate("a2dp-pair-scan-stop", self.device.stop_discovery)
             except Exception as exc:
                 self.logger.info("A2DP pairable scan stop ignored: %s", error_text(exc))
             self.state.speaker_pairing_status = "idle"
@@ -779,13 +816,22 @@ class A2DPBridge:
         if not address:
             raise RuntimeError("no bonded source address to dial")
         self.logger.info("A2DP source classic dial (CarThing-initiated): %s", address)
-        connection = await asyncio.wait_for(
-            self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
-            timeout=self.connect_timeout,
+        connection = await self._gate(
+            "a2dp-source-connect",
+            lambda: asyncio.wait_for(
+                self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+                timeout=self.connect_timeout,
+            ),
         )
         try:
-            await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
-            await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+            await self._gate(
+                "a2dp-source-auth",
+                lambda: asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout),
+            )
+            await self._gate(
+                "a2dp-source-encrypt",
+                lambda: asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout),
+            )
         except Exception as exc:
             self.logger.warning("A2DP source dial auth/encrypt failed: %s", error_text(exc))
             raise
