@@ -333,7 +333,12 @@ class A2DPBridge:
                 # online/offline здесь — статус, а не триггер автозвонка.
                 self.logger.info("A2DP speaker standby skipped (not paired, no link-key): %s", address)
                 continue
-            await self.ensure_speaker_connection(address)
+            # [CLAUDE 2026-06-02] Постоянный standby = УДЕРЖАННЫЙ A2DP-коннект (AVDTP open+start),
+            # не только ACL. Без открытого медиаканала колонка (Fosi) видит «пустой» ACL, роняет его
+            # и висит в режиме пары. request_receiver_connection открывает и держит A2DP-поток ->
+            # колонка выходит из пары и горит «подключено». RTP не форвардится, пока нет источника —
+            # канал просто живёт в фоне. Идемпотентно: если уже held на этот адрес — no-op.
+            await self.request_receiver_connection(address)
 
     async def enable_classic_visibility(self):
         # Connectable always (bonded peers reconnect, incoming A2DP works), but
@@ -403,8 +408,15 @@ class A2DPBridge:
         try:
             await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
             await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+            self.logger.info("A2DP receiver link ENCRYPTED ok: %s (encrypted=%s)",
+                             target_address, getattr(connection, "is_encrypted", "?"))
         except Exception as exc:
-            self.logger.info("A2DP receiver auth/encrypt continued: %s", error_text(exc))
+            # [CLAUDE 2026-06-02] A2DP/AVDTP требует ШИФРОВАНИЯ. Если оно не встаёт — Fosi рвёт
+            # коннект (reason 0x13). Раньше ошибку глушили и шли в AVDTP по открытому линку.
+            # Логируем реальную причину. Частый корень: рассинхрон link-key (колонка помнит
+            # старый ключ Car Thing) -> «забыть» Car Thing на самой колонке + спарить заново.
+            self.logger.warning("A2DP receiver auth/encrypt FAILED: %s: %s (encrypted=%s)",
+                                 target_address, error_text(exc), getattr(connection, "is_encrypted", "?"))
 
         self.logger.info("A2DP receiver AVDTP connect: %s", target_address)
         protocol = await asyncio.wait_for(
@@ -747,10 +759,10 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.warning("speaker trust save failed: %s", error_text(exc))
         self.on_state_change()
-        if self.state.transfer_active:
-            await self.request_receiver_connection(address)
-        else:
-            await self.ensure_speaker_connection(address)
+        # [CLAUDE 2026-06-02] После пары сразу открываем+держим A2DP-коннект к колонке (AVDTP,
+        # не только ACL), чтобы она вышла из режима пары и встала «подключено», а не мигала.
+        # Дальше standby-loop поддерживает/переоткрывает этот же коннект.
+        await self.request_receiver_connection(address)
 
     async def _bond_speaker(self, address):
         await self.ensure_speaker_connection(address, require_trusted=False, strict_security=True)
