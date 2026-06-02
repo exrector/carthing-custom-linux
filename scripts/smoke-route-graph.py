@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -12,12 +13,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / "overlay" / "usr" / "lib" / "carthing"
+VENDOR = LIB / "vendor"
+os.environ.setdefault("CAR_THING_LIB", str(VENDOR))
 sys.path.insert(0, str(LIB))
+sys.path.insert(0, str(VENDOR))
 
 from app_state import AppState  # noqa: E402
 from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E402
 from link_manager import LinkAdapter, LinkManager  # noqa: E402
-from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Protocol, TrustedDevice  # noqa: E402
+from route_graph import Capability, Constraint, Endpoint, EndpointDirection, PlannedSession, Protocol, TrustedDevice  # noqa: E402
 from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
 from session_presets import build_preset_session, normalize_preset  # noqa: E402
 from session_runner import AdapterConnector, SessionRunner  # noqa: E402
@@ -55,6 +59,35 @@ async def check_runner():
     assert runner.current is not None
     assert runner.current.plan.name == "router"
     assert any("detach:remote" in connector.events for connector in connectors)
+
+
+async def check_transfer_route_connector_refcount():
+    from carthing_runtime import TransferRouteConnector
+
+    logging.getLogger("session_runner").setLevel(logging.WARNING)
+
+    class Service:
+        def __init__(self):
+            self.activated = 0
+            self.deactivated = 0
+
+        async def activate(self):
+            self.activated += 1
+
+        async def deactivate(self):
+            self.deactivated += 1
+
+    service = Service()
+    runner = SessionRunner()
+    for protocol in (Protocol.CLASSIC_A2DP_SINK, Protocol.CLASSIC_A2DP_SOURCE):
+        runner.register(TransferRouteConnector(protocol, service))
+    await runner.start(PlannedSession(
+        name="router",
+        required_protocols={Protocol.CLASSIC_A2DP_SINK, Protocol.CLASSIC_A2DP_SOURCE},
+    ))
+    await runner.stop_current()
+    assert service.activated == 1
+    assert service.deactivated == 1
 
 
 def check_registry_and_planner():
@@ -314,6 +347,7 @@ def main():
     check_patchbay()
     asyncio.run(check_link_manager())
     asyncio.run(check_runner())
+    asyncio.run(check_transfer_route_connector_refcount())
     print("ROUTE GRAPH SMOKE OK")
 
 

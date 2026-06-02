@@ -89,7 +89,6 @@ class TransferRouteConnector(AdapterConnector):
     def __init__(self, protocol, service):
         self.protocol = protocol
         self.service = service
-        self._attached = 0
 
     async def start(self):
         return
@@ -100,16 +99,17 @@ class TransferRouteConnector(AdapterConnector):
     async def attach_session(self, session):
         if self.service is None:
             return
-        self._attached += 1
-        if self._attached == 1:
+        attached = int(getattr(self.service, "_route_connector_refcount", 0))
+        if attached == 0:
             await self.service.activate()
+        setattr(self.service, "_route_connector_refcount", attached + 1)
 
     async def detach_session(self, session):
         if self.service is None:
             return
-        if self._attached > 0:
-            self._attached -= 1
-        if self._attached == 0:
+        attached = max(0, int(getattr(self.service, "_route_connector_refcount", 0)) - 1)
+        setattr(self.service, "_route_connector_refcount", attached)
+        if attached == 0:
             await self.service.deactivate()
 
 
