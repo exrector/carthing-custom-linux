@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""[CLAUDE 2026-06-02] Изолированный тест Car Thing -> Fosi как A2DP source.
+Без айфона, без полного рантайма — эксклюзивно на HCI. Воспроизводит условия
+доказанно-рабочего прогона 2026-05-21 (A2DP_STREAMING_OK). Запускать с ОСТАНОВЛЕННЫМ
+рантаймом. Использует ТЕКУЩИЙ a2dp_bridge.setup_receiver + AVDTP/L2CAP debug-трейс."""
+import asyncio
+import logging
+import sys
+
+sys.path.insert(0, "/usr/lib/carthing")
+sys.path.insert(0, "/usr/lib/carthing/vendor")
+
+logging.basicConfig(level=logging.INFO,
+                    format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# Полный AVDTP/L2CAP-трейс — увидеть, отвечает ли Fosi на DISCOVER или молчит.
+for _n in ("bumble.avdtp", "bumble.l2cap", "bumble.a2dp"):
+    logging.getLogger(_n).setLevel(logging.DEBUG)
+
+FOSI = "C4:A9:B8:70:2F:E5"
+
+
+class Stub:
+    """Минимальный state для setup_receiver/ensure_speaker_connection."""
+    transfer_active = True
+    trusted_sources = []
+    trusted_speakers = [{"address": FOSI, "online": True, "connected": False}]
+
+    def __init__(self):
+        self.transfer_status = ""
+
+    def default_speaker_address(self):
+        return FOSI
+
+    def is_trusted_speaker(self, a):
+        return True
+
+    def is_trusted_source(self, a):
+        return False
+
+    def set_speaker_connected(self, a, c=True):
+        pass
+
+    def set_connected_speaker(self, a):
+        pass
+
+    def __getattr__(self, k):
+        def _noop(*a, **k):
+            return None
+        return _noop
+
+
+async def main():
+    from ble_transport import init_ble
+    from a2dp_bridge import A2DPBridge
+
+    device, _t = await init_ble()
+    try:
+        device.classic_enabled = True
+    except Exception:
+        pass
+
+    b = A2DPBridge(device, Stub())
+    b.install_sdp_records()
+    b.install_safe_link_key_provider()
+
+    print(">>> STANDALONE A2DP SOURCE TEST -> Fosi (no iPhone, exclusive HCI)")
+    try:
+        await b.setup_receiver(FOSI)
+        ok = b.receiver_rtp_channel is not None
+        print(f">>> setup_receiver done: rtp_channel={b.receiver_rtp_channel} "
+              f"status={b.state.transfer_status} "
+              f"{'A2DP_STREAMING_OK' if ok else 'NO_RTP_CHANNEL'}")
+        if ok:
+            print(">>> holding stream 20s (Fosi should be solid / connected)")
+            await asyncio.sleep(20)
+    except Exception as e:
+        import traceback
+        print(f">>> setup_receiver FAILED: {type(e).__name__}: {e}")
+        traceback.print_exc()
+
+
+asyncio.run(main())

@@ -431,11 +431,26 @@ class A2DPBridge:
             self.logger.warning("A2DP receiver auth/encrypt FAILED: %s: %s (encrypted=%s)",
                                  target_address, error_text(exc), getattr(connection, "is_encrypted", "?"))
 
-        self.logger.info("A2DP receiver AVDTP connect: %s", target_address)
+        # [CLAUDE 2026-06-02] ВОССТАНОВЛЕНО (регрессия Codex): доказанный путь 2026-05-21 делал
+        # SDP-запрос версии AVDTP ПЕРЕД Protocol.connect и передавал version=. Без этого Fosi
+        # рвал коннект (discover endpoints -> 0x13). С SDP-версией поток доходил до A2DP_STREAMING_OK.
+        try:
+            version = await self._gate(
+                "a2dp-receiver-sdp-version",
+                lambda: asyncio.wait_for(
+                    avdtp.find_avdtp_service_with_connection(self.device, connection),
+                    timeout=self.connect_timeout,
+                ),
+            )
+        except Exception as exc:
+            version = None
+            self.logger.info("A2DP receiver SDP version lookup ignored: %s", error_text(exc))
+        version = version or (1, 2)
+        self.logger.info("A2DP receiver AVDTP connect: %s version=%s", target_address, version)
         protocol = await self._gate(
             "a2dp-receiver-avdtp-connect",
             lambda: asyncio.wait_for(
-                avdtp.Protocol.connect(connection),
+                avdtp.Protocol.connect(connection, version=version),
                 timeout=self.connect_timeout,
             ),
         )
@@ -511,6 +526,21 @@ class A2DPBridge:
                 )
         return None, None, None, None
 
+    def _find_classic_connection(self, address):
+        """[CLAUDE 2026-06-02] Найти ЖИВОЙ classic (BR/EDR) коннект к адресу среди
+        device.connections — чтобы переиспользовать, а не дозваниваться вторично (раса 0xB)."""
+        address = normalize_address(address)
+        try:
+            conns = self.device.connections
+            items = conns.values() if hasattr(conns, "values") else conns
+            for c in items:
+                if (normalize_address(getattr(c, "peer_address", "")) == address
+                        and getattr(c, "transport", None) == BT_BR_EDR_TRANSPORT):
+                    return c
+        except Exception:
+            pass
+        return None
+
     async def ensure_speaker_connection(self, address, require_trusted=True, strict_security=False):
         address = normalize_address(address)
         connection = self._speaker_connections.get(address)
@@ -544,14 +574,28 @@ class A2DPBridge:
 
         self._standby_connecting.add(address)
         try:
-            self.logger.info("A2DP speaker standby connect: %s", address)
-            connection = await self._gate(
-                "a2dp-speaker-connect",
-                lambda: asyncio.wait_for(
-                    self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
-                    timeout=self.connect_timeout,
-                ),
-            )
+            # [CLAUDE 2026-06-02] Идемпотентность против расы pair_speaker <-> standby-loop:
+            # если classic-линк к адресу уже есть на HCI (другой путь успел) — переиспользуем,
+            # иначе device.connect отдаёт HCI_CONNECTION_ALREADY_EXISTS (0xB) и «пара не завершена».
+            connection = self._find_classic_connection(address)
+            if connection is not None:
+                self.logger.info("A2DP speaker reuse existing classic link: %s", address)
+            else:
+                self.logger.info("A2DP speaker standby connect: %s", address)
+                try:
+                    connection = await self._gate(
+                        "a2dp-speaker-connect",
+                        lambda: asyncio.wait_for(
+                            self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+                            timeout=self.connect_timeout,
+                        ),
+                    )
+                except Exception as exc:
+                    connection = self._find_classic_connection(address)
+                    if connection is None:
+                        raise
+                    self.logger.info("A2DP speaker connect raced (%s) -> reuse existing: %s",
+                                     error_text(exc), address)
             self._speaker_connections[address] = connection
             connection.on(
                 "disconnection",
