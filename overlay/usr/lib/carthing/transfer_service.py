@@ -125,11 +125,27 @@ class TransferService:
             self.bridge.state.transfer_status = "armed"
         except Exception:
             pass
-        await self.orch.set_transfer_connectable(True)   # classic connectable для входящего A2DP
+        await self.orch.set_transfer_connectable(True)   # classic connectable (bonded-only, не discoverable)
         await self.orch.on_a2dp_state(True)
+        # [CLAUDE 2026-06-02] CarThing САМ звонит bonded айфону по classic (исходящий) — это
+        # «мы инициируем classic из меню, айфон подхватывает». Раньше код только ЖДАЛ входящего.
+        src = None
+        try:
+            sources = list(self.bridge.state.trusted_sources)
+            if sources:
+                src = sources[0].get("address")
+        except Exception:
+            src = None
+        if src:
+            try:
+                await self.bridge.connect_source(src)
+                logger.info("transfer: dialed bonded source over classic: %s", src)
+            except Exception as e:
+                logger.warning("source classic dial failed (iPhone may still pick up): %s", e)
+        else:
+            logger.info("transfer armed: no bonded source yet — nothing to dial")
         await self.bridge.ensure_trusted_speakers_connected()
         await self.bridge.request_receiver_connection()
-        logger.info("transfer armed: receiver stream prepared, waits for incoming source RTP")
         self._sync()
 
     async def deactivate(self):

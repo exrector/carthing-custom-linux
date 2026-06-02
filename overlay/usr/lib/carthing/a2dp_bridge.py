@@ -754,6 +754,32 @@ class A2DPBridge:
     async def _bond_speaker(self, address):
         await self.ensure_speaker_connection(address, require_trusted=False, strict_security=True)
 
+    async def connect_source(self, address):
+        """[CLAUDE 2026-06-02] CarThing САМ звонит уже-BLE-бондед айфону по classic
+        (исходящий BR/EDR page) — по действию из меню. Авторизуется сохранённым link-key
+        (CTKD/safe_link_key_provider), шифрует. Айфон, как доверенный bonded аудио-выход,
+        МОЛЧА принимает и начинает стримить A2DP -> AVDTP-listener ловит поток. Это и есть
+        «мы инициируем classic из меню, айфон просто подхватывает». BLE остаётся
+        единственным транспортом, который инициирует САМ айфон; classic — всегда от нас.
+        НЕ делает устройство discoverable/connectable — только исходящий звонок."""
+        address = normalize_address(address)
+        if not address:
+            raise RuntimeError("no bonded source address to dial")
+        self.logger.info("A2DP source classic dial (CarThing-initiated): %s", address)
+        connection = await asyncio.wait_for(
+            self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+            timeout=self.connect_timeout,
+        )
+        try:
+            await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
+            await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
+        except Exception as exc:
+            self.logger.warning("A2DP source dial auth/encrypt failed: %s", error_text(exc))
+            raise
+        await self.handle_classic_connection(connection)
+        self.logger.info("A2DP_SOURCE_CLASSIC_DIALED %s", address)
+        return connection
+
     async def _has_link_key(self, address):
         if self.device.keystore is None:
             return False
