@@ -804,7 +804,7 @@ class PairingModal:
             C.text_centered(draw, title, T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 160, cx=cx)
             status = getattr(self.state, "speaker_pairing_status", "") or "scan"
             subtitle = {
-                "scan": "Ищу устройства и принимаю подключение…" if device_mode else "Ищу Bluetooth-аудио…",
+                "scan": "Ищу аудиоустройства и принимаю iPhone/Mac" if device_mode else "Ищу Bluetooth-аудио…",
                 "connect": "Завершаю сопряжение…",
                 "done": "Устройство подключено",
                 "error": "Не удалось добавить",
@@ -819,7 +819,7 @@ class PairingModal:
                                 T.MUTED if status == "done" else T.WARN,
                                 T.MAIN_CY - 42, cx=cx)
             elif not candidates:
-                text = message or ("Откройте Bluetooth на телефоне или включите pairing на аудиоустройстве"
+                text = message or ("Включите pairing на динамике или выберите Car Thing на телефоне"
                                    if device_mode else "Переведите аудиоустройство в режим сопряжения")
                 C.text_centered(draw, text, T.font(T.SZ_SMALL),
                                 T.MUTED, T.MAIN_CY - 42, cx=cx)

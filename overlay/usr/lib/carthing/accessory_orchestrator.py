@@ -181,6 +181,7 @@ class AccessoryOrchestrator:
         try:
             await self.device.start_advertising(
                 own_address_type=OwnAddressType.PUBLIC, auto_restart=True)
+            logger.info("General pairing advertising started (public, scan-name)")
         except Exception as e:
             logger.warning("general advertising failed: %s", e)
 
@@ -236,7 +237,36 @@ class AccessoryOrchestrator:
             # старый бонд (keystore keyed by identity). Резолвинг вернётся на следующем power_on.
             # Codex: долгосрочно — refresh resolving list на on_bonded (тогда и рестарт не нужен).
             await self._disable_resolution_for_pairing()
+            await self._disconnect_current_connections_for_pairing()
         await self.apply_visibility()
+
+    async def _disconnect_current_connections_for_pairing(self):
+        """Pairing is a deliberate service operation.
+
+        On this controller, trying to start undirected advertising while an
+        existing central is connected is unreliable and often gets silenced by
+        apply_visibility(). Drop current links first so a new iPhone/Mac can
+        actually see the accessory.
+        """
+        try:
+            raw_connections = self.device.connections
+            connections = list(raw_connections.values() if hasattr(raw_connections, "values") else raw_connections)
+        except Exception:
+            connections = []
+        for connection in connections:
+            try:
+                peer = getattr(connection, "peer_address", connection)
+                logger.info("Pairing mode: disconnect current peer %s", peer)
+                await connection.disconnect()
+            except Exception as e:
+                logger.warning("pairing disconnect ignored: %s", e)
+        for _ in range(10):
+            try:
+                if not self.device.connections:
+                    break
+            except Exception:
+                break
+            await asyncio.sleep(0.2)
 
     async def _disable_resolution_for_pairing(self):
         try:
