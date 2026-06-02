@@ -365,9 +365,7 @@ class SettingsScreen(Screen):
         self.items = [
             {"key": "sessions", "label": "Сессии и маршруты"},
             {"key": "pairing", "label": "Добавить устройство", "children": [
-                ("pairing_device", "Универсальное устройство"),
-                ("pairing_source", "Только iPhone / BLE"),
-                ("pairing_speaker", "Только аудиовыход"),
+                ("pairing_device", "Bluetooth-устройство"),
             ]},
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
@@ -802,20 +800,25 @@ class PairingModal:
                                radius=T.RADIUS, fill=T.SURFACE, outline=T.HAIRLINE, width=1)
         name = getattr(self.state, "device_name", "Car Thing")
         if list_mode:
-            title = "Добавить устройство" if device_mode else "Добавить аудиовыход"
+            title = "Добавить Bluetooth-устройство" if device_mode else "Добавить аудиовыход"
             C.text_centered(draw, title, T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 160, cx=cx)
             status = getattr(self.state, "speaker_pairing_status", "") or "scan"
             subtitle = {
                 "scan": "Ищу устройства и принимаю подключение…" if device_mode else "Ищу Bluetooth-аудио…",
                 "connect": "Завершаю сопряжение…",
-                "done": "Устройство добавлено",
+                "done": "Устройство подключено",
                 "error": "Не удалось добавить",
             }.get(status, "Найденные динамики")
             C.text_centered(draw, subtitle, T.font(T.SZ_META), T.ACCENT, T.MAIN_CY - 104, cx=cx)
             candidates = list(getattr(self.state, "speaker_candidates", []) or [])
-            candidates = [c for c in candidates if c.get("audio")]
+            if not device_mode:
+                candidates = [c for c in candidates if c.get("audio")]
             message = getattr(self.state, "pairing_message", "") or ""
-            if not candidates:
+            if status in ("done", "error") and message:
+                C.text_centered(draw, message, T.font(T.SZ_SMALL),
+                                T.MUTED if status == "done" else T.WARN,
+                                T.MAIN_CY - 42, cx=cx)
+            elif not candidates:
                 text = message or ("Откройте Bluetooth на телефоне или включите pairing на аудиоустройстве"
                                    if device_mode else "Переведите аудиоустройство в режим сопряжения")
                 C.text_centered(draw, text, T.font(T.SZ_SMALL),

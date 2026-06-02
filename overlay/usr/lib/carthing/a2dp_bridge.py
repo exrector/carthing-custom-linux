@@ -476,10 +476,13 @@ class A2DPBridge:
                 )
         return None, None, None, None
 
-    async def ensure_speaker_connection(self, address, require_trusted=True):
+    async def ensure_speaker_connection(self, address, require_trusted=True, strict_security=False):
         address = normalize_address(address)
         connection = self._speaker_connections.get(address)
         if connection is not None:
+            if strict_security:
+                await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
+                await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
             self.state.set_speaker_connected(address, True)
             self.on_state_change()
             return connection
@@ -514,6 +517,8 @@ class A2DPBridge:
                 await asyncio.wait_for(self.device.authenticate(connection), timeout=self.connect_timeout)
                 await asyncio.wait_for(self.device.encrypt(connection), timeout=self.connect_timeout)
             except Exception as exc:
+                if strict_security:
+                    raise
                 self.logger.info("A2DP speaker standby auth/encrypt continued: %s", error_text(exc))
             self.state.set_speaker_connected(address, True)
             self.on_state_change()
@@ -694,8 +699,14 @@ class A2DPBridge:
         if speaker is None:
             raise RuntimeError(f"refused to trust non-speaker {address}")
         self.state.select_default_speaker(address)
+        try:
+            await self.ensure_speaker_connection(address, strict_security=True)
+        except Exception:
+            self.state.remove_trusted(address)
+            raise
+        self.state.set_speaker_connected(address, True)
         self.state.speaker_pairing_status = "done"
-        self.state.pairing_message = f"{label} добавлен"
+        self.state.pairing_message = f"{label} подключен"
         try:
             self.state.save_trusted()
         except Exception as exc:
@@ -707,7 +718,7 @@ class A2DPBridge:
             await self.ensure_speaker_connection(address)
 
     async def _bond_speaker(self, address):
-        await self.ensure_speaker_connection(address, require_trusted=False)
+        await self.ensure_speaker_connection(address, require_trusted=False, strict_security=True)
 
     async def _has_link_key(self, address):
         if self.device.keystore is None:

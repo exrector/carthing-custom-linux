@@ -122,18 +122,9 @@ class Dispatcher:
             self.state.pairing_role = "device"
             self.state.pairing_mode = True
             self.state.speaker_pairing_status = "scan"
+            self.state.pairing_message = ""
             self.state.clear_speaker_candidates()
             self.on_pairing(True, "device")
-        elif key == "pairing_source":
-            self.state.pairing_role = "source"
-            self.state.pairing_mode = True
-            self.on_pairing(True, "source")
-        elif key == "pairing_speaker":
-            self.state.pairing_role = "speaker"
-            self.state.pairing_mode = True
-            self.state.speaker_pairing_status = "scan"
-            self.state.clear_speaker_candidates()
-            self.on_pairing(True, "speaker")
         elif key in ("sessions", "modes"):
             self.state.active_desktop = self.state.MODES
         elif key == "toggle_sleep":            # [CLAUDE] тумблер сна экрана
