@@ -811,8 +811,13 @@ class PairingModal:
             }.get(status, "Найденные динамики")
             C.text_centered(draw, subtitle, T.font(T.SZ_META), T.ACCENT, T.MAIN_CY - 104, cx=cx)
             candidates = list(getattr(self.state, "speaker_candidates", []) or [])
-            if not device_mode:
-                candidates = [c for c in candidates if c.get("audio")]
+            # [CLAUDE 2026-06-02] Тапабельный список = ТОЛЬКО исходящий канал (аудио-динамики,
+            # к которым звоним МЫ). iPhone/Mac (audio=False) — ВХОДЯЩИЙ канал (они коннектятся
+            # сами), их выбирать тут нельзя — отсюда был баг «не динамик»: тапаешь по строке, а
+            # под пальцем из-за пересортировки уже iPhone. Фильтруем audio ВСЕГДА + стабильный
+            # порядок по адресу, чтобы строки не прыгали под пальцем между рендером и тапом.
+            candidates = sorted((c for c in candidates if c.get("audio")),
+                                key=lambda c: c.get("address") or "")
             message = getattr(self.state, "pairing_message", "") or ""
             if status in ("done", "error") and message:
                 C.text_centered(draw, message, T.font(T.SZ_SMALL),
@@ -833,9 +838,12 @@ class PairingModal:
                     rect = (rx0, y - 6, rx1, y + T.ROW_H - 14)
                     if candidate.get("trusted"):
                         draw.rectangle(rect, fill=T.SURFACE_SEL)
+                    row_w = (rx1 - rx0) - 48          # [CLAUDE 2026-06-02] клип по ширине строки
+                    label = C.truncate(draw, label, T.font(T.SZ_BODY), row_w)
                     draw.text((rx0 + 24, y), label, font=T.font(T.SZ_BODY),
                               fill=T.FG if candidate.get("trusted") else T.MUTED)
-                    draw.text((rx0 + 24, y + 42), candidate.get("address") or "",
+                    addr = C.truncate(draw, candidate.get("address") or "", T.font(T.SZ_SMALL), row_w)
+                    draw.text((rx0 + 24, y + 42), addr,
                               font=T.font(T.SZ_SMALL), fill=T.FAINT)
                     regions.add(rect, "speaker_pair_select", payload=candidate.get("address"))
                     y += T.ROW_H
