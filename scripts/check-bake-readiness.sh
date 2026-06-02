@@ -5,6 +5,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 python3 scripts/smoke-route-graph.py
+python3 - <<'PY'
+import importlib.util
+from pathlib import Path
+
+script = Path("scripts/bake-unified-runtime-rootfs.py")
+spec = importlib.util.spec_from_file_location("bake_unified_runtime_rootfs", script)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+actual = mod.runtime_tree_sha1(Path("overlay/usr/lib/carthing"))
+expected = mod.EXPECTED_RUNTIME_TREE_SHA1
+if actual != expected:
+    raise SystemExit(f"runtime tree sha mismatch: {actual} != {expected}")
+print(f"RUNTIME TREE SHA OK: {actual}")
+PY
 python3 -m py_compile \
   overlay/usr/lib/carthing/carthing_runtime.py \
   overlay/usr/lib/carthing/session_runner.py \
