@@ -72,10 +72,6 @@ class Dispatcher:
             self._speaker_pair_select(payload)
         elif intent == "trusted_remove":
             self._trusted_remove(payload)
-        elif intent == "mode_select":
-            self._session_select(payload)
-        elif intent == "session_select":
-            self._session_select(payload)
         elif intent == "route_input_select":
             self._route_input_select(payload)
         elif intent == "route_output_select":
@@ -164,11 +160,6 @@ class Dispatcher:
                 pass
             self.on_transfer_select(address)
 
-    def _session_select(self, session):
-        if not session:
-            return
-        self.state.active_session = session
-        self.on_session_select(session)
 
     def _route_input_select(self, key):
         selected = self.state.select_route_input(key)

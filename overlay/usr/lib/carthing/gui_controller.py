@@ -22,7 +22,6 @@ from ui_statusbar import StatusBar
 from ui_anim import AnimDriver
 from screens import (
     MacOSScreen,
-    SessionsScreen,
     NowPlayingScreen,
     SettingsScreen,
     RouteBuilderScreen,
@@ -64,7 +63,7 @@ class GuiController:
             NowPlayingScreen(emit=emit),                                          # 0 HOME
             SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 1 (по кнопке)
             NotificationsScreen(emit=self._nav_intent),                           # 2 (свайп вниз)
-            SessionsScreen(emit=emit),                                             # 3
+            RouteBuilderScreen(emit=emit),                                         # 3 (был SessionsScreen — режимы удалены; слот сохранён, чтобы не сдвигать индексы)
             RouteBuilderScreen(emit=emit),                                         # 4
             MacOSScreen(emit=emit),                                                # 5 (режим macOS)
         ]
@@ -122,14 +121,6 @@ class GuiController:
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
-        if intent == "mode_select":
-            self.dispatcher.dispatch("session_select", payload)
-            self.compositor.render()
-            return
-        if intent == "session_select":
-            self.dispatcher.dispatch(intent, payload)
-            self.compositor.render()
-            return
         if intent in ("route_input_select", "route_output_select"):
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
@@ -138,11 +129,6 @@ class GuiController:
             # [CLAUDE 2026-06-02] режимы удалены: активируем текущий маршрут напрямую
             # (re-select входа -> _on_route_input_select -> _activate_route в рантайме).
             self.dispatcher.dispatch("route_input_select", getattr(self.app_state, "route_input", ""))
-            self.compositor.render()
-            return
-        if intent == "session_focus":
-            index = payload.get("index") if isinstance(payload, dict) else payload
-            self.compositor.screens[MODES].tap(index)
             self.compositor.render()
             return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
