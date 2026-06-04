@@ -73,6 +73,7 @@ only.
 Runtime was launched manually with:
 
 ```sh
+CARTHING_GUI_ENABLE=0
 CARTHING_TRANSFER_ENABLE=0
 CARTHING_A2DP_BRIDGE_ENABLE=0
 CARTHING_IAP2_ENABLE=0
@@ -82,6 +83,8 @@ CAR_THING_AUTO_PAIRING=1
 
 Observed on device:
 - `carthing_runtime.py` started from `/run/run-clean-bumble.sh`;
+- GUI must be disabled for the lab; iPhone Settings is the source of truth, not
+  the device screen;
 - `transfer disabled by CARTHING_TRANSFER_ENABLE=0 for clean Bumble lab`;
 - `iAP2 disabled by default for clean dual-mode audio pairing`;
 - BLE advertising started with flags `0x1a`;
@@ -106,3 +109,41 @@ Open question from user-facing observation:
   be treated as an iOS-visible advertising/persona problem.
 - If only the Car Thing GUI/technical list shows two addresses, it is most
   likely RPA-vs-identity presentation and should be normalized in the UI.
+
+## Result 2026-06-04 — LE-only control after dual-mode cache
+
+Runtime was restarted headless with Classic completely disabled:
+
+```sh
+CARTHING_GUI_ENABLE=0
+CARTHING_TRANSFER_ENABLE=0
+CARTHING_CLASSIC_ENABLE=0
+CARTHING_A2DP_BRIDGE_ENABLE=0
+CARTHING_IAP2_ENABLE=0
+CARTHING_POST_PAIR_CLASSIC_PROBE=0
+CAR_THING_AUTO_PAIRING=1
+```
+
+Observed on device:
+- `classic disabled by CARTHING_CLASSIC_ENABLE=0 for LE-only lab`;
+- advertising flags became `0x06 LE General,No BR/EDR`;
+- iPhone connected briefly over BLE as `63:CF:FF:2F:7D:B3`;
+- device requested pairing;
+- no completed bond was written: `keys.json` stayed `{}`;
+- `state.json` stayed empty;
+- runtime state stayed `source=none`, `connected=false`.
+
+Observed by user on iPhone:
+- one of the two old trusted rows first became disconnected but remained listed;
+- the other row changed/appeared as plain `Car Thing`;
+- the disconnected old row eventually disappeared;
+- only plain `Car Thing` remained;
+- later that remaining `Car Thing` also became `Not Connected`.
+
+Interpretation:
+- LE-only control appears to make iOS collapse or rewrite the previous dual-mode
+  cache, but it did not complete a fresh bond on the device in this run.
+- This supports separating two issues:
+  1. the dual-mode Bumble/CTKD presentation creates two iOS-visible rows;
+  2. after switching to LE-only, iOS can collapse stale rows, but a new clean
+     bond still needs to be explicitly created and verified.
