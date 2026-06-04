@@ -16,47 +16,53 @@
 # Imports
 # -----------------------------------------------------------------------------
 import asyncio
+import collections
+import ctypes
 import logging
-import struct
 import os
 import socket
-import ctypes
-import collections
+import struct
 
-from .common import Transport, ParserSource
-
+from bumble.transport.common import ParserSource, Transport
 
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
 logger = logging.getLogger(__name__)
 
+# Car Thing's minimal Python build omits Linux Bluetooth socket constants even
+# though the kernel supports HCI sockets. Keep the upstream transport and supply
+# the stable Linux ABI values only when Python does not expose them.
 AF_BLUETOOTH = getattr(socket, 'AF_BLUETOOTH', 31)
 BTPROTO_HCI = getattr(socket, 'BTPROTO_HCI', 1)
 
 
 # -----------------------------------------------------------------------------
-async def open_hci_socket_transport(spec):
+async def open_hci_socket_transport(spec: str | None) -> Transport:
     '''
     Open an HCI Socket (only available on some platforms).
     The parameter string is either empty (to use the first/default Bluetooth adapter)
     or a 0-based integer to indicate the adapter number.
     '''
 
-    HCI_CHANNEL_USER = 1
+    HCI_CHANNEL_USER = 1  # pylint: disable=invalid-name
 
     # Create a raw HCI socket
     try:
-        hci_socket = socket.socket(AF_BLUETOOTH, socket.SOCK_RAW | socket.SOCK_NONBLOCK, BTPROTO_HCI)
-    except OSError:
+        hci_socket = socket.socket(
+            AF_BLUETOOTH,
+            socket.SOCK_RAW | socket.SOCK_NONBLOCK,  # type: ignore[attr-defined]
+            BTPROTO_HCI,
+        )
+    except (AttributeError, OSError) as error:
+        # Not supported on this platform
         logger.info("HCI sockets not supported on this platform")
-        raise Exception('Bluetooth HCI sockets not supported on this platform')
+        raise Exception(
+            'Bluetooth HCI sockets not supported on this platform'
+        ) from error
 
     # Compute the adapter index
-    if spec is None:
-        adapter_index = 0
-    else:
-        adapter_index = int(spec)
+    adapter_index = int(spec) if spec else 0
 
     # Bind the socket
     # NOTE: since Python doesn't support binding with the required address format (yet),
@@ -64,20 +70,37 @@ async def open_hci_socket_transport(spec):
     try:
         ctypes.cdll.LoadLibrary('libc.so.6')
         libc = ctypes.CDLL('libc.so.6', use_errno=True)
-    except OSError:
+    except OSError as error:
         logger.info("HCI sockets not supported on this platform")
-        raise Exception('Bluetooth HCI sockets not supported on this platform')
+        raise Exception(
+            'Bluetooth HCI sockets not supported on this platform'
+        ) from error
     libc.bind.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_char), ctypes.c_int)
     libc.bind.restype = ctypes.c_int
-    bind_address = struct.pack('<HHH', AF_BLUETOOTH, adapter_index, HCI_CHANNEL_USER)
-    if libc.bind(hci_socket.fileno(), ctypes.create_string_buffer(bind_address), len(bind_address)) != 0:
-        raise IOError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
+    bind_address = struct.pack(
+        # pylint: disable=no-member
+        '<HHH',
+        AF_BLUETOOTH,
+        adapter_index,
+        HCI_CHANNEL_USER,
+    )
+    if (
+        libc.bind(
+            hci_socket.fileno(),
+            ctypes.create_string_buffer(bind_address),
+            len(bind_address),
+        )
+        != 0
+    ):
+        raise OSError(ctypes.get_errno(), os.strerror(ctypes.get_errno()))
 
     class HciSocketSource(ParserSource):
-        def __init__(self, socket):
+        def __init__(self, hci_socket):
             super().__init__()
-            self.socket  = socket
-            asyncio.get_running_loop().add_reader(socket.fileno(), self.recv_until_would_block)
+            self.socket = hci_socket
+            asyncio.get_running_loop().add_reader(
+                self.socket.fileno(), self.recv_until_would_block
+            )
 
         def recv_until_would_block(self):
             logger.debug('recv until would block +++')
@@ -94,9 +117,9 @@ async def open_hci_socket_transport(spec):
             asyncio.get_running_loop().remove_reader(self.socket.fileno())
 
     class HciSocketSink:
-        def __init__(self, socket):
-            self.socket       = socket
-            self.packets      = collections.deque()
+        def __init__(self, hci_socket):
+            self.socket = hci_socket
+            self.packets = collections.deque()
             self.writer_added = False
 
         def send_until_would_block(self):
@@ -114,9 +137,14 @@ async def open_hci_socket_transport(spec):
                     break
 
             if self.packets:
-                # There's still something to send, ensure that we are monitoring the socket
+                # There's still something to send, ensure that we are monitoring the
+                # socket
                 if not self.writer_added:
-                    asyncio.get_running_loop().add_writer(socket.fileno(), self.send_until_would_block)
+                    asyncio.get_running_loop().add_writer(
+                        # pylint: disable=no-member
+                        self.socket.fileno(),
+                        self.send_until_would_block,
+                    )
                     self.writer_added = True
             else:
                 # Nothing left to send, stop monitoring the socket
@@ -133,9 +161,9 @@ async def open_hci_socket_transport(spec):
                 asyncio.get_running_loop().remove_writer(self.socket.fileno())
 
     class HciSocketTransport(Transport):
-        def __init__(self, socket, source, sink):
+        def __init__(self, hci_socket, source, sink):
             super().__init__(source, sink)
-            self.socket = socket
+            self.socket = hci_socket
 
         async def close(self):
             logger.debug('closing HCI socket transport')

@@ -10,10 +10,10 @@ from runtime_paths import ensure_runtime_paths, device_name
 ensure_runtime_paths()
 
 from bumble.core import BT_BR_EDR_TRANSPORT, UUID
-from bumble.device import AdvertisingData, AdvertisingType, Connection, Device, OwnAddressType
+from bumble.device import AdvertisingData, AdvertisingType, Connection, Device
 from bumble.gatt import Characteristic, Descriptor, Service
-from bumble.hci import Address
-from bumble.smp import PairingConfig
+from bumble.hci import Address, OwnAddressType
+from bumble.pairing import PairingConfig
 
 from a2dp_bridge import A2DPBridge, COD_AUDIO_LOUDSPEAKER
 from ams_client import AMSClient, MediaState
@@ -434,10 +434,17 @@ async def on_disconnection(connection: Connection, reason: int):
 
 async def start_advertising(device: Device):
     name = bluetooth_name().encode("utf-8")
+    # Dual-mode accessory flags. 0x06 is BLE-only ("BR/EDR Not Supported");
+    # keep legacy manual runs consistent with carthing_runtime.
+    dual_mode_flags = (
+        AdvertisingData.LE_GENERAL_DISCOVERABLE_MODE_FLAG
+        | AdvertisingData.BR_EDR_CONTROLLER_FLAG
+        | AdvertisingData.BR_EDR_HOST_FLAG
+    )
     device.advertising_data = bytes(
         AdvertisingData(
             [
-                (AdvertisingData.FLAGS, bytes([0x06])),
+                (AdvertisingData.FLAGS, bytes([dual_mode_flags])),
                 (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
                 (
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
@@ -463,10 +470,15 @@ async def refresh_accept_list(device: Device):
 
 
 async def start_bonded_only_advertising(device: Device):
+    dual_mode_flags = (
+        AdvertisingData.LE_GENERAL_DISCOVERABLE_MODE_FLAG
+        | AdvertisingData.BR_EDR_CONTROLLER_FLAG
+        | AdvertisingData.BR_EDR_HOST_FLAG
+    )
     device.advertising_data = bytes(
         AdvertisingData(
             [
-                (AdvertisingData.FLAGS, bytes([0x06])),
+                (AdvertisingData.FLAGS, bytes([dual_mode_flags])),
                 (AdvertisingData.APPEARANCE, struct.pack("<H", 0x0180)),
                 (
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,

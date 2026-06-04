@@ -69,7 +69,7 @@ async def main():
         device.classic_enabled = True
         device.classic_ssp_enabled = True
         try:
-            from bumble.smp import PairingConfig, PairingDelegate
+            from bumble.pairing import PairingConfig, PairingDelegate
             device.pairing_config_factory = lambda conn: PairingConfig(
                 sc=True, mitm=False, bonding=True,
                 delegate=PairingDelegate(io_capability=PairingDelegate.NO_OUTPUT_NO_INPUT),

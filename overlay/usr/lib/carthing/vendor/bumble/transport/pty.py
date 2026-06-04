@@ -16,14 +16,13 @@
 # Imports
 # -----------------------------------------------------------------------------
 import asyncio
+import atexit
+import logging
+import os
 import pty
 import tty
-import io
-import atexit
-import os
-import logging
 
-from .common import Transport, StreamPacketSource, StreamPacketSink
+from bumble.transport.common import StreamPacketSink, StreamPacketSource, Transport
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-async def open_pty_transport(spec):
+async def open_pty_transport(spec: str | None) -> Transport:
     '''
     Open a PTY transport.
     The parameter string may be empty, or a path name where a symbolic link
@@ -47,13 +46,11 @@ async def open_pty_transport(spec):
     tty.setraw(replica)
 
     read_transport, packet_source = await asyncio.get_running_loop().connect_read_pipe(
-        lambda: StreamPacketSource(),
-        io.open(primary, 'rb', closefd=False)
+        StreamPacketSource, open(primary, 'rb', closefd=False)
     )
 
     write_transport, _ = await asyncio.get_running_loop().connect_write_pipe(
-        lambda: asyncio.BaseProtocol(),
-        io.open(primary, 'wb', closefd=False)
+        asyncio.BaseProtocol, open(primary, 'wb', closefd=False)
     )
     packet_sink = StreamPacketSink(write_transport)
 

@@ -1,4 +1,4 @@
-# Copyright 2021-2022 Google LLC
+# Copyright 2021-2023 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,13 +16,25 @@
 # Imports
 # -----------------------------------------------------------------------------
 import logging
-import grpc
 
-from .common import PumpedTransport, PumpedPacketSource, PumpedPacketSink
-from .emulated_bluetooth_pb2_grpc import EmulatedBluetoothServiceStub
-from .emulated_bluetooth_packets_pb2 import HCIPacket
-from .emulated_bluetooth_vhci_pb2_grpc import VhciForwardingServiceStub
+import grpc.aio
 
+from bumble.transport.common import (
+    PumpedPacketSink,
+    PumpedPacketSource,
+    PumpedTransport,
+    Transport,
+    TransportSpecError,
+)
+
+# pylint: disable=no-name-in-module
+from bumble.transport.grpc_protobuf.emulated_bluetooth_packets_pb2 import HCIPacket
+from bumble.transport.grpc_protobuf.emulated_bluetooth_pb2_grpc import (
+    EmulatedBluetoothServiceStub,
+)
+from bumble.transport.grpc_protobuf.emulated_bluetooth_vhci_pb2_grpc import (
+    VhciForwardingServiceStub,
+)
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -31,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-async def open_android_emulator_transport(spec):
+async def open_android_emulator_transport(spec: str | None) -> Transport:
     '''
     Open a transport connection to an Android emulator via its gRPC interface.
     The parameter string has this syntax:
@@ -59,32 +71,24 @@ async def open_android_emulator_transport(spec):
             return bytes([packet.type]) + packet.packet
 
         async def write(self, packet):
-            await self.hci_device.write(
-                HCIPacket(
-                    type   = packet[0],
-                    packet = packet[1:]
-                )
-            )
+            await self.hci_device.write(HCIPacket(type=packet[0], packet=packet[1:]))
 
     # Parse the parameters
-    mode        = 'host'
-    server_host = 'localhost'
-    server_port = 8554
-    if spec is not None:
+    mode = 'host'
+    server_address = 'localhost:8554'
+    if spec:
         params = spec.split(',')
         for param in params:
             if param.startswith('mode='):
                 mode = param.split('=')[1]
-            elif ':' in param:
-                server_host, server_port = param.split(':')
             else:
-                raise ValueError('invalid parameter')
+                server_address = param
 
     # Connect to the gRPC server
-    server_address = f'{server_host}:{server_port}'
-    logger.debug(f'connecting to gRPC server at {server_address}')
+    logger.debug('connecting to gRPC server at %s', server_address)
     channel = grpc.aio.insecure_channel(server_address)
 
+    service: EmulatedBluetoothServiceStub | VhciForwardingServiceStub
     if mode == 'host':
         # Connect as a host
         service = EmulatedBluetoothServiceStub(channel)
@@ -94,13 +98,16 @@ async def open_android_emulator_transport(spec):
         service = VhciForwardingServiceStub(channel)
         hci_device = HciDevice(service.attachVhci())
     else:
-        raise ValueError('invalid mode')
+        raise TransportSpecError('invalid mode')
 
     # Create the transport object
-    transport = PumpedTransport(
-        PumpedPacketSource(hci_device.read),
-        PumpedPacketSink(hci_device.write),
-        channel.close
+    class EmulatorTransport(PumpedTransport):
+        async def close(self):
+            await super().close()
+            await channel.close()
+
+    transport = EmulatorTransport(
+        PumpedPacketSource(hci_device.read), PumpedPacketSink(hci_device.write)
     )
     transport.start()
 

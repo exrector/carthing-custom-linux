@@ -15,14 +15,28 @@
 # -----------------------------------------------------------------------------
 # Imports
 # -----------------------------------------------------------------------------
+from __future__ import annotations
+
+import asyncio
 import logging
 import struct
-from colors import color
-import colors
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, ClassVar, NewType, TypeVar
 
-from . import core
-from .core import InvalidStateError
-from .hci import HCI_Object, name_or_number, key_with_value
+from typing_extensions import Self
+
+from bumble import core, hci, l2cap, utils
+from bumble.colors import color
+from bumble.core import (
+    InvalidArgumentError,
+    InvalidPacketError,
+    InvalidStateError,
+    ProtocolError,
+)
+
+if TYPE_CHECKING:
+    from bumble.device import Connection, Device
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -30,46 +44,38 @@ from .hci import HCI_Object, name_or_number, key_with_value
 logger = logging.getLogger(__name__)
 
 
+# SDP data elements are nested (SEQUENCE, ALTERNATIVE). Cap parse recursion to
+# prevent a malicious peer from crashing the process via a deeply nested PDU.
+# 32 levels is well beyond anything a legitimate service record uses.
+_MAX_DATA_ELEMENT_NESTING = 32
+
+
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
+# fmt: off
+# pylint: disable=line-too-long
+
 SDP_CONTINUATION_WATCHDOG = 64  # Maximum number of continuations we're willing to do
 
 SDP_PSM = 0x0001
 
-SDP_ERROR_RESPONSE                    = 0x01
-SDP_SERVICE_SEARCH_REQUEST            = 0x02
-SDP_SERVICE_SEARCH_RESPONSE           = 0x03
-SDP_SERVICE_ATTRIBUTE_REQUEST         = 0x04
-SDP_SERVICE_ATTRIBUTE_RESPONSE        = 0x05
-SDP_SERVICE_SEARCH_ATTRIBUTE_REQUEST  = 0x06
-SDP_SERVICE_SEARCH_ATTRIBUTE_RESPONSE = 0x07
+class PduId(hci.SpecableEnum):
+    SDP_ERROR_RESPONSE                    = 0x01
+    SDP_SERVICE_SEARCH_REQUEST            = 0x02
+    SDP_SERVICE_SEARCH_RESPONSE           = 0x03
+    SDP_SERVICE_ATTRIBUTE_REQUEST         = 0x04
+    SDP_SERVICE_ATTRIBUTE_RESPONSE        = 0x05
+    SDP_SERVICE_SEARCH_ATTRIBUTE_REQUEST  = 0x06
+    SDP_SERVICE_SEARCH_ATTRIBUTE_RESPONSE = 0x07
 
-SDP_PDU_NAMES = {
-    SDP_ERROR_RESPONSE:                    'SDP_ERROR_RESPONSE',
-    SDP_SERVICE_SEARCH_REQUEST:            'SDP_SERVICE_SEARCH_REQUEST',
-    SDP_SERVICE_SEARCH_RESPONSE:           'SDP_SERVICE_SEARCH_RESPONSE',
-    SDP_SERVICE_ATTRIBUTE_REQUEST:         'SDP_SERVICE_ATTRIBUTE_REQUEST',
-    SDP_SERVICE_ATTRIBUTE_RESPONSE:        'SDP_SERVICE_ATTRIBUTE_RESPONSE',
-    SDP_SERVICE_SEARCH_ATTRIBUTE_REQUEST:  'SDP_SERVICE_SEARCH_ATTRIBUTE_REQUEST',
-    SDP_SERVICE_SEARCH_ATTRIBUTE_RESPONSE: 'SDP_SERVICE_SEARCH_ATTRIBUTE_RESPONSE'
-}
-
-SDP_INVALID_SDP_VERSION_ERROR                       = 0x0001
-SDP_INVALID_SERVICE_RECORD_HANDLE_ERROR             = 0x0002
-SDP_INVALID_REQUEST_SYNTAX_ERROR                    = 0x0003
-SDP_INVALID_PDU_SIZE_ERROR                          = 0x0004
-SDP_INVALID_CONTINUATION_STATE_ERROR                = 0x0005
-SDP_INSUFFICIENT_RESOURCES_TO_SATISFY_REQUEST_ERROR = 0x0006
-
-SDP_ERROR_NAMES = {
-    SDP_INVALID_SDP_VERSION_ERROR:                       'SDP_INVALID_SDP_VERSION_ERROR',
-    SDP_INVALID_SERVICE_RECORD_HANDLE_ERROR:             'SDP_INVALID_SERVICE_RECORD_HANDLE_ERROR',
-    SDP_INVALID_REQUEST_SYNTAX_ERROR:                    'SDP_INVALID_REQUEST_SYNTAX_ERROR',
-    SDP_INVALID_PDU_SIZE_ERROR:                          'SDP_INVALID_PDU_SIZE_ERROR',
-    SDP_INVALID_CONTINUATION_STATE_ERROR:                'SDP_INVALID_CONTINUATION_STATE_ERROR',
-    SDP_INSUFFICIENT_RESOURCES_TO_SATISFY_REQUEST_ERROR: 'SDP_INSUFFICIENT_RESOURCES_TO_SATISFY_REQUEST_ERROR'
-}
+class ErrorCode(hci.SpecableEnum):
+    INVALID_SDP_VERSION                       = 0x0001
+    INVALID_SERVICE_RECORD_HANDLE             = 0x0002
+    INVALID_REQUEST_SYNTAX                    = 0x0003
+    INVALID_PDU_SIZE                          = 0x0004
+    INVALID_CONTINUATION_STATE                = 0x0005
+    INSUFFICIENT_RESOURCES_TO_SATISFY_REQUEST = 0x0006
 
 SDP_SERVICE_NAME_ATTRIBUTE_ID_OFFSET        = 0x0000
 SDP_SERVICE_DESCRIPTION_ATTRIBUTE_ID_OFFSET = 0x0001
@@ -90,6 +96,11 @@ SDP_CLIENT_EXECUTABLE_URL_ATTRIBUTE_ID               = 0X000B
 SDP_ICON_URL_ATTRIBUTE_ID                            = 0X000C
 SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID = 0X000D
 
+
+# Profile-specific Attribute Identifiers (cf. Assigned Numbers for Service Discovery)
+# used by AVRCP, HFP and A2DP
+SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID = 0x0311
+
 SDP_ATTRIBUTE_ID_NAMES = {
     SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID:               'SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID',
     SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID:               'SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID',
@@ -104,578 +115,810 @@ SDP_ATTRIBUTE_ID_NAMES = {
     SDP_DOCUMENTATION_URL_ATTRIBUTE_ID:                   'SDP_DOCUMENTATION_URL_ATTRIBUTE_ID',
     SDP_CLIENT_EXECUTABLE_URL_ATTRIBUTE_ID:               'SDP_CLIENT_EXECUTABLE_URL_ATTRIBUTE_ID',
     SDP_ICON_URL_ATTRIBUTE_ID:                            'SDP_ICON_URL_ATTRIBUTE_ID',
-    SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID: 'SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID'
+    SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID: 'SDP_ADDITIONAL_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID',
+    SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID:                  'SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID',
 }
 
 SDP_PUBLIC_BROWSE_ROOT = core.UUID.from_16_bits(0x1002, 'PublicBrowseRoot')
 
 # To be used in searches where an attribute ID list allows a range to be specified
-SDP_ALL_ATTRIBUTES_RANGE = (0x0000FFFF, 4)  # Express this as tuple so we can convey the desired encoding size
+SDP_ALL_ATTRIBUTES_RANGE = (0x0000, 0xFFFF)
+
+# fmt: on
+# pylint: enable=line-too-long
+# pylint: disable=invalid-name
 
 
 # -----------------------------------------------------------------------------
+@dataclass
 class DataElement:
-    NIL              = 0
-    UNSIGNED_INTEGER = 1
-    SIGNED_INTEGER   = 2
-    UUID             = 3
-    TEXT_STRING      = 4
-    BOOLEAN          = 5
-    SEQUENCE         = 6
-    ALTERNATIVE      = 7
-    URL              = 8
 
-    TYPE_NAMES = {
-        NIL:              'NIL',
-        UNSIGNED_INTEGER: 'UNSIGNED_INTEGER',
-        SIGNED_INTEGER:   'SIGNED_INTEGER',
-        UUID:             'UUID',
-        TEXT_STRING:      'TEXT_STRING',
-        BOOLEAN:          'BOOLEAN',
-        SEQUENCE:         'SEQUENCE',
-        ALTERNATIVE:      'ALTERNATIVE',
-        URL:              'URL'
-    }
+    class Type(utils.OpenIntEnum):
+        NIL = 0
+        UNSIGNED_INTEGER = 1
+        SIGNED_INTEGER = 2
+        UUID = 3
+        TEXT_STRING = 4
+        BOOLEAN = 5
+        SEQUENCE = 6
+        ALTERNATIVE = 7
+        URL = 8
 
-    type_constructors = {
-        NIL:              lambda x: DataElement(DataElement.NIL, None),
-        UNSIGNED_INTEGER: lambda x, y: DataElement(DataElement.UNSIGNED_INTEGER, DataElement.unsigned_integer_from_bytes(x), value_size=y),
-        SIGNED_INTEGER:   lambda x, y: DataElement(DataElement.SIGNED_INTEGER, DataElement.signed_integer_from_bytes(x), value_size=y),
-        UUID:             lambda x: DataElement(DataElement.UUID, core.UUID.from_bytes(bytes(reversed(x)))),
-        TEXT_STRING:      lambda x: DataElement(DataElement.TEXT_STRING, x.decode('utf8')),
-        BOOLEAN:          lambda x: DataElement(DataElement.BOOLEAN, x[0] == 1),
-        SEQUENCE:         lambda x: DataElement(DataElement.SEQUENCE, DataElement.list_from_bytes(x)),
-        ALTERNATIVE:      lambda x: DataElement(DataElement.ALTERNATIVE, DataElement.list_from_bytes(x)),
-        URL:              lambda x: DataElement(DataElement.URL, x.decode('utf8'))
-    }
+    NIL = Type.NIL
+    UNSIGNED_INTEGER = Type.UNSIGNED_INTEGER
+    SIGNED_INTEGER = Type.SIGNED_INTEGER
+    UUID = Type.UUID
+    TEXT_STRING = Type.TEXT_STRING
+    BOOLEAN = Type.BOOLEAN
+    SEQUENCE = Type.SEQUENCE
+    ALTERNATIVE = Type.ALTERNATIVE
+    URL = Type.URL
 
-    def __init__(self, type, value, value_size=None):
-        self.type       = type
-        self.value      = value
-        self.value_size = value_size
-        self.bytes      = None  # Used a cache when parsing from bytes so we can emit a byte-for-byte replica
-        if type == DataElement.UNSIGNED_INTEGER or type == DataElement.SIGNED_INTEGER:
-            if value_size is None:
-                raise ValueError('integer types must have a value size specified')
+    type: Type
+    value: Any
+    value_size: int | None = None
 
-    @staticmethod
-    def nil():
-        return DataElement(DataElement.NIL, None)
+    def __post_init__(self) -> None:
+        # Used as a cache when parsing from bytes so we can emit a byte-for-byte replica
+        self._bytes: bytes | None = None
+        if self.type in (
+            DataElement.UNSIGNED_INTEGER,
+            DataElement.SIGNED_INTEGER,
+        ):
+            if self.value_size is None:
+                raise InvalidArgumentError(
+                    'integer types must have a value size specified'
+                )
 
-    @staticmethod
-    def unsigned_integer(value, value_size):
-        return DataElement(DataElement.UNSIGNED_INTEGER, value, value_size)
+    @classmethod
+    def nil(cls) -> DataElement:
+        return cls(cls.NIL, None)
 
-    @staticmethod
-    def unsigned_integer_8(value):
-        return DataElement(DataElement.UNSIGNED_INTEGER, value, value_size=1)
+    @classmethod
+    def unsigned_integer(cls, value: int, value_size: int) -> DataElement:
+        return cls(cls.UNSIGNED_INTEGER, value, value_size)
 
-    @staticmethod
-    def unsigned_integer_16(value):
-        return DataElement(DataElement.UNSIGNED_INTEGER, value, value_size=2)
+    @classmethod
+    def unsigned_integer_8(cls, value: int) -> DataElement:
+        return cls(cls.UNSIGNED_INTEGER, value, value_size=1)
 
-    @staticmethod
-    def unsigned_integer_32(value):
-        return DataElement(DataElement.UNSIGNED_INTEGER, value, value_size=4)
+    @classmethod
+    def unsigned_integer_16(cls, value: int) -> DataElement:
+        return cls(cls.UNSIGNED_INTEGER, value, value_size=2)
 
-    @staticmethod
-    def signed_integer(value, value_size):
-        return DataElement(DataElement.SIGNED_INTEGER, value, value_size)
+    @classmethod
+    def unsigned_integer_32(cls, value: int) -> DataElement:
+        return cls(cls.UNSIGNED_INTEGER, value, value_size=4)
 
-    @staticmethod
-    def signed_integer_8(value):
-        return DataElement(DataElement.SIGNED_INTEGER, value, value_size=1)
+    @classmethod
+    def signed_integer(cls, value: int, value_size: int) -> DataElement:
+        return cls(cls.SIGNED_INTEGER, value, value_size)
 
-    @staticmethod
-    def signed_integer_16(value):
-        return DataElement(DataElement.SIGNED_INTEGER, value, value_size=2)
+    @classmethod
+    def signed_integer_8(cls, value: int) -> DataElement:
+        return cls(cls.SIGNED_INTEGER, value, value_size=1)
 
-    @staticmethod
-    def signed_integer_32(value):
-        return DataElement(DataElement.SIGNED_INTEGER, value, value_size=4)
+    @classmethod
+    def signed_integer_16(cls, value: int) -> DataElement:
+        return cls(cls.SIGNED_INTEGER, value, value_size=2)
 
-    @staticmethod
-    def uuid(value):
-        return DataElement(DataElement.UUID, value)
+    @classmethod
+    def signed_integer_32(cls, value: int) -> DataElement:
+        return cls(cls.SIGNED_INTEGER, value, value_size=4)
 
-    @staticmethod
-    def text_string(value):
-        return DataElement(DataElement.TEXT_STRING, value)
+    @classmethod
+    def uuid(cls, value: core.UUID) -> DataElement:
+        return cls(cls.UUID, value)
 
-    @staticmethod
-    def boolean(value):
-        return DataElement(DataElement.BOOLEAN, value)
+    @classmethod
+    def text_string(cls, value: bytes) -> DataElement:
+        return cls(cls.TEXT_STRING, value)
 
-    @staticmethod
-    def sequence(value):
-        return DataElement(DataElement.SEQUENCE, value)
+    @classmethod
+    def boolean(cls, value: bool) -> DataElement:
+        return cls(cls.BOOLEAN, value)
 
-    @staticmethod
-    def alternative(value):
-        return DataElement(DataElement.ALTERNATIVE, value)
+    @classmethod
+    def sequence(cls, value: Iterable[DataElement]) -> DataElement:
+        return cls(cls.SEQUENCE, value)
 
-    @staticmethod
-    def url(value):
-        return DataElement(DataElement.URL, value)
+    @classmethod
+    def alternative(cls, value: Iterable[DataElement]) -> DataElement:
+        return cls(cls.ALTERNATIVE, value)
 
-    @staticmethod
-    def unsigned_integer_from_bytes(data):
-        if len(data) == 1:
-            return data[0]
-        elif len(data) == 2:
-            return struct.unpack('>H', data)[0]
-        elif len(data) == 4:
-            return struct.unpack('>I', data)[0]
-        elif len(data) == 8:
-            return struct.unpack('>Q', data)[0]
-        else:
-            raise ValueError(f'invalid integer length {len(data)}')
+    @classmethod
+    def url(cls, value: str) -> DataElement:
+        return cls(cls.URL, value)
 
-    @staticmethod
-    def signed_integer_from_bytes(data):
-        if len(data) == 1:
-            return struct.unpack('b', data)[0]
-        elif len(data) == 2:
-            return struct.unpack('>h', data)[0]
-        elif len(data) == 4:
-            return struct.unpack('>i', data)[0]
-        elif len(data) == 8:
-            return struct.unpack('>q', data)[0]
-        else:
-            raise ValueError(f'invalid integer length {len(data)}')
+    @classmethod
+    def unsigned_integer_from_bytes(cls, data: bytes, offset: int, length: int) -> int:
+        match length:
+            case 1:
+                return data[offset]
+            case 2:
+                return struct.unpack_from('>H', data, offset)[0]
+            case 4:
+                return struct.unpack_from('>I', data, offset)[0]
+            case 8:
+                return struct.unpack_from('>Q', data, offset)[0]
+            case invalid_length:
+                raise InvalidPacketError(f'invalid integer length {invalid_length}')
 
-    @staticmethod
-    def list_from_bytes(data):
-        elements = []
-        while data:
-            element = DataElement.from_bytes(data)
-            elements.append(element)
-            data = data[len(bytes(element)):]
-        return elements
+    @classmethod
+    def signed_integer_from_bytes(cls, data: bytes, offset: int, length: int) -> int:
+        match length:
+            case 1:
+                return struct.unpack_from('b', data, offset)[0]
+            case 2:
+                return struct.unpack_from('>h', data, offset)[0]
+            case 4:
+                return struct.unpack_from('>i', data, offset)[0]
+            case 8:
+                return struct.unpack_from('>q', data, offset)[0]
+            case invalid_length:
+                raise InvalidPacketError(f'invalid integer length {invalid_length}')
 
-    @staticmethod
-    def parse_from_bytes(data, offset):
-        element = DataElement.from_bytes(data[offset:])
-        return offset + len(bytes(element)), element
+    @classmethod
+    def parse_from_bytes(cls, data: bytes, offset: int) -> tuple[int, DataElement]:
+        parser = DataElementParser(data, offset)
+        element = parser.parse_next()
+        return parser.offset, element
 
-    @staticmethod
-    def from_bytes(data):
-        type = data[0] >> 3
-        size_index  = data[0] & 7
-        value_offset = 0
-        if size_index == 0:
-            if type == DataElement.NIL:
-                value_size = 0
-            else:
-                value_size = 1
-        elif size_index == 1:
-            value_size = 2
-        elif size_index == 2:
-            value_size = 4
-        elif size_index == 3:
-            value_size = 8
-        elif size_index == 4:
-            value_size = 16
-        elif size_index == 5:
-            value_size = data[1]
-            value_offset = 1
-        elif size_index == 6:
-            value_size = struct.unpack('>H', data[1:3])[0]
-            value_offset = 2
-        else:  # size_index == 7
-            value_size = struct.unpack('>I', data[1:5])[0]
-            value_offset = 4
+    @classmethod
+    def from_bytes(cls, data: bytes) -> DataElement:
+        return DataElementParser(data).parse_next()
 
-        value_data = data[1 + value_offset:1 + value_offset + value_size]
-        constructor = DataElement.type_constructors.get(type)
-        if constructor:
-            if type == DataElement.UNSIGNED_INTEGER or type == DataElement.SIGNED_INTEGER:
-                result = constructor(value_data, value_size)
-            else:
-                result = constructor(value_data)
-        else:
-            result = DataElement(type, value_data)
-        result.bytes = data[:1 + value_offset + value_size]  # Keep a copy so we can re-serialize to an exact replica
-        return result
-
-    def to_bytes(self):
-        return bytes(self)
-
-    def __bytes__(self):
+    def __bytes__(self) -> bytes:
         # Return early if we have a cache
-        if self.bytes:
-            return self.bytes
+        if self._bytes:
+            return self._bytes
 
-        if self.type == DataElement.NIL:
-            data = b''
-        elif self.type == DataElement.UNSIGNED_INTEGER:
-            if self.value < 0:
-                raise ValueError('UNSIGNED_INTEGER cannot be negative')
-            elif self.value_size == 1:
-                data = struct.pack('B', self.value)
-            elif self.value_size == 2:
-                data = struct.pack('>H', self.value)
-            elif self.value_size == 4:
-                data = struct.pack('>I', self.value)
-            elif self.value_size == 8:
-                data = struct.pack('>Q', self.value)
-            else:
-                raise ValueError('invalid value_size')
-        elif self.type == DataElement.SIGNED_INTEGER:
-            if self.value_size == 1:
-                data = struct.pack('b', self.value)
-            elif self.value_size == 2:
-                data = struct.pack('>h', self.value)
-            elif self.value_size == 4:
-                data = struct.pack('>i', self.value)
-            elif self.value_size == 8:
-                data = struct.pack('>q', self.value)
-            else:
-                raise ValueError('invalid value_size')
-        elif self.type == DataElement.UUID:
-            data = bytes(reversed(bytes(self.value)))
-        elif self.type == DataElement.TEXT_STRING or self.type == DataElement.URL:
-            data = self.value.encode('utf8')
-        elif self.type == DataElement.BOOLEAN:
-            data = bytes([1 if self.value else 0])
-        elif self.type == DataElement.SEQUENCE or self.type == DataElement.ALTERNATIVE:
-            data = b''.join([bytes(element) for element in self.value])
-        else:
-            data = self.value
+        match self.type:
+            case DataElement.NIL:
+                data = b''
+            case DataElement.UNSIGNED_INTEGER:
+                if self.value < 0:
+                    raise InvalidArgumentError('UNSIGNED_INTEGER cannot be negative')
+
+                match self.value_size:
+                    case 1:
+                        data = struct.pack('B', self.value)
+                    case 2:
+                        data = struct.pack('>H', self.value)
+                    case 4:
+                        data = struct.pack('>I', self.value)
+                    case 8:
+                        data = struct.pack('>Q', self.value)
+                    case invalid_length:
+                        raise InvalidArgumentError(
+                            f'invalid value_size of {invalid_length}'
+                        )
+            case DataElement.SIGNED_INTEGER:
+                match self.value_size:
+                    case 1:
+                        data = struct.pack('b', self.value)
+                    case 2:
+                        data = struct.pack('>h', self.value)
+                    case 4:
+                        data = struct.pack('>i', self.value)
+                    case 8:
+                        data = struct.pack('>q', self.value)
+                    case invalid_length:
+                        raise InvalidArgumentError(
+                            f'invalid value_size of {invalid_length}'
+                        )
+            case DataElement.UUID:
+                data = bytes(self.value)[::-1]
+            case DataElement.URL:
+                data = self.value.encode('utf8')
+            case DataElement.BOOLEAN:
+                data = bytes([1 if self.value else 0])
+            case DataElement.SEQUENCE | DataElement.ALTERNATIVE:
+                data = b''.join([bytes(element) for element in self.value])
+            case _:
+                data = self.value
 
         size = len(data)
         size_bytes = b''
-        if self.type == DataElement.NIL:
-            if size != 0:
-                raise ValueError('NIL must be empty')
-            size_index = 0
-        elif (self.type == DataElement.UNSIGNED_INTEGER or
-              self.type == DataElement.SIGNED_INTEGER or
-              self.type == DataElement.UUID):
-            if size <= 1:
+        match self.type:
+            case DataElement.NIL:
+                if size != 0:
+                    raise InvalidArgumentError('NIL must be empty')
                 size_index = 0
-            elif size == 2:
-                size_index = 1
-            elif size == 4:
-                size_index = 2
-            elif size == 8:
-                size_index = 3
-            elif size == 16:
-                size_index = 4
-            else:
-                raise ValueError('invalid data size')
-        elif (self.type == DataElement.TEXT_STRING or
-              self.type == DataElement.SEQUENCE or
-              self.type == DataElement.ALTERNATIVE or
-              self.type == DataElement.URL):
-            if size <= 0xFF:
-                size_index = 5
-                size_bytes = bytes([size])
-            elif size <= 0xFFFF:
-                size_index = 6
-                size_bytes = struct.pack('>H', size)
-            elif size <= 0xFFFFFFFF:
-                size_index = 7
-                size_bytes = struct.pack('>I', size)
-            else:
-                raise ValueError('invalid data size')
-        elif self.type == DataElement.BOOLEAN:
-            if size != 1:
-                raise ValueError('boolean must be 1 byte')
-            size_index = 0
+            case (
+                DataElement.UNSIGNED_INTEGER
+                | DataElement.SIGNED_INTEGER
+                | DataElement.UUID
+            ):
+                if size <= 1:
+                    size_index = 0
+                elif size == 2:
+                    size_index = 1
+                elif size == 4:
+                    size_index = 2
+                elif size == 8:
+                    size_index = 3
+                elif size == 16:
+                    size_index = 4
+                else:
+                    raise InvalidArgumentError('invalid data size')
+            case (
+                DataElement.TEXT_STRING
+                | DataElement.SEQUENCE
+                | DataElement.ALTERNATIVE
+                | DataElement.URL
+            ):
+                if size <= 0xFF:
+                    size_index = 5
+                    size_bytes = bytes([size])
+                elif size <= 0xFFFF:
+                    size_index = 6
+                    size_bytes = struct.pack('>H', size)
+                elif size <= 0xFFFFFFFF:
+                    size_index = 7
+                    size_bytes = struct.pack('>I', size)
+                else:
+                    raise InvalidArgumentError('invalid data size')
+            case DataElement.BOOLEAN:
+                if size != 1:
+                    raise InvalidArgumentError('boolean must be 1 byte')
+                size_index = 0
+            case unsupported_type:
+                raise core.InvalidPacketError(
+                    f"internal error - {unsupported_type} not supported"
+                )
 
-        self.bytes = bytes([self.type << 3 | size_index]) + size_bytes + data
-        return self.bytes
+        self._bytes = bytes([self.type << 3 | size_index]) + size_bytes + data
+        return self._bytes
 
-    def to_string(self, pretty=False, indentation=0):
+    def to_string(self, pretty: bool = False, indentation: int = 0) -> str:
         prefix = '  ' * indentation
-        type_name = name_or_number(self.TYPE_NAMES, self.type)
-        if self.type == DataElement.NIL:
-            value_string = ''
-        elif self.type == DataElement.SEQUENCE or self.type == DataElement.ALTERNATIVE:
-            container_separator = '\n' if pretty else ''
-            element_separator = '\n' if pretty else ','
-            value_string = f'[{container_separator}{element_separator.join([element.to_string(pretty, indentation + 1 if pretty else 0) for element in self.value])}{container_separator}{prefix}]'
-        elif self.type == DataElement.UNSIGNED_INTEGER or self.type == DataElement.SIGNED_INTEGER:
-            value_string = f'{self.value}#{self.value_size}'
-        elif isinstance(self.value, DataElement):
-            value_string = self.value.to_string(pretty, indentation)
-        else:
-            value_string = str(self.value)
+        type_name = self.type.name
+        match self.type:
+            case DataElement.NIL:
+                value_string = ''
+            case DataElement.SEQUENCE | DataElement.ALTERNATIVE:
+                container_separator = '\n' if pretty else ''
+                element_separator = '\n' if pretty else ','
+                elements = [
+                    element.to_string(pretty, indentation + 1 if pretty else 0)
+                    for element in self.value
+                ]
+                value_string = (
+                    f'[{container_separator}'
+                    f'{element_separator.join(elements)}'
+                    f'{container_separator}{prefix}]'
+                )
+            case DataElement.UNSIGNED_INTEGER | DataElement.SIGNED_INTEGER:
+                value_string = f'{self.value}#{self.value_size}'
+            case _:
+                if isinstance(self.value, DataElement):
+                    value_string = self.value.to_string(pretty, indentation)
+                else:
+                    value_string = str(self.value)
         return f'{prefix}{type_name}({value_string})'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.to_string()
 
 
+class DataElementParser:
+    def __init__(
+        self, data: bytes, offset: int = 0, max_depth: int = _MAX_DATA_ELEMENT_NESTING
+    ) -> None:
+        self.data = data
+        self.offset = offset
+        self.depth = 0
+        self.max_depth = max_depth
+
+    def parse_next(self) -> DataElement:
+        if self.offset >= len(self.data):
+            raise core.InvalidStateError(
+                f"offset {self.offset} exceeds len(data) {len(self.data)}"
+            )
+        start_offset = self.offset
+        element_type = DataElement.Type(self.data[self.offset] >> 3)
+        size_index = self.data[self.offset] & 7
+        self.offset += 1
+
+        value_size: int
+        match size_index:
+            case 0:
+                if element_type == DataElement.NIL:
+                    value_size = 0
+                else:
+                    value_size = 1
+            case 1:
+                value_size = 2
+            case 2:
+                value_size = 4
+            case 3:
+                value_size = 8
+            case 4:
+                value_size = 16
+            case 5:
+                value_size = self.data[self.offset]
+                self.offset += 1
+            case 6:
+                value_size = struct.unpack_from('>H', self.data, self.offset)[0]
+                self.offset += 2
+            case 7:
+                value_size = struct.unpack_from('>I', self.data, self.offset)[0]
+                self.offset += 4
+            case _:
+                raise core.UnreachableError()
+
+        value_start = self.offset
+        value_end = self.offset + value_size
+
+        match element_type:
+            case DataElement.NIL:
+                result = DataElement(DataElement.NIL, None)
+            case DataElement.UNSIGNED_INTEGER:
+                result = DataElement(
+                    DataElement.UNSIGNED_INTEGER,
+                    DataElement.unsigned_integer_from_bytes(
+                        self.data, value_start, value_size
+                    ),
+                    value_size=value_size,
+                )
+            case DataElement.SIGNED_INTEGER:
+                result = DataElement(
+                    DataElement.SIGNED_INTEGER,
+                    DataElement.signed_integer_from_bytes(
+                        self.data, value_start, value_size
+                    ),
+                    value_size=value_size,
+                )
+            case DataElement.UUID:
+                result = DataElement(
+                    DataElement.UUID,
+                    core.UUID.from_bytes(self.data[value_start:value_end][::-1]),
+                )
+            case DataElement.TEXT_STRING:
+                result = DataElement(
+                    DataElement.TEXT_STRING, self.data[value_start:value_end]
+                )
+            case DataElement.BOOLEAN:
+                result = DataElement(DataElement.BOOLEAN, self.data[value_start] == 1)
+            case DataElement.SEQUENCE | DataElement.ALTERNATIVE:
+                self.offset = value_start
+                result = DataElement(
+                    element_type,
+                    self._list_from_bytes(value_end),
+                )
+                if self.offset != value_end:
+                    logger.warning(
+                        "Expect parsing until offset %d, but ends at %d",
+                        value_end,
+                        self.offset,
+                    )
+            case DataElement.URL:
+                result = DataElement(
+                    DataElement.URL, self.data[value_start:value_end].decode('utf8')
+                )
+            case other_type:
+                result = DataElement(other_type, self.data[value_start:value_end])
+
+        self.offset = value_end
+        result._bytes = self.data[start_offset:value_end]
+
+        return result
+
+    def _list_from_bytes(self, end_offset: int) -> list[DataElement]:
+        if self.depth >= self.max_depth:
+            raise InvalidPacketError(
+                f"SDP data element nesting exceeds max depth " f"({self.max_depth})"
+            )
+        self.depth += 1
+        elements = []
+        while self.offset < end_offset:
+            elements.append(self.parse_next())
+        self.depth -= 1
+        return elements
+
+
 # -----------------------------------------------------------------------------
+@dataclass
 class ServiceAttribute:
-    def __init__(self, id, value):
-        self.id    = id
-        self.value = value
+    id: int
+    value: DataElement
 
     @staticmethod
-    def list_from_data_elements(elements):
+    def list_from_data_elements(
+        elements: Sequence[DataElement],
+    ) -> list[ServiceAttribute]:
         attribute_list = []
         for i in range(0, len(elements) // 2):
-            attribute_id, attribute_value = elements[2 * i:2 * (i + 1)]
+            attribute_id, attribute_value = elements[2 * i : 2 * (i + 1)]
             if attribute_id.type != DataElement.UNSIGNED_INTEGER:
-                logger.warn('attribute ID element is not an integer')
+                logger.warning('attribute ID element is not an integer')
                 continue
             attribute_list.append(ServiceAttribute(attribute_id.value, attribute_value))
 
         return attribute_list
 
     @staticmethod
-    def find_attribute_in_list(attribute_list, attribute_id):
-        return next((attribute.value for attribute in attribute_list if attribute.id == attribute_id), None)
+    def find_attribute_in_list(
+        attribute_list: Iterable[ServiceAttribute], attribute_id: int
+    ) -> DataElement | None:
+        return next(
+            (
+                attribute.value
+                for attribute in attribute_list
+                if attribute.id == attribute_id
+            ),
+            None,
+        )
 
     @staticmethod
-    def id_name(id):
-        return name_or_number(SDP_ATTRIBUTE_ID_NAMES, id)
+    def id_name(id_code):
+        return hci.name_or_number(SDP_ATTRIBUTE_ID_NAMES, id_code)
 
     @staticmethod
-    def is_uuid_in_value(uuid, value):
+    def is_uuid_in_value(uuid: core.UUID, value: DataElement) -> bool:
         # Find if a uuid matches a value, either directly or recursing into sequences
         if value.type == DataElement.UUID:
             return value.value == uuid
-        elif value.type == DataElement.SEQUENCE:
+
+        if value.type == DataElement.SEQUENCE:
             for element in value.value:
                 if ServiceAttribute.is_uuid_in_value(uuid, element):
                     return True
             return False
-        else:
-            return False
 
-    def to_string(self, color=False):
-        if color:
-            return f'Attribute(id={colors.color(self.id_name(self.id),"magenta")},value={self.value})'
-        else:
-            return f'Attribute(id={self.id_name(self.id)},value={self.value})'
+        return False
+
+    def to_string(self, with_colors=False):
+        if with_colors:
+            return (
+                f'Attribute(id={color(self.id_name(self.id), "magenta")},'
+                f'value={self.value})'
+            )
+
+        return f'Attribute(id={self.id_name(self.id)},value={self.value})'
 
     def __str__(self):
         return self.to_string()
 
 
 # -----------------------------------------------------------------------------
+def _parse_service_record_handle_list(
+    data: bytes, offset: int
+) -> tuple[int, list[int]]:
+    count = struct.unpack_from('>H', data, offset)[0]
+    offset += 2
+    handle_list = [
+        struct.unpack_from('>I', data, offset + x * 4)[0] for x in range(count)
+    ]
+    return offset + count * 4, handle_list
+
+
+def _serialize_service_record_handle_list(
+    handles: list[int],
+) -> bytes:
+    return struct.pack('>H', len(handles)) + b''.join(
+        struct.pack('>I', handle) for handle in handles
+    )
+
+
+def _parse_bytes_preceded_by_length(data: bytes, offset: int) -> tuple[int, bytes]:
+    length = struct.unpack_from('>H', data, offset)[0]
+    offset += 2
+    return offset + length, data[offset : offset + length]
+
+
+def _serialize_bytes_preceded_by_length(data: bytes) -> bytes:
+    return struct.pack('>H', len(data)) + data
+
+
+_SERVICE_RECORD_HANDLE_LIST_METADATA = hci.metadata(
+    {
+        'parser': _parse_service_record_handle_list,
+        'serializer': _serialize_service_record_handle_list,
+    }
+)
+
+
+_BYTES_PRECEDED_BY_LENGTH_METADATA = hci.metadata(
+    {
+        'parser': _parse_bytes_preceded_by_length,
+        'serializer': _serialize_bytes_preceded_by_length,
+    }
+)
+
+
+# -----------------------------------------------------------------------------
+@dataclass
 class SDP_PDU:
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.2 PROTOCOL DATA UNIT FORMAT
     '''
-    sdp_pdu_classes = {}
 
-    @staticmethod
-    def from_bytes(pdu):
+    RESPONSE_PDU_IDS = {
+        PduId.SDP_SERVICE_SEARCH_REQUEST: PduId.SDP_SERVICE_SEARCH_RESPONSE,
+        PduId.SDP_SERVICE_ATTRIBUTE_REQUEST: PduId.SDP_SERVICE_ATTRIBUTE_RESPONSE,
+        PduId.SDP_SERVICE_SEARCH_ATTRIBUTE_REQUEST: PduId.SDP_SERVICE_SEARCH_ATTRIBUTE_RESPONSE,
+    }
+    subclasses: ClassVar[dict[int, type[SDP_PDU]]] = {}
+    pdu_id: ClassVar[PduId]
+    fields: ClassVar[hci.Fields]
+
+    transaction_id: int
+    _payload: bytes | None = field(init=False, repr=False, default=None)
+
+    @classmethod
+    def from_bytes(cls, pdu: bytes) -> SDP_PDU:
         pdu_id, transaction_id, parameters_length = struct.unpack_from('>BHH', pdu, 0)
 
-        cls = SDP_PDU.sdp_pdu_classes.get(pdu_id)
-        if cls is None:
-            instance = SDP_PDU(pdu)
-            instance.name = SDP_PDU.pdu_name(pdu_id)
-            instance.pdu_id = pdu_id
-            instance.transaction_id = transaction_id
-            return instance
-        self = cls.__new__(cls)
-        SDP_PDU.__init__(self, pdu, transaction_id)
-        if hasattr(self, 'fields'):
-            self.init_from_bytes(pdu, 5)
-        return self
+        if len(pdu) != 5 + parameters_length:
+            logger.warning("Expect %d bytes, got %d", 5 + parameters_length, len(pdu))
 
-    @staticmethod
-    def parse_service_record_handle_list_preceded_by_count(data, offset):
-        count = struct.unpack_from('>H', data, offset - 2)[0]
-        handle_list = [struct.unpack_from('>I', data, offset + x * 4)[0] for x in range(count)]
-        return offset + count * 4, handle_list
+        subclass = cls.subclasses.get(pdu_id)
+        if not (subclass := cls.subclasses.get(pdu_id)):
+            raise InvalidPacketError(f"Unknown PDU type {pdu_id}")
+        instance = subclass(
+            transaction_id=transaction_id,
+            **hci.HCI_Object.dict_from_bytes(pdu, 5, subclass.fields),
+        )
+        instance._payload = pdu
+        return instance
 
-    @staticmethod
-    def parse_bytes_preceded_by_length(data, offset):
-        length = struct.unpack_from('>H', data, offset - 2)[0]
-        return offset + length, data[offset:offset + length]
+    _PDU = TypeVar('_PDU', bound='SDP_PDU')
 
-    @staticmethod
-    def error_name(error_code):
-        return name_or_number(SDP_ERROR_NAMES, error_code)
-
-    @staticmethod
-    def pdu_name(code):
-        return name_or_number(SDP_PDU_NAMES, code)
-
-    @staticmethod
-    def subclass(fields):
-        def inner(cls):
-            name = cls.__name__
-
-            # add a _ character before every uppercase letter, except the SDP_ prefix
-            location = len(name) - 1
-            while location > 4:
-                if not name[location].isupper():
-                    location -= 1
-                    continue
-                name = name[:location] + '_' + name[location:]
-                location -= 1
-
-            cls.name = name.upper()
-            cls.pdu_id = key_with_value(SDP_PDU_NAMES, cls.name)
-            if cls.pdu_id is None:
-                raise KeyError(f'PDU name {cls.name} not found in SDP_PDU_NAMES')
-            cls.fields = fields
-
-            # Register a factory for this class
-            SDP_PDU.sdp_pdu_classes[cls.pdu_id] = cls
-
-            return cls
-
-        return inner
-
-    def __init__(self, pdu=None, transaction_id=0, **kwargs):
-        if hasattr(self, 'fields') and kwargs:
-            HCI_Object.init_from_fields(self, self.fields, kwargs)
-        if pdu is None:
-            parameters = HCI_Object.dict_to_bytes(kwargs, self.fields)
-            pdu = struct.pack('>BHH', self.pdu_id, transaction_id, len(parameters)) + parameters
-        self.pdu = pdu
-        self.transaction_id = transaction_id
-
-    def init_from_bytes(self, pdu, offset):
-        return HCI_Object.init_from_bytes(self, pdu, offset, self.fields)
-
-    def to_bytes(self):
-        return self.pdu
+    @classmethod
+    def subclass(cls, subclass: type[_PDU]) -> type[_PDU]:
+        subclass.fields = hci.HCI_Object.fields_from_dataclass(subclass)
+        cls.subclasses[subclass.pdu_id] = subclass
+        return subclass
 
     def __bytes__(self):
-        return self.to_bytes()
+        if self._payload is None:
+            parameters = hci.HCI_Object.dict_to_bytes(self.__dict__, self.fields)
+            self._payload = (
+                struct.pack('>BHH', self.pdu_id, self.transaction_id, len(parameters))
+                + parameters
+            )
+        return self._payload
+
+    @property
+    def name(self) -> str:
+        return self.pdu_id.name
 
     def __str__(self):
         result = f'{color(self.name, "blue")} [TID={self.transaction_id}]'
         if fields := getattr(self, 'fields', None):
-            result += ':\n' + HCI_Object.format_fields(self.__dict__, fields, '  ')
+            result += ':\n' + hci.HCI_Object.format_fields(self.__dict__, fields, '  ')
         elif len(self.pdu) > 1:
             result += f': {self.pdu.hex()}'
         return result
 
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('error_code', {'size': 2, 'mapper': SDP_PDU.error_name})
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ErrorResponse(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.4.1 SDP_ErrorResponse PDU
     '''
 
+    pdu_id = PduId.SDP_ERROR_RESPONSE
+
+    error_code: ErrorCode = field(metadata=ErrorCode.type_metadata(2))
+
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('service_search_pattern',       DataElement.parse_from_bytes),
-    ('maximum_service_record_count', '>2'),
-    ('continuation_state',          '*')
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ServiceSearchRequest(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.5.1 SDP_ServiceSearchRequest PDU
     '''
 
+    pdu_id = PduId.SDP_SERVICE_SEARCH_REQUEST
+
+    service_search_pattern: DataElement = field(
+        metadata=hci.metadata(DataElement.parse_from_bytes)
+    )
+    maximum_service_record_count: int = field(metadata=hci.metadata('>2'))
+    continuation_state: bytes = field(metadata=hci.metadata('*'))
+
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('total_service_record_count',   '>2'),
-    ('current_service_record_count', '>2'),
-    ('service_record_handle_list',   SDP_PDU.parse_service_record_handle_list_preceded_by_count),
-    ('continuation_state',           '*')
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ServiceSearchResponse(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.5.2 SDP_ServiceSearchResponse PDU
     '''
 
+    pdu_id = PduId.SDP_SERVICE_SEARCH_RESPONSE
+
+    total_service_record_count: int = field(metadata=hci.metadata('>2'))
+    service_record_handle_list: Sequence[int] = field(
+        metadata=_SERVICE_RECORD_HANDLE_LIST_METADATA
+    )
+    continuation_state: bytes = field(metadata=hci.metadata('*'))
+
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('service_record_handle',        '>4'),
-    ('maximum_attribute_byte_count', '>2'),
-    ('attribute_id_list',            DataElement.parse_from_bytes),
-    ('continuation_state',           '*')
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ServiceAttributeRequest(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.6.1 SDP_ServiceAttributeRequest PDU
     '''
 
+    pdu_id = PduId.SDP_SERVICE_ATTRIBUTE_REQUEST
+
+    service_record_handle: int = field(metadata=hci.metadata('>4'))
+    maximum_attribute_byte_count: int = field(metadata=hci.metadata('>2'))
+    attribute_id_list: DataElement = field(
+        metadata=hci.metadata(DataElement.parse_from_bytes)
+    )
+    continuation_state: bytes = field(metadata=hci.metadata('*'))
+
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('attribute_list_byte_count', '>2'),
-    ('attribute_list',            SDP_PDU.parse_bytes_preceded_by_length),
-    ('continuation_state',        '*')
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ServiceAttributeResponse(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.6.2 SDP_ServiceAttributeResponse PDU
     '''
 
+    pdu_id = PduId.SDP_SERVICE_ATTRIBUTE_RESPONSE
+
+    attribute_list: bytes = field(metadata=_BYTES_PRECEDED_BY_LENGTH_METADATA)
+    continuation_state: bytes = field(metadata=hci.metadata('*'))
+
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('service_search_pattern',       DataElement.parse_from_bytes),
-    ('maximum_attribute_byte_count', '>2'),
-    ('attribute_id_list',            DataElement.parse_from_bytes),
-    ('continuation_state',          '*')
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ServiceSearchAttributeRequest(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.7.1 SDP_ServiceSearchAttributeRequest PDU
     '''
 
+    pdu_id = PduId.SDP_SERVICE_SEARCH_ATTRIBUTE_REQUEST
+
+    service_search_pattern: DataElement = field(
+        metadata=hci.metadata(DataElement.parse_from_bytes)
+    )
+    maximum_attribute_byte_count: int = field(metadata=hci.metadata('>2'))
+    attribute_id_list: DataElement = field(
+        metadata=hci.metadata(DataElement.parse_from_bytes)
+    )
+    continuation_state: bytes = field(metadata=hci.metadata('*'))
+
 
 # -----------------------------------------------------------------------------
-@SDP_PDU.subclass([
-    ('attribute_lists_byte_count', '>2'),
-    ('attribute_lists',            SDP_PDU.parse_bytes_preceded_by_length),
-    ('continuation_state',        '*')
-])
+@SDP_PDU.subclass
+@dataclass
 class SDP_ServiceSearchAttributeResponse(SDP_PDU):
     '''
     See Bluetooth spec @ Vol 3, Part B - 4.7.2 SDP_ServiceSearchAttributeResponse PDU
     '''
 
+    pdu_id = PduId.SDP_SERVICE_SEARCH_ATTRIBUTE_RESPONSE
+
+    attribute_lists: bytes = field(metadata=_BYTES_PRECEDED_BY_LENGTH_METADATA)
+    continuation_state: bytes = field(metadata=hci.metadata('*'))
+
 
 # -----------------------------------------------------------------------------
 class Client:
-    def __init__(self, device):
-        self.device          = device
-        self.pending_request = None
-        self.channel         = None
+    def __init__(self, connection: Connection, mtu: int = 0) -> None:
+        self.connection = connection
+        self.channel: l2cap.ClassicChannel | None = None
+        self.mtu = mtu
+        self.request_semaphore = asyncio.Semaphore(1)
+        self.pending_request: SDP_PDU | None = None
+        self.pending_response: asyncio.futures.Future[SDP_PDU] | None = None
+        self.next_transaction_id = 0
 
-    async def connect(self, connection):
-        result = await self.device.l2cap_channel_manager.connect(connection, SDP_PSM)
-        self.channel = result
+    async def connect(self) -> None:
+        self.channel = await self.connection.create_l2cap_channel(
+            spec=(
+                l2cap.ClassicChannelSpec(SDP_PSM, self.mtu)
+                if self.mtu
+                else l2cap.ClassicChannelSpec(SDP_PSM)
+            )
+        )
+        self.channel.sink = self.on_pdu
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         if self.channel:
             await self.channel.disconnect()
             self.channel = None
 
-    async def search_services(self, uuids):
+    def make_transaction_id(self) -> int:
+        transaction_id = self.next_transaction_id
+        self.next_transaction_id = (self.next_transaction_id + 1) & 0xFFFF
+        return transaction_id
+
+    def on_pdu(self, pdu: bytes) -> None:
+        if not self.pending_request:
+            logger.warning('received response with no pending request')
+            return
+        assert self.pending_response is not None
+
+        response = SDP_PDU.from_bytes(pdu)
+
+        # Check that the transaction ID is what we expect
+        if self.pending_request.transaction_id != response.transaction_id:
+            logger.warning(
+                f"received response with transaction ID {response.transaction_id} "
+                f"but expected {self.pending_request.transaction_id}"
+            )
+            return
+
+        # Check if the response is an error
+        if isinstance(response, SDP_ErrorResponse):
+            self.pending_response.set_exception(
+                ProtocolError(error_code=response.error_code)
+            )
+            return
+
+        # Check that the type of the response matches the request
+        if response.pdu_id != SDP_PDU.RESPONSE_PDU_IDS.get(self.pending_request.pdu_id):
+            logger.warning("response type mismatch")
+            return
+
+        self.pending_response.set_result(response)
+
+    async def send_request(self, request: SDP_PDU) -> SDP_PDU:
+        assert self.channel is not None
+        async with self.request_semaphore:
+            assert self.pending_request is None
+            assert self.pending_response is None
+
+            # Create a future value to hold the eventual response
+            self.pending_response = asyncio.get_running_loop().create_future()
+            self.pending_request = request
+
+            try:
+                self.channel.write(bytes(request))
+                return await self.pending_response
+            finally:
+                self.pending_request = None
+                self.pending_response = None
+
+    async def search_services(self, uuids: Iterable[core.UUID]) -> list[int]:
+        """
+        Search for services by UUID.
+
+        Args:
+          uuids: service the UUIDs to search for.
+
+        Returns:
+          A list of matching service record handles.
+        """
         if self.pending_request is not None:
             raise InvalidStateError('request already pending')
+        if self.channel is None:
+            raise InvalidStateError('L2CAP not connected')
 
-        service_search_pattern = DataElement.sequence([DataElement.uuid(uuid) for uuid in uuids])
+        service_search_pattern = DataElement.sequence(
+            [DataElement.uuid(uuid) for uuid in uuids]
+        )
 
         # Request and accumulate until there's no more continuation
-        service_record_handle_list = []
+        service_record_handle_list: list[int] = []
         continuation_state = bytes([0])
         watchdog = SDP_CONTINUATION_WATCHDOG
         while watchdog > 0:
-            response_pdu = await self.channel.send_request(
+            response = await self.send_request(
                 SDP_ServiceSearchRequest(
-                    transaction_id               = 0,  # Transaction ID TODO: pick a real value
-                    service_search_pattern       = service_search_pattern,
-                    maximum_service_record_count = 0xFFFF,
-                    continuation_state           = continuation_state
+                    transaction_id=self.make_transaction_id(),
+                    service_search_pattern=service_search_pattern,
+                    maximum_service_record_count=0xFFFF,
+                    continuation_state=continuation_state,
                 )
             )
-            response = SDP_PDU.from_bytes(response_pdu)
             logger.debug(f'<<< Response: {response}')
+            assert isinstance(response, SDP_ServiceSearchResponse)
             service_record_handle_list += response.service_record_handle_list
             continuation_state = response.continuation_state
             if len(continuation_state) == 1 and continuation_state[0] == 0:
@@ -685,16 +928,39 @@ class Client:
 
         return service_record_handle_list
 
-    async def search_attributes(self, uuids, attribute_ids):
+    async def search_attributes(
+        self,
+        uuids: Iterable[core.UUID],
+        attribute_ids: Iterable[int | tuple[int, int]],
+    ) -> list[list[ServiceAttribute]]:
+        """
+        Search for attributes by UUID and attribute IDs.
+
+        Args:
+          uuids: the service UUIDs to search for.
+          attribute_ids: list of attribute IDs or (start, end) attribute ID ranges.
+          (use (0, 0xFFFF) to include all attributes)
+
+        Returns:
+          A list of list of attributes, one list per matching service.
+        """
         if self.pending_request is not None:
             raise InvalidStateError('request already pending')
+        if self.channel is None:
+            raise InvalidStateError('L2CAP not connected')
 
-        service_search_pattern = DataElement.sequence([DataElement.uuid(uuid) for uuid in uuids])
+        service_search_pattern = DataElement.sequence(
+            [DataElement.uuid(uuid) for uuid in uuids]
+        )
         attribute_id_list = DataElement.sequence(
             [
-                DataElement.unsigned_integer(attribute_id[0], value_size=attribute_id[1])
-                if type(attribute_id) is tuple
-                else DataElement.unsigned_integer_16(attribute_id)
+                (
+                    DataElement.unsigned_integer_32(
+                        attribute_id[0] << 16 | attribute_id[1]
+                    )
+                    if isinstance(attribute_id, tuple)
+                    else DataElement.unsigned_integer_16(attribute_id)
+                )
                 for attribute_id in attribute_ids
             ]
         )
@@ -704,17 +970,17 @@ class Client:
         continuation_state = bytes([0])
         watchdog = SDP_CONTINUATION_WATCHDOG
         while watchdog > 0:
-            response_pdu = await self.channel.send_request(
+            response = await self.send_request(
                 SDP_ServiceSearchAttributeRequest(
-                    transaction_id               = 0,  # Transaction ID TODO: pick a real value
-                    service_search_pattern       = service_search_pattern,
-                    maximum_attribute_byte_count = 0xFFFF,
-                    attribute_id_list            = attribute_id_list,
-                    continuation_state           = continuation_state
+                    transaction_id=self.make_transaction_id(),
+                    service_search_pattern=service_search_pattern,
+                    maximum_attribute_byte_count=0xFFFF,
+                    attribute_id_list=attribute_id_list,
+                    continuation_state=continuation_state,
                 )
             )
-            response = SDP_PDU.from_bytes(response_pdu)
             logger.debug(f'<<< Response: {response}')
+            assert isinstance(response, SDP_ServiceSearchAttributeResponse)
             accumulator += response.attribute_lists
             continuation_state = response.continuation_state
             if len(continuation_state) == 1 and continuation_state[0] == 0:
@@ -725,7 +991,7 @@ class Client:
         # Parse the result into attribute lists
         attribute_lists_sequences = DataElement.from_bytes(accumulator)
         if attribute_lists_sequences.type != DataElement.SEQUENCE:
-            logger.warn('unexpected data type')
+            logger.warning('unexpected data type')
             return []
 
         return [
@@ -734,15 +1000,35 @@ class Client:
             if sequence.type == DataElement.SEQUENCE
         ]
 
-    async def get_attributes(self, service_record_handle, attribute_ids):
+    async def get_attributes(
+        self,
+        service_record_handle: int,
+        attribute_ids: Iterable[int | tuple[int, int]],
+    ) -> list[ServiceAttribute]:
+        """
+        Get attributes for a service.
+
+        Args:
+          service_record_handle: the handle for a service
+          attribute_ids: list or attribute IDs or (start, end) attribute ID handles.
+
+        Returns:
+          A list of attributes.
+        """
         if self.pending_request is not None:
             raise InvalidStateError('request already pending')
+        if self.channel is None:
+            raise InvalidStateError('L2CAP not connected')
 
         attribute_id_list = DataElement.sequence(
             [
-                DataElement.unsigned_integer(attribute_id[0], value_size=attribute_id[1])
-                if type(attribute_id) is tuple
-                else DataElement.unsigned_integer_16(attribute_id)
+                (
+                    DataElement.unsigned_integer_32(
+                        attribute_id[0] << 16 | attribute_id[1]
+                    )
+                    if isinstance(attribute_id, tuple)
+                    else DataElement.unsigned_integer_16(attribute_id)
+                )
                 for attribute_id in attribute_ids
             ]
         )
@@ -752,17 +1038,17 @@ class Client:
         continuation_state = bytes([0])
         watchdog = SDP_CONTINUATION_WATCHDOG
         while watchdog > 0:
-            response_pdu = await self.channel.send_request(
+            response = await self.send_request(
                 SDP_ServiceAttributeRequest(
-                    transaction_id               = 0,  # Transaction ID TODO: pick a real value
-                    service_record_handle        = service_record_handle,
-                    maximum_attribute_byte_count = 0xFFFF,
-                    attribute_id_list            = attribute_id_list,
-                    continuation_state           = continuation_state
+                    transaction_id=self.make_transaction_id(),
+                    service_record_handle=service_record_handle,
+                    maximum_attribute_byte_count=0xFFFF,
+                    attribute_id_list=attribute_id_list,
+                    continuation_state=continuation_state,
                 )
             )
-            response = SDP_PDU.from_bytes(response_pdu)
             logger.debug(f'<<< Response: {response}')
+            assert isinstance(response, SDP_ServiceAttributeResponse)
             accumulator += response.attribute_list
             continuation_state = response.continuation_state
             if len(continuation_state) == 1 and continuation_state[0] == 0:
@@ -773,29 +1059,43 @@ class Client:
         # Parse the result into a list of attributes
         attribute_list_sequence = DataElement.from_bytes(accumulator)
         if attribute_list_sequence.type != DataElement.SEQUENCE:
-            logger.warn('unexpected data type')
+            logger.warning('unexpected data type')
             return []
 
         return ServiceAttribute.list_from_data_elements(attribute_list_sequence.value)
 
+    async def __aenter__(self) -> Self:
+        await self.connect()
+        return self
+
+    async def __aexit__(self, *args) -> None:
+        await self.disconnect()
+
 
 # -----------------------------------------------------------------------------
 class Server:
-    CONTINUATION_STATE = bytes([0x01, 0x43])
+    CONTINUATION_STATE = bytes([0x01, 0x00])
+    channel: l2cap.ClassicChannel | None
+    Service = NewType('Service', list[ServiceAttribute])
+    service_records: dict[int, Service]
+    current_response: None | bytes | tuple[int, list[int]]
 
-    def __init__(self, device):
-        self.device           = device
-        self.service_records  = {}  # Service records maps, by record handle
-        self.current_response = None
+    def __init__(self, device: Device) -> None:
+        self.device = device
+        self.service_records = {}  # Service records maps, by record handle
+        self.channel = None
+        self.current_response = None  # Current response data, used for continuations
 
-    def register(self, l2cap_channel_manager):
-        l2cap_channel_manager.register_server(SDP_PSM, self.on_connection)
+    def register(self, l2cap_channel_manager: l2cap.ChannelManager) -> None:
+        l2cap_channel_manager.create_classic_server(
+            spec=l2cap.ClassicChannelSpec(psm=SDP_PSM), handler=self.on_connection
+        )
 
     def send_response(self, response):
         logger.debug(f'{color(">>> Sending SDP Response", "blue")}: {response}')
-        self.channel.send_pdu(response)
+        self.channel.write(response)
 
-    def match_services(self, search_pattern):
+    def match_services(self, search_pattern: DataElement) -> dict[int, Service]:
         # Find the services for which the attributes in the pattern is a subset of the
         # service's attribute values (NOTE: the value search recurses into sequences)
         matching_services = {}
@@ -819,12 +1119,11 @@ class Server:
     def on_pdu(self, pdu):
         try:
             sdp_pdu = SDP_PDU.from_bytes(pdu)
-        except Exception as error:
-            logger.warn(color(f'failed to parse SDP Request PDU: {error}', 'red'))
+        except Exception:
+            logger.exception(color('failed to parse SDP Request PDU', 'red'))
             self.send_response(
                 SDP_ErrorResponse(
-                    transaction_id = 0,
-                    error_code     = SDP_INVALID_REQUEST_SYNTAX_ERROR
+                    transaction_id=0, error_code=ErrorCode.INVALID_REQUEST_SYNTAX
                 )
             )
 
@@ -836,22 +1135,47 @@ class Server:
         if handler:
             try:
                 handler(sdp_pdu)
-            except Exception as error:
-                logger.warning(f'{color("!!! Exception in handler:", "red")} {error}')
+            except Exception:
+                logger.exception(color("!!! Exception in handler:", "red"))
                 self.send_response(
                     SDP_ErrorResponse(
-                        transaction_id = sdp_pdu.transaction_id,
-                        error_code     = SDP_INSUFFICIENT_RESOURCES_TO_SATISFY_REQUEST_ERROR
+                        transaction_id=sdp_pdu.transaction_id,
+                        error_code=ErrorCode.INSUFFICIENT_RESOURCES_TO_SATISFY_REQUEST,
                     )
                 )
         else:
             logger.error(color('SDP Request not handled???', 'red'))
             self.send_response(
                 SDP_ErrorResponse(
-                    transaction_id = sdp_pdu.transaction_id,
-                    error_code     = SDP_INVALID_REQUEST_SYNTAX_ERROR
+                    transaction_id=sdp_pdu.transaction_id,
+                    error_code=ErrorCode.INVALID_REQUEST_SYNTAX,
                 )
             )
+
+    def check_continuation(
+        self,
+        continuation_state: bytes,
+        transaction_id: int,
+    ) -> bool | None:
+        # Check if this is a valid continuation
+        if len(continuation_state) > 1:
+            if (
+                self.current_response is None
+                or continuation_state != self.CONTINUATION_STATE
+            ):
+                self.send_response(
+                    SDP_ErrorResponse(
+                        transaction_id=transaction_id,
+                        error_code=ErrorCode.INVALID_CONTINUATION_STATE,
+                    )
+                )
+                return None
+            return True
+
+        # Cleanup any partial response leftover
+        self.current_response = None
+
+        return False
 
     def get_next_response_payload(self, maximum_size):
         if len(self.current_response) > maximum_size:
@@ -866,23 +1190,26 @@ class Server:
         return (payload, continuation_state)
 
     @staticmethod
-    def get_service_attributes(service, attribute_ids):
+    def get_service_attributes(
+        service: Service, attribute_ids: Iterable[DataElement]
+    ) -> DataElement:
         attributes = []
         for attribute_id in attribute_ids:
             if attribute_id.value_size == 4:
                 # Attribute ID range
                 id_range_start = attribute_id.value >> 16
-                id_range_end   = attribute_id.value & 0xFFFF
+                id_range_end = attribute_id.value & 0xFFFF
             else:
                 id_range_start = attribute_id.value
-                id_range_end   = attribute_id.value
+                id_range_end = attribute_id.value
             attributes += [
-                attribute for attribute in service
+                attribute
+                for attribute in service
                 if attribute.id >= id_range_start and attribute.id <= id_range_end
             ]
 
-        # Return the maching attributes, sorted by attribute id
-        attributes.sort(key = lambda x: x.id)
+        # Return the matching attributes, sorted by attribute id
+        attributes.sort(key=lambda x: x.id)
         attribute_list = DataElement.sequence([])
         for attribute in attributes:
             attribute_list.value.append(DataElement.unsigned_integer_16(attribute.id))
@@ -890,118 +1217,129 @@ class Server:
 
         return attribute_list
 
-    def on_sdp_service_search_request(self, request):
+    def on_sdp_service_search_request(self, request: SDP_ServiceSearchRequest) -> None:
         # Check if this is a continuation
-        if len(request.continuation_state) > 1:
-            if not self.current_response:
-                self.send_response(
-                    SDP_ErrorResponse(
-                        transaction_id = request.transaction_id,
-                        error_code     = SDP_INVALID_CONTINUATION_STATE_ERROR
-                    )
-                )
-                return
-        else:
-            # Cleanup any partial response leftover
-            self.current_response = None
+        if (
+            continuation := self.check_continuation(
+                request.continuation_state, request.transaction_id
+            )
+        ) is None:
+            return
 
+        if not continuation:
             # Find the matching services
             matching_services = self.match_services(request.service_search_pattern)
             service_record_handles = list(matching_services.keys())
+            logger.debug(f'Service Record Handles: {service_record_handles}')
 
             # Only return up to the maximum requested
-            service_record_handles_subset = service_record_handles[:request.maximum_service_record_count]
+            service_record_handles_subset = service_record_handles[
+                : request.maximum_service_record_count
+            ]
 
-            # Serialize to a byte array, and remember the total count
-            logger.debug(f'Service Record Handles: {service_record_handles}')
             self.current_response = (
                 len(service_record_handles),
-                service_record_handles_subset
+                service_record_handles_subset,
             )
 
         # Respond, keeping any unsent handles for later
-        service_record_handles = self.current_response[1][:request.maximum_service_record_count]
+        assert isinstance(self.current_response, tuple)
+        assert self.channel is not None
+        total_service_record_count, service_record_handles = self.current_response
+        maximum_service_record_count = (self.channel.peer_mtu - 11) // 4
+        service_record_handles_remaining = service_record_handles[
+            maximum_service_record_count:
+        ]
+        service_record_handles = service_record_handles[:maximum_service_record_count]
         self.current_response = (
-            self.current_response[0],
-            self.current_response[1][request.maximum_service_record_count:]
+            total_service_record_count,
+            service_record_handles_remaining,
         )
-        continuation_state = Server.CONTINUATION_STATE if self.current_response[1] else bytes([0])
-        service_record_handle_list = b''.join([struct.pack('>I', handle) for handle in service_record_handles])
+        continuation_state = (
+            Server.CONTINUATION_STATE
+            if service_record_handles_remaining
+            else bytes([0])
+        )
         self.send_response(
             SDP_ServiceSearchResponse(
-                transaction_id               = request.transaction_id,
-                total_service_record_count   = self.current_response[0],
-                current_service_record_count = len(service_record_handles),
-                service_record_handle_list   = service_record_handle_list,
-                continuation_state           = continuation_state
+                transaction_id=request.transaction_id,
+                total_service_record_count=total_service_record_count,
+                service_record_handle_list=service_record_handles,
+                continuation_state=continuation_state,
             )
         )
 
-    def on_sdp_service_attribute_request(self, request):
+    def on_sdp_service_attribute_request(
+        self, request: SDP_ServiceAttributeRequest
+    ) -> None:
         # Check if this is a continuation
-        if len(request.continuation_state) > 1:
-            if not self.current_response:
-                self.send_response(
-                    SDP_ErrorResponse(
-                        transaction_id = request.transaction_id,
-                        error_code     = SDP_INVALID_CONTINUATION_STATE_ERROR
-                    )
-                )
-                return
-        else:
-            # Cleanup any partial response leftover
-            self.current_response = None
+        if (
+            continuation := self.check_continuation(
+                request.continuation_state, request.transaction_id
+            )
+        ) is None:
+            return
 
+        if not continuation:
             # Check that the service exists
             service = self.service_records.get(request.service_record_handle)
             if service is None:
                 self.send_response(
                     SDP_ErrorResponse(
-                        transaction_id = request.transaction_id,
-                        error_code     = SDP_INVALID_SERVICE_RECORD_HANDLE_ERROR
+                        transaction_id=request.transaction_id,
+                        error_code=ErrorCode.INVALID_SERVICE_RECORD_HANDLE,
                     )
                 )
                 return
 
             # Get the attributes for the service
-            attribute_list = Server.get_service_attributes(service, request.attribute_id_list.value)
+            attribute_list = Server.get_service_attributes(
+                service, request.attribute_id_list.value
+            )
 
             # Serialize to a byte array
             logger.debug(f'Attributes: {attribute_list}')
             self.current_response = bytes(attribute_list)
 
         # Respond, keeping any pending chunks for later
-        attribute_list, continuation_state = self.get_next_response_payload(request.maximum_attribute_byte_count)
+        assert self.channel is not None
+        maximum_attribute_byte_count = min(
+            request.maximum_attribute_byte_count, self.channel.peer_mtu - 9
+        )
+        attribute_list_response, continuation_state = self.get_next_response_payload(
+            maximum_attribute_byte_count
+        )
         self.send_response(
             SDP_ServiceAttributeResponse(
-                transaction_id            = request.transaction_id,
-                attribute_list_byte_count = len(attribute_list),
-                attribute_list            = attribute_list,
-                continuation_state        = continuation_state
+                transaction_id=request.transaction_id,
+                attribute_list=attribute_list_response,
+                continuation_state=continuation_state,
             )
         )
 
-    def on_sdp_service_search_attribute_request(self, request):
+    def on_sdp_service_search_attribute_request(
+        self, request: SDP_ServiceSearchAttributeRequest
+    ) -> None:
         # Check if this is a continuation
-        if len(request.continuation_state) > 1:
-            if not self.current_response:
-                self.send_response(
-                    SDP_ErrorResponse(
-                        transaction_id = request.transaction_id,
-                        error_code     = SDP_INVALID_CONTINUATION_STATE_ERROR
-                    )
-                )
-        else:
-            # Cleanup any partial response leftover
-            self.current_response = None
+        if (
+            continuation := self.check_continuation(
+                request.continuation_state, request.transaction_id
+            )
+        ) is None:
+            return
 
+        if not continuation:
             # Find the matching services
-            matching_services = self.match_services(request.service_search_pattern).values()
+            matching_services = self.match_services(
+                request.service_search_pattern
+            ).values()
 
             # Filter the required attributes
             attribute_lists = DataElement.sequence([])
             for service in matching_services:
-                attribute_list = Server.get_service_attributes(service, request.attribute_id_list.value)
+                attribute_list = Server.get_service_attributes(
+                    service, request.attribute_id_list.value
+                )
                 if attribute_list.value:
                     attribute_lists.value.append(attribute_list)
 
@@ -1010,12 +1348,17 @@ class Server:
             self.current_response = bytes(attribute_lists)
 
         # Respond, keeping any pending chunks for later
-        attribute_lists, continuation_state = self.get_next_response_payload(request.maximum_attribute_byte_count)
+        assert self.channel is not None
+        maximum_attribute_byte_count = min(
+            request.maximum_attribute_byte_count, self.channel.peer_mtu - 9
+        )
+        attribute_lists_response, continuation_state = self.get_next_response_payload(
+            maximum_attribute_byte_count
+        )
         self.send_response(
             SDP_ServiceSearchAttributeResponse(
-                transaction_id             = request.transaction_id,
-                attribute_lists_byte_count = len(attribute_lists),
-                attribute_lists            = attribute_lists,
-                continuation_state         = continuation_state
+                transaction_id=request.transaction_id,
+                attribute_lists=attribute_lists_response,
+                continuation_state=continuation_state,
             )
         )

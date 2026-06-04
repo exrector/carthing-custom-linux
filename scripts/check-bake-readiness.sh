@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 python3 scripts/smoke-route-graph.py
+python3 scripts/check-bumble-vendor.py
 python3 - <<'PY'
 import importlib.util
 from pathlib import Path

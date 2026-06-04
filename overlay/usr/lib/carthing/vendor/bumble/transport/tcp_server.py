@@ -15,10 +15,13 @@
 # -----------------------------------------------------------------------------
 # Imports
 # -----------------------------------------------------------------------------
+from __future__ import annotations
+
 import asyncio
 import logging
+import socket
 
-from .common import Transport, StreamPacketSource
+from bumble.transport.common import StreamPacketSource, Transport
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -27,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-async def open_tcp_server_transport(spec):
+async def open_tcp_server_transport(spec: str) -> Transport:
     '''
     Open a TCP server transport.
     The parameter string has this syntax:
@@ -37,20 +40,38 @@ async def open_tcp_server_transport(spec):
 
     Example: _:9001
     '''
+    local_host, local_port = spec.rsplit(':', maxsplit=1)
+    return await _open_tcp_server_transport_impl(
+        host=local_host if local_host != '_' else None, port=int(local_port)
+    )
 
+
+async def open_tcp_server_transport_with_socket(
+    sock: socket.socket,
+) -> Transport:
+    '''
+    Open a TCP server transport with an existing socket.
+
+    One reason to use this variant is to let python pick an unused port.
+    '''
+    return await _open_tcp_server_transport_impl(sock=sock)
+
+
+async def _open_tcp_server_transport_impl(**kwargs) -> Transport:
     class TcpServerTransport(Transport):
-        async def close(self):
-            await super().close()
+        def __init__(self, source, sink, server):
+            self.server = server
+            super().__init__(source, sink)
 
-    class TcpServerProtocol:
+    class TcpServerProtocol(asyncio.BaseProtocol):
         def __init__(self, packet_source, packet_sink):
             self.packet_source = packet_source
-            self.packet_sink   = packet_sink
+            self.packet_sink = packet_sink
 
         # Called when a new connection is established
         def connection_made(self, transport):
-            peername = transport.get_extra_info('peername')
-            logger.debug('connection from {}'.format(peername))
+            peer_name = transport.get_extra_info('peer_name')
+            logger.debug(f'connection from {peer_name}')
             self.packet_sink.transport = transport
 
         # Called when the client is disconnected
@@ -76,13 +97,10 @@ async def open_tcp_server_transport(spec):
             else:
                 logger.debug('no client, dropping packet')
 
-    local_host, local_port = spec.split(':')
     packet_source = StreamPacketSource()
-    packet_sink   = TcpServerPacketSink()
-    await asyncio.get_running_loop().create_server(
-        lambda: TcpServerProtocol(packet_source, packet_sink),
-        host=local_host if local_host != '_' else None,
-        port=int(local_port),
+    packet_sink = TcpServerPacketSink()
+    server = await asyncio.get_running_loop().create_server(
+        lambda: TcpServerProtocol(packet_source, packet_sink), **kwargs
     )
 
-    return TcpServerTransport(packet_source, packet_sink)
+    return TcpServerTransport(packet_source, packet_sink, server)

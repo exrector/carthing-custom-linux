@@ -104,6 +104,17 @@ def e2rm_file(image: Path, dest: str) -> None:
         raise subprocess.CalledProcessError(proc.returncode, proc.args, proc.stdout, proc.stderr)
 
 
+def e2rm_tree(image: Path, dest: str) -> None:
+    proc = subprocess.run(
+        ["e2rm", "-r", f"{image}:{dest}"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0 and "No such file" not in proc.stderr and "not found" not in proc.stderr:
+        raise subprocess.CalledProcessError(proc.returncode, proc.args, proc.stdout, proc.stderr)
+
+
 def e2path_exists(image: Path, dest: str) -> bool:
     proc = subprocess.run(
         ["e2ls", f"{image}:{dest}"],
@@ -186,9 +197,10 @@ def copy_runtime(image: Path) -> None:
             continue
         e2copy_file(image, src, f"/usr/lib/carthing/{src.name}", mode="0644")
 
-    bitstruct = runtime_dir / "vendor/bitstruct.py"
-    if bitstruct.exists():
-        e2copy_file(image, bitstruct, "/usr/lib/carthing/vendor/bitstruct.py", mode="0644")
+    # The runtime owns its complete vendored dependency set. Remove the Bumble
+    # tree first so a bake cannot retain stale modules from the base image.
+    e2rm_tree(image, "/usr/lib/carthing/vendor/bumble")
+    copy_overlay_tree(image, runtime_dir / "vendor", "/usr/lib/carthing/vendor")
 
     for name in NATIVE_RUNTIME_FILES:
         src = runtime_dir / name
@@ -230,6 +242,16 @@ def verify_image(image: Path) -> None:
         for name in NATIVE_RUNTIME_FILES:
             if (OVERLAY / "usr/lib/carthing" / name).exists() and not e2path_exists(image, f"/usr/lib/carthing/{name}"):
                 raise SystemExit(f"native runtime file missing from rootfs: {name}")
+
+        required_vendor = [
+            "/usr/lib/carthing/vendor/BUMBLE-VERSION",
+            "/usr/lib/carthing/vendor/bumble/_version.py",
+            "/usr/lib/carthing/vendor/bumble/pairing.py",
+            "/usr/lib/carthing/vendor/bumble/transport/hci_socket.py",
+        ]
+        missing_vendor = [path for path in required_vendor if not e2path_exists(image, path)]
+        if missing_vendor:
+            raise SystemExit(f"vendored runtime dependency missing from rootfs: {missing_vendor}")
 
         leaked = [
             name for name in RETIRED_RUNTIME_FILES

@@ -18,7 +18,7 @@
 import asyncio
 import logging
 
-from .common import Transport, ParserSource
+from bumble.transport.common import ParserSource, Transport
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-async def open_udp_transport(spec):
+async def open_udp_transport(spec: str) -> Transport:
     '''
     Open a UDP transport.
     The parameter string has this syntax:
@@ -51,12 +51,15 @@ async def open_udp_transport(spec):
             self.transport.close()
 
     local, remote = spec.split(',')
-    local_host, local_port = local.split(':')
-    remote_host, remote_port = remote.split(':')
-    udp_transport, packet_source = await asyncio.get_running_loop().create_datagram_endpoint(
-        lambda: UdpPacketSource(),
+    local_host, local_port = local.rsplit(':', maxsplit=1)
+    remote_host, remote_port = remote.rsplit(':', maxsplit=1)
+    (
+        udp_transport,
+        packet_source,
+    ) = await asyncio.get_running_loop().create_datagram_endpoint(
+        UdpPacketSource,
         local_addr=(local_host, int(local_port)),
-        remote_addr=(remote_host, int(remote_port))
+        remote_addr=(remote_host, int(remote_port)),
     )
     packet_sink = UdpPacketSink(udp_transport)
 

@@ -15,13 +15,23 @@
 # -----------------------------------------------------------------------------
 # Imports
 # -----------------------------------------------------------------------------
-import logging
-import asyncio
-import itertools
-import random
+from __future__ import annotations
 
-from .hci import *
-from .l2cap import *
+import asyncio
+import dataclasses
+import itertools
+import logging
+import random
+import struct
+from typing import TYPE_CHECKING, Any, cast
+
+from bumble import hci, link, ll, lmp
+from bumble import link as bumble_link
+from bumble.colors import color
+from bumble.core import PhysicalTransport
+
+if TYPE_CHECKING:
+    from bumble.transport.common import TransportSink
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -37,73 +47,366 @@ class DataObject:
 
 
 # -----------------------------------------------------------------------------
+@dataclasses.dataclass
+class CisLink:
+    handle: int
+    cis_id: int
+    cig_id: int
+    acl_connection: Connection | None = None
+    data_paths: set[int] = dataclasses.field(default_factory=set)
+
+
+# -----------------------------------------------------------------------------
+@dataclasses.dataclass
+class LegacyAdvertiser:
+    controller: Controller
+    advertising_interval_min: int = 0
+    advertising_interval_max: int = 0
+    advertising_type: int = 0
+    own_address_type: int = 0
+    peer_address_type: int = 0
+    peer_address: hci.Address = hci.Address.ANY
+    advertising_channel_map: int = 0
+    advertising_filter_policy: int = 0
+
+    advertising_data: bytes = b''
+    scan_response_data: bytes = b''
+
+    enabled: bool = False
+    timer_handle: asyncio.Handle | None = None
+
+    @property
+    def address(self) -> hci.Address:
+        '''Address used in advertising PDU.'''
+        if self.own_address_type == hci.Address.PUBLIC_DEVICE_ADDRESS:
+            return self.controller.public_address
+        else:
+            return self.controller.random_address
+
+    def _on_timer_fired(self) -> None:
+        self.send_advertising_data()
+        self.timer_handle = asyncio.get_running_loop().call_later(
+            self.advertising_interval_min / 1000.0, self._on_timer_fired
+        )
+
+    def start(self) -> None:
+        # Stop any ongoing advertising before we start again
+        self.stop()
+        self.enabled = True
+
+        # Advertise now
+        self.timer_handle = asyncio.get_running_loop().call_soon(self._on_timer_fired)
+
+    def stop(self) -> None:
+        if self.timer_handle is not None:
+            self.timer_handle.cancel()
+            self.timer_handle = None
+        self.enabled = False
+
+    def send_advertising_data(self) -> None:
+        if not self.enabled:
+            return
+
+        if (
+            self.advertising_type
+            == hci.HCI_LE_Set_Advertising_Parameters_Command.AdvertisingType.ADV_IND
+        ):
+            self.controller.send_advertising_pdu(
+                ll.AdvInd(
+                    advertiser_address=self.address,
+                    data=self.advertising_data,
+                )
+            )
+
+
+# -----------------------------------------------------------------------------
+@dataclasses.dataclass
+class AdvertisingSet:
+    controller: Controller
+    handle: int
+    parameters: hci.HCI_LE_Set_Extended_Advertising_Parameters_Command | None = None
+    data: bytearray = dataclasses.field(default_factory=bytearray)
+    scan_response_data: bytearray = dataclasses.field(default_factory=bytearray)
+    enabled: bool = False
+    timer_handle: asyncio.Handle | None = None
+    random_address: hci.Address | None = None
+
+    @property
+    def address(self) -> hci.Address | None:
+        '''Address used in advertising PDU.'''
+        if not self.parameters:
+            return None
+        if self.parameters.own_address_type == hci.Address.PUBLIC_DEVICE_ADDRESS:
+            return self.controller.public_address
+        else:
+            return self.random_address
+
+    def _on_extended_advertising_timer_fired(self) -> None:
+        if not self.enabled:
+            return
+
+        self.send_extended_advertising_data()
+
+        interval = (
+            self.parameters.primary_advertising_interval_min * 0.625 / 1000.0
+            if self.parameters
+            else 1.0
+        )
+        self.timer_handle = asyncio.get_running_loop().call_later(
+            interval, self._on_extended_advertising_timer_fired
+        )
+
+    def start(self) -> None:
+        self.enabled = True
+        asyncio.get_running_loop().call_soon(self._on_extended_advertising_timer_fired)
+
+    def stop(self) -> None:
+        self.enabled = False
+        if timer_handle := self.timer_handle:
+            timer_handle.cancel()
+        self.timer_handle = None
+
+    def send_extended_advertising_data(self) -> None:
+        if self.controller.link:
+            address = self.address
+            assert address
+
+            self.controller.send_advertising_pdu(ll.AdvInd(address, bytes(self.data)))
+
+
+# -----------------------------------------------------------------------------
+@dataclasses.dataclass
+class ScoLink:
+    handle: int
+    link_type: int
+    peer_address: hci.Address
+
+
+# -----------------------------------------------------------------------------
+@dataclasses.dataclass
 class Connection:
-    def __init__(self, controller, handle, role, peer_address, link):
-        self.controller   = controller
-        self.handle       = handle
-        self.role         = role
-        self.peer_address = peer_address
-        self.link         = link
-        self.assembler    = HCI_AclDataPacketAssembler(self.on_acl_pdu)
+    controller: Controller
+    handle: int
+    role: hci.Role
+    self_address: hci.Address
+    peer_address: hci.Address
+    link: link.LocalLink
+    transport: PhysicalTransport
+    link_type: int
+    classic_allow_role_switch: bool = False
 
-    def on_hci_acl_data_packet(self, packet):
+    def __post_init__(self) -> None:
+        self.assembler = hci.HCI_AclDataPacketAssembler(self.on_acl_pdu)
+
+    def on_hci_acl_data_packet(self, packet: hci.HCI_AclDataPacket) -> None:
         self.assembler.feed_packet(packet)
-        self.controller.send_hci_packet(HCI_Number_Of_Completed_Packets_Event([(self.handle, 1)]))
+        self.controller.send_hci_packet(
+            hci.HCI_Number_Of_Completed_Packets_Event(
+                connection_handles=[self.handle], num_completed_packets=[1]
+            )
+        )
 
-    def on_acl_pdu(self, data):
+    def on_acl_pdu(self, pdu: bytes) -> None:
         if self.link:
-            self.link.send_acl_data(self.controller.random_address, self.peer_address, data)
+            self.link.send_acl_data(
+                self.controller, self.peer_address, self.transport, pdu
+            )
+
+    def send_ll_control_pdu(self, packet: ll.ControlPdu) -> None:
+        if self.link:
+            self.link.send_ll_control_pdu(
+                sender_address=self.self_address,
+                receiver_address=self.peer_address,
+                packet=packet,
+            )
 
 
 # -----------------------------------------------------------------------------
 class Controller:
-    def __init__(self, name, host_source = None, host_sink = None, link = None):
-        self.name     = name
-        self.hci_sink = None
-        self.link     = link
+    hci_sink: TransportSink | None = None
 
-        self.central_connections    = {}  # Connections where this controller is the central
-        self.peripheral_connections = {}  # Connections where this controller is the peripheral
+    le_connections: dict[hci.Address, Connection]  # LE Connections
+    classic_connections: dict[hci.Address, Connection]  # Connections in BR/EDR
+    classic_pending_commands: dict[hci.Address, dict[lmp.Opcode, asyncio.Future[int]]]
+    sco_links: dict[hci.Address, ScoLink]  # SCO links by address
+    central_cis_links: dict[int, CisLink]  # CIS links by handle
+    peripheral_cis_links: dict[int, CisLink]  # CIS links by handle
+    advertising_sets: dict[int, AdvertisingSet]  # Advertising sets by handle
+    le_legacy_advertiser: LegacyAdvertiser
 
-        self.hci_version                  = HCI_VERSION_BLUETOOTH_CORE_5_0
-        self.hci_revision                 = 0
-        self.lmp_version                  = HCI_VERSION_BLUETOOTH_CORE_5_0
-        self.lmp_subversion               = 0
-        self.lmp_features                 = bytes.fromhex('0000000060000000')  # BR/EDR Not Supported, LE Supported (Controller)
-        self.manufacturer_name            = 0xFFFF
-        self.hc_le_data_packet_length     = 27
-        self.hc_total_num_le_data_packets = 64
-        self.supported_commands           = bytes.fromhex('2000800000c000000000e40000002822000000000000040000f7ffff7f00000030f0f9ff01008004000000000000000000000000000000000000000000000000')
-        self.le_features                  = bytes.fromhex('ff49010000000000')
-        self.le_states                    = bytes.fromhex('ffff3fffff030000')
-        self.advertising_channel_tx_power = 0
-        self.filter_accept_list_size      = 8
-        self.resolving_list_size          = 8
-        self.supported_max_tx_octets      = 27
-        self.supported_max_tx_time        = 10000  # microseconds
-        self.supported_max_rx_octets      = 27
-        self.supported_max_rx_time        = 10000  # microseconds
-        self.suggested_max_tx_octets      = 27
-        self.suggested_max_tx_time        = 0x0148  # microseconds
-        self.default_phy                  = bytes([0, 0, 0])
-        self.le_scan_type                 = 0
-        self.le_scan_interval             = 0x10
-        self.le_scan_window               = 0x10
-        self.le_scan_enable               = 0
-        self.le_scan_own_address_type     = Address.RANDOM_DEVICE_ADDRESS
-        self.le_scanning_filter_policy    = 0
-        self.le_scan_response_data        = None
-        self.le_address_resolution        = False
-        self.le_rpa_timeout               = 0
-        self.sync_flow_control            = False
-        self.local_name                   = 'Bumble'
+    hci_version: int = hci.HCI_VERSION_BLUETOOTH_CORE_5_0
+    hci_revision: int = 0
+    lmp_version: int = hci.HCI_VERSION_BLUETOOTH_CORE_5_0
+    lmp_subversion: int = 0
+    lmp_features: hci.LmpFeatureMask = (
+        hci.LmpFeatureMask.LE_SUPPORTED_CONTROLLER
+        | hci.LmpFeatureMask.BR_EDR_NOT_SUPPORTED
+        | hci.LmpFeatureMask.EXTENDED_FEATURES
+    )
+    lmp_features_max_page_number: int = 3
+    manufacturer_company_identifier: int = 0xFFFF
+    acl_data_packet_length: int = 27
+    total_num_acl_data_packets: int = 64
+    le_acl_data_packet_length: int = 27
+    total_num_le_acl_data_packets: int = 64
+    iso_data_packet_length: int = 960
+    total_num_iso_data_packets: int = 64
+    event_mask: int = 0
+    event_mask_page_2: int = 0
+    supported_commands: set[int] = {
+        hci.HCI_DISCONNECT_COMMAND,
+        hci.HCI_READ_REMOTE_VERSION_INFORMATION_COMMAND,
+        hci.HCI_READ_CLOCK_OFFSET_COMMAND,
+        hci.HCI_READ_LMP_HANDLE_COMMAND,
+        hci.HCI_SET_EVENT_MASK_COMMAND,
+        hci.HCI_RESET_COMMAND,
+        hci.HCI_READ_TRANSMIT_POWER_LEVEL_COMMAND,
+        hci.HCI_SET_CONTROLLER_TO_HOST_FLOW_CONTROL_COMMAND,
+        hci.HCI_HOST_BUFFER_SIZE_COMMAND,
+        hci.HCI_HOST_NUMBER_OF_COMPLETED_PACKETS_COMMAND,
+        hci.HCI_READ_LOCAL_VERSION_INFORMATION_COMMAND,
+        hci.HCI_READ_LOCAL_SUPPORTED_FEATURES_COMMAND,
+        hci.HCI_READ_BUFFER_SIZE_COMMAND,
+        hci.HCI_READ_BD_ADDR_COMMAND,
+        hci.HCI_READ_RSSI_COMMAND,
+        hci.HCI_SET_EVENT_MASK_PAGE_2_COMMAND,
+        hci.HCI_LE_SET_EVENT_MASK_COMMAND,
+        hci.HCI_LE_READ_BUFFER_SIZE_COMMAND,
+        hci.HCI_LE_READ_LOCAL_SUPPORTED_FEATURES_COMMAND,
+        hci.HCI_LE_SET_RANDOM_ADDRESS_COMMAND,
+        hci.HCI_LE_SET_ADVERTISING_PARAMETERS_COMMAND,
+        hci.HCI_LE_READ_ADVERTISING_PHYSICAL_CHANNEL_TX_POWER_COMMAND,
+        hci.HCI_LE_SET_ADVERTISING_DATA_COMMAND,
+        hci.HCI_LE_SET_SCAN_RESPONSE_DATA_COMMAND,
+        hci.HCI_LE_SET_ADVERTISING_ENABLE_COMMAND,
+        hci.HCI_LE_SET_SCAN_PARAMETERS_COMMAND,
+        hci.HCI_LE_SET_SCAN_ENABLE_COMMAND,
+        hci.HCI_LE_CREATE_CONNECTION_COMMAND,
+        hci.HCI_LE_CREATE_CONNECTION_CANCEL_COMMAND,
+        hci.HCI_LE_READ_FILTER_ACCEPT_LIST_SIZE_COMMAND,
+        hci.HCI_LE_CLEAR_FILTER_ACCEPT_LIST_COMMAND,
+        hci.HCI_LE_ADD_DEVICE_TO_FILTER_ACCEPT_LIST_COMMAND,
+        hci.HCI_LE_REMOVE_DEVICE_FROM_FILTER_ACCEPT_LIST_COMMAND,
+        hci.HCI_LE_CONNECTION_UPDATE_COMMAND,
+        hci.HCI_LE_SET_HOST_CHANNEL_CLASSIFICATION_COMMAND,
+        hci.HCI_LE_READ_CHANNEL_MAP_COMMAND,
+        hci.HCI_LE_READ_REMOTE_FEATURES_COMMAND,
+        hci.HCI_LE_ENCRYPT_COMMAND,
+        hci.HCI_LE_RAND_COMMAND,
+        hci.HCI_LE_ENABLE_ENCRYPTION_COMMAND,
+        hci.HCI_LE_LONG_TERM_KEY_REQUEST_REPLY_COMMAND,
+        hci.HCI_LE_LONG_TERM_KEY_REQUEST_NEGATIVE_REPLY_COMMAND,
+        hci.HCI_LE_READ_SUPPORTED_STATES_COMMAND,
+        hci.HCI_LE_RECEIVER_TEST_COMMAND,
+        hci.HCI_LE_TRANSMITTER_TEST_COMMAND,
+        hci.HCI_LE_TEST_END_COMMAND,
+        hci.HCI_READ_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
+        hci.HCI_WRITE_AUTHENTICATED_PAYLOAD_TIMEOUT_COMMAND,
+        hci.HCI_LE_REMOTE_CONNECTION_PARAMETER_REQUEST_REPLY_COMMAND,
+        hci.HCI_LE_REMOTE_CONNECTION_PARAMETER_REQUEST_NEGATIVE_REPLY_COMMAND,
+        hci.HCI_LE_SET_DATA_LENGTH_COMMAND,
+        hci.HCI_LE_READ_SUGGESTED_DEFAULT_DATA_LENGTH_COMMAND,
+        hci.HCI_LE_WRITE_SUGGESTED_DEFAULT_DATA_LENGTH_COMMAND,
+        hci.HCI_LE_ADD_DEVICE_TO_RESOLVING_LIST_COMMAND,
+        hci.HCI_LE_REMOVE_DEVICE_FROM_RESOLVING_LIST_COMMAND,
+        hci.HCI_LE_CLEAR_RESOLVING_LIST_COMMAND,
+        hci.HCI_LE_READ_RESOLVING_LIST_SIZE_COMMAND,
+        hci.HCI_LE_READ_PEER_RESOLVABLE_ADDRESS_COMMAND,
+        hci.HCI_LE_READ_LOCAL_RESOLVABLE_ADDRESS_COMMAND,
+        hci.HCI_LE_SET_ADDRESS_RESOLUTION_ENABLE_COMMAND,
+        hci.HCI_LE_SET_RESOLVABLE_PRIVATE_ADDRESS_TIMEOUT_COMMAND,
+        hci.HCI_LE_READ_MAXIMUM_DATA_LENGTH_COMMAND,
+        hci.HCI_LE_READ_PHY_COMMAND,
+        hci.HCI_LE_SET_DEFAULT_PHY_COMMAND,
+        hci.HCI_LE_SET_PHY_COMMAND,
+        hci.HCI_LE_RECEIVER_TEST_V2_COMMAND,
+        hci.HCI_LE_TRANSMITTER_TEST_V2_COMMAND,
+        hci.HCI_LE_READ_TRANSMIT_POWER_COMMAND,
+        hci.HCI_LE_SET_PRIVACY_MODE_COMMAND,
+        hci.HCI_LE_READ_BUFFER_SIZE_V2_COMMAND,
+    }
+    le_event_mask: int = 0
+    le_features: hci.LeFeatureMask = (
+        hci.LeFeatureMask.LE_ENCRYPTION
+        | hci.LeFeatureMask.CONNECTION_PARAMETERS_REQUEST_PROCEDURE
+        | hci.LeFeatureMask.EXTENDED_REJECT_INDICATION
+        | hci.LeFeatureMask.PERIPHERAL_INITIATED_FEATURE_EXCHANGE
+        | hci.LeFeatureMask.LE_PING
+        | hci.LeFeatureMask.LE_DATA_PACKET_LENGTH_EXTENSION
+        | hci.LeFeatureMask.LL_PRIVACY
+        | hci.LeFeatureMask.EXTENDED_SCANNER_FILTER_POLICIES
+        | hci.LeFeatureMask.LE_2M_PHY
+        | hci.LeFeatureMask.LE_CODED_PHY
+        | hci.LeFeatureMask.CHANNEL_SELECTION_ALGORITHM_2
+        | hci.LeFeatureMask.MINIMUM_NUMBER_OF_USED_CHANNELS_PROCEDURE
+    )
+    le_states: bytes = bytes.fromhex('ffff3fffff030000')
+    advertising_channel_tx_power: int = 0
+    filter_accept_list_size: int = 8
+    filter_duplicates: bool = False
+    resolving_list_size: int = 8
+    supported_max_tx_octets: int = 27
+    supported_max_tx_time: int = 10000
+    supported_max_rx_octets: int = 27
+    supported_max_rx_time: int = 10000
+    suggested_max_tx_octets: int = 27
+    suggested_max_tx_time: int = 0x0148
+    default_phy: dict[str, int]
+    le_scan_type: int = 0
+    le_scan_interval: int = 0x10
+    le_scan_window: int = 0x10
+    le_scan_enable: bool = False
+    le_scan_own_address_type: int = hci.Address.RANDOM_DEVICE_ADDRESS
+    le_scanning_filter_policy: int = 0
+    le_address_resolution: bool = False
+    le_rpa_timeout: int = 0
+    sync_flow_control: bool = False
+    local_name: str = 'Bumble'
+    advertising_interval: int = 2000
+    advertising_data: bytes | None = None
+    advertising_timer_handle: asyncio.Handle | None = None
+    classic_scan_enable: int = 0
+    classic_allow_role_switch: bool = True
+    pending_le_connection: (
+        hci.HCI_LE_Create_Connection_Command
+        | hci.HCI_LE_Extended_Create_Connection_Command
+        | None
+    ) = None
 
-        self.advertising_interval     = 2000  # Fixed for now
-        self.advertising_data         = None
-        self.advertising_timer_handle = None
+    _random_address: hci.Address = hci.Address('00:00:00:00:00:00')
 
-        self._random_address = Address('00:00:00:00:00:00')
-        self._public_address = None
+    def __init__(
+        self,
+        name: str,
+        host_source=None,
+        host_sink: TransportSink | None = None,
+        link: link.LocalLink | None = None,
+        public_address: bytes | str | hci.Address | None = None,
+    ) -> None:
+        self.name = name
+        self.link = link or bumble_link.LocalLink()
+        self.le_connections = {}
+        self.classic_connections = {}
+        self.sco_links = {}
+        self.classic_pending_commands = {}
+        self.central_cis_links = {}
+        self.peripheral_cis_links = {}
+        self.advertising_sets = {}
+        self.default_phy = {
+            'all_phys': 0,
+            'tx_phys': 0,
+            'rx_phys': 0,
+        }
+        self.le_legacy_advertiser = LegacyAdvertiser(self)
+
+        if isinstance(public_address, hci.Address):
+            self._public_address = public_address
+        elif public_address is not None:
+            self._public_address = hci.Address(
+                public_address, hci.Address.PUBLIC_DEVICE_ADDRESS
+            )
+        else:
+            self._public_address = hci.Address('00:00:00:00:00:00')
 
         # Set the source and sink interfaces
         if host_source:
@@ -114,381 +417,1297 @@ class Controller:
         if link:
             link.add_controller(self)
 
+        self.terminated: asyncio.Future[Any] = (
+            asyncio.get_running_loop().create_future()
+        )
+
     @property
-    def host(self):
+    def host(self) -> TransportSink | None:
         return self.hci_sink
 
     @host.setter
-    def host(self, host):
+    def host(self, host: TransportSink | None) -> None:
         '''
-        Sets the host (sink) for this controller, and set this controller as the controller (sink) for the host
+        Sets the host (sink) for this controller, and set this controller as the
+        controller (sink) for the host
         '''
         self.set_packet_sink(host)
-        if host:
-            host.controller = self
 
-    def set_packet_sink(self, sink):
+    def set_packet_sink(self, sink: TransportSink | None) -> None:
         '''
         Method from the Packet Source interface
         '''
         self.hci_sink = sink
 
     @property
-    def public_address(self):
+    def public_address(self) -> hci.Address:
         return self._public_address
 
     @public_address.setter
-    def public_address(self, address):
-        if type(address) is str:
-            address = Address(address)
+    def public_address(self, address: hci.Address | str) -> None:
+        if isinstance(address, str):
+            address = hci.Address(address)
         self._public_address = address
 
     @property
-    def random_address(self):
+    def random_address(self) -> hci.Address:
         return self._random_address
 
     @random_address.setter
-    def random_address(self, address):
-        if type(address) is str:
-            address = Address(address)
+    def random_address(self, address: hci.Address | str) -> None:
+        if isinstance(address, str):
+            address = hci.Address(address)
         self._random_address = address
         logger.debug(f'new random address: {address}')
 
         if self.link:
             self.link.on_address_changed(self)
 
-    # Packet Sink protocol (packets coming from the host via HCI)
-    def on_packet(self, packet):
-        self.on_hci_packet(HCI_Packet.from_bytes(packet))
+    @property
+    def lmp_features_bytes(self) -> bytes:
+        return self.lmp_features.to_bytes(
+            (self.lmp_features_max_page_number + 1) * 8, 'little'
+        )
 
-    def on_hci_packet(self, packet):
-        logger.debug(f'{color("<<<", "blue")} [{self.name}] {color("HOST -> CONTROLLER", "blue")}: {packet}')
+    # Packet Sink protocol (packets coming from the host via HCI)
+    def on_packet(self, packet: bytes) -> None:
+        self.on_hci_packet(hci.HCI_Packet.from_bytes(packet))
+
+    def on_hci_packet(self, packet: hci.HCI_Packet) -> None:
+        logger.debug(
+            f'{color("<<<", "blue")} [{self.name}] '
+            f'{color("HOST -> CONTROLLER", "blue")}: {packet}'
+        )
 
         # If the packet is a command, invoke the handler for this packet
-        if packet.hci_packet_type == HCI_COMMAND_PACKET:
-            self.on_hci_command_packet(packet)
-        elif packet.hci_packet_type == HCI_EVENT_PACKET:
-            self.on_hci_event_packet(packet)
-        elif packet.hci_packet_type == HCI_ACL_DATA_PACKET:
-            self.on_hci_acl_data_packet(packet)
-        else:
-            logger.warning(f'!!! unknown packet type {packet.hci_packet_type}')
+        match packet:
+            case hci.HCI_Command():
+                self.on_hci_command_packet(packet)
+            case hci.HCI_AclDataPacket():
+                self.on_hci_acl_data_packet(packet)
+            case hci.HCI_Event():
+                self.on_hci_event_packet(packet)
+            case _:
+                logger.warning(f'!!! unknown packet type {packet.hci_packet_type}')
 
-    def on_hci_command_packet(self, command):
+    def on_hci_command_packet(self, command: hci.HCI_Command) -> None:
         handler_name = f'on_{command.name.lower()}'
         handler = getattr(self, handler_name, self.on_hci_command)
-        result = handler(command)
-        if type(result) is bytes:
-            self.send_hci_packet(HCI_Command_Complete_Event(
-                num_hci_command_packets = 1,
-                command_opcode          = command.op_code,
-                return_parameters       = result
-            ))
+        result: hci.HCI_ReturnParameters | None = handler(command)
+        if isinstance(command, hci.HCI_SyncCommand):
+            if result is None:
+                logger.error("Sync command handlers should return parameters, got None")
+                return
+            self.send_hci_packet(
+                hci.HCI_Command_Complete_Event(
+                    num_hci_command_packets=1,
+                    command_opcode=command.op_code,
+                    return_parameters=result,
+                )
+            )
+        elif result is not None:
+            logger.error("Async command handlers should return None, got %s", result)
 
-    def on_hci_event_packet(self, event):
+    def on_hci_event_packet(self, _event: hci.HCI_Packet) -> None:
         logger.warning('!!! unexpected event packet')
 
-    def on_hci_acl_data_packet(self, packet):
+    def on_hci_acl_data_packet(self, packet: hci.HCI_AclDataPacket) -> None:
         # Look for the connection to which this data belongs
         connection = self.find_connection_by_handle(packet.connection_handle)
         if connection is None:
-            logger.warning(f'!!! no connection for handle 0x{packet.connection_handle:04X}')
+            logger.warning(
+                f'!!! no connection for handle 0x{packet.connection_handle:04X}'
+            )
             return
 
         # Pass the packet to the connection
         connection.on_hci_acl_data_packet(packet)
 
-    def send_hci_packet(self, packet):
-        logger.debug(f'{color(">>>", "green")} [{self.name}] {color("CONTROLLER -> HOST", "green")}: {packet}')
+    def send_hci_packet(self, packet: hci.HCI_Packet) -> None:
+        logger.debug(
+            f'{color(">>>", "green")} [{self.name}] '
+            f'{color("CONTROLLER -> HOST", "green")}: {packet}'
+        )
         if self.host:
-            self.host.on_packet(packet.to_bytes())
+            asyncio.get_running_loop().call_soon(self.host.on_packet, bytes(packet))
 
-    # This method allow the controller to emulate the same API as a transport source
-    async def wait_for_termination(self):
-        # For now, just wait forever
-        await asyncio.get_running_loop().create_future()
+    def _send_hci_command_status(self, status: int, op_code: int) -> None:
+        self.send_hci_packet(
+            hci.HCI_Command_Status_Event(
+                status=status, num_hci_command_packets=1, command_opcode=op_code
+            )
+        )
+
+    # This method allows the controller to emulate the same API as a transport source
+    async def wait_for_termination(self) -> None:
+        await self.terminated
 
     ############################################################
     # Link connections
     ############################################################
-    def allocate_connection_handle(self):
-        handle = 0
-        max_handle = 0
-        for connection in itertools.chain(
-            self.central_connections.values(),
-            self.peripheral_connections.values()
-        ):
-            max_handle = max(max_handle, connection.handle)
-            if connection.handle == handle:
-                # Already used, continue searching after the current max
-                handle = max_handle + 1
-        return handle
+    def allocate_connection_handle(self) -> int:
+        current_handles = set(
+            cast(Connection | CisLink | ScoLink, link).handle
+            for link in itertools.chain(
+                self.le_connections.values(),
+                self.classic_connections.values(),
+                self.sco_links.values(),
+                self.central_cis_links.values(),
+                self.peripheral_cis_links.values(),
+            )
+        )
+        return next(
+            handle
+            for handle in range(0x0001, 0xEFF + 1)
+            if handle not in current_handles
+        )
 
-    def find_connection_by_address(self, address):
-        return self.central_connections.get(address) or self.peripheral_connections.get(address)
-
-    def find_connection_by_handle(self, handle):
+    def find_connection_by_handle(self, handle: int) -> Connection | None:
         for connection in itertools.chain(
-            self.central_connections.values(),
-            self.peripheral_connections.values()
+            self.le_connections.values(),
+            self.classic_connections.values(),
         ):
             if connection.handle == handle:
                 return connection
         return None
 
-    def find_central_connection_by_handle(self, handle):
-        for connection in self.central_connections.values():
+    def find_le_connection_by_handle(self, handle: int) -> Connection | None:
+        for connection in self.le_connections.values():
             if connection.handle == handle:
                 return connection
         return None
 
-    def on_link_central_connected(self, central_address):
+    def find_classic_connection_by_handle(self, handle: int) -> Connection | None:
+        for connection in self.classic_connections.values():
+            if connection.handle == handle:
+                return connection
+        return None
+
+    def find_classic_sco_link_by_handle(self, handle: int) -> ScoLink | None:
+        for connection in self.sco_links.values():
+            if connection.handle == handle:
+                return connection
+        return None
+
+    def find_iso_link_by_handle(self, handle: int) -> CisLink | None:
+        return self.central_cis_links.get(handle) or self.peripheral_cis_links.get(
+            handle
+        )
+
+    def send_advertising_pdu(self, packet: ll.AdvertisingPdu) -> None:
+        logger.debug("[%s] >>> Advertising PDU: %s", self.name, packet)
+        if self.link:
+            self.link.send_advertising_pdu(self, packet)
+
+    def on_ll_control_pdu(
+        self, sender_address: hci.Address, packet: ll.ControlPdu
+    ) -> None:
+        logger.debug("[%s] >>> LL Control PDU: %s", self.name, packet)
+        if not (connection := self.le_connections.get(sender_address)):
+            logger.error("Cannot find a connection for %s", sender_address)
+            return
+
+        match packet:
+            case ll.TerminateInd():
+                self.on_le_disconnected(connection, packet.error_code)
+            case ll.CisReq():
+                self.on_le_cis_request(connection, packet.cig_id, packet.cis_id)
+            case ll.CisRsp():
+                self.on_le_cis_established(packet.cig_id, packet.cis_id)
+                connection.send_ll_control_pdu(ll.CisInd(packet.cig_id, packet.cis_id))
+            case ll.CisInd():
+                self.on_le_cis_established(packet.cig_id, packet.cis_id)
+            case ll.CisTerminateInd():
+                self.on_le_cis_disconnected(packet.cig_id, packet.cis_id)
+            case ll.EncReq():
+                self.on_le_encrypted(connection)
+            case ll.FeatureReq() | ll.PeripheralFeatureReq():
+                connection.send_ll_control_pdu(
+                    ll.FeatureRsp(
+                        feature_set=self.le_features.value.to_bytes(8, 'little')
+                    )
+                )
+            case ll.FeatureRsp(feature_set):
+                self.send_hci_packet(
+                    hci.HCI_LE_Read_Remote_Features_Complete_Event(
+                        status=hci.HCI_ErrorCode.SUCCESS,
+                        connection_handle=connection.handle,
+                        le_features=feature_set,
+                    )
+                )
+
+    def on_ll_advertising_pdu(self, packet: ll.AdvertisingPdu) -> None:
+        logger.debug("[%s] <<< Advertising PDU: %s", self.name, packet)
+        match packet:
+            case ll.ConnectInd():
+                self.on_le_connect_ind(packet)
+            case ll.AdvInd() | ll.AdvExtInd():
+                self.on_advertising_pdu(packet)
+
+    def on_le_connect_ind(self, packet: ll.ConnectInd) -> None:
         '''
         Called when an incoming connection occurs from a central on the link
         '''
-
-        # Allocate (or reuse) a connection handle
-        peer_address = central_address
-        peer_address_type = central_address.address_type
-        connection = self.peripheral_connections.get(peer_address)
-        if connection is None:
-            connection_handle = self.allocate_connection_handle()
-            connection = Connection(self, connection_handle, BT_PERIPHERAL_ROLE, peer_address, self.link)
-            self.peripheral_connections[peer_address] = connection
-            logger.debug(f'New PERIPHERAL connection handle: 0x{connection_handle:04X}')
-
-        # Then say that the connection has completed
-        self.send_hci_packet(HCI_LE_Connection_Complete_Event(
-            status                 = HCI_SUCCESS,
-            connection_handle      = connection.handle,
-            role                   = connection.role,
-            peer_address_type      = peer_address_type,
-            peer_address           = peer_address,
-            connection_interval    = 10,  # FIXME
-            peripheral_latency     = 0,   # FIXME
-            supervision_timeout    = 10,  # FIXME
-            central_clock_accuracy = 7    # FIXME
-        ))
-
-    def on_link_central_disconnected(self, peer_address, reason):
-        '''
-        Called when an active disconnection occurs from a peer
-        '''
-
-        # Send a disconnection complete event
-        if connection := self.peripheral_connections.get(peer_address):
-            self.send_hci_packet(HCI_Disconnection_Complete_Event(
-                status            = HCI_SUCCESS,
-                connection_handle = connection.handle,
-                reason            = reason
-            ))
-
-            # Remove the connection
-            del self.peripheral_connections[peer_address]
+        advertiser: LegacyAdvertiser | AdvertisingSet | None
+        if (
+            self.le_legacy_advertiser.address == packet.advertiser_address
+            and self.le_legacy_advertiser.enabled
+        ):
+            advertiser = self.le_legacy_advertiser
         else:
-            logger.warn(f'!!! No peripheral connection found for {peer_address}')
-
-    def on_link_peripheral_connection_complete(self, le_create_connection_command, status):
-        '''
-        Called by the link when a connection has been made or has failed to be made
-        '''
-
-        if status == HCI_SUCCESS:
-            # Allocate (or reuse) a connection handle
-            peer_address = le_create_connection_command.peer_address
-            connection = self.central_connections.get(peer_address)
-            if connection is None:
-                connection_handle = self.allocate_connection_handle()
-                connection = Connection(
-                    self,
-                    connection_handle,
-                    BT_CENTRAL_ROLE,
-                    peer_address,
-                    self.link
-                )
-                self.central_connections[peer_address] = connection
-                logger.debug(f'New CENTRAL connection handle: 0x{connection_handle:04X}')
-        else:
-            connection = None
-
-        # Say that the connection has completed
-        self.send_hci_packet(HCI_LE_Connection_Complete_Event(
-            status                 = status,
-            connection_handle      = connection.handle if connection else 0,
-            role                   = BT_CENTRAL_ROLE,
-            peer_address_type      = le_create_connection_command.peer_address_type,
-            peer_address           = le_create_connection_command.peer_address,
-            connection_interval    = le_create_connection_command.connection_interval_min,
-            peripheral_latency     = le_create_connection_command.max_latency,
-            supervision_timeout    = le_create_connection_command.supervision_timeout,
-            central_clock_accuracy = 0
-        ))
-
-    def on_link_peripheral_disconnection_complete(self, disconnection_command, status):
-        '''
-        Called when a disconnection has been completed
-        '''
-
-        # Send a disconnection complete event
-        self.send_hci_packet(HCI_Disconnection_Complete_Event(
-            status            = status,
-            connection_handle = disconnection_command.connection_handle,
-            reason            = disconnection_command.reason
-        ))
-
-        # Remove the connection
-        if connection := self.find_central_connection_by_handle(disconnection_command.connection_handle):
-            logger.debug(f'CENTRAL Connection removed: {connection}')
-            del self.central_connections[connection.peer_address]
-
-    def on_link_peripheral_disconnected(self, peer_address):
-        '''
-        Called when a connection to a peripheral is broken
-        '''
-
-        # Send a disconnection complete event
-        if connection := self.central_connections.get(peer_address):
-            self.send_hci_packet(HCI_Disconnection_Complete_Event(
-                status            = HCI_SUCCESS,
-                connection_handle = connection.handle,
-                reason            = HCI_CONNECTION_TIMEOUT_ERROR
-            ))
-
-            # Remove the connection
-            del self.central_connections[peer_address]
-        else:
-            logger.warn(f'!!! No central connection found for {peer_address}')
-
-    def on_link_encrypted(self, peer_address, rand, ediv, ltk):
-        # For now, just setup the encryption without asking the host
-        if connection := self.find_connection_by_address(peer_address):
-            self.send_hci_packet(
-                HCI_Encryption_Change_Event(
-                    status             = 0,
-                    connection_handle  = connection.handle,
-                    encryption_enabled = 1
-                )
+            advertiser = next(
+                (
+                    advertising_set
+                    for advertising_set in self.advertising_sets.values()
+                    if advertising_set.address == packet.advertiser_address
+                    and advertising_set.enabled
+                ),
+                None,
             )
 
-    def on_link_acl_data(self, sender_address, data):
+        if not advertiser:
+            # This is not send to us.
+            return
+
+        # Allocate (or reuse) a connection handle
+        peer_address = packet.initiator_address
+
+        connection_handle = self.allocate_connection_handle()
+        connection = Connection(
+            controller=self,
+            handle=connection_handle,
+            role=hci.Role.PERIPHERAL,
+            self_address=packet.advertiser_address,
+            peer_address=peer_address,
+            link=self.link,
+            transport=PhysicalTransport.LE,
+            link_type=hci.HCI_Connection_Complete_Event.LinkType.ACL,
+        )
+        self.le_connections[peer_address] = connection
+        logger.debug(f'New PERIPHERAL connection handle: 0x{connection_handle:04X}')
+
+        # Then say that the connection has completed
+        self.send_hci_packet(
+            hci.HCI_LE_Connection_Complete_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=connection.handle,
+                role=connection.role,
+                peer_address_type=peer_address.address_type,
+                peer_address=peer_address,
+                connection_interval=10,  # FIXME
+                peripheral_latency=0,  # FIXME
+                supervision_timeout=10,  # FIXME
+                central_clock_accuracy=7,  # FIXME
+            )
+        )
+
+        if isinstance(advertiser, AdvertisingSet):
+            self.send_hci_packet(
+                hci.HCI_LE_Advertising_Set_Terminated_Event(
+                    status=hci.HCI_ErrorCode.SUCCESS,
+                    advertising_handle=advertiser.handle,
+                    connection_handle=connection.handle,
+                    num_completed_extended_advertising_events=0,
+                )
+            )
+        advertiser.stop()
+
+    def on_le_disconnected(self, connection: Connection, reason: int) -> None:
+        # Send a disconnection complete event
+        self.send_hci_packet(
+            hci.HCI_Disconnection_Complete_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=connection.handle,
+                reason=reason,
+            )
+        )
+
+        del self.le_connections[connection.peer_address]
+
+    def create_le_connection(self, peer_address: hci.Address) -> None:
+        '''
+        Called when we receive advertisement matching connection filter.
+        '''
+        pending_le_connection = self.pending_le_connection
+        assert pending_le_connection
+
+        if self.le_connections.get(peer_address):
+            logger.error("Connection for %s already exists?", peer_address)
+            return
+
+        self_address = (
+            self.public_address
+            if pending_le_connection.own_address_type == hci.OwnAddressType.PUBLIC
+            else self.random_address
+        )
+
+        # Allocate (or reuse) a connection handle
+        peer_address = pending_le_connection.peer_address
+        connection_handle = self.allocate_connection_handle()
+        connection = Connection(
+            controller=self,
+            handle=connection_handle,
+            role=hci.Role.CENTRAL,
+            self_address=self_address,
+            peer_address=peer_address,
+            link=self.link,
+            transport=PhysicalTransport.LE,
+            link_type=hci.HCI_Connection_Complete_Event.LinkType.ACL,
+        )
+        self.le_connections[peer_address] = connection
+        logger.debug(f'New CENTRAL connection handle: 0x{connection_handle:04X}')
+
+        if isinstance(
+            pending_le_connection, hci.HCI_LE_Extended_Create_Connection_Command
+        ):
+            interval = pending_le_connection.connection_interval_mins[0]
+            latency = pending_le_connection.max_latencies[0]
+            timeout = pending_le_connection.supervision_timeouts[0]
+        else:
+            interval = pending_le_connection.connection_interval_min
+            latency = pending_le_connection.max_latency
+            timeout = pending_le_connection.supervision_timeout
+
+        self.send_advertising_pdu(
+            ll.ConnectInd(
+                initiator_address=self_address,
+                advertiser_address=peer_address,
+                interval=interval,
+                latency=latency,
+                timeout=timeout,
+            )
+        )
+        # Say that the connection has completed
+        self.send_hci_packet(
+            # pylint: disable=line-too-long
+            hci.HCI_LE_Connection_Complete_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=connection.handle if connection else 0,
+                role=hci.Role.CENTRAL,
+                peer_address_type=peer_address.address_type,
+                peer_address=peer_address,
+                connection_interval=interval,
+                peripheral_latency=latency,
+                supervision_timeout=timeout,
+                central_clock_accuracy=0,
+            )
+        )
+        self.pending_le_connection = None
+
+    def on_le_encrypted(self, connection: Connection) -> None:
+        # For now, just setup the encryption without asking the host
+        self.send_hci_packet(
+            hci.HCI_Encryption_Change_Event(
+                status=0, connection_handle=connection.handle, encryption_enabled=1
+            )
+        )
+
+    def on_link_acl_data(
+        self, sender_address: hci.Address, transport: PhysicalTransport, data: bytes
+    ) -> None:
         # Look for the connection to which this data belongs
-        connection = self.find_connection_by_address(sender_address)
+        if transport == PhysicalTransport.LE:
+            connection = self.le_connections.get(sender_address)
+        else:
+            connection = self.classic_connections.get(sender_address)
         if connection is None:
             logger.warning(f'!!! no connection for {sender_address}')
             return
 
         # Send the data to the host
         # TODO: should fragment
-        acl_packet = HCI_AclDataPacket(connection.handle, 2, 0, len(data), data)
+        acl_packet = hci.HCI_AclDataPacket(connection.handle, 2, 0, len(data), data)
         self.send_hci_packet(acl_packet)
 
-    def on_link_advertising_data(self, sender_address, data):
-        # Ignore if we're not scanning
-        if self.le_scan_enable == 0:
+    def on_advertising_pdu(self, pdu: ll.AdvInd | ll.AdvExtInd) -> None:
+        if isinstance(pdu, ll.AdvExtInd):
+            direct_address = pdu.target_address
+        else:
+            direct_address = None
+
+        if self.le_scan_enable:
+            # Send a scan report
+            if self.le_features & hci.LeFeatureMask.LE_EXTENDED_ADVERTISING:
+                ext_report = hci.HCI_LE_Extended_Advertising_Report_Event.Report(
+                    event_type=hci.HCI_LE_Extended_Advertising_Report_Event.EventType.CONNECTABLE_ADVERTISING,
+                    address_type=pdu.advertiser_address.address_type,
+                    address=pdu.advertiser_address,
+                    primary_phy=hci.Phy.LE_1M,
+                    secondary_phy=hci.Phy.LE_1M,
+                    advertising_sid=0,
+                    tx_power=0,
+                    rssi=-50,
+                    periodic_advertising_interval=0,
+                    direct_address_type=(
+                        direct_address.address_type if direct_address else 0
+                    ),
+                    direct_address=direct_address or hci.Address.ANY,
+                    data=pdu.data,
+                )
+                self.send_hci_packet(
+                    hci.HCI_LE_Extended_Advertising_Report_Event([ext_report])
+                )
+                ext_report = hci.HCI_LE_Extended_Advertising_Report_Event.Report(
+                    event_type=hci.HCI_LE_Extended_Advertising_Report_Event.EventType.SCAN_RESPONSE,
+                    address_type=pdu.advertiser_address.address_type,
+                    address=pdu.advertiser_address,
+                    primary_phy=hci.Phy.LE_1M,
+                    secondary_phy=hci.Phy.LE_1M,
+                    advertising_sid=0,
+                    tx_power=0,
+                    rssi=-50,
+                    periodic_advertising_interval=0,
+                    direct_address_type=(
+                        direct_address.address_type if direct_address else 0
+                    ),
+                    direct_address=direct_address or hci.Address.ANY,
+                    data=pdu.data,
+                )
+                self.send_hci_packet(
+                    hci.HCI_LE_Extended_Advertising_Report_Event([ext_report])
+                )
+            else:
+                report = hci.HCI_LE_Advertising_Report_Event.Report(
+                    event_type=hci.HCI_LE_Advertising_Report_Event.EventType.ADV_IND,
+                    address_type=pdu.advertiser_address.address_type,
+                    address=pdu.advertiser_address,
+                    data=pdu.data,
+                    rssi=-50,
+                )
+                self.send_hci_packet(hci.HCI_LE_Advertising_Report_Event([report]))
+                report = hci.HCI_LE_Advertising_Report_Event.Report(
+                    event_type=hci.HCI_LE_Advertising_Report_Event.EventType.SCAN_RSP,
+                    address_type=pdu.advertiser_address.address_type,
+                    address=pdu.advertiser_address,
+                    data=pdu.data,
+                    rssi=-50,
+                )
+                self.send_hci_packet(hci.HCI_LE_Advertising_Report_Event([report]))
+
+        # Create connection.
+        if (
+            pending_le_connection := self.pending_le_connection
+        ) and pending_le_connection.peer_address == pdu.advertiser_address:
+            self.create_le_connection(pdu.advertiser_address)
+
+    def on_le_cis_request(
+        self, connection: Connection, cig_id: int, cis_id: int
+    ) -> None:
+        '''
+        Called when an incoming CIS request occurs from a central on the link
+        '''
+        pending_cis_link = CisLink(
+            handle=self.allocate_connection_handle(),
+            cis_id=cis_id,
+            cig_id=cig_id,
+            acl_connection=connection,
+        )
+        self.peripheral_cis_links[pending_cis_link.handle] = pending_cis_link
+
+        self.send_hci_packet(
+            hci.HCI_LE_CIS_Request_Event(
+                acl_connection_handle=connection.handle,
+                cis_connection_handle=pending_cis_link.handle,
+                cig_id=cig_id,
+                cis_id=cis_id,
+            )
+        )
+
+    def on_le_cis_established(self, cig_id: int, cis_id: int) -> None:
+        '''
+        Called when an incoming CIS established.
+        '''
+
+        cis_link = next(
+            cis_link
+            for cis_link in itertools.chain(
+                self.central_cis_links.values(), self.peripheral_cis_links.values()
+            )
+            if cis_link.cis_id == cis_id and cis_link.cig_id == cig_id
+        )
+
+        self.send_hci_packet(
+            hci.HCI_LE_CIS_Established_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=cis_link.handle,
+                # CIS parameters are ignored.
+                cig_sync_delay=0,
+                cis_sync_delay=0,
+                transport_latency_c_to_p=0,
+                transport_latency_p_to_c=0,
+                phy_c_to_p=1,
+                phy_p_to_c=1,
+                nse=0,
+                bn_c_to_p=0,
+                bn_p_to_c=0,
+                ft_c_to_p=0,
+                ft_p_to_c=0,
+                max_pdu_c_to_p=0,
+                max_pdu_p_to_c=0,
+                iso_interval=0,
+            )
+        )
+
+    def on_le_cis_disconnected(self, cig_id: int, cis_id: int) -> None:
+        '''
+        Called when a CIS disconnected.
+        '''
+
+        if cis_link := next(
+            (
+                cis_link
+                for cis_link in self.peripheral_cis_links.values()
+                if cis_link.cis_id == cis_id and cis_link.cig_id == cig_id
+            ),
+            None,
+        ):
+            # Remove peripheral CIS on disconnection.
+            self.peripheral_cis_links.pop(cis_link.handle)
+        elif cis_link := next(
+            (
+                cis_link
+                for cis_link in self.central_cis_links.values()
+                if cis_link.cis_id == cis_id and cis_link.cig_id == cig_id
+            ),
+            None,
+        ):
+            # Keep central CIS on disconnection. They should be removed by hci.HCI_LE_Remove_CIG_Command.
+            cis_link.acl_connection = None
+        else:
             return
 
-        # Send a scan report
-        report = HCI_Object(
-            HCI_LE_Advertising_Report_Event.REPORT_FIELDS,
-            event_type   = HCI_LE_Advertising_Report_Event.ADV_IND,
-            address_type = sender_address.address_type,
-            address      = sender_address,
-            data         = data,
-            rssi         = -50
+        self.send_hci_packet(
+            hci.HCI_Disconnection_Complete_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=cis_link.handle,
+                reason=hci.HCI_ErrorCode.REMOTE_USER_TERMINATED_CONNECTION_ERROR,
+            )
         )
-        self.send_hci_packet(HCI_LE_Advertising_Report_Event([report]))
 
-        # Simulate a scan response
-        report = HCI_Object(
-            HCI_LE_Advertising_Report_Event.REPORT_FIELDS,
-            event_type   = HCI_LE_Advertising_Report_Event.SCAN_RSP,
-            address_type = sender_address.address_type,
-            address      = sender_address,
-            data         = data,
-            rssi         = -50
+    ############################################################
+    # Classic link connections
+    ############################################################
+
+    def send_lmp_packet(
+        self, receiver_address: hci.Address, packet: lmp.Packet
+    ) -> asyncio.Future[int]:
+        loop = asyncio.get_running_loop()
+        assert self.link
+        self.link.send_lmp_packet(self, receiver_address, packet)
+        future = self.classic_pending_commands.setdefault(receiver_address, {})[
+            packet.opcode
+        ] = loop.create_future()
+        return future
+
+    def on_lmp_packet(self, sender_address: hci.Address, packet: lmp.Packet) -> None:
+        match packet:
+            case lmp.LmpAccepted() | lmp.LmpAcceptedExt():
+                if future := self.classic_pending_commands.setdefault(
+                    sender_address, {}
+                ).get(packet.response_opcode):
+                    future.set_result(hci.HCI_ErrorCode.SUCCESS)
+                else:
+                    logger.error("!!! Unhandled packet: %s", packet)
+            case lmp.LmpNotAccepted() | lmp.LmpNotAcceptedExt():
+                if future := self.classic_pending_commands.setdefault(
+                    sender_address, {}
+                ).get(packet.response_opcode):
+                    future.set_result(packet.error_code)
+                else:
+                    logger.error("!!! Unhandled packet: %s", packet)
+            case lmp.LmpHostConnectionReq():
+                self.on_classic_connection_request(
+                    sender_address, hci.HCI_Connection_Complete_Event.LinkType.ACL
+                )
+            case lmp.LmpScoLinkReq():
+                self.on_classic_connection_request(
+                    sender_address, hci.HCI_Connection_Complete_Event.LinkType.SCO
+                )
+            case lmp.LmpEscoLinkReq():
+                self.on_classic_connection_request(
+                    sender_address, hci.HCI_Connection_Complete_Event.LinkType.ESCO
+                )
+            case lmp.LmpDetach():
+                self.on_classic_disconnected(
+                    sender_address,
+                    hci.HCI_ErrorCode.REMOTE_USER_TERMINATED_CONNECTION_ERROR,
+                )
+            case lmp.LmpSwitchReq():
+                self.on_classic_role_change_request(sender_address)
+            case lmp.LmpRemoveScoLinkReq() | lmp.LmpRemoveEscoLinkReq():
+                self.on_classic_sco_disconnected(sender_address, packet.error_code)
+            case lmp.LmpNameReq():
+                self.on_classic_remote_name_request(sender_address, packet.name_offset)
+            case lmp.LmpNameRes():
+                self.on_classic_remote_name_response(
+                    sender_address,
+                    packet.name_offset,
+                    packet.name_length,
+                    packet.name_fregment,
+                )
+            case lmp.LmpFeaturesReq(features):
+                self.send_lmp_packet(
+                    sender_address,
+                    lmp.LmpFeaturesRes(features=self.lmp_features_bytes[:8]),
+                )
+            case lmp.LmpFeaturesRes(features):
+                if connection := self.classic_connections.get(sender_address):
+                    self.send_hci_packet(
+                        hci.HCI_Read_Remote_Supported_Features_Complete_Event(
+                            status=hci.HCI_ErrorCode.SUCCESS,
+                            connection_handle=connection.handle,
+                            lmp_features=features,
+                        )
+                    )
+            case lmp.LmpFeaturesReqExt(features_page, features):
+                # Calculate start/end of page
+                page_start = features_page * 8
+                page_end = page_start + 8
+                features_bytes = self.lmp_features_bytes
+                if page_start < len(features_bytes):
+                    page_features = features_bytes[page_start:page_end].ljust(
+                        8, b'\x00'
+                    )
+                else:
+                    page_features = b'\x00' * 8
+
+                self.send_lmp_packet(
+                    sender_address,
+                    lmp.LmpFeaturesResExt(
+                        features_page=features_page,
+                        max_features_page=len(features_bytes) // 8 - 1,
+                        features=page_features,
+                    ),
+                )
+            case lmp.LmpFeaturesResExt(features_page, max_features_page, features):
+                if connection := self.classic_connections.get(sender_address):
+                    self.send_hci_packet(
+                        hci.HCI_Read_Remote_Extended_Features_Complete_Event(
+                            status=hci.HCI_ErrorCode.SUCCESS,
+                            connection_handle=connection.handle,
+                            page_number=features_page,
+                            maximum_page_number=max_features_page,
+                            extended_lmp_features=features,
+                        )
+                    )
+            case _:
+                logger.error("!!! Unhandled packet: %s", packet)
+
+    def on_classic_connection_request(
+        self, peer_address: hci.Address, link_type: int
+    ) -> None:
+        if link_type == hci.HCI_Connection_Complete_Event.LinkType.ACL:
+            self.classic_connections[peer_address] = Connection(
+                controller=self,
+                handle=0,
+                role=hci.Role.PERIPHERAL,
+                self_address=self.public_address,
+                peer_address=peer_address,
+                link=self.link,
+                transport=PhysicalTransport.BR_EDR,
+                link_type=link_type,
+                classic_allow_role_switch=self.classic_allow_role_switch,
+            )
+        else:
+            self.sco_links[peer_address] = ScoLink(
+                handle=0,
+                link_type=link_type,
+                peer_address=peer_address,
+            )
+        self.send_hci_packet(
+            hci.HCI_Connection_Request_Event(
+                bd_addr=peer_address,
+                class_of_device=0,
+                link_type=link_type,
+            )
         )
-        self.send_hci_packet(HCI_LE_Advertising_Report_Event([report]))
+
+    def on_classic_connection_complete(
+        self, peer_address: hci.Address, status: int
+    ) -> None:
+        if status == hci.HCI_ErrorCode.SUCCESS:
+            # Allocate (or reuse) a connection handle
+            peer_address = peer_address
+            connection_handle = self.allocate_connection_handle()
+            if connection := self.classic_connections.get(peer_address):
+                connection.handle = connection_handle
+            else:
+                connection = Connection(
+                    controller=self,
+                    handle=connection_handle,
+                    role=hci.Role.CENTRAL,
+                    self_address=self.public_address,
+                    peer_address=peer_address,
+                    link=self.link,
+                    transport=PhysicalTransport.BR_EDR,
+                    link_type=hci.HCI_Connection_Complete_Event.LinkType.ACL,
+                )
+                self.classic_connections[peer_address] = connection
+                logger.debug(
+                    f'New CLASSIC connection handle: 0x{connection_handle:04X}'
+                )
+            self.send_hci_packet(
+                hci.HCI_Connection_Complete_Event(
+                    status=status,
+                    connection_handle=connection_handle,
+                    bd_addr=peer_address,
+                    encryption_enabled=False,
+                    link_type=hci.HCI_Connection_Complete_Event.LinkType.ACL,
+                )
+            )
+        else:
+            connection = None
+            self.send_hci_packet(
+                hci.HCI_Connection_Complete_Event(
+                    status=status,
+                    connection_handle=0,
+                    bd_addr=peer_address,
+                    encryption_enabled=False,
+                    link_type=hci.HCI_Connection_Complete_Event.LinkType.ACL,
+                )
+            )
+
+    def on_classic_disconnected(self, peer_address: hci.Address, reason: int) -> None:
+        # Send a disconnection complete event
+        if connection := self.classic_connections.pop(peer_address, None):
+            self.send_hci_packet(
+                hci.HCI_Disconnection_Complete_Event(
+                    status=hci.HCI_ErrorCode.SUCCESS,
+                    connection_handle=connection.handle,
+                    reason=reason,
+                )
+            )
+        else:
+            logger.warning(f'!!! No classic connection found for {peer_address}')
+
+    def on_classic_sco_disconnected(
+        self, peer_address: hci.Address, reason: int
+    ) -> None:
+        # Send a disconnection complete event
+        if sco_link := self.sco_links.pop(peer_address, None):
+            self.send_hci_packet(
+                hci.HCI_Disconnection_Complete_Event(
+                    status=hci.HCI_ErrorCode.SUCCESS,
+                    connection_handle=sco_link.handle,
+                    reason=reason,
+                )
+            )
+        else:
+            logger.warning(f'!!! No classic connection found for {peer_address}')
+
+    def on_classic_role_change_request(self, peer_address: hci.Address) -> None:
+        assert (connection := self.classic_connections.get(peer_address))
+        if not connection.classic_allow_role_switch:
+            self.send_lmp_packet(
+                peer_address,
+                lmp.LmpNotAccepted(
+                    lmp.Opcode.LMP_SWITCH_REQ,
+                    hci.HCI_ErrorCode.ROLE_CHANGE_NOT_ALLOWED_ERROR,
+                ),
+            )
+        else:
+            self.send_lmp_packet(
+                peer_address,
+                lmp.LmpAccepted(lmp.Opcode.LMP_SWITCH_REQ),
+            )
+            self.classic_role_change(connection)
+
+    def classic_role_change(self, connection: Connection) -> None:
+        new_role = (
+            hci.Role.CENTRAL
+            if connection.role == hci.Role.PERIPHERAL
+            else hci.Role.PERIPHERAL
+        )
+        connection.role = new_role
+        self.send_hci_packet(
+            hci.HCI_Role_Change_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                bd_addr=connection.peer_address,
+                new_role=new_role,
+            )
+        )
+
+    def on_classic_sco_connection_complete(
+        self, peer_address: hci.Address, status: int, link_type: int
+    ) -> None:
+        if status == hci.HCI_ErrorCode.SUCCESS:
+            # Allocate (or reuse) a connection handle
+            connection_handle = self.allocate_connection_handle()
+            sco_link = ScoLink(
+                handle=connection_handle,
+                link_type=link_type,
+                peer_address=peer_address,
+            )
+            self.sco_links[peer_address] = sco_link
+            logger.debug(f'New SCO connection handle: 0x{connection_handle:04X}')
+        else:
+            connection_handle = 0
+
+        self.send_hci_packet(
+            hci.HCI_Synchronous_Connection_Complete_Event(
+                status=status,
+                connection_handle=connection_handle,
+                bd_addr=peer_address,
+                link_type=link_type,
+                # TODO: Provide SCO connection parameters.
+                transmission_interval=0,
+                retransmission_window=0,
+                rx_packet_length=0,
+                tx_packet_length=0,
+                air_mode=0,
+            )
+        )
+
+    def on_classic_remote_name_request(
+        self, peer_address: hci.Address, name_offset: int
+    ) -> None:
+        self.send_lmp_packet(
+            peer_address,
+            lmp.LmpNameRes(
+                name_offset=name_offset,
+                name_length=len(self.local_name),
+                name_fregment=self.local_name.encode('utf-8'),
+            ),
+        )
+
+    def on_classic_remote_name_response(
+        self,
+        peer_address: hci.Address,
+        name_offset: int,
+        name_length: int,
+        name_fregment: bytes,
+    ) -> None:
+        self.send_hci_packet(
+            hci.HCI_Remote_Name_Request_Complete_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                bd_addr=peer_address,
+                remote_name=name_fregment,
+            )
+        )
 
     ############################################################
     # Advertising support
     ############################################################
-    def on_advertising_timer_fired(self):
-        self.send_advertising_data()
-        self.advertising_timer_handle = asyncio.get_running_loop().call_later(self.advertising_interval / 1000.0, self.on_advertising_timer_fired)
-
-    def start_advertising(self):
-        # Stop any ongoing advertising before we start again
-        self.stop_advertising()
-
-        # Advertise now
-        self.advertising_timer_handle = asyncio.get_running_loop().call_soon(self.on_advertising_timer_fired)
-
-    def stop_advertising(self):
-        if self.advertising_timer_handle is not None:
-            self.advertising_timer_handle.cancel()
-            self.advertising_timer_handle = None
-
-    def send_advertising_data(self):
-        if self.link and self.advertising_data:
-            self.link.send_advertising_data(self.random_address, self.advertising_data)
 
     @property
-    def is_advertising(self):
-        return self.advertising_timer_handle is not None
+    def is_advertising(self) -> bool:
+        return self.le_legacy_advertiser.enabled or any(
+            s.enabled for s in self.advertising_sets.values()
+        )
 
     ############################################################
     # HCI handlers
     ############################################################
-    def on_hci_command(self, command):
+    def on_hci_command(
+        self, command: hci.HCI_Command
+    ) -> hci.HCI_StatusReturnParameters:
         logger.warning(color(f'--- Unsupported command {command}', 'red'))
-        return bytes([HCI_UNKNOWN_HCI_COMMAND_ERROR])
+        return hci.HCI_StatusReturnParameters(
+            hci.HCI_ErrorCode.UNKNOWN_HCI_COMMAND_ERROR
+        )
 
-    def on_hci_create_connection_command(self, command):
+    def on_hci_create_connection_command(
+        self, command: hci.HCI_Create_Connection_Command
+    ) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.1.5 Create Connection command
+        See Bluetooth spec Vol 4, Part E - 7.1.5 Create Connection command
         '''
 
-        # TODO: classic mode not supported yet
+        if self.link is None:
+            return None
+        logger.debug(f'Connection request to {command.bd_addr}')
 
-    def on_hci_disconnect_command(self, command):
+        # Check that we don't already have a pending connection
+        if self.pending_le_connection:
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.CONTROLLER_BUSY_ERROR, command.op_code
+            )
+            return None
+
+        self.classic_connections[command.bd_addr] = Connection(
+            controller=self,
+            handle=0,
+            role=hci.Role.CENTRAL,
+            self_address=self.public_address,
+            peer_address=command.bd_addr,
+            link=self.link,
+            transport=PhysicalTransport.BR_EDR,
+            link_type=hci.HCI_Connection_Complete_Event.LinkType.ACL,
+            classic_allow_role_switch=bool(command.allow_role_switch),
+        )
+
+        # Say that the connection is pending
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+        future = self.send_lmp_packet(command.bd_addr, lmp.LmpHostConnectionReq())
+
+        def on_response(future: asyncio.Future[int]) -> None:
+            self.on_classic_connection_complete(command.bd_addr, future.result())
+
+        future.add_done_callback(on_response)
+        return None
+
+    def on_hci_disconnect_command(self, command: hci.HCI_Disconnect_Command) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.1.6 Disconnect Command
+        See Bluetooth spec Vol 4, Part E - 7.1.6 Disconnect Command
         '''
         # First, say that the disconnection is pending
-        self.send_hci_packet(HCI_Command_Status_Event(
-            status                  = HCI_COMMAND_STATUS_PENDING,
-            num_hci_command_packets = 1,
-            command_opcode          = command.op_code
-        ))
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
 
         # Notify the link of the disconnection
-        if not (connection := self.find_central_connection_by_handle(command.connection_handle)):
-            logger.warn('connection not found')
-            return
+        handle = command.connection_handle
+        if connection := self.find_classic_connection_by_handle(handle):
+            if self.link:
+                self.send_lmp_packet(
+                    connection.peer_address,
+                    lmp.LmpDetach(command.reason),
+                )
+                self.on_classic_disconnected(connection.peer_address, command.reason)
+            else:
+                # Remove the connection
+                del self.classic_connections[connection.peer_address]
+        elif connection := self.find_le_connection_by_handle(handle):
+            if self.link:
+                connection.send_ll_control_pdu(ll.TerminateInd(command.reason))
+                self.on_le_disconnected(connection, command.reason)
+            else:
+                # Remove the connection
+                del self.le_connections[connection.peer_address]
+        elif sco_link := self.find_classic_sco_link_by_handle(handle):
+            if self.link:
+                if (
+                    sco_link.link_type
+                    == hci.HCI_Connection_Complete_Event.LinkType.ESCO
+                ):
+                    self.send_lmp_packet(
+                        sco_link.peer_address,
+                        lmp.LmpRemoveScoLinkReq(
+                            sco_handle=0, error_code=command.reason
+                        ),
+                    )
+                else:
+                    self.send_lmp_packet(
+                        sco_link.peer_address,
+                        lmp.LmpRemoveEscoLinkReq(
+                            esco_handle=0, error_code=command.reason
+                        ),
+                    )
+                self.on_classic_sco_disconnected(sco_link.peer_address, command.reason)
+            else:
+                # Remove the connection
+                del self.sco_links[sco_link.peer_address]
+        elif cis_link := (
+            self.central_cis_links.get(handle) or self.peripheral_cis_links.get(handle)
+        ):
+            if self.link and cis_link.acl_connection:
+                cis_link.acl_connection.send_ll_control_pdu(
+                    ll.CisTerminateInd(
+                        cis_link.cig_id, cis_link.cis_id, command.reason
+                    ),
+                )
+                self.on_le_cis_disconnected(cis_link.cig_id, cis_link.cis_id)
+            # Spec requires handle to be kept after disconnection.
 
-        if self.link:
-            self.link.disconnect(self.random_address, connection.peer_address, command)
+        return None
+
+    def on_hci_accept_connection_request_command(
+        self, command: hci.HCI_Accept_Connection_Request_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.1.8 Accept Connection Request command
+        '''
+
+        if self.link is None:
+            return None
+
+        if not (connection := self.classic_connections.get(command.bd_addr)):
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+
+        if command.role == hci.Role.CENTRAL:
+            # Perform role switching before accept.
+            future = self.send_lmp_packet(command.bd_addr, lmp.LmpSwitchReq())
+
+            def on_response(future: asyncio.Future[int]) -> None:
+                if (status := future.result()) == hci.HCI_ErrorCode.SUCCESS:
+                    self.classic_role_change(connection)
+                    # Continue connection setup.
+                    self.send_lmp_packet(
+                        command.bd_addr,
+                        lmp.LmpAccepted(lmp.Opcode.LMP_HOST_CONNECTION_REQ),
+                    )
+                else:
+                    # Abort connection setup.
+                    self.send_lmp_packet(
+                        command.bd_addr,
+                        lmp.LmpNotAccepted(lmp.Opcode.LMP_HOST_CONNECTION_REQ, status),
+                    )
+                self.on_classic_connection_complete(command.bd_addr, status)
+
+            future.add_done_callback(on_response)
+
         else:
-            # Remove the connection
-            del self.central_connections[connection.peer_address]
+            # Simply accept connection.
+            self.send_lmp_packet(
+                command.bd_addr,
+                lmp.LmpAccepted(lmp.Opcode.LMP_HOST_CONNECTION_REQ),
+            )
+            self.on_classic_connection_complete(
+                command.bd_addr, hci.HCI_ErrorCode.SUCCESS
+            )
+        return None
 
-    def on_hci_set_event_mask_command(self, command):
+    def on_hci_remote_name_request_command(
+        self, command: hci.HCI_Remote_Name_Request_Command
+    ) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.1 Set Event Mask Command
+        See Bluetooth spec Vol 4, Part E - 7.1.19 Remote Name Request command
         '''
-        self.event_mask = command.event_mask
-        return bytes([HCI_SUCCESS])
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
 
-    def on_hci_reset_command(self, command):
+        self.send_lmp_packet(command.bd_addr, lmp.LmpNameReq(0))
+
+        return None
+
+    def on_hci_read_remote_supported_features_command(
+        self, command: hci.HCI_Read_Remote_Supported_Features_Command
+    ) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.2 Reset Command
+        See Bluetooth spec Vol 4, Part E - 7.1.20 Read Remote Supported Features command
+        '''
+        handle = command.connection_handle
+        if not (connection := self.find_classic_connection_by_handle(handle)):
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+        self.send_lmp_packet(
+            connection.peer_address,
+            lmp.LmpFeaturesReq(self.lmp_features_bytes[:8]),
+        )
+
+        return None
+
+    def on_hci_read_remote_extended_features_command(
+        self, command: hci.HCI_Read_Remote_Extended_Features_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.1.21 Read Remote Extended Features command
+        '''
+        handle = command.connection_handle
+        if not (connection := self.find_classic_connection_by_handle(handle)):
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+        self.send_lmp_packet(
+            connection.peer_address,
+            lmp.LmpFeaturesReqExt(
+                features_page=command.page_number,
+                features=self.lmp_features_bytes[
+                    command.page_number * 8 : (command.page_number + 1) * 8
+                ],
+            ),
+        )
+
+        return None
+
+    def on_hci_enhanced_setup_synchronous_connection_command(
+        self, command: hci.HCI_Enhanced_Setup_Synchronous_Connection_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.1.45 Enhanced Setup Synchronous Connection command
+        '''
+
+        if self.link is None:
+            return None
+
+        if not (
+            connection := self.find_connection_by_handle(command.connection_handle)
+        ):
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+        future = self.send_lmp_packet(
+            connection.peer_address,
+            lmp.LmpEscoLinkReq(
+                esco_handle=0,
+                esco_lt_addr=0,
+                timing_control_flags=0,
+                d_esco=0,
+                t_esco=0,
+                w_esco=0,
+                esco_packet_type_c_to_p=0,
+                esco_packet_type_p_to_c=0,
+                packet_length_c_to_p=0,
+                packet_length_p_to_c=0,
+                air_mode=0,
+                negotiation_state=0,
+            ),
+        )
+
+        def on_response(future: asyncio.Future[int]) -> None:
+            self.on_classic_sco_connection_complete(
+                connection.peer_address,
+                future.result(),
+                hci.HCI_Connection_Complete_Event.LinkType.ESCO,
+            )
+
+        future.add_done_callback(on_response)
+        return None
+
+    def on_hci_enhanced_accept_synchronous_connection_request_command(
+        self, command: hci.HCI_Enhanced_Accept_Synchronous_Connection_Request_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.1.46 Enhanced Accept Synchronous Connection Request command
+        '''
+
+        if self.link is None:
+            return None
+
+        if not (connection := self.classic_connections.get(command.bd_addr)):
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+        self.send_lmp_packet(
+            connection.peer_address,
+            lmp.LmpAcceptedExt(lmp.Opcode.LMP_ESCO_LINK_REQ),
+        )
+        self.on_classic_sco_connection_complete(
+            connection.peer_address,
+            hci.HCI_ErrorCode.SUCCESS,
+            hci.HCI_Connection_Complete_Event.LinkType.ESCO,
+        )
+        return None
+
+    def on_hci_sniff_mode_command(self, command: hci.HCI_Sniff_Mode_Command) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.2.2 Sniff Mode command
+        '''
+        if self.link is None:
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+        self.send_hci_packet(
+            hci.HCI_Mode_Change_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=command.connection_handle,
+                current_mode=hci.HCI_Mode_Change_Event.Mode.SNIFF,
+                interval=2,
+            )
+        )
+        return None
+
+    def on_hci_exit_sniff_mode_command(
+        self, command: hci.HCI_Exit_Sniff_Mode_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.2.3 Exit Sniff Mode command
+        '''
+
+        if self.link is None:
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR, command.op_code
+            )
+            return None
+
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+        self.send_hci_packet(
+            hci.HCI_Mode_Change_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=command.connection_handle,
+                current_mode=hci.HCI_Mode_Change_Event.Mode.ACTIVE,
+                interval=2,
+            )
+        )
+        return None
+
+    def on_hci_switch_role_command(self, command: hci.HCI_Switch_Role_Command) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.2.8 Switch hci.Role command
+        '''
+
+        if self.link is None:
+            return None
+
+        if connection := self.classic_connections.get(command.bd_addr):
+            current_role = connection.role
+            self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+        else:
+            # Connection doesn't exist, reject.
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.COMMAND_DISALLOWED_ERROR, command.op_code
+            )
+            return None
+
+        # If role doesn't change, only send event to local host.
+        if current_role == command.role:
+            self.send_hci_packet(
+                hci.HCI_Role_Change_Event(
+                    status=hci.HCI_ErrorCode.SUCCESS,
+                    bd_addr=command.bd_addr,
+                    new_role=current_role,
+                )
+            )
+        else:
+            future = self.send_lmp_packet(command.bd_addr, lmp.LmpSwitchReq())
+
+            def on_response(future: asyncio.Future[int]) -> None:
+                if (status := future.result()) == hci.HCI_ErrorCode.SUCCESS:
+                    connection.role = hci.Role(command.role)
+                self.send_hci_packet(
+                    hci.HCI_Role_Change_Event(
+                        status=status,
+                        bd_addr=command.bd_addr,
+                        new_role=connection.role,
+                    )
+                )
+
+            future.add_done_callback(on_response)
+
+        return None
+
+    def on_hci_set_event_mask_command(
+        self, command: hci.HCI_Set_Event_Mask_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.3.1 Set Event Mask Command
+        '''
+        self.event_mask = int.from_bytes(
+            command.event_mask, byteorder='little', signed=False
+        )
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_reset_command(
+        self, _command: hci.HCI_Reset_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.3.2 Reset Command
         '''
         # TODO: cleanup what needs to be reset
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_write_local_name_command(self, command):
+    def on_hci_write_local_name_command(
+        self, command: hci.HCI_Write_Local_Name_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.11 Write Local Name Command
+        See Bluetooth spec Vol 4, Part E - 7.3.11 Write Local Name Command
         '''
         local_name = command.local_name
         if len(local_name):
@@ -499,414 +1718,1115 @@ class Controller:
                 self.local_name = str(local_name, 'utf-8')
             except UnicodeDecodeError:
                 pass
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_read_local_name_command(self, command):
+    def on_hci_read_local_name_command(
+        self, _command: hci.HCI_Read_Local_Name_Command
+    ) -> hci.HCI_Read_Local_Name_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.12 Read Local Name Command
+        See Bluetooth spec Vol 4, Part E - 7.3.12 Read Local Name Command
         '''
         local_name = bytes(self.local_name, 'utf-8')[:248]
         if len(local_name) < 248:
             local_name = local_name + bytes(248 - len(local_name))
 
-        return bytes([HCI_SUCCESS]) + local_name
+        return hci.HCI_Read_Local_Name_ReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS, local_name=local_name
+        )
 
-    def on_hci_read_class_of_device_command(self, command):
+    def on_hci_read_class_of_device_command(
+        self, _command: hci.HCI_Read_Class_Of_Device_Command
+    ) -> hci.HCI_Read_Class_Of_Device_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.25 Read Class of Device Command
+        See Bluetooth spec Vol 4, Part E - 7.3.25 Read Class of Device Command
         '''
-        return bytes([HCI_SUCCESS, 0, 0, 0])
+        return hci.HCI_Read_Class_Of_Device_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, class_of_device=0
+        )
 
-    def on_hci_write_class_of_device_command(self, command):
+    def on_hci_write_class_of_device_command(
+        self, _command: hci.HCI_Write_Class_Of_Device_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.26 Write Class of Device Command
+        See Bluetooth spec Vol 4, Part E - 7.3.26 Write Class of Device Command
         '''
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_read_synchronous_flow_control_enable_command(self, command):
+    def on_hci_read_synchronous_flow_control_enable_command(
+        self, _command: hci.HCI_Read_Synchronous_Flow_Control_Enable_Command
+    ) -> hci.HCI_Read_Synchronous_Flow_Control_Enable_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.36 Read Synchronous Flow Control Enable Command
+        See Bluetooth spec Vol 4, Part E - 7.3.36 Read Synchronous Flow Control Enable
+        Command
         '''
         if self.sync_flow_control:
             ret = 1
         else:
             ret = 0
-        return bytes([HCI_SUCCESS, ret])
+        return hci.HCI_Read_Synchronous_Flow_Control_Enable_ReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS, ret
+        )
 
-    def on_hci_write_synchronous_flow_control_enable_command(self, command):
+    def on_hci_write_synchronous_flow_control_enable_command(
+        self, command: hci.HCI_Write_Synchronous_Flow_Control_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.37 Write Synchronous Flow Control Enable Command
+        See Bluetooth spec Vol 4, Part E - 7.3.37 Write Synchronous Flow Control Enable
+        Command
         '''
-        ret = HCI_SUCCESS
+        ret = hci.HCI_ErrorCode.SUCCESS
         if command.synchronous_flow_control_enable == 1:
             self.sync_flow_control = True
         elif command.synchronous_flow_control_enable == 0:
             self.sync_flow_control = False
         else:
-            ret = HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR
-        return bytes([ret])
+            ret = hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR
+        return hci.HCI_StatusReturnParameters(ret)
 
-    def on_hci_write_simple_pairing_mode_command(self, command):
+    def on_hci_set_controller_to_host_flow_control_command(
+        self, _command: hci.HCI_Set_Controller_To_Host_Flow_Control_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.59 Write Simple Pairing Mode Command
+        See Bluetooth spec Vol 4, Part E - 7.3.38 Set Controller To Host Flow Control
+        Command
         '''
-        return bytes([HCI_SUCCESS])
+        # For now we just accept the command but ignore the values.
+        # TODO: respect the passed in values.
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_set_event_mask_page_2_command(self, command):
+    def on_hci_host_buffer_size_command(
+        self, _command: hci.HCI_Host_Buffer_Size_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.69 Set Event Mask Page 2 Command
+        See Bluetooth spec Vol 4, Part E - 7.3.39 Host Buffer Size Command
         '''
-        self.event_mask_page_2 = command.event_mask_page_2
-        return bytes([HCI_SUCCESS])
+        # For now we just accept the command but ignore the values.
+        # TODO: respect the passed in values.
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_read_le_host_support_command(self, command):
+    def on_hci_write_extended_inquiry_response_command(
+        self, _command: hci.HCI_Write_Extended_Inquiry_Response_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.78 Write LE Host Support Command
+        See Bluetooth spec Vol 4, Part E - 7.3.56 Write Extended Inquiry Response
+        Command
         '''
-        return bytes([HCI_SUCCESS, 1, 0])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_write_le_host_support_command(self, command):
+    def on_hci_write_simple_pairing_mode_command(
+        self, command: hci.HCI_Write_Simple_Pairing_Mode_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.79 Write LE Host Support Command
+        See Bluetooth spec Vol 4, Part E - 7.3.59 Write Simple Pairing Mode Command
         '''
-        # TODO / Just ignore for now
-        return bytes([HCI_SUCCESS])
+        if command.simple_pairing_mode:
+            self.lmp_features |= hci.LmpFeatureMask.SECURE_SIMPLE_PAIRING_HOST_SUPPORT
+        else:
+            self.lmp_features &= ~hci.LmpFeatureMask.SECURE_SIMPLE_PAIRING_HOST_SUPPORT
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_write_authenticated_payload_timeout_command(self, command):
+    def on_hci_set_event_mask_page_2_command(
+        self, command: hci.HCI_Set_Event_Mask_Page_2_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.3.94 Write Authenticated Payload Timeout Command
+        See Bluetooth spec Vol 4, Part E - 7.3.69 Set Event Mask Page 2 Command
         '''
-        # TODO
-        return struct.pack('<BH', HCI_SUCCESS, command.connection_handle)
+        self.event_mask_page_2 = int.from_bytes(
+            command.event_mask_page_2, byteorder='little', signed=False
+        )
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_read_local_version_information_command(self, command):
+    def on_hci_read_le_host_support_command(
+        self, _command: hci.HCI_Read_LE_Host_Support_Command
+    ) -> hci.HCI_Read_LE_Host_Support_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.4.1 Read Local Version Information Command
+        See Bluetooth spec Vol 4, Part E - 7.3.78 Write LE Host Support Command
         '''
-        return struct.pack(
-            '<BBHBHH',
-            HCI_SUCCESS,
-            self.hci_version,
-            self.hci_revision,
-            self.lmp_version,
-            self.manufacturer_name,
-            self.lmp_subversion
+        return hci.HCI_Read_LE_Host_Support_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            le_supported_host=(
+                1 if self.lmp_features & hci.LmpFeatureMask.LE_SUPPORTED_HOST else 0
+            ),
+            unused=0,
         )
 
-    def on_hci_read_local_supported_commands_command(self, command):
+    def on_hci_write_le_host_support_command(
+        self, command: hci.HCI_Write_LE_Host_Support_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.4.2 Read Local Supported Commands Command
+        See Bluetooth spec Vol 4, Part E - 7.3.79 Write LE Host Support Command
         '''
-        return bytes([HCI_SUCCESS]) + self.supported_commands
+        if command.le_supported_host:
+            self.lmp_features |= hci.LmpFeatureMask.LE_SUPPORTED_HOST
+        else:
+            self.lmp_features &= ~hci.LmpFeatureMask.LE_SUPPORTED_HOST
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_read_local_supported_features_command(self, command):
+    def on_hci_write_authenticated_payload_timeout_command(
+        self, command: hci.HCI_Write_Authenticated_Payload_Timeout_Command
+    ) -> hci.HCI_StatusAndConnectionHandleReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.4.3 Read Local Supported Features Command
+        See Bluetooth spec Vol 4, Part E - 7.3.94 Write Authenticated Payload Timeout
+        Command
         '''
-        return bytes([HCI_SUCCESS]) + self.lmp_features
+        # TODO
+        return hci.HCI_StatusAndConnectionHandleReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS, command.connection_handle
+        )
 
-    def on_hci_read_bd_addr_command(self, command):
+    def on_hci_read_local_version_information_command(
+        self, _command: hci.HCI_Read_Local_Version_Information_Command
+    ) -> hci.HCI_Read_Local_Version_Information_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.4.6 Read BD_ADDR Command
+        See Bluetooth spec Vol 4, Part E - 7.4.1 Read Local Version Information Command
         '''
-        bd_addr = self._public_address.to_bytes() if self._public_address is not None else bytes(6)
-        return bytes([HCI_SUCCESS]) + bd_addr
+        return hci.HCI_Read_Local_Version_Information_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            hci_version=self.hci_version,
+            hci_subversion=self.hci_revision,
+            lmp_version=self.lmp_version,
+            company_identifier=self.manufacturer_company_identifier,
+            lmp_subversion=self.lmp_subversion,
+        )
 
-    def on_hci_le_set_event_mask_command(self, command):
+    def on_hci_read_local_supported_commands_command(
+        self, _command: hci.HCI_Read_Local_Supported_Commands_Command
+    ) -> hci.HCI_Read_Local_Supported_Commands_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.1 LE Set Event Mask Command
+        See Bluetooth spec Vol 4, Part E - 7.4.2 Read Local Supported Commands Command
         '''
-        self.le_event_mask = command.le_event_mask
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_Read_Local_Supported_Commands_ReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS,
+            supported_commands=sum(
+                hci.HCI_SUPPORTED_COMMANDS_MASKS.get(opcode, 0)
+                for opcode in self.supported_commands
+            ).to_bytes(64, 'little'),
+        )
 
-    def on_hci_le_read_buffer_size_command(self, command):
+    def on_hci_read_local_supported_features_command(
+        self, _command: hci.HCI_Read_Local_Supported_Features_Command
+    ) -> hci.HCI_Read_Local_Supported_Features_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.2 LE Read Buffer Size Command
+        See Bluetooth spec Vol 4, Part E - 7.4.3 Read Local Supported Features Command
         '''
-        return struct.pack('<BHB',
-                           HCI_SUCCESS,
-                           self.hc_le_data_packet_length,
-                           self.hc_total_num_le_data_packets)
+        return hci.HCI_Read_Local_Supported_Features_ReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS,
+            lmp_features=self.lmp_features_bytes[:8],
+        )
 
-    def on_hci_le_read_local_supported_features_command(self, command):
+    def on_hci_read_local_extended_features_command(
+        self, command: hci.HCI_Read_Local_Extended_Features_Command
+    ) -> hci.HCI_Read_Local_Extended_Features_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.3 LE Read Local Supported Features Command
+        See Bluetooth spec Vol 4, Part E - 7.4.4 Read Local Extended Features Command
         '''
-        return bytes([HCI_SUCCESS]) + self.le_features
+        feature_bytes = self.lmp_features_bytes
+        if command.page_number * 8 > len(feature_bytes):
+            return hci.HCI_Read_Local_Extended_Features_ReturnParameters(
+                status=hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR,
+                page_number=command.page_number,
+                maximum_page_number=len(feature_bytes) // 8 - 1,
+                extended_lmp_features=bytes(8),
+            )
+        return hci.HCI_Read_Local_Extended_Features_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            page_number=command.page_number,
+            maximum_page_number=len(feature_bytes) // 8 - 1,
+            extended_lmp_features=feature_bytes[
+                command.page_number * 8 : (command.page_number + 1) * 8
+            ],
+        )
 
-    def on_hci_le_set_random_address_command(self, command):
+    def on_hci_read_buffer_size_command(
+        self, _command: hci.HCI_Read_Buffer_Size_Command
+    ) -> hci.HCI_Read_Buffer_Size_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.4 LE Set Random Address Command
+        See Bluetooth spec Vol 4, Part E - 7.4.5 Read Buffer Size Command
+        '''
+        return hci.HCI_Read_Buffer_Size_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            hc_acl_data_packet_length=self.acl_data_packet_length,
+            hc_synchronous_data_packet_length=0,
+            hc_total_num_acl_data_packets=self.total_num_acl_data_packets,
+            hc_total_num_synchronous_data_packets=0,
+        )
+
+    def on_hci_read_bd_addr_command(
+        self, _command: hci.HCI_Read_BD_ADDR_Command
+    ) -> hci.HCI_Read_BD_ADDR_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.4.6 Read BD_ADDR Command
+        '''
+        return hci.HCI_Read_BD_ADDR_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            bd_addr=self._public_address or hci.Address.ANY,
+        )
+
+    def on_hci_le_set_default_subrate_command(
+        self, command: hci.HCI_LE_Set_Default_Subrate_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 6, Part E - 7.8.123 LE Set Event Mask Command
+        '''
+
+        if (
+            command.subrate_max * (command.max_latency) > 500
+            or command.subrate_max < command.subrate_min
+            or command.continuation_number >= command.subrate_max
+        ):
+            return hci.HCI_StatusReturnParameters(
+                hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR
+            )
+
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_subrate_request_command(
+        self, command: hci.HCI_LE_Subrate_Request_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 6, Part E - 7.8.124 LE Subrate Request command
+        '''
+        if (
+            command.subrate_max * (command.max_latency) > 500
+            or command.continuation_number < command.continuation_number
+            or command.subrate_max < command.subrate_min
+            or command.continuation_number >= command.subrate_max
+        ):
+            return self._send_hci_command_status(
+                hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR, command.op_code
+            )
+
+        self._send_hci_command_status(hci.HCI_ErrorCode.SUCCESS, command.op_code)
+
+        self.send_hci_packet(
+            hci.HCI_LE_Subrate_Change_Event(
+                status=hci.HCI_ErrorCode.SUCCESS,
+                connection_handle=command.connection_handle,
+                subrate_factor=2,
+                peripheral_latency=2,
+                continuation_number=command.continuation_number,
+                supervision_timeout=command.supervision_timeout,
+            )
+        )
+        return None
+
+    def on_hci_le_set_event_mask_command(
+        self, command: hci.HCI_LE_Set_Event_Mask_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.1 LE Set Event Mask Command
+        '''
+        self.le_event_mask = int.from_bytes(
+            command.le_event_mask, byteorder='little', signed=False
+        )
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_read_buffer_size_command(
+        self, _command: hci.HCI_LE_Read_Buffer_Size_Command
+    ) -> hci.HCI_LE_Read_Buffer_Size_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.2 LE Read Buffer Size Command
+        '''
+        return hci.HCI_LE_Read_Buffer_Size_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            le_acl_data_packet_length=self.le_acl_data_packet_length,
+            total_num_le_acl_data_packets=self.total_num_le_acl_data_packets,
+        )
+
+    def on_hci_le_read_buffer_size_v2_command(
+        self, _command: hci.HCI_LE_Read_Buffer_Size_V2_Command
+    ) -> hci.HCI_LE_Read_Buffer_Size_V2_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.2 LE Read Buffer Size Command
+        '''
+        return hci.HCI_LE_Read_Buffer_Size_V2_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            le_acl_data_packet_length=self.le_acl_data_packet_length,
+            total_num_le_acl_data_packets=self.total_num_le_acl_data_packets,
+            iso_data_packet_length=self.iso_data_packet_length,
+            total_num_iso_data_packets=self.total_num_iso_data_packets,
+        )
+
+    def on_hci_le_read_local_supported_features_command(
+        self, _command: hci.HCI_LE_Read_Local_Supported_Features_Command
+    ) -> hci.HCI_LE_Read_Local_Supported_Features_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.3 LE Read Local Supported Features
+        Command
+        '''
+        return hci.HCI_LE_Read_Local_Supported_Features_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            le_features=self.le_features.value.to_bytes(8, 'little'),
+        )
+
+    def on_hci_le_read_all_local_supported_features_command(
+        self, _command: hci.HCI_LE_Read_All_Local_Supported_Features_Command
+    ) -> hci.HCI_LE_Read_All_Local_Supported_Features_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.128 LE Read All Local Supported Features
+        Command
+        '''
+        return hci.HCI_LE_Read_All_Local_Supported_Features_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            max_page=0,
+            le_features=self.le_features.value.to_bytes(248, 'little'),
+        )
+
+    def on_hci_le_set_random_address_command(
+        self, command: hci.HCI_LE_Set_Random_Address_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.4 LE Set Random hci.Address Command
         '''
         self.random_address = command.random_address
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_set_advertising_parameters_command(self, command):
+    def on_hci_le_set_advertising_parameters_command(
+        self, command: hci.HCI_LE_Set_Advertising_Parameters_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.5 LE Set Advertising Parameters Command
+        See Bluetooth spec Vol 4, Part E - 7.8.5 LE Set Advertising Parameters Command
         '''
-        self.advertising_parameters = command
-        return bytes([HCI_SUCCESS])
+        self.le_legacy_advertiser.advertising_interval_min = (
+            command.advertising_interval_min
+        )
+        self.le_legacy_advertiser.advertising_interval_max = (
+            command.advertising_interval_max
+        )
+        self.le_legacy_advertiser.advertising_type = command.advertising_type
+        self.le_legacy_advertiser.own_address_type = command.own_address_type
+        self.le_legacy_advertiser.peer_address_type = command.peer_address_type
+        self.le_legacy_advertiser.peer_address = command.peer_address
+        self.le_legacy_advertiser.advertising_channel_map = (
+            command.advertising_channel_map
+        )
+        self.le_legacy_advertiser.advertising_filter_policy = (
+            command.advertising_filter_policy
+        )
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_read_advertising_channel_tx_power_command(self, command):
+    def on_hci_le_read_advertising_physical_channel_tx_power_command(
+        self, _command: hci.HCI_LE_Read_Advertising_Physical_Channel_Tx_Power_Command
+    ) -> hci.HCI_LE_Read_Advertising_Physical_Channel_Tx_Power_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.6 LE Read Advertising Channel Tx Power Command
+        See Bluetooth spec Vol 4, Part E - 7.8.6 LE Read Advertising Physical Channel
+        Tx Power Command
         '''
-        return bytes([HCI_SUCCESS, self.advertising_channel_tx_power])
+        return hci.HCI_LE_Read_Advertising_Physical_Channel_Tx_Power_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, tx_power_level=0
+        )
 
-    def on_hci_le_set_advertising_data_command(self, command):
+    def on_hci_le_set_advertising_data_command(
+        self, command: hci.HCI_LE_Set_Advertising_Data_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.7 LE Set Advertising Data Command
+        See Bluetooth spec Vol 4, Part E - 7.8.7 LE Set Advertising Data Command
         '''
-        self.advertising_data = command.advertising_data
-        return bytes([HCI_SUCCESS])
+        self.le_legacy_advertiser.advertising_data = command.advertising_data
 
-    def on_hci_le_set_scan_response_data_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.8 LE Set Scan Response Data Command
-        '''
-        self.le_scan_response_data = command.scan_response_data
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_set_advertising_enable_command(self, command):
+    def on_hci_le_set_scan_response_data_command(
+        self, command: hci.HCI_LE_Set_Scan_Response_Data_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.9 LE Set Advertising Enable Command
+        See Bluetooth spec Vol 4, Part E - 7.8.8 LE Set Scan Response Data Command
+        '''
+        self.le_legacy_advertiser.scan_response_data = command.scan_response_data
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_set_advertising_enable_command(
+        self, command: hci.HCI_LE_Set_Advertising_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.9 LE Set Advertising Enable Command
         '''
         if command.advertising_enable:
-            self.start_advertising()
+            self.le_legacy_advertiser.start()
         else:
-            self.stop_advertising()
+            self.le_legacy_advertiser.stop()
 
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_set_scan_parameters_command(self, command):
+    def on_hci_le_set_scan_parameters_command(
+        self, command: hci.HCI_LE_Set_Scan_Parameters_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.10 LE Set Scan Parameters Command
+        See Bluetooth spec Vol 4, Part E - 7.8.10 LE Set Scan Parameters Command
         '''
-        self.le_scan_type              = command.le_scan_type
-        self.le_scan_interval          = command.le_scan_interval
-        self.le_scan_window            = command.le_scan_window
-        self.le_scan_own_address_type  = command.own_address_type
+        if self.le_scan_enable:
+            return hci.HCI_StatusReturnParameters(
+                hci.HCI_ErrorCode.COMMAND_DISALLOWED_ERROR
+            )
+
+        self.le_scan_type = command.le_scan_type
+        self.le_scan_interval = command.le_scan_interval
+        self.le_scan_window = command.le_scan_window
+        self.le_scan_own_address_type = hci.AddressType(command.own_address_type)
         self.le_scanning_filter_policy = command.scanning_filter_policy
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_set_scan_enable_command(self, command):
+    def on_hci_le_set_scan_enable_command(
+        self, command: hci.HCI_LE_Set_Scan_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.11 LE Set Scan Enable Command
+        See Bluetooth spec Vol 4, Part E - 7.8.11 LE Set Scan Enable Command
         '''
-        self.le_scan_enable    = command.le_scan_enable
-        self.filter_duplicates = command.filter_duplicates
-        return bytes([HCI_SUCCESS])
+        self.le_scan_enable = bool(command.le_scan_enable)
+        self.filter_duplicates = bool(command.filter_duplicates)
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_create_connection_command(self, command):
+    def on_hci_le_create_connection_command(
+        self, command: hci.HCI_LE_Create_Connection_Command
+    ) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.12 LE Create Connection Command
+        See Bluetooth spec Vol 4, Part E - 7.8.12 LE Create Connection Command
         '''
 
         if not self.link:
-            return
+            return None
 
         logger.debug(f'Connection request to {command.peer_address}')
 
         # Check that we don't already have a pending connection
-        if self.link.get_pending_connection():
-            self.send_hci_packet(HCI_Command_Status_Event(
-                status                  = HCI_COMMAND_DISALLOWED_ERROR,
-                num_hci_command_packets = 1,
-                command_opcode          = command.op_code
-            ))
-            return
+        if self.pending_le_connection:
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.COMMAND_DISALLOWED_ERROR, command.op_code
+            )
+            return None
 
-        # Initiate the connection
-        self.link.connect(self.random_address, command)
+        self.pending_le_connection = command
 
         # Say that the connection is pending
-        self.send_hci_packet(HCI_Command_Status_Event(
-            status                  = HCI_COMMAND_STATUS_PENDING,
-            num_hci_command_packets = 1,
-            command_opcode          = command.op_code
-        ))
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+        return None
 
-    def on_hci_le_create_connection_cancel_command(self, command):
+    def on_hci_le_create_connection_cancel_command(
+        self, _command: hci.HCI_LE_Create_Connection_Cancel_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.13 LE Create Connection Cancel Command
+        See Bluetooth spec Vol 4, Part E - 7.8.13 LE Create Connection Cancel Command
         '''
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_read_filter_accept_list_size_command(self, command):
+    def on_hci_le_extended_create_connection_command(
+        self, command: hci.HCI_LE_Extended_Create_Connection_Command
+    ) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.14 LE Read Filter Accept List Size Command
+        See Bluetooth spec Vol 4, Part E - 7.8.66 LE Extended Create Connection Command
         '''
-        return bytes([HCI_SUCCESS, self.filter_accept_list_size])
+        if not self.link:
+            return
 
-    def on_hci_le_clear_filter_accept_list_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.15 LE Clear Filter Accept List Command
-        '''
-        return bytes([HCI_SUCCESS])
+        # Check pending
+        if self.pending_le_connection:
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.COMMAND_DISALLOWED_ERROR, command.op_code
+            )
+            return
 
-    def on_hci_le_add_device_to_filter_accept_list_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.16 LE Add Device To Filter Accept List Command
-        '''
-        return bytes([HCI_SUCCESS])
+        self.pending_le_connection = command
 
-    def on_hci_le_remove_device_from_filter_accept_list_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.17 LE Remove Device From Filter Accept List Command
-        '''
-        return bytes([HCI_SUCCESS])
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
 
-    def on_hci_le_read_remote_features_command(self, command):
+    def on_hci_le_read_filter_accept_list_size_command(
+        self, _command: hci.HCI_LE_Read_Filter_Accept_List_Size_Command
+    ) -> hci.HCI_LE_Read_Filter_Accept_List_Size_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.21 LE Read Remote Features Command
+        See Bluetooth spec Vol 4, Part E - 7.8.14 LE Read Filter Accept List Size
+        Command
         '''
-
-        # First, say that the command is pending
-        self.send_hci_packet(HCI_Command_Status_Event(
-            status                  = HCI_COMMAND_STATUS_PENDING,
-            num_hci_command_packets = 1,
-            command_opcode          = command.op_code
-        ))
-
-        # Then send the remote features
-        self.send_hci_packet(HCI_LE_Read_Remote_Features_Complete_Event(
-            status            = HCI_SUCCESS,
-            connection_handle = 0,
-            le_features       = bytes.fromhex('dd40000000000000')
-        ))
-
-    def on_hci_le_rand_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.23 LE Rand Command
-        '''
-        return bytes([HCI_SUCCESS]) + struct.pack('Q', random.randint(0, 1 << 64))
-
-    def on_hci_le_enable_encryption_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.24 LE Enable Encryption Command
-        '''
-
-        # Check the parameters
-        if not (connection := self.find_central_connection_by_handle(command.connection_handle)):
-            logger.warn('connection not found')
-            return bytes([HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR])
-
-        # Notify that the connection is now encrypted
-        self.link.on_connection_encrypted(
-            self.random_address,
-            connection.peer_address,
-            command.random_number,
-            command.encrypted_diversifier,
-            command.long_term_key
+        return hci.HCI_LE_Read_Filter_Accept_List_Size_ReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS, self.filter_accept_list_size
         )
 
-        self.send_hci_packet(HCI_Command_Status_Event(
-            status                  = HCI_COMMAND_STATUS_PENDING,
-            num_hci_command_packets = 1,
-            command_opcode          = command.op_code
-        ))
+    def on_hci_le_clear_filter_accept_list_command(
+        self, _command: hci.HCI_LE_Clear_Filter_Accept_List_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.15 LE Clear Filter Accept List Command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_read_supported_states_command(self, command):
+    def on_hci_le_add_device_to_filter_accept_list_command(
+        self, _command: hci.HCI_LE_Add_Device_To_Filter_Accept_List_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.27 LE Read Supported States Command
+        See Bluetooth spec Vol 4, Part E - 7.8.16 LE Add Device To Filter Accept List
+        Command
         '''
-        return bytes([HCI_SUCCESS]) + self.le_states
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_read_suggested_default_data_length_command(self, command):
+    def on_hci_le_remove_device_from_filter_accept_list_command(
+        self, _command: hci.HCI_LE_Remove_Device_From_Filter_Accept_List_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.34 LE Read Suggested Default Data Length Command
+        See Bluetooth spec Vol 4, Part E - 7.8.17 LE Remove Device From Filter Accept
+        List Command
         '''
-        return struct.pack('<BHH',
-                           HCI_SUCCESS,
-                           self.suggested_max_tx_octets,
-                           self.suggested_max_tx_time)
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_write_suggested_default_data_length_command(self, command):
+    def on_hci_write_scan_enable_command(
+        self, command: hci.HCI_Write_Scan_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.35 LE Write Suggested Default Data Length Command
+        See Bluetooth spec Vol 4, Part E - 7.3.18 Write Scan Enable Command
         '''
-        self.suggested_max_tx_octets, self.suggested_max_tx_time = struct.unpack('<HH', command.parameters[:4])
-        return bytes([HCI_SUCCESS])
+        self.classic_scan_enable = command.scan_enable
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_read_local_p_256_public_key_command(self, command):
+    def on_hci_le_read_remote_features_command(
+        self, command: hci.HCI_LE_Read_Remote_Features_Command
+    ) -> None:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.36 LE Read P-256 Public Key Command
+        See Bluetooth spec Vol 4, Part E - 7.8.21 LE Read Remote Features Command
         '''
-        # TODO create key and send HCI_LE_Read_Local_P-256_Public_Key_Complete event
-        return bytes([HCI_SUCCESS])
 
-    def on_hci_le_add_device_to_resolving_list_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.38 LE Add Device To Resolving List Command
-        '''
-        return bytes([HCI_SUCCESS])
+        handle = command.connection_handle
 
-    def on_hci_le_clear_resolving_list_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.40 LE Clear Resolving List Command
-        '''
-        return bytes([HCI_SUCCESS])
+        if not (connection := self.find_le_connection_by_handle(handle)):
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR, command.op_code
+            )
+            return None
 
-    def on_hci_le_read_resolving_list_size_command(self, command):
-        '''
-        See Bluetooth spec Vol 2, Part E - 7.8.41 LE Read Resolving List Size Command
-        '''
-        return bytes([HCI_SUCCESS, self.resolving_list_size])
+        # First, say that the command is pending
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
 
-    def on_hci_le_set_address_resolution_enable_command(self, command):
+        if connection.role == hci.Role.CENTRAL:
+            connection.send_ll_control_pdu(
+                ll.FeatureReq(feature_set=self.le_features.value.to_bytes(8, 'little'))
+            )
+        else:
+            connection.send_ll_control_pdu(
+                ll.PeripheralFeatureReq(
+                    feature_set=self.le_features.value.to_bytes(8, 'little')
+                )
+            )
+        return None
+
+    def on_hci_le_rand_command(
+        self, _command: hci.HCI_LE_Rand_Command
+    ) -> hci.HCI_LE_Rand_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.44 LE Set Address Resolution Enable Command
+        See Bluetooth spec Vol 4, Part E - 7.8.23 LE Rand Command
         '''
-        ret = HCI_SUCCESS
+        return hci.HCI_LE_Rand_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            random_number=struct.pack('Q', random.randint(0, 1 << 64)),
+        )
+
+    def on_hci_le_enable_encryption_command(
+        self, command: hci.HCI_LE_Enable_Encryption_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.24 LE Enable Encryption Command
+        '''
+        if not self.link:
+            return
+
+        # Check the parameters
+        if (
+            not (
+                connection := self.find_connection_by_handle(command.connection_handle)
+            )
+            or connection.transport != PhysicalTransport.LE
+        ):
+            logger.warning('connection not found')
+            return self._send_hci_command_status(
+                hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR, command.op_code
+            )
+
+        connection.send_ll_control_pdu(
+            ll.EncReq(
+                rand=command.random_number,
+                ediv=command.encrypted_diversifier,
+                ltk=command.long_term_key,
+            ),
+        )
+
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+
+        # TODO: Handle authentication
+        self.on_le_encrypted(connection)
+
+    def on_hci_le_read_supported_states_command(
+        self, _command: hci.HCI_LE_Read_Supported_States_Command
+    ) -> hci.HCI_LE_Read_Supported_States_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.27 LE Read Supported States Command
+        '''
+        return hci.HCI_LE_Read_Supported_States_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, le_states=self.le_states
+        )
+
+    def on_hci_le_read_suggested_default_data_length_command(
+        self, _command: hci.HCI_LE_Read_Suggested_Default_Data_Length_Command
+    ) -> hci.HCI_LE_Read_Suggested_Default_Data_Length_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.34 LE Read Suggested Default Data Length
+        Command
+        '''
+        return hci.HCI_LE_Read_Suggested_Default_Data_Length_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            suggested_max_tx_octets=self.suggested_max_tx_octets,
+            suggested_max_tx_time=self.suggested_max_tx_time,
+        )
+
+    def on_hci_le_write_suggested_default_data_length_command(
+        self, command: hci.HCI_LE_Write_Suggested_Default_Data_Length_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.35 LE Write Suggested Default Data Length
+        Command
+        '''
+        self.suggested_max_tx_octets, self.suggested_max_tx_time = struct.unpack(
+            '<HH', command.parameters[:4]
+        )
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_read_local_p_256_public_key_command(
+        self, _command: hci.HCI_LE_Read_Local_P_256_Public_Key_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.36 LE Read P-256 Public Key Command
+        '''
+        # TODO create key and send hci.HCI_LE_Read_Local_P-256_Public_Key_Complete event
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_add_device_to_resolving_list_command(
+        self, _command: hci.HCI_LE_Add_Device_To_Resolving_List_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.38 LE Add Device To Resolving List
+        Command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_clear_resolving_list_command(
+        self, _command: hci.HCI_LE_Clear_Resolving_List_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.40 LE Clear Resolving List Command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_read_resolving_list_size_command(
+        self, _command: hci.HCI_LE_Read_Resolving_List_Size_Command
+    ) -> hci.HCI_LE_Read_Resolving_List_Size_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.41 LE Read Resolving List Size Command
+        '''
+        return hci.HCI_LE_Read_Resolving_List_Size_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            resolving_list_size=self.resolving_list_size,
+        )
+
+    def on_hci_le_set_address_resolution_enable_command(
+        self, command: hci.HCI_LE_Set_Address_Resolution_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.44 LE Set hci.Address Resolution Enable
+        Command
+        '''
+        ret = hci.HCI_ErrorCode.SUCCESS
         if command.address_resolution_enable == 1:
             self.le_address_resolution = True
         elif command.address_resolution_enable == 0:
             self.le_address_resolution = False
         else:
-            ret = HCI_INVALID_HCI_COMMAND_PARAMETERS_ERROR
-        return bytes([ret])
+            ret = hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR
+        return hci.HCI_StatusReturnParameters(ret)
 
-    def on_hci_le_set_resolvable_private_address_timeout_command(self, command):
+    def on_hci_le_set_resolvable_private_address_timeout_command(
+        self, command: hci.HCI_LE_Set_Resolvable_Private_Address_Timeout_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.45 LE Set Resolvable Private Address Timeout Command
+        See Bluetooth spec Vol 4, Part E - 7.8.45 LE Set Resolvable Private hci.Address
+        Timeout Command
         '''
         self.le_rpa_timeout = command.rpa_timeout
-        return bytes([HCI_SUCCESS])
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
-    def on_hci_le_read_maximum_data_length_command(self, command):
+    def on_hci_le_read_maximum_data_length_command(
+        self, _command: hci.HCI_LE_Read_Maximum_Data_Length_Command
+    ) -> hci.HCI_LE_Read_Maximum_Data_Length_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.46 LE Read Maximum Data Length Command
+        See Bluetooth spec Vol 4, Part E - 7.8.46 LE Read Maximum Data Length Command
         '''
-        return struct.pack(
-            '<BHHHH',
-            HCI_SUCCESS,
-            self.supported_max_tx_octets,
-            self.supported_max_tx_time,
-            self.supported_max_rx_octets,
-            self.supported_max_rx_time
+        return hci.HCI_LE_Read_Maximum_Data_Length_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            supported_max_tx_octets=self.supported_max_tx_octets,
+            supported_max_tx_time=self.supported_max_tx_time,
+            supported_max_rx_octets=self.supported_max_rx_octets,
+            supported_max_rx_time=self.supported_max_rx_time,
         )
 
-    def on_hci_le_read_phy_command(self, command):
+    def on_hci_le_read_phy_command(
+        self, command: hci.HCI_LE_Read_PHY_Command
+    ) -> hci.HCI_LE_Read_PHY_ReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.47 LE Read PHY command
+        See Bluetooth spec Vol 4, Part E - 7.8.47 LE Read PHY Command
         '''
-        return struct.pack(
-            '<BHBB',
-            HCI_SUCCESS,
-            command.connection_handle,
-            HCI_LE_1M_PHY,
-            HCI_LE_1M_PHY
+        return hci.HCI_LE_Read_PHY_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            connection_handle=command.connection_handle,
+            tx_phy=hci.HCI_LE_1M_PHY,
+            rx_phy=hci.HCI_LE_1M_PHY,
         )
 
-    def on_hci_le_set_default_phy_command(self, command):
+    def on_hci_le_set_default_phy_command(
+        self, command: hci.HCI_LE_Set_Default_PHY_Command
+    ) -> hci.HCI_StatusReturnParameters:
         '''
-        See Bluetooth spec Vol 2, Part E - 7.8.48 LE Set Default PHY Command
+        See Bluetooth spec Vol 4, Part E - 7.8.48 LE Set Default PHY Command
         '''
-        self.default_phy = {
-            'all_phys': command.all_phys,
-            'tx_phys':  command.tx_phys,
-            'rx_phys':  command.rx_phys
-        }
-        return bytes([HCI_SUCCESS])
+        self.default_phy['all_phys'] = command.all_phys
+        self.default_phy['tx_phys'] = command.tx_phys
+        self.default_phy['rx_phys'] = command.rx_phys
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
 
+    def on_hci_le_set_advertising_set_random_address_command(
+        self, command: hci.HCI_LE_Set_Advertising_Set_Random_Address_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.52 LE Set Advertising Set Random hci.Address
+        Command
+        '''
+        handle = command.advertising_handle
+        if handle not in self.advertising_sets:
+            self.advertising_sets[handle] = AdvertisingSet(
+                controller=self, handle=handle
+            )
+        self.advertising_sets[handle].random_address = command.random_address
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_set_extended_advertising_parameters_command(
+        self, command: hci.HCI_LE_Set_Extended_Advertising_Parameters_Command
+    ) -> hci.HCI_LE_Set_Extended_Advertising_Parameters_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.53 LE Set Extended Advertising Parameters
+        Command
+        '''
+        handle = command.advertising_handle
+        if handle not in self.advertising_sets:
+            self.advertising_sets[handle] = AdvertisingSet(
+                controller=self, handle=handle
+            )
+
+        self.advertising_sets[handle].parameters = command
+        return hci.HCI_LE_Set_Extended_Advertising_Parameters_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, selected_tx_power=0
+        )
+
+    def on_hci_le_set_extended_advertising_data_command(
+        self, command: hci.HCI_LE_Set_Extended_Advertising_Data_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.54 LE Set Extended Advertising Data
+        Command
+        '''
+        handle = command.advertising_handle
+        if not (adv_set := self.advertising_sets.get(handle)):
+            return hci.HCI_StatusReturnParameters(
+                hci.HCI_ErrorCode.UNKNOWN_ADVERTISING_IDENTIFIER_ERROR
+            )
+
+        if command.operation in (
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.FIRST_FRAGMENT,
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.COMPLETE_DATA,
+        ):
+            adv_set.data = bytearray(command.advertising_data)
+        elif command.operation in (
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.INTERMEDIATE_FRAGMENT,
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.LAST_FRAGMENT,
+        ):
+            adv_set.data.extend(command.advertising_data)
+
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_set_extended_scan_response_data_command(
+        self, command: hci.HCI_LE_Set_Extended_Scan_Response_Data_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.55 LE Set Extended Scan Response Data
+        Command
+        '''
+        handle = command.advertising_handle
+        if not (adv_set := self.advertising_sets.get(handle)):
+            return hci.HCI_StatusReturnParameters(
+                hci.HCI_ErrorCode.UNKNOWN_ADVERTISING_IDENTIFIER_ERROR
+            )
+
+        if command.operation in (
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.FIRST_FRAGMENT,
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.COMPLETE_DATA,
+        ):
+            adv_set.scan_response_data = bytearray(command.scan_response_data)
+        elif command.operation in (
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.INTERMEDIATE_FRAGMENT,
+            hci.HCI_LE_Set_Extended_Advertising_Data_Command.Operation.LAST_FRAGMENT,
+        ):
+            adv_set.scan_response_data.extend(command.scan_response_data)
+
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_set_extended_advertising_enable_command(
+        self, command: hci.HCI_LE_Set_Extended_Advertising_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.56 LE Set Extended Advertising Enable
+        Command
+        '''
+        if command.enable:
+            for handle in command.advertising_handles:
+                if advertising_set := self.advertising_sets.get(handle):
+                    advertising_set.start()
+        else:
+            if not command.advertising_handles:
+                for advertising_set in self.advertising_sets.values():
+                    advertising_set.stop()
+            else:
+                for handle in command.advertising_handles:
+                    if advertising_set := self.advertising_sets.get(handle):
+                        advertising_set.stop()
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_remove_advertising_set_command(
+        self, command: hci.HCI_LE_Remove_Advertising_Set_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.59 LE Remove Advertising Set Command
+        '''
+        handle = command.advertising_handle
+        if advertising_set := self.advertising_sets.pop(handle, None):
+            advertising_set.stop()
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_clear_advertising_sets_command(
+        self, _command: hci.HCI_LE_Clear_Advertising_Sets_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.60 LE Clear Advertising Sets Command
+        '''
+        for advertising_set in self.advertising_sets.values():
+            advertising_set.stop()
+        self.advertising_sets.clear()
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_read_maximum_advertising_data_length_command(
+        self, _command: hci.HCI_LE_Read_Maximum_Advertising_Data_Length_Command
+    ) -> hci.HCI_LE_Read_Maximum_Advertising_Data_Length_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.57 LE Read Maximum Advertising Data
+        Length Command
+        '''
+        return hci.HCI_LE_Read_Maximum_Advertising_Data_Length_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, max_advertising_data_length=0x0672
+        )
+
+    def on_hci_le_read_number_of_supported_advertising_sets_command(
+        self, _command: hci.HCI_LE_Read_Number_Of_Supported_Advertising_Sets_Command
+    ) -> hci.HCI_LE_Read_Number_Of_Supported_Advertising_Sets_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.58 LE Read Number of Supported
+        Advertising Set Command
+        '''
+        return hci.HCI_LE_Read_Number_Of_Supported_Advertising_Sets_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, num_supported_advertising_sets=0xF0
+        )
+
+    def on_hci_le_set_periodic_advertising_parameters_command(
+        self, _command: hci.HCI_LE_Set_Periodic_Advertising_Parameters_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.61 LE Set Periodic Advertising Parameters
+        Command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_set_periodic_advertising_data_command(
+        self, _command: hci.HCI_LE_Set_Periodic_Advertising_Data_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.62 LE Set Periodic Advertising Data
+        Command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_set_periodic_advertising_enable_command(
+        self, _command: hci.HCI_LE_Set_Periodic_Advertising_Enable_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.63 LE Set Periodic Advertising Enable
+        Command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)
+
+    def on_hci_le_read_transmit_power_command(
+        self, _command: hci.HCI_LE_Read_Transmit_Power_Command
+    ) -> hci.HCI_LE_Read_Transmit_Power_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.74 LE Read Transmit Power Command
+        '''
+        return hci.HCI_LE_Read_Transmit_Power_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS, min_tx_power=0, max_tx_power=0
+        )
+
+    def on_hci_le_set_cig_parameters_command(
+        self, command: hci.HCI_LE_Set_CIG_Parameters_Command
+    ) -> hci.HCI_LE_Set_CIG_Parameters_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.97 LE Set CIG Parameter Command
+        '''
+
+        # Remove old CIG implicitly.
+        cis_links = list(self.central_cis_links.items())
+        for handle, cis_link in cis_links:
+            if cis_link.cig_id == command.cig_id:
+                self.central_cis_links.pop(handle)
+
+        handles = []
+        for cis_id in command.cis_id:
+            handle = self.allocate_connection_handle()
+            handles.append(handle)
+            self.central_cis_links[handle] = CisLink(
+                cis_id=cis_id,
+                cig_id=command.cig_id,
+                handle=handle,
+            )
+        return hci.HCI_LE_Set_CIG_Parameters_ReturnParameters(
+            status=hci.HCI_ErrorCode.SUCCESS,
+            cig_id=command.cig_id,
+            connection_handle=handles,
+        )
+
+    def on_hci_le_create_cis_command(
+        self, command: hci.HCI_LE_Create_CIS_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.99 LE Create CIS Command
+        '''
+        if not self.link:
+            return None
+
+        for cis_handle, acl_handle in zip(
+            command.cis_connection_handle, command.acl_connection_handle
+        ):
+            if not (connection := self.find_connection_by_handle(acl_handle)):
+                logger.error(f'Cannot find connection with handle={acl_handle}')
+                self._send_hci_command_status(
+                    hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR, command.op_code
+                )
+                return
+
+            if not (cis_link := self.central_cis_links.get(cis_handle)):
+                logger.error(f'Cannot find CIS with handle={cis_handle}')
+                self._send_hci_command_status(
+                    hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR, command.op_code
+                )
+                return
+
+            cis_link.acl_connection = connection
+
+            connection.send_ll_control_pdu(
+                ll.CisReq(cig_id=cis_link.cig_id, cis_id=cis_link.cis_id)
+            )
+
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+
+    def on_hci_le_remove_cig_command(
+        self, command: hci.HCI_LE_Remove_CIG_Command
+    ) -> hci.HCI_LE_Remove_CIG_ReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.100 LE Remove CIG Command
+        '''
+
+        status = hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR
+
+        cis_links = list(self.central_cis_links.items())
+        for cis_handle, cis_link in cis_links:
+            if cis_link.cig_id == command.cig_id:
+                self.central_cis_links.pop(cis_handle)
+                status = hci.HCI_ErrorCode.SUCCESS
+
+        return hci.HCI_LE_Remove_CIG_ReturnParameters(status, command.cig_id)
+
+    def on_hci_le_accept_cis_request_command(
+        self, command: hci.HCI_LE_Accept_CIS_Request_Command
+    ) -> None:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.101 LE Accept CIS Request Command
+        '''
+        if not self.link:
+            return None
+
+        if not (
+            pending_cis_link := self.peripheral_cis_links.get(command.connection_handle)
+        ):
+            logger.error(f'Cannot find CIS with handle={command.connection_handle}')
+            self._send_hci_command_status(
+                hci.HCI_ErrorCode.INVALID_COMMAND_PARAMETERS_ERROR, command.op_code
+            )
+            return
+
+        assert pending_cis_link.acl_connection
+        pending_cis_link.acl_connection.send_ll_control_pdu(
+            ll.CisRsp(cig_id=pending_cis_link.cig_id, cis_id=pending_cis_link.cis_id),
+        )
+
+        self._send_hci_command_status(hci.HCI_COMMAND_STATUS_PENDING, command.op_code)
+        return None
+
+    def on_hci_le_setup_iso_data_path_command(
+        self, command: hci.HCI_LE_Setup_ISO_Data_Path_Command
+    ) -> hci.HCI_StatusAndConnectionHandleReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.109 LE Setup ISO Data Path Command
+        '''
+        if not (iso_link := self.find_iso_link_by_handle(command.connection_handle)):
+            return hci.HCI_StatusAndConnectionHandleReturnParameters(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR,
+                command.connection_handle,
+            )
+        if command.data_path_direction in iso_link.data_paths:
+            return hci.HCI_StatusAndConnectionHandleReturnParameters(
+                hci.HCI_ErrorCode.COMMAND_DISALLOWED_ERROR, command.connection_handle
+            )
+        iso_link.data_paths.add(command.data_path_direction)
+        return hci.HCI_StatusAndConnectionHandleReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS, command.connection_handle
+        )
+
+    def on_hci_le_remove_iso_data_path_command(
+        self, command: hci.HCI_LE_Remove_ISO_Data_Path_Command
+    ) -> hci.HCI_StatusAndConnectionHandleReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.110 LE Remove ISO Data Path Command
+        '''
+        if not (iso_link := self.find_iso_link_by_handle(command.connection_handle)):
+            return hci.HCI_StatusAndConnectionHandleReturnParameters(
+                hci.HCI_ErrorCode.UNKNOWN_CONNECTION_IDENTIFIER_ERROR,
+                command.connection_handle,
+            )
+        data_paths: set[int] = set(
+            direction
+            for direction in hci.HCI_LE_Setup_ISO_Data_Path_Command.Direction
+            if (1 << direction) & command.data_path_direction
+        )
+        if not data_paths.issubset(iso_link.data_paths):
+            return hci.HCI_StatusAndConnectionHandleReturnParameters(
+                hci.HCI_ErrorCode.COMMAND_DISALLOWED_ERROR, command.connection_handle
+            )
+        iso_link.data_paths.difference_update(data_paths)
+        return hci.HCI_StatusAndConnectionHandleReturnParameters(
+            hci.HCI_ErrorCode.SUCCESS, command.connection_handle
+        )
+
+    def on_hci_le_set_host_feature_command(
+        self, _command: hci.HCI_LE_Set_Host_Feature_Command
+    ) -> hci.HCI_StatusReturnParameters:
+        '''
+        See Bluetooth spec Vol 4, Part E - 7.8.115 LE Set Host Feature command
+        '''
+        return hci.HCI_StatusReturnParameters(hci.HCI_ErrorCode.SUCCESS)

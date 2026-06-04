@@ -17,24 +17,25 @@
 # Imports
 # -----------------------------------------------------------------------------
 import struct
-from typing import Tuple
 
-from ..gatt_client import ProfileServiceProxy
-from ..gatt import (
+from bumble.gatt import (
     GATT_DEVICE_INFORMATION_SERVICE,
     GATT_FIRMWARE_REVISION_STRING_CHARACTERISTIC,
     GATT_HARDWARE_REVISION_STRING_CHARACTERISTIC,
     GATT_MANUFACTURER_NAME_STRING_CHARACTERISTIC,
     GATT_MODEL_NUMBER_STRING_CHARACTERISTIC,
+    GATT_REGULATORY_CERTIFICATION_DATA_LIST_CHARACTERISTIC,
     GATT_SERIAL_NUMBER_STRING_CHARACTERISTIC,
     GATT_SOFTWARE_REVISION_STRING_CHARACTERISTIC,
     GATT_SYSTEM_ID_CHARACTERISTIC,
-    GATT_REGULATORY_CERTIFICATION_DATA_LIST_CHARACTERISTIC,
-    TemplateService,
     Characteristic,
-    DelegatedCharacteristicAdapter,
-    UTF8CharacteristicAdapter
+    TemplateService,
 )
+from bumble.gatt_adapters import (
+    DelegatedCharacteristicProxyAdapter,
+    UTF8CharacteristicProxyAdapter,
+)
+from bumble.gatt_client import CharacteristicProxy, ProfileServiceProxy, ServiceProxy
 
 
 # -----------------------------------------------------------------------------
@@ -52,49 +53,53 @@ class DeviceInformationService(TemplateService):
 
     def __init__(
         self,
-        manufacturer_name: str = None,
-        model_number: str = None,
-        serial_number: str = None,
-        hardware_revision: str = None,
-        firmware_revision: str = None,
-        software_revision: str = None,
-        system_id: Tuple[int, int] = None,  # (OUI, Manufacturer ID)
-        ieee_regulatory_certification_data_list: bytes = None
+        manufacturer_name: str | None = None,
+        model_number: str | None = None,
+        serial_number: str | None = None,
+        hardware_revision: str | None = None,
+        firmware_revision: str | None = None,
+        software_revision: str | None = None,
+        system_id: tuple[int, int] | None = None,  # (OUI, Manufacturer ID)
+        ieee_regulatory_certification_data_list: bytes | None = None,
         # TODO: pnp_id
     ):
-        characteristics = [
+        characteristics: list[Characteristic[bytes]] = [
             Characteristic(
                 uuid,
-                Characteristic.READ,
+                Characteristic.Properties.READ,
                 Characteristic.READABLE,
-                field
+                bytes(field, 'utf-8'),
             )
             for (field, uuid) in (
                 (manufacturer_name, GATT_MANUFACTURER_NAME_STRING_CHARACTERISTIC),
-                (model_number,      GATT_MODEL_NUMBER_STRING_CHARACTERISTIC),
-                (serial_number,     GATT_SERIAL_NUMBER_STRING_CHARACTERISTIC),
+                (model_number, GATT_MODEL_NUMBER_STRING_CHARACTERISTIC),
+                (serial_number, GATT_SERIAL_NUMBER_STRING_CHARACTERISTIC),
                 (hardware_revision, GATT_HARDWARE_REVISION_STRING_CHARACTERISTIC),
                 (firmware_revision, GATT_FIRMWARE_REVISION_STRING_CHARACTERISTIC),
-                (software_revision, GATT_SOFTWARE_REVISION_STRING_CHARACTERISTIC)
+                (software_revision, GATT_SOFTWARE_REVISION_STRING_CHARACTERISTIC),
             )
             if field is not None
         ]
 
         if system_id is not None:
-            characteristics.append(Characteristic(
-                GATT_SYSTEM_ID_CHARACTERISTIC,
-                Characteristic.READ,
-                Characteristic.READABLE,
-                self.pack_system_id(*system_id)
-            ))
+            characteristics.append(
+                Characteristic(
+                    GATT_SYSTEM_ID_CHARACTERISTIC,
+                    Characteristic.Properties.READ,
+                    Characteristic.READABLE,
+                    self.pack_system_id(*system_id),
+                )
+            )
 
         if ieee_regulatory_certification_data_list is not None:
-            characteristics.append(Characteristic(
-                GATT_REGULATORY_CERTIFICATION_DATA_LIST_CHARACTERISTIC,
-                Characteristic.READ,
-                Characteristic.READABLE,
-                ieee_regulatory_certification_data_list
-            ))
+            characteristics.append(
+                Characteristic(
+                    GATT_REGULATORY_CERTIFICATION_DATA_LIST_CHARACTERISTIC,
+                    Characteristic.Properties.READ,
+                    Characteristic.READABLE,
+                    ieee_regulatory_certification_data_list,
+                )
+            )
 
         super().__init__(characteristics)
 
@@ -103,33 +108,46 @@ class DeviceInformationService(TemplateService):
 class DeviceInformationServiceProxy(ProfileServiceProxy):
     SERVICE_CLASS = DeviceInformationService
 
-    def __init__(self, service_proxy):
+    manufacturer_name: CharacteristicProxy[str] | None
+    model_number: CharacteristicProxy[str] | None
+    serial_number: CharacteristicProxy[str] | None
+    hardware_revision: CharacteristicProxy[str] | None
+    firmware_revision: CharacteristicProxy[str] | None
+    software_revision: CharacteristicProxy[str] | None
+    system_id: CharacteristicProxy[tuple[int, int]] | None
+    ieee_regulatory_certification_data_list: CharacteristicProxy[bytes] | None
+
+    def __init__(self, service_proxy: ServiceProxy):
         self.service_proxy = service_proxy
 
-        for (field, uuid) in (
+        for field, uuid in (
             ('manufacturer_name', GATT_MANUFACTURER_NAME_STRING_CHARACTERISTIC),
-            ('model_number',      GATT_MODEL_NUMBER_STRING_CHARACTERISTIC),
-            ('serial_number',     GATT_SERIAL_NUMBER_STRING_CHARACTERISTIC),
+            ('model_number', GATT_MODEL_NUMBER_STRING_CHARACTERISTIC),
+            ('serial_number', GATT_SERIAL_NUMBER_STRING_CHARACTERISTIC),
             ('hardware_revision', GATT_HARDWARE_REVISION_STRING_CHARACTERISTIC),
             ('firmware_revision', GATT_FIRMWARE_REVISION_STRING_CHARACTERISTIC),
-            ('software_revision', GATT_SOFTWARE_REVISION_STRING_CHARACTERISTIC)
+            ('software_revision', GATT_SOFTWARE_REVISION_STRING_CHARACTERISTIC),
         ):
             if characteristics := service_proxy.get_characteristics_by_uuid(uuid):
-                characteristic = UTF8CharacteristicAdapter(characteristics[0])
+                characteristic = UTF8CharacteristicProxyAdapter(characteristics[0])
             else:
                 characteristic = None
             self.__setattr__(field, characteristic)
 
-        if characteristics := service_proxy.get_characteristics_by_uuid(GATT_SYSTEM_ID_CHARACTERISTIC):
-            self.system_id = DelegatedCharacteristicAdapter(
+        if characteristics := service_proxy.get_characteristics_by_uuid(
+            GATT_SYSTEM_ID_CHARACTERISTIC
+        ):
+            self.system_id = DelegatedCharacteristicProxyAdapter(
                 characteristics[0],
                 encode=lambda v: DeviceInformationService.pack_system_id(*v),
-                decode=DeviceInformationService.unpack_system_id
+                decode=DeviceInformationService.unpack_system_id,
             )
         else:
             self.system_id = None
 
-        if characteristics := service_proxy.get_characteristics_by_uuid(GATT_REGULATORY_CERTIFICATION_DATA_LIST_CHARACTERISTIC):
+        if characteristics := service_proxy.get_characteristics_by_uuid(
+            GATT_REGULATORY_CERTIFICATION_DATA_LIST_CHARACTERISTIC
+        ):
             self.ieee_regulatory_certification_data_list = characteristics[0]
         else:
             self.ieee_regulatory_certification_data_list = None

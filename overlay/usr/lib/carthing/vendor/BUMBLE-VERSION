@@ -1,0 +1,4 @@
+upstream: https://github.com/google/bumble
+tag: v0.0.229
+commit: 72d821b1f64cd8a4626e3175430dac0d7aafd6c0
+vendored: 2026-06-05

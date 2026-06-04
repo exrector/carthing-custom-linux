@@ -18,7 +18,7 @@
 import asyncio
 import logging
 
-from .common import Transport, StreamPacketSource, StreamPacketSink
+from bumble.transport.common import StreamPacketSink, StreamPacketSource, Transport
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-async def open_tcp_client_transport(spec):
+async def open_tcp_client_transport(spec: str) -> Transport:
     '''
     Open a TCP client transport.
     The parameter string has this syntax:
@@ -37,13 +37,13 @@ async def open_tcp_client_transport(spec):
     '''
 
     class TcpPacketSource(StreamPacketSource):
-        def connection_lost(self, error):
-            logger.debug(f'connection lost: {error}')
-            self.terminated.set_result(error)
+        def connection_lost(self, exc):
+            logger.debug(f'connection lost: {exc}')
+            self.on_transport_lost()
 
-    remote_host, remote_port = spec.split(':')
+    remote_host, remote_port = spec.rsplit(':', maxsplit=1)
     tcp_transport, packet_source = await asyncio.get_running_loop().create_connection(
-        lambda: TcpPacketSource(),
+        TcpPacketSource,
         host=remote_host,
         port=int(remote_port),
     )
