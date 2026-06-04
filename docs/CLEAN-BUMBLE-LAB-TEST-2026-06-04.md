@@ -67,3 +67,42 @@ but only if it proves one layer at a time.
 
 Do not remove quarantine for normal boot to run this. Use explicit lab override
 only.
+
+## Result 2026-06-04 — Row 1, Pure BLE media remote
+
+Runtime was launched manually with:
+
+```sh
+CARTHING_TRANSFER_ENABLE=0
+CARTHING_A2DP_BRIDGE_ENABLE=0
+CARTHING_IAP2_ENABLE=0
+CARTHING_POST_PAIR_CLASSIC_PROBE=0
+CAR_THING_AUTO_PAIRING=1
+```
+
+Observed on device:
+- `carthing_runtime.py` started from `/run/run-clean-bumble.sh`;
+- `transfer disabled by CARTHING_TRANSFER_ENABLE=0 for clean Bumble lab`;
+- `iAP2 disabled by default for clean dual-mode audio pairing`;
+- BLE advertising started with flags `0x1a`;
+- iPhone connected over BLE as current RPA `75:29:2F:66:20:DA`;
+- AMS, ANCS, CTS all came up successfully;
+- Bumble keystore has one bond identity: `10:A2:D3:83:82:50/P`;
+- `state.json` has one trusted source: `source:10:A2:D3:83:82:50`;
+- legacy `trusted-devices.json` remains empty.
+
+Interpretation:
+- Row 1 did not create two device-side trusted records.
+- The apparent two-address situation is BLE privacy: active RPA versus stored
+  identity address.
+- The current state merger still gives the bonded source potential
+  `audio_input/classic_a2dp_sink` capabilities even when transfer is disabled
+  for the lab. That is acceptable for production route planning, but it makes
+  row 1 less visually pure and should be accounted for when reading the GUI.
+
+Open question from user-facing observation:
+- If iPhone Settings itself shows two persistent rows after exiting and
+  re-entering Bluetooth, that is not explained by device-side storage and must
+  be treated as an iOS-visible advertising/persona problem.
+- If only the Car Thing GUI/technical list shows two addresses, it is most
+  likely RPA-vs-identity presentation and should be normalized in the UI.
