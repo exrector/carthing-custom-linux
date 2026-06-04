@@ -5,7 +5,17 @@
 рантаймом. Использует ТЕКУЩИЙ a2dp_bridge.setup_receiver + AVDTP/L2CAP debug-трейс."""
 import asyncio
 import logging
+import os
 import sys
+
+if (
+    os.environ.get("CARTHING_BUMBLE_QUARANTINE", "1") != "0"
+    or os.environ.get("CARTHING_ALLOW_BUMBLE_RUN", "0") != "1"
+):
+    raise SystemExit(
+        "[fosi-a2dp-standalone-test] Bumble A2DP test quarantined; set "
+        "CARTHING_BUMBLE_QUARANTINE=0 CARTHING_ALLOW_BUMBLE_RUN=1 for a manual lab run"
+    )
 
 sys.path.insert(0, "/usr/lib/carthing")
 sys.path.insert(0, "/usr/lib/carthing/vendor")

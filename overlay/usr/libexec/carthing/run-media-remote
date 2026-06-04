@@ -3,6 +3,14 @@ set -eu
 
 . /etc/default/carthing
 
+# Last-resort guard. The init script is disabled as well, but this launcher can
+# still be run by hand or by an old handoff note. Refuse unless the lab override
+# is explicit.
+if [ "${CARTHING_BUMBLE_QUARANTINE:-1}" != "0" ] || [ "${CARTHING_ALLOW_BUMBLE_RUN:-0}" != "1" ]; then
+    echo "[run-media-remote] Bumble runtime quarantined; set CARTHING_BUMBLE_QUARANTINE=0 CARTHING_ALLOW_BUMBLE_RUN=1 for a manual lab run"
+    exit 0
+fi
+
 export PYTHONPATH="$CARTHING_RUNTIME_LIB"
 export CAR_THING_LIB="$CARTHING_RUNTIME_LIB"
 export CAR_THING_KEYSTORE="$CARTHING_RUNTIME_KEYS"

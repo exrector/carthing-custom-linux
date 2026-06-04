@@ -47,6 +47,8 @@ ensure_early_mounts
 
 log "stage-2 entry"
 
+[ -f /etc/default/carthing ] && . /etc/default/carthing
+
 run_early_service /etc/init.d/S03-runtime-state
 run_early_service /etc/init.d/S04-usbgadget
 run_early_service /etc/init.d/S05-usbnet
@@ -57,7 +59,15 @@ run_early_service /etc/init.d/S09-reverse-agent
 run_early_service /etc/init.d/S10-firmware-stage
 run_early_service /etc/init.d/S20-bt-init
 run_early_service /etc/init.d/S45-input-links
-run_early_service /etc/init.d/S50-carthing-remote
+
+# The old media-remote boot service owns HCI through Bumble. It is intentionally
+# quarantined now: USB/NCM, SSH, debug tools, firmware staging, and input links
+# still come up, but no Bumble runtime is allowed to seize the Bluetooth chip.
+if [ "${CARTHING_BUMBLE_QUARANTINE:-1}" = "0" ] && [ "${CARTHING_ALLOW_BUMBLE_RUN:-0}" = "1" ]; then
+    run_early_service /etc/init.d/:S50-carthing-remote.disabled
+else
+    log "Bumble runtime quarantined; skipping /etc/init.d/:S50-carthing-remote.disabled"
+fi
 
 : >"$STAGE2_ONCE_MARK"
 

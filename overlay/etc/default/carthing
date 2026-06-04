@@ -34,6 +34,14 @@ CARTHING_RUNTIME_LIB=/usr/lib/carthing/vendor
 CARTHING_RUNTIME_KEYS=/run/carthing-state/carthing/keys.json
 CARTHING_RUNTIME_LOG=/run/carthing/carthing-remote.log
 CARTHING_AUTOSTART_REMOTE=1
+# Bumble quarantine is the deliberate release-state while the Bluetooth base
+# layer is being redesigned. Keep the old Python/Bumble runtime on disk for
+# reference, but do not allow boot scripts or local tools to start it by
+# accident. A manual lab run must set both:
+#   CARTHING_BUMBLE_QUARANTINE=0
+#   CARTHING_ALLOW_BUMBLE_RUN=1
+CARTHING_BUMBLE_QUARANTINE=1
+CARTHING_ALLOW_BUMBLE_RUN=0
 CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4
 CARTHING_FONT_PATH=/usr/share/fonts/truetype/DejaVuSans.ttf
 # One name everywhere comes from manufacturing efuse USID when available.
