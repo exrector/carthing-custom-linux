@@ -147,3 +147,38 @@ Interpretation:
   1. the dual-mode Bumble/CTKD presentation creates two iOS-visible rows;
   2. after switching to LE-only, iOS can collapse stale rows, but a new clean
      bond still needs to be explicitly created and verified.
+
+## Result 2026-06-04 — True LE-only fresh pair
+
+After the previous observation, the LE-only lab was corrected further:
+
+- `CARTHING_CLASSIC_ENABLE=0` now disables Classic radio ownership in the
+  orchestrator;
+- LE-only pairing no longer requests `SMP_LINK_KEY_DISTRIBUTION_FLAG`;
+- LE-only pairing sets `ct2=False`;
+- on incoming LE connection, the runtime calls `on_le_connection_started()` and
+  immediately stops the visible pairing advertisement so iOS does not keep a
+  second discovery row while the bonded row is being created.
+
+Observed by user on iPhone:
+- pair was created from scratch;
+- only one device remained;
+- the user could not rename it, matching a BLE-style Settings row.
+
+Observed on device:
+- runtime connected to iPhone over BLE as `4F:F2:D2:B9:93:C6`;
+- AMS, ANCS, and CTS started successfully;
+- `keys.json` contains one identity bond `10:A2:D3:83:82:50/P`;
+- the bond contains `irk` and `ltk`;
+- the bond does not contain `link_key`;
+- runtime state reports `source=iphone`, `connected=true`;
+- no additional `General pairing advertising` line appears after the incoming
+  connection, so visible scan-response advertising was no longer kept alive.
+
+Conclusion:
+- The one-device result is the clean BLE-only baseline.
+- The earlier two-row iPhone behavior is tied to dual-mode/Classic/CTKD
+  presentation, not GUI, Transfer, A2DP, iAP2, or Fosi.
+- A future dual-mode solution must reproduce this single-row behavior while
+  adding Classic/A2DP capability. Simply enabling Bumble Classic + CTKD is not
+  sufficient with the current stack behavior.
