@@ -90,7 +90,7 @@ MAX_RETRIES = int(os.environ.get("CARTHING_FLASH_MAX_RETRIES", "16"))
 RECONNECT_WAIT = float(os.environ.get("CARTHING_FLASH_RECONNECT_WAIT", "6"))
 MAKE_DEV_RETRIES = int(os.environ.get("CARTHING_FLASH_MAKE_DEV_RETRIES", "10"))
 MAKE_DEV_INITIAL_SETTLE = float(os.environ.get("CARTHING_FLASH_MAKE_DEV_INITIAL_SETTLE", "3"))
-USE_RESTORE_PARTITION = os.environ.get("CARTHING_FLASH_USE_RESTORE_PARTITION", "1") != "0"
+USE_RESTORE_PARTITION = os.environ.get("CARTHING_FLASH_USE_RESTORE_PARTITION", "0") != "0"
 
 SuperbirdDevice.TRANSFER_BLOCK_SIZE = TRANSFER_BLOCK_SIZE
 SuperbirdDevice.WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS
@@ -166,7 +166,9 @@ def make_dev(max_retries: int = MAKE_DEV_RETRIES, initial_settle: float = MAKE_D
 
 def write_chunk(dev: SuperbirdDevice, data: bytes, target_blk: int, blk_count: int):
     dev.device.writeLargeMemory(ADDR_TMP, data, TRANSFER_BLOCK_SIZE, appendZeros=True)
-    dev.bulkcmd(f"amlmmc write 1 {hex(ADDR_TMP)} {hex(target_blk)} {hex(blk_count)}", ignore_timeout=True)
+    # A timed-out or failed eMMC write must never be treated as success. The
+    # caller reconnects and retries this exact chunk on any exception.
+    raw_bulkcmd(dev, f"amlmmc write 1 {hex(ADDR_TMP)} {hex(target_blk)} {hex(blk_count)}")
 
 
 def write_image(dev: SuperbirdDevice, infile: str, sector_offset: int, label: str):
