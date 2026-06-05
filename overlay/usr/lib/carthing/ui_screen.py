@@ -53,7 +53,10 @@ class DRMDisplayAdapter(Display):
         self._native = None
         self._dst_addr = None
         self._native_failed = False
-        self._load_native_rotator()
+        # MacDisplay/pygame или WebDisplay/browser: no DRM mmap; present via blit() after rotate.
+        self._mac_display = type(drm).__name__ in ("MacDisplay", "WebDisplay") or hasattr(drm, "set_on_event")
+        if not self._mac_display:
+            self._load_native_rotator()
 
     def _load_native_rotator(self):
         lib_path = os.path.join(os.path.dirname(__file__), "libcarthing_frame.so")
@@ -82,6 +85,12 @@ class DRMDisplayAdapter(Display):
             self._dst_addr = None
 
     def present(self, img, name=None):
+        if self._mac_display:
+            # [CLAUDE 2026-06-03] БЕЗ rotate(-90): поворот нужен только для физически
+            # повёрнутой портретной панели устройства. На мониторе Mac/в браузере показываем
+            # канвас 800x480 как есть (ровно), иначе весь экран лежит на боку.
+            self.drm.blit(img.convert("RGBA").tobytes())
+            return
         if self._native is not None and not self._native_failed:
             try:
                 src = img.tobytes("raw", "RGB")
@@ -148,7 +157,8 @@ class Compositor:
     """Owns desktops + status bar + modal; renders layers and routes input."""
 
     def __init__(self, display, screens, status_bar=None, anim=None,
-                 state=None, on_intent=None, show_dots=True, pairing_modal=None):
+                 state=None, on_intent=None, show_dots=True, pairing_modal=None,
+                 nav_order=None):
         assert screens
         self.display = display
         self.screens = screens
@@ -157,6 +167,8 @@ class Compositor:
         self.state = state
         self.on_intent = on_intent or (lambda intent, payload=None: None)
         self.show_dots = show_dots
+        # [CLAUDE 2026-06-02] какие вью участвуют в горизонтальной навигации (точки-индикатор)
+        self.nav_order = nav_order
         self._active = 0
         self.modal = None
         self._pairing_modal = pairing_modal
@@ -215,8 +227,6 @@ class Compositor:
     def _handle_tap(self, x, y):
         hit = self._regions.hit(x, y)
         if hit:
-            if hit.intent == "trusted_remove":
-                return True
             self.on_intent(hit.intent, hit.payload)
             return True
         return False
@@ -242,6 +252,18 @@ class Compositor:
         if self.anim:
             self.anim.start_transition(delta)
         self.active = (self.active + delta) % n   # setter writes state.active_desktop
+        self.render()
+        return True
+
+    def animate_switch(self, target, direction):
+        """[CLAUDE 2026-06-02] Анимированный переход на конкретный вью (target) со слайдом
+        в направлении direction (+1 = новый въезжает справа, -1 = слева). В отличие от _switch
+        не предполагает соседства индексов — исходный экран запоминается явно."""
+        if target == self.active:
+            return False
+        if self.anim:
+            self.anim.start_transition(direction, from_index=self.active)
+        self.active = target
         self.render()
         return True
 
@@ -280,13 +302,17 @@ class Compositor:
         self._draw_overlays(img, full=fullscreen)
         if self.modal is not None:
             self._draw_modal(img)
+            # дуга громкости остаётся видна поверх полноэкранного модала (энкодер всегда активен)
+            if getattr(self.modal, "fullscreen", False):
+                cs = getattr(self.state, "control_source", None) if self.state else None
+                T.encoder_arc(ImageDraw.Draw(img), level=(cs.volume if cs is not None else None))
 
         return self.display.present(img, name=self.current.name)
 
     def _draw_overlays(self, img, full=False):
-        """Draw chrome only on the home surface. Pushed views are true fullscreen."""
-        if full:
-            return
+        """[CLAUDE 2026-06-02] Дуга громкости + зона энкодера — ВСЕГДА верхний слой, на любом
+        вью (физический регулятор всегда виден/активен). Статусбар и точки-индикатор — только
+        на home-поверхности; полноэкранные вью держат правый отступ под дугу (LIST_X1=CONTENT_X1)."""
         draw = ImageDraw.Draw(img)
         vol = None
         if self.state is not None:
@@ -299,11 +325,12 @@ class Compositor:
         blink_on = getattr(self.state, "notif_blink", True) if self.state else True
         if unread and blink_on and int(time.monotonic() * 1.5) % 2 == 0:
             T.encoder_zone_glow(draw)
-        T.encoder_arc(draw, level=vol)
-        if self.status_bar:
-            self.status_bar.render(img, self._regions, self.anim, self.state)
-        if self.show_dots and len(self.screens) > 1:
-            self._draw_dots(draw)
+        T.encoder_arc(draw, level=vol)                 # ВСЕГДА — поверх любого вью
+        if not full:
+            if self.status_bar:
+                self.status_bar.render(img, self._regions, self.anim, self.state)
+            if self.show_dots:
+                self._draw_dots(draw)
 
     # ── интерактивная «шторка» (вытягивание панели за пальцем) ─────────────────
     def _compose_full(self, index):
@@ -347,7 +374,8 @@ class Compositor:
         d = self.anim.transition_dir
         off = int(T.W * p)
         cur = self.current.render(None)
-        prev_idx = (self.active - d) % len(self.screens)
+        frm = getattr(self.anim, "transition_from", None)
+        prev_idx = frm if frm is not None else (self.active - d) % len(self.screens)
         outgoing = self.screens[prev_idx].render(None)
         canvas = Image.new("RGB", (T.W, T.H), T.BG)
         if d > 0:   # next: outgoing slides left, current enters from right
@@ -359,18 +387,23 @@ class Compositor:
         return canvas
 
     def _draw_dots(self, draw):
-        # along the top of the bottom bar (transport sits below them)
-        n = len(self.screens)
+        # [CLAUDE 2026-06-02] индикатор горизонтальной навигации: по точке на вью из nav_order
+        # (если задан), иначе по всем экранам. Текущий — ACCENT, остальные — FAINT.
+        order = self.nav_order if self.nav_order else list(range(len(self.screens)))
+        n = len(order)
+        if n <= 1:
+            return
         gap = 22
         x0 = T.W // 2 - (n - 1) * gap // 2
         y = T.STATUSBAR_TOP + 16
-        for i in range(n):
-            col = T.ACCENT if i == self.active else T.FAINT
+        for i, idx in enumerate(order):
+            col = T.ACCENT if idx == self.active else T.FAINT
             T.icon_dot(draw, x0 + i * gap, y, 4, color=col)
 
     def _draw_modal(self, img):
-        # dim the backdrop, then let the modal draw itself
-        overlay = Image.new("RGB", (T.W, T.H), (0, 0, 0))
-        img.paste(Image.blend(img, overlay, 0.55), (0, 0))
+        # полноэкранный модал сам заливает чёрный фон; иначе — затемняем подложку
+        if not getattr(self.modal, "fullscreen", False):
+            overlay = Image.new("RGB", (T.W, T.H), (0, 0, 0))
+            img.paste(Image.blend(img, overlay, 0.55), (0, 0))
         self._regions.clear()            # modal is exclusive for hit-testing
         self.modal.render(img, self._regions)

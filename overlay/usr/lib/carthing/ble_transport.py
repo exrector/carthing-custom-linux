@@ -6,7 +6,7 @@ from bumble.device import Device
 from bumble.host import Host
 from bumble.transport import open_transport_or_link
 from bumble.keys import JsonKeyStore
-from bumble.hci import HCI_Write_Local_Name_Command
+from bumble.hci import HCI_Write_Local_Name_Command, HCI_Read_Local_Name_Command
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,17 @@ async def init_ble(configure_device=None, on_ready=None):
         await device.host.send_command(HCI_Write_Local_Name_Command(local_name=unique.encode("utf-8")))
     except Exception as e:
         logger.warning("Write_Local_Name(%s) failed: %s", unique, e)
+    # [CLAUDE 2026-06-04] ФАКТ-ПРОВЕРКА «второго устройства Car Thing»: читаем обратно, что чип
+    # реально отдаёт как BR/EDR Local Name (Remote_Name_Request от iPhone вернёт именно это).
+    try:
+        resp = await device.host.send_command(HCI_Read_Local_Name_Command())
+        params = getattr(resp, "return_parameters", resp)
+        local_name = getattr(params, "local_name", "")
+        if isinstance(local_name, bytes):
+            local_name = local_name.split(b"\x00", 1)[0].decode("utf-8", "replace")
+        logger.info("Read_Local_Name (что реально на чипе по классике): %r", local_name)
+    except Exception as e:
+        logger.warning("Read_Local_Name failed: %s", e)
     try:
         socket.sethostname(unique)
     except Exception as e:

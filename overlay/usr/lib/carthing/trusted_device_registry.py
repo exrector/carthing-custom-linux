@@ -194,6 +194,28 @@ class TrustedDeviceRegistry:
         self.path = Path(path or DEFAULT_TRUSTED_DEVICES_PATH)
         self.devices: list[TrustedDevice] = []
 
+    @classmethod
+    def from_trusted_list(cls, trusted: list) -> "TrustedDeviceRegistry":
+        """[CLAUDE 2026-06-04] Строим реестр из app_state.trusted (в памяти), а не с диска.
+        Это гарантирует актуальные данные: _bonded_source_rows() уже слил endpoints/capabilities
+        из keystore, даже если state.json ещё не обновлён (RPA-адрес / пустые endpoints).
+        app_state использует поле "key" как ID — нормализуем в "id" для _device_from_json."""
+        registry = cls.__new__(cls)
+        registry.path = Path(DEFAULT_TRUSTED_DEVICES_PATH)
+        registry.devices = []
+        for row in trusted:
+            if not isinstance(row, dict):
+                continue
+            # app_state хранит ID в "key", registry ожидает "id"
+            normalized = dict(row)
+            if "id" not in normalized and "key" in normalized:
+                normalized["id"] = normalized["key"]
+            # app_state хранит имя в "label", registry ожидает "name"
+            if "name" not in normalized and "label" in normalized:
+                normalized["name"] = normalized["label"]
+            registry.devices.append(_device_from_json(normalized))
+        return registry
+
     def load(self):
         try:
             data = json.loads(self.path.read_text())

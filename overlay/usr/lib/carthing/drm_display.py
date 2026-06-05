@@ -243,13 +243,38 @@ class DRMDisplay:
         log.info("DRM: CRTC set — display active")
 
     def blit(self, img_bytes: bytes):
-        """Write XRGB8888 pixel data (width*height*4 bytes) to framebuffer."""
-        self.buf.seek(0)
-        self.buf.write(img_bytes[:self.size])
+        """Write XRGB8888 rows into the dumb buffer (respects DRM pitch/stride)."""
+        row_bytes = self.width * 4
+        if len(img_bytes) < row_bytes * self.height:
+            log.warning("DRM blit: short frame %d < %d", len(img_bytes), row_bytes * self.height)
+            return
+        if self.pitch == row_bytes:
+            self.buf.seek(0)
+            self.buf.write(img_bytes[: row_bytes * self.height])
+            return
+        # Kernel may pad each scanline (pitch > width*4); compact RGBA/BGRX won't fit.
+        mv = memoryview(self.buf)
+        src = memoryview(img_bytes)
+        for y in range(self.height):
+            start = y * row_bytes
+            mv[y * self.pitch : y * self.pitch + row_bytes] = src[start : start + row_bytes]
+
+    def fill_test(self, rgb=(0, 200, 120)):
+        """Solid colour frame — quick on-device sanity check for DRM output."""
+        r, g, b = rgb
+        row = bytes((b, g, r, 0)) * self.width
+        if self.pitch == len(row):
+            pattern = row * self.height
+            self.buf.seek(0)
+            self.buf.write(pattern)
+            return
+        mv = memoryview(self.buf)
+        for y in range(self.height):
+            mv[y * self.pitch : y * self.pitch + len(row)] = row
 
     def buffer_address(self) -> int:
         """Return the mmap base address for native render backends."""
-        return ctypes.addressof(ctypes.c_char.from_buffer(self.buf))
+        return ctypes.addressof(ctypes.c_char.from_buffer(memoryview(self.buf)))
 
     def close(self):
         self.buf.close()

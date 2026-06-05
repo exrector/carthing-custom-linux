@@ -2,6 +2,8 @@
 calls raw PIL styling or font glyphs (vector icons only). Content starts below
 the status bar. Screens read duck-typed state and emit intents via callbacks.
 """
+import time
+
 from PIL import Image, ImageDraw
 
 import ui_theme as T
@@ -140,115 +142,183 @@ class RouteBuilderScreen(Screen):
     title = "Маршрут"
     fullscreen = True
 
+    # [CLAUDE 2026-06-02] Patchbay GUI: ВХОД (слева) | ВЫХОД (справа), обе колонки СКРОЛЛЯТСЯ.
+    # Строка устройства = две строки: имя (SZ_SMALL) + MAC-адрес (мелкий, FAINT).
+    # верхняя полоса держит зазор от дуги (R1 = ARC_SAFE_X), нижний бар — на всю ширину
+    L0, L1 = 36, 352            # левая колонка (входы)
+    COLX = 368                  # вертикальный штриховой разделитель колонок
+    R0, R1 = 384, T.ARC_SAFE_X  # правая колонка (выходы), не лезет под дугу/штрихи громкости
+    HEAD_Y = 18                 # заголовки колонок
+    COL_TOP = 70                # верх области скролла строк
+    COL_BOTTOM = T.STATUSBAR_TOP - 6   # низ области скролла (над баром)
+    ROW_H2 = 56                 # высота двухстрочной строки
+    MAC_FONT = 18               # мелкий шрифт MAC-адреса
+
     def __init__(self, emit=None):
         self.state = None
         self.emit = emit or (lambda intent, payload=None: None)
-        self.focus = "input"
+        self._scroll = {"input": 0.0, "output": 0.0}
+        self._max_scroll = {"input": 0, "output": 0}
 
     def on_state(self, state):
         self.state = state
 
+    @property
+    def focus(self):
+        # активная колонка = последняя, по которой кликнули (для скролла/подсветки)
+        return getattr(self.state, "route_focus", "input") if self.state else "input"
+
+    # scroll-плумбинг рантайма читает/пишет scroll_y; маппим его на активную колонку
+    @property
+    def scroll_y(self):
+        return self._scroll.get(self.focus, 0.0)
+
+    @scroll_y.setter
+    def scroll_y(self, value):
+        side = self.focus
+        self._scroll[side] = max(0.0, min(float(self._max_scroll.get(side, 0)), float(value)))
+
+    def _devices(self, side):
+        if not self.state:
+            return []
+        return list(self.state.route_inputs if side == "input" else self.state.route_outputs)
+
     def on_input(self, event):
+        # свайп влево/вправо — глобальная навигация вьюх (в gui_controller), не здесь.
+        # Энкодер = громкость (глобально), сюда не доходит.
+        if isinstance(event, tuple) and event and event[0] == "scroll":
+            self.scroll_y = self.scroll_y - event[1]
+            return True
         if event == Input.PRESS:
-            self.focus = "output" if self.focus == "input" else "input"
-            return True
-        if event == Input.SWIPE_UP:
-            self.focus = "input"
-            return True
-        if event == Input.SWIPE_DOWN:
-            self.focus = "output"
+            ri = getattr(self.state, "route_input", "") if self.state else ""
+            ro = getattr(self.state, "route_output", "") if self.state else ""
+            if ri and ro and getattr(self.state, "route_compatible", None) is True:
+                self.emit("route_activate")
             return True
         return False
 
+    def _dot(self, draw, x, y, dev):
+        connected = bool(dev.get("connected"))
+        online = bool(dev.get("online")) or connected
+        color = T.STATUS_OK if connected else (T.MUTED if online else T.FAINT)
+        draw.ellipse((x - 6, y - 6, x + 6, y + 6), fill=color)
+
+    def _column(self, draw, regions, side, x0, x1, title, sel_key, intent):
+        focused = self.focus == side
+        draw.text((x0 + 12, self.HEAD_Y), title, font=T.font(28),
+                  fill=T.ACCENT if focused else T.MUTED)
+        rows = {}
+        devs = self._devices(side)
+        # границы скролла
+        view_h = self.COL_BOTTOM - self.COL_TOP
+        self._max_scroll[side] = max(0, len(devs) * self.ROW_H2 - view_h)
+        self._scroll[side] = max(0.0, min(float(self._max_scroll[side]), self._scroll[side]))
+        scroll = self._scroll[side]
+        if not devs:
+            draw.text((x0 + 12, self.COL_TOP + 6), "нет устройств",
+                      font=T.font(T.SZ_SMALL), fill=T.FAINT)
+            return rows
+        for idx, dev in enumerate(devs):
+            y = self.COL_TOP + idx * self.ROW_H2 - scroll
+            if y + self.ROW_H2 <= self.COL_TOP or y >= self.COL_BOTTOM:
+                continue                                    # вне видимой области — клип
+            key = dev.get("key") or dev.get("address")
+            selected = (key == sel_key) or bool(dev.get("route_" + side))
+            connected = bool(dev.get("connected"))
+            # ЗЕЛЁНЫЙ = реально подключён сейчас; выбранный, но не подключён — акцент; иначе обычный
+            name_col = T.STATUS_OK if connected else (T.ACCENT if selected else T.FG)
+            rect = (x0, int(y), x1, int(y + self.ROW_H2 - 8))
+            if selected:
+                draw.rectangle(rect, fill=T.SURFACE_SEL,
+                               outline=(T.STATUS_OK if connected else T.ACCENT), width=2)
+            name = dev.get("label") or dev.get("address") or "Device"
+            name = C.truncate(draw, name, T.font(T.SZ_SMALL), (x1 - x0) - 44)
+            draw.text((x0 + 12, int(y) + 5), name, font=T.font(T.SZ_SMALL), fill=name_col)
+            mac = str(dev.get("address") or "—")
+            draw.text((x0 + 12, int(y) + 30), mac, font=T.font(self.MAC_FONT), fill=T.FAINT)
+            self._dot(draw, x1 - 16, int(y) + self.ROW_H2 // 2 - 4, dev)
+            if regions is not None:
+                regions.add(rect, intent, payload=key)
+            rows[key] = int(y) + self.ROW_H2 // 2 - 4
+        return rows
+
     def render(self, regions=None):
         img, draw = self.blank()
-        draw.text((24, CONTENT_TOP - 8), "Маршрут", font=T.font(34), fill=T.MUTED)
-        draw.line([24, CONTENT_TOP + 34, T.CONTENT_X1, CONTENT_TOP + 34], fill=T.HAIRLINE, width=2)
-
         if not self.state:
             return img
-
-        inputs = self.state.route_inputs
-        outputs = self.state.route_outputs
-        route_input = getattr(self.state, "route_input", "")
-        route_output = getattr(self.state, "route_output", "")
+        ri = getattr(self.state, "route_input", "")
+        ro = getattr(self.state, "route_output", "")
         active = bool(getattr(self.state, "route_active", False))
-        status = "маршрут активен" if active else ("маршрут выбран" if route_input and route_output else "ожидание маршрута")
-        draw.text((52, CONTENT_TOP + 52), status,
-                  font=T.font(T.SZ_META), fill=T.FAINT)
-        route_name = getattr(self.state, "route_name", "")
-        if route_name:
-            draw.text((52, CONTENT_TOP + 76), f"Plan: {route_name}",
-                      font=T.font(T.SZ_SMALL), fill=T.MUTED)
+        compat = getattr(self.state, "route_compatible", None)
+        ready = bool(ri and ro)
 
-        cap_labels = {
-            "audio_input": "аудио-вход",
-            "audio_output": "аудио-выход",
-            "control_input": "пульт",
-            "control_output": "управление",
-            "metadata_input": "метаданные",
-            "notifications_input": "уведомления",
-            "volume_control": "громкость",
-            "transport_control": "плеер",
-        }
+        # штриховые делители (визуальный язык дуги/сегментов, не сплошные «секции»)
+        T.dashed_line(draw, self.L0, self.COL_TOP - 6, self.R1, self.COL_TOP - 6)
+        T.dashed_line(draw, self.COLX, self.COL_TOP, self.COLX, self.COL_BOTTOM)
 
-        def render_group(title, devices, y, selected_key, focus_name, intent):
-            focused = self.focus == focus_name
-            title_color = T.ACCENT if focused else T.MUTED
-            draw.text((32, y), title, font=T.font(T.SZ_BODY), fill=title_color)
-            y += 36
-            if not devices:
-                draw.text((52, y), "нет известных устройств", font=T.font(T.SZ_SMALL), fill=T.FAINT)
-                return y + 46
-            for device in devices[:3]:
-                connected = bool(device.get("connected"))
-                online = bool(device.get("online")) or connected
-                key = device.get("key") or device.get("address")
-                selected = key == selected_key or device.get(f"route_{focus_name}")
-                label = device.get("label") or device.get("address") or "Device"
-                text = label
-                if selected:
-                    text += "  · выбран"
-                rect = C.list_row(draw, y, text, selected=selected and focused, indent=0)
-                state = "подключено" if connected else ("в сети" if online else "не в сети")
-                caps_text = ", ".join(
-                    cap_labels.get(cap, cap)
-                    for cap in (device.get("capabilities") or [])
-                )
-                caps = C.truncate(draw, caps_text, T.font(T.SZ_SMALL), T.CONTENT_W - 56)
-                meta = state if not caps else f"{state} · {caps}"
-                draw.text((52, y + 42), meta, font=T.font(T.SZ_SMALL),
-                          fill=T.FG if online else T.FAINT)
-                if regions is not None:
-                    regions.add(rect, intent, payload=key)
-                y += T.ROW_H
-            return y + 10
+        in_rows = self._column(draw, regions, "input", self.L0, self.L1, "ВХОД", ri, "route_input_select")
+        out_rows = self._column(draw, regions, "output", self.R0, self.R1, "ВЫХОД", ro, "route_output_select")
 
-        y = CONTENT_TOP + 92
-        y = render_group("Input", inputs, y, route_input, "input", "route_input_select")
-        y = render_group("Output", outputs, y, route_output, "output", "route_output_select")
-        if route_input or route_output:
-            preview_in = route_input or "?"
-            preview_out = route_output or "?"
-            draw.text((32, y), f"Plan: {preview_in} -> {preview_out}",
-                      font=T.font(T.SZ_META), fill=T.FAINT)
-            y += 32
-        protocols = list(getattr(self.state, "route_protocols", []) or [])
-        warnings = list(getattr(self.state, "route_warnings", []) or [])
-        if protocols:
-            draw.text((32, y), f"Protocols: {', '.join(protocols)}",
-                      font=T.font(T.SZ_SMALL), fill=T.MUTED)
-            y += 26
-        if warnings:
-            for warning in warnings[:2]:
-                draw.text((32, y), warning, font=T.font(T.SZ_SMALL), fill=T.WARN)
-                y += 22
-        if route_input and route_output:
-            C.text_centered(draw, "Применить план", T.font(T.SZ_META), T.ACCENT, T.H - 46, cx=T.CONTENT_CX)
-            if regions is not None:
-                regions.add((24, T.H - 78, T.CONTENT_X1, T.H - 16), "route_activate")
+        # соединительный «кабель»: ЗЕЛЁНЫЙ только когда оба конца реально подключены;
+        # несовместимо -> красный; иначе (выбрано, но не подключено) -> акцент.
+        def _conn(devs, k):
+            return any(bool(d.get("connected")) for d in devs
+                       if (d.get("key") or d.get("address")) == k)
+        both_connected = _conn(self.state.route_inputs, ri) and _conn(self.state.route_outputs, ro)
+        if ri in in_rows and ro in out_rows:
+            iy, oy = in_rows[ri], out_rows[ro]
+            cable = (T.STATUS_OK if both_connected else
+                     (T.WARN if compat is False else T.ACCENT))
+            draw.line([(self.L1, iy), (self.COLX, iy), (self.COLX, oy), (self.R0, oy)],
+                      fill=cable, width=3)
+
+        # ── нижний бар: ТОЛЬКО круглые одинаковые кнопки-иконки по центру, БЕЗ текста.
+        bar_top = T.STATUSBAR_TOP
+        draw.rectangle([0, bar_top, T.W, T.H], fill=T.BG)
+        T.progress_segments(draw, 0, bar_top, T.W, 0.0)     # сегментный делитель во всю ширину
+        cy = bar_top + (T.H - bar_top) // 2 + 4
+        R = 30                                              # одинаковый радиус всех кнопок
+
+        # Состояние «Активировать»: цвет кодирует статус (текста нет).
+        self_out = ro == getattr(self.state, "SELF_OUTPUT_KEY", "carthing")
+        transfer_on = bool(getattr(self.state, "transfer_active", False))
+        if self_out and not transfer_on:
+            act_col, act_intent = T.MUTED, None            # Play Now по умолчанию — не CTA
+        elif self_out and transfer_on:
+            act_col, act_intent = T.ACCENT, "route_activate"
+        elif active:
+            act_col, act_intent = T.STATUS_OK, "route_activate"
+        elif not ready:
+            act_col, act_intent = T.FAINT, None
+        elif compat is False:
+            act_col, act_intent = T.WARN, None             # красный = несовместимо
         else:
-            C.text_centered(draw, "Выбери Input и Output", T.font(T.SZ_META), T.FAINT, T.H - 46, cx=T.CONTENT_CX)
+            act_col, act_intent = T.STATUS_OK, "route_activate"
+
+        # [настройки(шестерёнка) · активировать(▶) · сопряжение(+) · ассистент(○)] — по центру
+        btns = [
+            ("gear", T.MUTED, "open_settings", None),
+            ("play", act_col, act_intent, None),
+            ("plus", T.MUTED, "settings_select", "pairing_device"),
+            ("orb",  T.MUTED, "assistant", None),
+        ]
+        n = len(btns)
+        gap = 36
+        total = n * 2 * R + (n - 1) * gap
+        x = (T.W - total) // 2 + R
+        for kind, col, intent, payload in btns:
+            draw.ellipse([x - R, cy - R, x + R, cy + R], outline=col, width=3)
+            if kind == "gear":
+                T.icon_gear(draw, x, cy, R - 12, color=col, width=2)
+            elif kind == "play":
+                T.icon_play(draw, x, cy, R - 12, color=col)
+            elif kind == "plus":
+                T.icon_plus(draw, x, cy, R - 14, color=col, width=3)
+            elif kind == "orb":
+                T.icon_ring(draw, x, cy, R - 12, color=col, width=3)
+            if regions is not None and intent is not None:
+                regions.add((x - R, cy - R, x + R, cy + R), intent, payload=payload)
+            x += 2 * R + gap
         return img
 
 
@@ -268,10 +338,8 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
-            {"key": "routes", "label": "Маршруты"},
-            {"key": "pairing", "label": "Добавить устройство", "children": [
-                ("pairing_device", "Bluetooth-устройство"),
-            ]},
+            # [CLAUDE 2026-06-03] «Добавить устройство» убрано — сопряжение запускается
+            # отдельной кнопкой [Сопряжение] в баре Routes, дублировать в настройках не нужно.
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
                 ("brightness", "Яркость"),
@@ -287,15 +355,31 @@ class SettingsScreen(Screen):
         self._max_scroll = 0
         self.state = None
 
+    CARD_LINE_H = 30          # [CLAUDE 2026-06-03] компактный шаг для строк карточки устройства
+
     def _viewport(self):
         start_y = CONTENT_TOP + 52
         bottom_y = T.H - 24
         return start_y, bottom_y
 
+    def _row_h(self, row):
+        """Высота строки: компактная для строк карточки (2-й уровень), иначе ROW_H (под палец)."""
+        if row[0] >= 2 or str(row[1]).endswith("|cap"):
+            return self.CARD_LINE_H
+        return T.ROW_H
+
+    def _row_offsets(self, rows):
+        """Кумулятивные верхние координаты строк (переменная высота) + полная высота."""
+        tops, y = [], 0
+        for r in rows:
+            tops.append(y)
+            y += self._row_h(r)
+        return tops, y
+
     def _update_scroll_bounds(self, rows=None):
         rows = rows if rows is not None else self._visible()
         start_y, bottom_y = self._viewport()
-        total_h = len(rows) * T.ROW_H
+        _, total_h = self._row_offsets(rows)
         self._max_scroll = max(0, total_h - (bottom_y - start_y))
         self.scroll_y = max(0, min(self._max_scroll, self.scroll_y))
         return start_y, bottom_y
@@ -307,8 +391,9 @@ class SettingsScreen(Screen):
         if not (0 <= index < len(rows)):
             return
         start_y, bottom_y = self._update_scroll_bounds(rows)
-        row_top = start_y + index * T.ROW_H
-        row_bottom = row_top + T.ROW_H
+        tops, _ = self._row_offsets(rows)
+        row_top = start_y + tops[index]
+        row_bottom = row_top + self._row_h(rows[index])
         if row_top - self.scroll_y < start_y:
             self.scroll_y = row_top - start_y
         elif row_bottom - self.scroll_y > bottom_y:
@@ -365,8 +450,55 @@ class SettingsScreen(Screen):
                 for child in self._children(it):
                     ckey, clabel = child[0], child[1]
                     color = child[2] if len(child) > 2 else None
-                    rows.append((1, ckey, clabel, False, False, color))
+                    # [CLAUDE 2026-06-03] Доверенное устройство — РАСКРЫВАЕМЫЙ узел: тап
+                    # разворачивает карточку (тип/протоколы/возможности).
+                    is_dev = ckey.startswith("trusted:")
+                    rows.append((1, ckey, clabel, is_dev, ckey in self.expanded, color))
+                    if is_dev and ckey in self.expanded:
+                        for cap in self._device_caps(ckey):
+                            rows.append((2, ckey + "|cap", cap, False, False, None))
         return rows
+
+    def _device_caps(self, ckey):
+        """[CLAUDE 2026-06-03] Карточка устройства: тип, протоколы, возможности — строками."""
+        key = ckey.split("trusted:", 1)[1]
+        devs = self.state.trusted if self.state else []
+        dev = next((d for d in devs if d.get("key") == key or d.get("address") == key), None)
+        if not dev:
+            return ["— нет данных —"]
+        protos = []
+        for ep in dev.get("endpoints") or []:
+            protos += ep.get("protocols") or []
+        protos = sorted(set(str(p) for p in protos))
+        caps = sorted(set(str(c) for c in dev.get("capabilities") or []))
+        full = []
+        t = dev.get("type") or dev.get("role")
+        if t:
+            full.append("Тип: " + str(t))
+        if protos:
+            full.append("Протоколы: " + ", ".join(protos))
+        if caps:
+            full.append("Возможности: " + ", ".join(caps))
+        if not full:
+            full.append("— нет данных (пересканировать) —")
+        # [CLAUDE 2026-06-03] Переносим ПОЛНЫЙ текст по словам (не обрезаем) — каждую строку
+        # карточки в несколько коротких. Рендерятся компактным шагом (CARD_LINE_H).
+        out = []
+        for s in full:
+            out += self._wrap_chars(s, 46)
+        return out
+
+    @staticmethod
+    def _wrap_chars(s, n):
+        words, lines, cur = s.split(), [], ""
+        for w in words:
+            if cur and len(cur) + 1 + len(w) > n:
+                lines.append(cur); cur = w
+            else:
+                cur = (cur + " " + w) if cur else w
+        if cur:
+            lines.append(cur)
+        return lines or [s]
 
     def _activate(self, i):
         """Действие над строкой i: раскрыть родителя или выбрать лист (= PRESS)."""
@@ -435,17 +567,24 @@ class SettingsScreen(Screen):
 
         rows = self._visible()
         start_y, bottom_y = self._update_scroll_bounds(rows)
+        tops, _ = self._row_offsets(rows)
 
         visible = []
         for i, row in enumerate(rows):
-            y = start_y + i * T.ROW_H - self.scroll_y
-            if y + T.ROW_H > start_y and y < bottom_y:
+            y = start_y + tops[i] - self.scroll_y
+            h = self._row_h(row)
+            if y + h > start_y and y < bottom_y:
                 visible.append((i, y, row))
         if visible and not any(i == self.sel for i, _y, _row in visible):
             self.sel = visible[0][0]
 
         for i, y, row in visible:
             level, key, label, expandable, expanded, color = rows[i]
+            # [CLAUDE 2026-06-03] строка КАРТОЧКИ устройства (2-й уровень): полный текст (уже
+            # перенесён по словам), компактный шаг, БЕЗ обрезки.
+            if level >= 2 or key.endswith("|cap"):
+                draw.text((56, y + 4), label, font=T.font(T.SZ_SMALL), fill=T.MUTED)
+                continue
             # [CLAUDE 2026-06-01] спец-строка тайм-аута гашения: «Гашение  −  N мин  +»
             if key == "off_timeout":
                 rect = C.list_row(draw, y, "Гашение экрана", selected=(i == self.sel),
@@ -604,17 +743,20 @@ class NotificationsScreen(Screen):
         img, draw = self.blank()
         notes = self._notes()
         x0 = 28; tx = x0 + 24
-        maxw = T.OCCLUSION_LEFT - tx - 8                  # не залезать под дугу громкости справа
+        # [CLAUDE 2026-06-03] Правый край = ARC_SAFE_X (716), как в Routes: НЕ лезть под дугу
+        # громкости и под её зелёные чёрточки (они выпирают до ~733). Раньше было OCCLUSION_LEFT(740).
+        right = T.ARC_SAFE_X
+        maxw = right - tx - 8
         top_y = 74; bot_y = T.H - 6
 
         def header():
             draw.rectangle([0, 0, T.W, 62], fill=T.BG)    # маска для контента, заехавшего под шапку
             draw.text((28, 16), "Уведомления", font=T.font(34), fill=T.MUTED)
-            draw.line([28, 60, T.W - 28, 60], fill=T.HAIRLINE, width=2)
+            draw.line([28, 60, right, 60], fill=T.HAIRLINE, width=2)
 
         if not notes:
             header()
-            C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_TITLE), T.FAINT, T.H // 2, cx=T.W // 2)
+            C.text_centered(draw, "Нет уведомлений", T.font(T.SZ_TITLE), T.FAINT, T.H // 2, cx=right // 2)
             return img
 
         self._ensure_layout(draw, notes, maxw)
@@ -637,10 +779,10 @@ class NotificationsScreen(Screen):
             img.paste(crop, (0, top_y))
         for i, y, item in visible:
             if i == self.sel:
-                draw.rectangle([x0, y - 4, T.W - 28, y - 4 + item["content_h"]],
+                draw.rectangle([x0, y - 4, right, y - 4 + item["content_h"]],
                                outline=T.SURFACE_SEL, width=2)
             if regions is not None:
-                regions.add((x0, max(top_y, y - 4), T.W - 24, min(bot_y, y - 4 + item["content_h"])),
+                regions.add((x0, max(top_y, y - 4), right, min(bot_y, y - 4 + item["content_h"])),
                             "notif_select", payload=i)
         header()                                          # шапка ПОВЕРХ списка
         return img
@@ -652,9 +794,10 @@ class NotificationsScreen(Screen):
         S = T.SZ_META
         f = T.font(S)
         x0 = 28
-        maxw = T.W - 2 * x0
+        right = T.ARC_SAFE_X                              # [CLAUDE 2026-06-03] не лезть под дугу/чёрточки
+        maxw = right - x0 - 8
         draw.text((x0, 16), n.get("app", ""), font=T.font(T.SZ_BODY), fill=T.ACCENT)
-        draw.line([x0, 60, T.W - x0, 60], fill=T.HAIRLINE, width=2)
+        draw.line([x0, 60, right, 60], fill=T.HAIRLINE, width=2)
 
         y = 78
         for line in C.wrap_lines(draw, n.get("title", ""), f, maxw)[:3]:    # заголовок жирным
@@ -676,10 +819,14 @@ class NotificationsScreen(Screen):
 
 
 class PairingModal:
-    """Live-action overlay: makes the device discoverable and waits for a new
-    device to connect from its side. Drawn over the dimmed active desktop.
-    Shown while AppState.pairing_mode is True. Emits 'pairing_cancel' to close.
-    """
+    """[CLAUDE 2026-06-02] Полноэкранный сканер сопряжения на чёрном фоне, в общем стиле.
+    Показывается пока AppState.pairing_mode=True. Кнопки отмены НЕТ — закрывает физический Back
+    (мы везде используем Back). Дугу громкости рисует поверх Compositor, она остаётся видимой."""
+
+    fullscreen = True
+    X0 = 36
+    X1 = T.ARC_SAFE_X            # держим зазор от дуги
+    ROW_H2 = 56
 
     def __init__(self, emit=None):
         self.emit = emit or (lambda intent, payload=None: None)
@@ -694,75 +841,44 @@ class PairingModal:
             return True
         return False
 
-    def render(self, img, regions):
-        draw = ImageDraw.Draw(img)
-        cx = T.CONTENT_CX
-        # card background for legibility over the dimmed desktop
-        role = getattr(self.state, "pairing_role", "source")
-        device_mode = role == "device"
-        speaker_mode = role == "speaker"
-        list_mode = speaker_mode or device_mode
-        cw, ch = (640, 390) if list_mode else (580, 300)
-        draw.rounded_rectangle([cx - cw // 2, T.MAIN_CY - ch // 2, cx + cw // 2, T.MAIN_CY + ch // 2],
-                               radius=T.RADIUS, fill=T.SURFACE, outline=T.HAIRLINE, width=1)
-        name = getattr(self.state, "device_name", "Car Thing")
-        if list_mode:
-            title = "Добавить Bluetooth-устройство" if device_mode else "Добавить аудиовыход"
-            C.text_centered(draw, title, T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 160, cx=cx)
-            status = getattr(self.state, "speaker_pairing_status", "") or "scan"
-            subtitle = {
-                "scan": "Ищу аудиоустройства и принимаю iPhone/Mac" if device_mode else "Ищу Bluetooth-аудио…",
-                "connect": "Завершаю сопряжение…",
-                "done": "Устройство подключено",
-                "error": "Не удалось добавить",
-            }.get(status, "Найденные динамики")
-            C.text_centered(draw, subtitle, T.font(T.SZ_META), T.ACCENT, T.MAIN_CY - 104, cx=cx)
-            candidates = list(getattr(self.state, "speaker_candidates", []) or [])
-            # [CLAUDE 2026-06-02] Тапабельный список = ТОЛЬКО исходящий канал (аудио-динамики,
-            # к которым звоним МЫ). iPhone/Mac (audio=False) — ВХОДЯЩИЙ канал (они коннектятся
-            # сами), их выбирать тут нельзя — отсюда был баг «не динамик»: тапаешь по строке, а
-            # под пальцем из-за пересортировки уже iPhone. Фильтруем audio ВСЕГДА + стабильный
-            # порядок по адресу, чтобы строки не прыгали под пальцем между рендером и тапом.
-            candidates = sorted((c for c in candidates if c.get("audio")),
-                                key=lambda c: c.get("address") or "")
-            message = getattr(self.state, "pairing_message", "") or ""
-            if status in ("done", "error") and message:
-                C.text_centered(draw, message, T.font(T.SZ_SMALL),
-                                T.MUTED if status == "done" else T.WARN,
-                                T.MAIN_CY - 42, cx=cx)
-            elif not candidates:
-                text = message or ("Включите pairing на динамике или выберите Car Thing на телефоне"
-                                   if device_mode else "Переведите аудиоустройство в режим сопряжения")
-                C.text_centered(draw, text, T.font(T.SZ_SMALL),
-                                T.MUTED, T.MAIN_CY - 42, cx=cx)
-            else:
-                y = T.MAIN_CY - 58
-                rx0, rx1 = cx - cw // 2 + 36, cx + cw // 2 - 36
-                for candidate in candidates[:4]:
-                    label = candidate.get("label") or candidate.get("address") or "Bluetooth device"
-                    if candidate.get("trusted"):
-                        label += "  · добавлен"
-                    rect = (rx0, y - 6, rx1, y + T.ROW_H - 14)
-                    if candidate.get("trusted"):
-                        draw.rectangle(rect, fill=T.SURFACE_SEL)
-                    row_w = (rx1 - rx0) - 48          # [CLAUDE 2026-06-02] клип по ширине строки
-                    label = C.truncate(draw, label, T.font(T.SZ_BODY), row_w)
-                    draw.text((rx0 + 24, y), label, font=T.font(T.SZ_BODY),
-                              fill=T.FG if candidate.get("trusted") else T.MUTED)
-                    addr = C.truncate(draw, candidate.get("address") or "", T.font(T.SZ_SMALL), row_w)
-                    draw.text((rx0 + 24, y + 42), addr,
-                              font=T.font(T.SZ_SMALL), fill=T.FAINT)
-                    regions.add(rect, "speaker_pair_select", payload=candidate.get("address"))
-                    y += T.ROW_H
-        else:
-            C.text_centered(draw, "Добавить источник", T.font(T.SZ_TITLE), T.FG, T.MAIN_CY - 70, cx=cx)
-            C.text_centered(draw, "«" + name + "»", T.font(T.SZ_BODY), T.FG, T.MAIN_CY - 8, cx=cx)
-            C.text_centered(draw, "Выберите на iPhone…", T.font(T.SZ_SMALL), T.ACCENT,
-                            T.MAIN_CY + 30, cx=cx)
+    def _scan_indicator(self, draw, cx, y):
+        """[CLAUDE 2026-06-03] Единственный элемент-«живость»: бегущий ряд точек, пока
+        сканер открыт. Никаких подписей."""
+        n, gap = 5, 26
+        t = int(time.monotonic() * 4) % n
+        x0 = cx - (n - 1) * gap // 2
+        for i in range(n):
+            T.icon_dot(draw, x0 + i * gap, y, 6 if i == t else 4,
+                       color=T.ACCENT if i == t else T.HAIRLINE)
 
-        # Cancel button (tappable) — also Back/Press cancels
-        bw, bh = 200, 48
-        bx0, by0 = cx - bw // 2, T.MAIN_CY + (142 if list_mode else 84)
-        draw.rectangle([bx0, by0, bx0 + bw, by0 + bh], outline=T.FAINT, width=2)
-        C.text_centered(draw, "Отмена", T.font(T.SZ_META), T.MUTED, by0 + 8, cx=cx)
-        regions.add((bx0, by0, bx0 + bw, by0 + bh), "pairing_cancel")
+    def render(self, img, regions):
+        # [CLAUDE 2026-06-03] МИНИМАЛИЗМ по приказу: только живой индикатор + список устройств
+        # (имя + MAC). Ни заголовков, ни статусов, ни подсказок, ни пометок. Сканер открыт =
+        # режим сопряжения открыт; Back закрывает оба.
+        draw = ImageDraw.Draw(img)
+        X0, X1 = self.X0, self.X1
+        w = X1 - X0
+        draw.rectangle([0, 0, T.W, T.H], fill=T.BG)            # чёрный фон
+        self._scan_indicator(draw, (X0 + X1) // 2, 32)         # «шевелится» = скан активен
+
+        # СТАБИЛЬНЫЙ порядок появления (не по RSSI — он скачет и строки бы прыгали).
+        # Список ленивый/накопительный: новые устройства добавляются снизу, не мелькают.
+        # [CLAUDE 2026-06-03] УНИВЕРСАЛЬНЫЙ сканер: тапается ЛЮБОЕ устройство (enroll решает, что
+        # это — колонка или источник). СТАБИЛЬНЫЙ порядок по АДРЕСУ (детерминированный) — строки
+        # НЕ прыгают при сканировании/тапах (раньше прыгали из-за нестабильного порядка).
+        candidates = sorted(list(getattr(self.state, "speaker_candidates", []) or []),
+                            key=lambda c: str(c.get("address") or ""))
+        y = 72
+        for cand in candidates:
+            if y + self.ROW_H2 > T.H:
+                break
+            name = cand.get("label") or cand.get("address") or "Device"
+            addr = cand.get("address") or "—"
+            trusted = bool(cand.get("trusted"))
+            rect = (X0, y, X1, y + self.ROW_H2 - 8)
+            draw.text((X0 + 12, y + 4), C.truncate(draw, name, T.font(T.SZ_BODY), w - 24),
+                      font=T.font(T.SZ_BODY), fill=(T.STATUS_OK if trusted else T.FG))
+            draw.text((X0 + 12, y + 34), C.truncate(draw, addr, T.font(18), w - 24),
+                      font=T.font(18), fill=T.FAINT)
+            regions.add(rect, "speaker_pair_select", payload=cand.get("address"))
+            y += self.ROW_H2

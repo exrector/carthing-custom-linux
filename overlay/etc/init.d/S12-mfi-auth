@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+MODULE_DIR=${CARTHING_MFI_MODULE_DIR:-/usr/lib/carthing/modules/mfi}
+AUTH_KO=$MODULE_DIR/apple-mfi-auth.ko
+I2C_KO=$MODULE_DIR/apple-mfi-auth-i2c.ko
+DEV=/dev/apple_mfi
+
+loaded() {
+    grep -q "^$1 " /proc/modules 2>/dev/null
+}
+
+load_one() {
+    name=$1
+    file=$2
+    if loaded "$name"; then
+        return 0
+    fi
+    if [ ! -f "$file" ]; then
+        echo "[S12-mfi-auth] missing module: $file"
+        return 1
+    fi
+    insmod "$file"
+}
+
+create_dev() {
+    major=$(awk '$2 == "apple_mfi_ioctl" { print $1; exit }' /proc/devices)
+    if [ -z "${major:-}" ]; then
+        echo "[S12-mfi-auth] apple_mfi_ioctl not registered"
+        return 1
+    fi
+    if [ ! -e "$DEV" ]; then
+        mknod -m 0666 "$DEV" c "$major" 0
+    else
+        chmod 0666 "$DEV" || true
+    fi
+}
+
+load_one apple_mfi_auth "$AUTH_KO"
+load_one apple_mfi_auth_i2c "$I2C_KO"
+create_dev
+
+echo "[S12-mfi-auth] MFi auth available at $DEV"

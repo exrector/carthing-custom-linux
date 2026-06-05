@@ -5,8 +5,12 @@ import logging
 import os
 
 from bumble import a2dp, avdtp
-from bumble.core import BT_BR_EDR_TRANSPORT
+from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, Device
+from bumble.hci import (
+    HCI_Read_Class_Of_Device_Command,
+    HCI_Write_Class_Of_Device_Command,
+)
 
 from app_state import normalize_address
 from runtime_paths import device_name
@@ -14,11 +18,17 @@ from runtime_paths import device_name
 
 DEFAULT_BT_NAME = ""
 DEFAULT_LEGACY_LINK_KEYS_PATH = "/run/carthing-state/carthing/iap2-link-keys.txt"
+# [CLAUDE 2026-06-04] 0x240414 = Audio/Video major + Loudspeaker minor + Audio/Rendering service.
+# Codex: для A2DP speaker правильный CoD = loudspeaker (0x240404 = Wearable Headset, хуже).
 COD_AUDIO_LOUDSPEAKER = 0x240414
 SERVICE_RECORD_AUDIO_SOURCE = 0x10001
 SERVICE_RECORD_AUDIO_SINK = 0x10002
+SERVICE_RECORD_AVRCP_TARGET = 0x10003
+AVCTP_PSM = 0x0017
 BT_AUDIO_SOURCE_UUID16 = 0x110A
 BT_AUDIO_SINK_UUID16 = 0x110B
+BT_AV_REMOTE_CONTROL_TARGET_UUID16 = 0x110C
+IAP2_UUID128 = UUID("00000000-deca-fade-deca-deafdecacaff", "iAP2 Accessory")
 COD_MAJOR_AUDIO_VIDEO = 0x0400
 
 
@@ -193,6 +203,7 @@ class A2DPBridge:
         connect_timeout: float = 20.0,
         hci_gate=None,
         on_state_change=None,
+        on_visibility_request=None,
         logger: logging.Logger | None = None,
     ):
         self.device = device
@@ -203,6 +214,10 @@ class A2DPBridge:
         self.connect_timeout = connect_timeout
         self.hci_gate = hci_gate
         self.on_state_change = on_state_change or (lambda: None)
+        # Callback: on_visibility_request(connectable, discoverable) -> coroutine | None
+        # Если задан — bridge НЕ трогает set_connectable/set_discoverable напрямую,
+        # а делегирует решение оркестратору.
+        self.on_visibility_request = on_visibility_request
         self.logger = logger or logging.getLogger(__name__)
 
         self.listener: avdtp.Listener | None = None
@@ -235,16 +250,68 @@ class A2DPBridge:
             return await operation()
         return await self.hci_gate.run(label, operation)
 
+    async def _request_visibility(self, connectable: bool, discoverable: bool):
+        """Делегировать управление classic-видимостью оркестратору (если задан callback),
+        иначе — вызвать device напрямую (fallback для standalone-использования)."""
+        if self.on_visibility_request is not None:
+            result = self.on_visibility_request(connectable, discoverable)
+            if hasattr(result, "__await__"):
+                await result
+        else:
+            await self._gate(
+                f"a2dp-visibility-{connectable}-{discoverable}",
+                lambda: self._set_classic_direct(connectable, discoverable),
+            )
+
+    async def _set_classic_direct(self, connectable: bool, discoverable: bool):
+        await self.device.set_connectable(connectable)
+        await self.device.set_discoverable(discoverable)
+
+    @staticmethod
+    def _make_avrcp_target_sdp_records(handle):
+        """[CLAUDE 2026-06-04] AVRCP Target SDP — Codex: iOS почти всегда требует AVRCP, чтобы
+        показать устройство как аудиовыход в Control Center. В этом vendored Bumble нет helper'а,
+        собираем вручную: AVRCP Target (0x110C) + AVCTP (PSM 0x0017) + AVRCP profile 1.6."""
+        from bumble.sdp import DataElement, ServiceAttribute
+        from bumble.core import (UUID, BT_L2CAP_PROTOCOL_ID,
+                                 BT_AV_REMOTE_CONTROL_TARGET_SERVICE,
+                                 BT_AV_REMOTE_CONTROL_SERVICE)
+        avctp = UUID.from_16_bits(0x0017, "AVCTP")
+        return [
+            ServiceAttribute(a2dp.SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,
+                             DataElement.unsigned_integer_32(handle)),
+            ServiceAttribute(a2dp.SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
+                             DataElement.sequence([DataElement.uuid(a2dp.SDP_PUBLIC_BROWSE_ROOT)])),
+            ServiceAttribute(a2dp.SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,
+                             DataElement.sequence([DataElement.uuid(BT_AV_REMOTE_CONTROL_TARGET_SERVICE)])),
+            ServiceAttribute(a2dp.SDP_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID, DataElement.sequence([
+                DataElement.sequence([DataElement.uuid(BT_L2CAP_PROTOCOL_ID),
+                                      DataElement.unsigned_integer_16(AVCTP_PSM)]),
+                DataElement.sequence([DataElement.uuid(avctp),
+                                      DataElement.unsigned_integer_16(0x0104)]),
+            ])),
+            ServiceAttribute(a2dp.SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID, DataElement.sequence([
+                DataElement.sequence([DataElement.uuid(BT_AV_REMOTE_CONTROL_SERVICE),
+                                      DataElement.unsigned_integer_16(0x0106)]),
+            ])),
+            # SupportedFeatures (0x0311): category 2 (player/recorder) — типично для аудио-приёмника.
+            ServiceAttribute(0x0311, DataElement.unsigned_integer_16(0x0002)),
+        ]
+
     def install_sdp_records(self):
         records = dict(self.device.sdp_service_records)
-        records[SERVICE_RECORD_AUDIO_SOURCE] = a2dp.make_audio_source_service_sdp_records(
-            SERVICE_RECORD_AUDIO_SOURCE
-        )
+        # [CLAUDE 2026-06-04] ТОЛЬКО A2DP Sink (Codex: не рекламировать AudioSource если мы только
+        # приёмник — иначе iPhone получает двусмысленную картину ролей и не кладёт в аудиовыходы).
+        # + AVRCP Target — без него iOS обычно не показывает устройство как audio output.
+        records.pop(SERVICE_RECORD_AUDIO_SOURCE, None)
         records[SERVICE_RECORD_AUDIO_SINK] = a2dp.make_audio_sink_service_sdp_records(
             SERVICE_RECORD_AUDIO_SINK
         )
+        records[SERVICE_RECORD_AVRCP_TARGET] = self._make_avrcp_target_sdp_records(
+            SERVICE_RECORD_AVRCP_TARGET
+        )
         self.device.sdp_service_records = records
-        self.logger.info("A2DP SDP records installed: AudioSource + AudioSink")
+        self.logger.info("A2DP SDP records installed: AudioSink + AVRCP Target (CoD loudspeaker)")
 
     def install_safe_link_key_provider(self):
         def legacy_link_key(address):
@@ -326,6 +393,12 @@ class A2DPBridge:
 
     async def ensure_trusted_speakers_connected(self):
         for speaker in list(self.state.trusted_speakers):
+            # [CLAUDE 2026-06-03] Standby ТОЛЬКО для ЧИСТЫХ колонок (role=="speaker").
+            # Устройства, которые ещё и источники (Mac/iPhone — у них есть A2DP-sink возможность,
+            # role=="device"/"source"), НЕ авто-звоним как колонку — иначе HCI_AUTHENTICATION
+            # failure спамом (они не в pairing-режиме приёмника). Их аудио идёт через свой маршрут.
+            if speaker.get("role") != "speaker":
+                continue
             address = normalize_address(speaker.get("address"))
             if not address or address in self._speaker_connections:
                 continue
@@ -351,32 +424,45 @@ class A2DPBridge:
         # Connectable always (bonded peers reconnect, incoming A2DP works), but
         # NOT discoverable by default — discovery is opened only in pairing mode.
         self.device.class_of_device = COD_AUDIO_LOUDSPEAKER
+        await self.device.host.send_command(
+            HCI_Write_Class_Of_Device_Command(class_of_device=COD_AUDIO_LOUDSPEAKER),
+            check_result=True,
+        )
+        try:
+            response = await self.device.host.send_command(HCI_Read_Class_Of_Device_Command())
+            actual_cod = getattr(getattr(response, "return_parameters", response), "class_of_device", None)
+            self.logger.info("A2DP classic CoD active: 0x%06x", int(actual_cod))
+        except Exception as exc:
+            self.logger.warning("A2DP classic CoD readback failed: %s", error_text(exc))
         self.device.inquiry_response = bytes(
             AdvertisingData(
                 [
                     (
                         AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
-                        BT_AUDIO_SOURCE_UUID16.to_bytes(2, "little")
-                        + BT_AUDIO_SINK_UUID16.to_bytes(2, "little"),
+                        BT_AUDIO_SINK_UUID16.to_bytes(2, "little")
+                        + BT_AV_REMOTE_CONTROL_TARGET_UUID16.to_bytes(2, "little"),
+                    ),
+                    (
+                        AdvertisingData.COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
+                        IAP2_UUID128.to_bytes(),
                     ),
                     (AdvertisingData.COMPLETE_LOCAL_NAME, self.bt_name.encode("utf-8")),
                 ]
             )
         )
-        await self.device.set_connectable(True)
-        await self.device.set_discoverable(False)
+        await self._request_visibility(connectable=True, discoverable=False)
         self.logger.info("A2DP classic connectable (not discoverable) enabled")
 
     async def enter_pairing(self):
         """Pairing mode: become classic-discoverable (so a phone can add us as an
         audio output) and scan for trusted speakers to add as transfer targets."""
-        await self._gate("a2dp-enter-pairing", lambda: self.device.set_discoverable(True))
+        await self._request_visibility(connectable=True, discoverable=True)
         self.logger.info("A2DP classic discoverable ON (pairing)")
         if self._scan_task is None or self._scan_task.done():
             self._scan_task = asyncio.create_task(self.scan_trusted_speakers())
 
     async def exit_pairing(self):
-        await self._gate("a2dp-exit-pairing", lambda: self.device.set_discoverable(False))
+        await self._request_visibility(connectable=True, discoverable=False)
         self.logger.info("A2DP classic discoverable OFF")
 
     async def receiver_loop(self):
@@ -747,7 +833,8 @@ class A2DPBridge:
                 return
             pending_names.add(normalized)
             try:
-                name = await asyncio.wait_for(self.device.request_remote_name(address), timeout=5.0)
+                name = await self._gate("a2dp-remote-name", lambda: asyncio.wait_for(
+                    self.device.request_remote_name(address), timeout=5.0))
             except Exception:
                 return
             finally:
@@ -781,7 +868,9 @@ class A2DPBridge:
                 complete.set_result(None)
 
         self.state.speaker_pairing_status = "scan"
-        self.state.clear_speaker_candidates()
+        # [CLAUDE 2026-06-03] НЕ чистим список между циклами — он ЛЕНИВЫЙ/накопительный.
+        # Устройства не появляются/исчезают так быстро; раз увиденное остаётся в списке.
+        # Полная очистка — только при ВХОДЕ в режим сопряжения (intents._settings).
         self.on_state_change()
         self.device.on("inquiry_result", on_inquiry_result)
         self.device.on("inquiry_complete", on_inquiry_complete)
@@ -801,6 +890,52 @@ class A2DPBridge:
             self.state.speaker_pairing_status = "idle"
             self.on_state_change()
 
+    async def scan_device_capabilities(self, connection):
+        """[CLAUDE 2026-06-03] МОЩНЫЙ скан возможностей: запросить SDP-записи подключённого
+        устройства и собрать ВСЕ service-class UUID (профили). Возвращает набор токенов
+        ('110b','110a','1812'...) -> EnrollmentManager строит богатую карточку. Best-effort:
+        любая ошибка не фатальна (карточка деградирует на CoD). Идёт через единый HCI-гейт."""
+        from bumble.sdp import (Client as SDPClient, SDP_PUBLIC_BROWSE_ROOT,
+                                SDP_ALL_ATTRIBUTES_RANGE)
+        tokens = set()
+
+        async def _do():
+            sdp = SDPClient(self.device)
+            await sdp.connect(connection)
+            try:
+                results = await asyncio.wait_for(
+                    sdp.search_attributes([SDP_PUBLIC_BROWSE_ROOT], [SDP_ALL_ATTRIBUTES_RANGE]),
+                    timeout=self.connect_timeout,
+                )
+                self._collect_uuid_tokens(results, tokens)
+            finally:
+                try:
+                    await sdp.disconnect()
+                except Exception:
+                    pass
+
+        await self._gate("a2dp-sdp-scan", _do)
+        return tokens
+
+    @staticmethod
+    def _collect_uuid_tokens(node, out, depth=0):
+        """Рекурсивно вытащить все UUID-токены из дерева SDP DataElement (любая вложенность)."""
+        from bumble.core import UUID
+        if depth > 10 or node is None:
+            return
+        if isinstance(node, UUID):
+            try:
+                out.add(node.to_hex_str().lower())
+            except Exception:
+                out.add(str(node).lower())
+            return
+        val = getattr(node, "value", None)
+        if val is not None and not isinstance(val, (str, bytes, int, float, bool)):
+            A2DPBridge._collect_uuid_tokens(val, out, depth + 1)
+        if isinstance(node, (list, tuple)):
+            for e in node:
+                A2DPBridge._collect_uuid_tokens(e, out, depth + 1)
+
     async def pair_speaker(self, address):
         address = normalize_address(address)
         if not address:
@@ -817,7 +952,7 @@ class A2DPBridge:
         self.state.pairing_message = ""
         self.on_state_change()
         try:
-            await self.device.stop_discovery()
+            await self._gate("a2dp-pair-stop-discovery", self.device.stop_discovery)
         except Exception:
             pass
         await self._bond_speaker(address)
@@ -828,11 +963,32 @@ class A2DPBridge:
             raise RuntimeError(f"refused to trust non-speaker {address}")
         self.state.select_default_speaker(address)
         try:
-            await self.ensure_speaker_connection(address, strict_security=True)
+            connection = await self.ensure_speaker_connection(address, strict_security=True)
         except Exception:
             self.state.remove_trusted(address)
             raise
         self.state.set_speaker_connected(address, True)
+        # [CLAUDE 2026-06-03] МОЩНЫЙ СКАН по SDP -> богатая карточка (протоколы/возможности).
+        try:
+            uuids = await self.scan_device_capabilities(connection)
+            cod = (candidate or {}).get("class_of_device")
+            self.state.enroll_trusted_device(address, name=label,
+                                             class_of_device=cod, service_uuids=uuids)
+            self.logger.info("device card enriched: %s -> %s", address, sorted(uuids))
+        except Exception as exc:
+            self.logger.info("capability scan skipped (card stays on CoD): %s", error_text(exc))
+        # [CLAUDE 2026-06-03] ACL+encrypt мало: Fosi видит «пустой» ACL и ВИСИТ В РЕЖИМЕ ПАРЫ
+        # (мигает), пока нет открытого медиа-транспорта. Открываем AVDTP (open+start) сразу при
+        # паре — колонка выходит из пары и держится подключённой. RTP не льётся без источника,
+        # канал просто живёт в фоне. Затем поднимаем standby-петлю, чтобы держать/реконнектить
+        # независимо от активации маршрута (trusted speaker «прилипает» ниже Transfer).
+        try:
+            await self.setup_receiver(address)
+            self.logger.info("A2DP stream opened+held after pairing: %s", address)
+        except Exception as exc:
+            self.logger.warning("A2DP stream open after pairing failed (kept ACL): %s",
+                                 error_text(exc))
+        self.start_standby_loop()
         self.state.speaker_pairing_status = "done"
         self.state.pairing_message = f"{label} подключен"
         try:
@@ -1000,12 +1156,19 @@ class A2DPBridge:
         def on_close():
             self.logger.info("A2DP_SOURCE_CLOSE")
             self.source_stream_active = False
+            # [CLAUDE 2026-06-03] Поток источника закрыт -> маршрут больше НЕ активен. Раньше
+            # transfer_active залипал True (сбрасывался только source_stream_active) -> route_active
+            # навсегда True -> кнопка «Активировать» показывала «Активен» и не тапалась.
+            self.state.transfer_active = False
+            self.state.transfer_source = ""
             asyncio.create_task(self.stop_receiver_stream())
             return original_close()
 
         def on_abort():
             self.logger.info("A2DP_SOURCE_ABORT")
             self.source_stream_active = False
+            self.state.transfer_active = False
+            self.state.transfer_source = ""
             asyncio.create_task(self.stop_receiver_stream())
             return original_abort()
 

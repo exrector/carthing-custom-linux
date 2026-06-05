@@ -16,7 +16,7 @@ Quarantine rules:
 - `/etc/default/carthing` sets `CARTHING_BUMBLE_QUARANTINE=1`;
 - `/etc/default/carthing` sets `CARTHING_ALLOW_BUMBLE_RUN=0`;
 - the boot script was renamed from `S50-carthing-remote` to
-  `:S50-carthing-remote.disabled`, so `rcS` will not auto-run it;
+  `disabled-S50-carthing-remote`, so `rcS` will not auto-run it;
 - `init-wrapper` skips the runtime while quarantine is enabled;
 - `run-media-remote`, `tools/run_local.sh`, `tools/run_local_main.py`,
   `tools/hci_proxy.py`, and the Fosi standalone tests refuse to run unless the
@@ -32,8 +32,9 @@ On the device, the old boot service is intentionally stored under the poisoned
 name:
 
 ```sh
-/etc/init.d/:S50-carthing-remote.disabled
+/etc/init.d/disabled-S50-carthing-remote
 ```
 
-Do not restore the old `S50-carthing-remote` name in a release image. That would
-let the legacy runtime own HCI again during boot.
+Do not restore the old `S50-carthing-remote` name in a release image. The
+`disabled-` prefix is also intentionally compatible with the ext2 image tools
+used by the reproducible rootfs bake.

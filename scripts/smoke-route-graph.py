@@ -358,8 +358,9 @@ def check_runtime_route_state():
     assert bt["route"]["name"] == ""
 
 
-def check_statusbar_route_chip():
+def check_statusbar_has_no_legacy_route_chip():
     from ui_statusbar import StatusBar
+    import ui_theme as T
 
     img = Image.new("RGB", (800, 480), (0, 0, 0))
     regions = RegionSet()
@@ -371,7 +372,7 @@ def check_statusbar_route_chip():
         route_active=False,
     )
     StatusBar().render(img, regions=regions, anim=None, st=state)
-    assert img.getpixel((60, 330)) != (0, 0, 0)
+    assert img.getpixel((60, 330)) == T.BG
 
 
 def check_patchbay():
@@ -527,7 +528,7 @@ def main():
     check_multirole_app_state()
     check_route_activation_intent()
     check_runtime_route_state()
-    check_statusbar_route_chip()
+    check_statusbar_has_no_legacy_route_chip()
     check_patchbay()
     asyncio.run(check_route_patchbay_router())
     asyncio.run(check_hci_gate())

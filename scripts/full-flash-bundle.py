@@ -22,8 +22,8 @@ FLASHER = REPO_ROOT / "scripts/flash-device1-rootfs-only.py"
 
 def import_flasher(bundle: Path):
     os.environ["CARTHING_FLASH_BUNDLE_DIR"] = str(bundle)
-    os.environ.setdefault("CARTHING_FLASH_USE_RESTORE_PARTITION", "0")
-    os.environ.setdefault("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "1024")
+    os.environ.setdefault("CARTHING_FLASH_USE_RESTORE_PARTITION", "1")
+    os.environ.setdefault("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "512")
     os.environ.setdefault("CARTHING_FLASH_TRANSFER_BLOCK_SIZE", "32768")
     spec = importlib.util.spec_from_file_location("carthing_flasher", FLASHER)
     if spec is None or spec.loader is None:
@@ -57,8 +57,16 @@ def main() -> int:
     dev = flasher.get_device()
     dev.bulkcmd("amlmmc part 1", ignore_timeout=True)
     dev.bulkcmd("amlmmc key", ignore_timeout=True)
-    dev = flasher.write_image(dev, str(bootfs), 0, "BOOTFS")
-    dev = flasher.write_image(dev, str(rootfs), flasher.ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
+    print("\n=== Restoring BOOTFS with standard restore_partition ===", flush=True)
+    dev.restore_partition(0, str(bootfs))
+    print("\n=== Restoring ROOT with standard restore_partition ===", flush=True)
+    dev.restore_partition(flasher.ROOT_RESTORE_BLOCK_OFFSET, str(rootfs))
+
+    env = bundle / "env.txt"
+    if env.exists():
+        print("\n=== Restoring env.txt with standard env writer ===", flush=True)
+        dev.send_env_file(str(env))
+        dev.bulkcmd("saveenv")
     if args.no_reboot:
         print("\n=== DONE. Device left in Burn Mode (--no-reboot). ===", flush=True)
         return 0

@@ -84,14 +84,17 @@ SuperbirdDevice.WRITE_CHUNK_SIZE = 512
 ADDR_TMP = 0x13000000
 TRANSFER_BLOCK_SIZE = int(os.environ.get("CARTHING_FLASH_TRANSFER_BLOCK_SIZE", "32768"))
 SECTOR = 512
-WRITE_CHUNK_SECTORS = int(os.environ.get("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "1024"))
+# Keep the proven Superbird restore_partition geometry as the default.
+# The strict/resumable writer below is diagnostic opt-in only.
+WRITE_CHUNK_SECTORS = int(os.environ.get("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "512"))
 WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS * SECTOR
+ROOT_START_OFFSET_BYTES = int(os.environ.get("CARTHING_FLASH_ROOT_START_OFFSET_BYTES", "0"), 0)
 MAX_RETRIES = int(os.environ.get("CARTHING_FLASH_MAX_RETRIES", "16"))
 RECONNECT_WAIT = float(os.environ.get("CARTHING_FLASH_RECONNECT_WAIT", "6"))
 MAKE_DEV_RETRIES = int(os.environ.get("CARTHING_FLASH_MAKE_DEV_RETRIES", "20"))
 MAKE_DEV_INITIAL_SETTLE = float(os.environ.get("CARTHING_FLASH_MAKE_DEV_INITIAL_SETTLE", "3"))
 BULKCMD_TIMEOUT_MS = int(os.environ.get("CARTHING_FLASH_BULKCMD_TIMEOUT_MS", "10000"))
-USE_RESTORE_PARTITION = os.environ.get("CARTHING_FLASH_USE_RESTORE_PARTITION", "0") != "0"
+USE_RESTORE_PARTITION = os.environ.get("CARTHING_FLASH_USE_RESTORE_PARTITION", "1") != "0"
 
 SuperbirdDevice.TRANSFER_BLOCK_SIZE = TRANSFER_BLOCK_SIZE
 SuperbirdDevice.WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS
@@ -176,13 +179,21 @@ def write_chunk(dev: SuperbirdDevice, data: bytes, target_blk: int, blk_count: i
     raw_bulkcmd(dev, f"amlmmc write 1 {hex(ADDR_TMP)} {hex(target_blk)} {hex(blk_count)}")
 
 
-def write_image(dev: SuperbirdDevice, infile: str, sector_offset: int, label: str):
+def write_image(dev: SuperbirdDevice, infile: str, sector_offset: int, label: str, start_offset_bytes: int = 0):
     file_size = os.path.getsize(infile)
+    if start_offset_bytes < 0 or start_offset_bytes >= file_size or start_offset_bytes % SECTOR:
+        raise ValueError(f"invalid aligned resume offset: {start_offset_bytes}")
     print(f"\n>>> writing {label}: {infile} ({file_size // 1024 // 1024} MB) -> sector {sector_offset}")
     print(f"    block={TRANSFER_BLOCK_SIZE}B chunk={WRITE_CHUNK_SIZE // 1024}KB")
+    if start_offset_bytes:
+        print(
+            f"    resuming at image offset {start_offset_bytes} bytes "
+            f"({start_offset_bytes // 1024 // 1024} MB), sector {hex(sector_offset + start_offset_bytes // SECTOR)}"
+        )
 
     with open(infile, "rb") as f:
-        offset_bytes = 0
+        f.seek(start_offset_bytes)
+        offset_bytes = start_offset_bytes
         start = time.time()
         failures = 0
 
@@ -245,6 +256,7 @@ def main() -> int:
         f"block={TRANSFER_BLOCK_SIZE}B "
         f"chunk={WRITE_CHUNK_SIZE // 1024}KB "
         f"chunk_sectors={WRITE_CHUNK_SECTORS} "
+        f"root_start_offset={ROOT_START_OFFSET_BYTES}B "
         f"retries={MAX_RETRIES} "
         f"reconnect_wait={RECONNECT_WAIT}s "
         f"make_dev_retries={MAKE_DEV_RETRIES} "
@@ -265,7 +277,13 @@ def main() -> int:
         dev.restore_partition(ROOT_RESTORE_BLOCK_OFFSET, str(ROOTFS_IMG))
         print("DONE ROOT: restore_partition returned")
     else:
-        dev = write_image(dev, str(ROOTFS_IMG), ROOT_RESTORE_BLOCK_OFFSET, "ROOT")
+        dev = write_image(
+            dev,
+            str(ROOTFS_IMG),
+            ROOT_RESTORE_BLOCK_OFFSET,
+            "ROOT",
+            start_offset_bytes=ROOT_START_OFFSET_BYTES,
+        )
     print("\nrootfs write complete. power-cycle the device and test normal boot.")
     return 0
 

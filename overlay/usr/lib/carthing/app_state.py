@@ -13,10 +13,13 @@ import json
 import os
 from pathlib import Path
 from runtime_paths import device_name
+import state_paths
 
 
-DEFAULT_TRUSTED_DEVICES_PATH = "/run/carthing-state/carthing/trusted-devices.json"
-DEFAULT_KEYSTORE_PATH = "/run/carthing-state/carthing/keys.json"
+# [CLAUDE 2026-06-03] ЕДИНЫЙ файл состояния: devices + settings в одном state.json (один источник
+# правды). Реестр (TrustedDeviceRegistry) импортирует этот же путь -> читает devices оттуда.
+DEFAULT_TRUSTED_DEVICES_PATH = str(state_paths.STATE_FILE)
+DEFAULT_KEYSTORE_PATH = str(state_paths.KEYS_PATH)
 
 
 def normalize_address(address) -> str:
@@ -43,10 +46,10 @@ def _bonded_source_rows(keystore_path=None):
         address = normalize_address(raw_address)
         if address:
             rows.append({
-                "key": "iphone" if not rows else f"source:{address}",
+                "key": f"source:{address}",
                 "address": address,
-                "label": "iPhone" if not rows else "Bluetooth Source",
-                "type": "iPhone" if not rows else "Источник",
+                "label": "Bluetooth Source",
+                "type": "Источник",
                 "role": "source",
                 "online": False,
                 "connected": False,
@@ -273,6 +276,7 @@ class AppState:
     def __init__(self):
         self.iphone = MediaSession("iphone", "iPhone")
         self.mac = MediaSession("mac", "Mac")
+        self._dyn_sources = {}              # [CLAUDE] мультиустройство: сессии по адресу (2-й+ источник)
         self.active_desktop = 0
         self.last_media_source = "iphone"   # fallback for non-media desktops
         self.unread_count = 0
@@ -283,6 +287,10 @@ class AppState:
         self.transfer_source = ""
         self._route_input = ""
         self._route_output = ""
+        # [CLAUDE 2026-06-02] какая колонка активна (для скролла/подсветки) и совместимость
+        # выбранной пары вход→выход: True=зелёный, False=красный (нельзя), None=ещё не оба выбраны.
+        self.route_focus = "input"
+        self.route_compatible = None
         self.route_name = ""
         self.route_protocols = []
         self.route_warnings = []
@@ -347,7 +355,22 @@ class AppState:
 
     @property
     def sources(self):
-        return {"iphone": self.iphone, "mac": self.mac}
+        # [CLAUDE 2026-06-03] Мультиустройство: фикс. iphone/mac + динамические сессии по адресу
+        # (для 2-го+ источника). Раньше словарь был жёстким {iphone,mac} -> выбор иного источника
+        # давал KeyError. Теперь любой источник имеет валидную сессию.
+        merged = {"iphone": self.iphone, "mac": self.mac}
+        merged.update(self._dyn_sources)
+        return merged
+
+    def source_for(self, key):
+        """Сессия источника по ключу/адресу. Неизвестный (2-й iPhone и т.п.) -> ленивое создание,
+        чтобы выбор маршрута/транспорт не падал. Метаданные наполнит рантайм, когда подключится."""
+        s = self.sources
+        if key in s:
+            return s[key]
+        if key not in self._dyn_sources:
+            self._dyn_sources[key] = MediaSession(str(key), str(key))
+        return self._dyn_sources[key]
 
     def desktop_source(self, idx):
         return self.DESKTOP_SOURCE.get(idx)
@@ -359,7 +382,7 @@ class AppState:
 
     @property
     def control_source(self):
-        return self.sources[self.control_source_key]
+        return self.source_for(self.control_source_key)
 
     def load_trusted(self, path=None):
         path = Path(path or os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
@@ -433,6 +456,10 @@ class AppState:
         devices = [_normalize_trusted_row(device) for device in devices]
         by_key = {device.get("key"): device for device in devices if device.get("key")}
         by_address = {device.get("address"): device for device in devices if device.get("address")}
+        # [CLAUDE 2026-06-03] keys.json (keystore Bumble) только ЧИТАЕМ — узнать, какие источники
+        # привязаны. Но device-ЗАПИСЬ должна жить в state.json вместе со всеми (один источник правды).
+        # Если бонд ещё не записан как устройство — добавляем и помечаем на персист.
+        new_bond = False
         for bonded in _bonded_source_rows():
             bonded = _normalize_trusted_row(bonded)
             existing = by_key.get(bonded["key"]) or by_address.get(bonded["address"])
@@ -440,15 +467,23 @@ class AppState:
                 devices.append(bonded)
                 by_key[bonded["key"]] = bonded
                 by_address[bonded["address"]] = bonded
+                new_bond = True
             else:
                 existing.setdefault("role", "source")
                 existing.setdefault("type", bonded["type"])
                 existing.setdefault("label", bonded["label"])
-                if not existing.get("address"):
+                had_address = bool(existing.get("address"))
+                had_endpoints = bool(existing.get("endpoints"))
+                if not had_address:
                     existing["address"] = bonded["address"]
                 existing["capabilities"] = _merge_unique_strings(existing.get("capabilities"), bonded.get("capabilities"))
                 existing["endpoints"] = _merge_endpoints(existing.get("endpoints"), bonded.get("endpoints"))
                 _normalize_trusted_row(existing)
+                # [CLAUDE 2026-06-04] Если запись была stub (нет адреса или endpoints) —
+                # пересохраняем в state.json чтобы TrustedDeviceRegistry видел полные данные.
+                # Иначе route_planner не найдёт endpoints → RoutePlanError → кнопка красная.
+                if not had_address or not had_endpoints:
+                    new_bond = True
         self.trusted = devices
         self.route_input = next(
             (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),
@@ -459,6 +494,14 @@ class AppState:
             "",
         )
         self._ensure_default_route_selection()
+        # [CLAUDE 2026-06-03] Новый bonded-источник -> ПЕРСИСТИМ в state.json, чтобы ВСЕ устройства
+        # (iPhone и колонки) жили в одном месте. Идемпотентно: на следующем load он уже device,
+        # new_bond=False -> повторной записи нет. На Mac degraded write_state просто no-op.
+        if new_bond:
+            try:
+                self.save_trusted()
+            except Exception:
+                pass
 
     def _ensure_default_route_selection(self):
         if not self.route_input and len(self.route_inputs) == 1:
@@ -507,9 +550,10 @@ class AppState:
             if device.get("route_output"):
                 row["route_output"] = True
             data["devices"].append(row)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
-        tmp.replace(path)
+        # [CLAUDE 2026-06-03] Пишем devices в ЕДИНЫЙ state.json через write_state (read-modify-write:
+        # секция settings сохраняется). Один источник правды вместо отдельного trusted-devices.json.
+        import state_paths
+        state_paths.write_state({"schema": 2, "devices": data["devices"]})
 
     def trusted_by_role(self, role):
         return [device for device in self.trusted if device.get("role") == role]
@@ -584,9 +628,38 @@ class AppState:
     def route_inputs(self):
         return self.trusted_sources
 
+    # [CLAUDE 2026-06-03] Car Thing САМ как виртуальный выход (Play Now / control).
+    # Иначе в Play Now к iPhone нечего привязать как output. Это НЕ audio-sink (нет playback-
+    # железа) — это control/metadata поверхность: iPhone остаётся источником, Car Thing рулит
+    # по BLE (AMS/ANCS). connected=True всегда — BLE-control постоянен.
+    SELF_OUTPUT_KEY = "carthing"
+
+    def _self_output_device(self):
+        return {
+            "key": self.SELF_OUTPUT_KEY,
+            "address": "",
+            "label": "Car Thing",          # self-выход — это сам хаб (Play Now), не hostname
+            "type": "Play Now",
+            "role": "self",
+            "online": True,
+            "connected": True,
+            "default": False,
+            "capabilities": ["control_input", "metadata_input"],
+            "endpoints": [{
+                "id": "playnow",
+                "direction": "output",
+                "capabilities": ["control_input", "metadata_input"],
+                "protocols": ["ble_ams"],
+            }],
+            "constraints": [],
+            "metadata": {"self": True},
+            "route_output": self._route_output == self.SELF_OUTPUT_KEY,
+        }
+
     @property
     def route_outputs(self):
-        return self.trusted_speakers
+        # Car Thing-self первым в списке выходов, затем доверенные колонки.
+        return [self._self_output_device()] + self.trusted_speakers
 
     def select_route_input(self, key_or_address):
         selected = None
@@ -597,6 +670,8 @@ class AppState:
             if match:
                 selected = device.get("key") or device.get("address")
         self._route_input = selected or ""
+        self.route_focus = "input"
+        self.route_compatible = None        # пересчитает рантайм
         return selected
 
     def select_route_output(self, key_or_address):
@@ -608,6 +683,8 @@ class AppState:
             if match:
                 selected = device.get("key") or device.get("address")
         self._route_output = selected or ""
+        self.route_focus = "output"
+        self.route_compatible = None        # пересчитает рантайм
         return selected
 
     def is_trusted_source(self, address):

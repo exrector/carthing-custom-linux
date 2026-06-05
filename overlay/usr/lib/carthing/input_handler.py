@@ -172,10 +172,13 @@ async def start(get_ams=None, on_event=None):
         if t["dragging"]:                         # начатый edge-drag -> доводка (по позиции пальца)
             kind = "open" if t["zone"] == "top" else "close"
             on_event(("drag_end", kind, t["cy"]))
+        elif abs(dx) >= SWIPE_MIN_PX and abs(dx) >= abs(dy) * 1.5:
+            # [CLAUDE 2026-06-02] Явно ГОРИЗОНТАЛЬНЫЙ жест по ВСЕМУ экрану = переключение вью.
+            # Приоритет выше скролла: при лёгком вертикальном дрейфе свайп больше НЕ съедается
+            # инерцией списка (раньше vstepped перехватывал и свайп «срабатывал один раз и всё»).
+            on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
         elif t["vstepped"]:
             on_event(("scroll_end", t["velocity"]))  # отпустили список -> единая инерция в GUI
-        elif abs(dx) >= SWIPE_MIN_PX and abs(dx) > abs(dy):
-            on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
         elif abs(dx) < TAP_MAX_PX and abs(dy) < TAP_MAX_PX:
             duration = time.monotonic() - (t["down_t"] or time.monotonic())
             event = EV_LONG_TAP if duration >= LONG_TAP_SEC else EV_TAP

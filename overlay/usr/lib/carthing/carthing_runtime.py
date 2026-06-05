@@ -49,6 +49,7 @@ _iphone: IPhoneService | None = None
 gui = None
 transfer = None          # TransferService
 backchannel = None       # TransferControlBackchannel
+iap2 = None              # IAP2Service
 settings = None          # SettingsService
 hw_caps = {}             # hardware_inventory.probe()
 mac = None               # MacService
@@ -57,6 +58,7 @@ session_runner = None    # SessionRunner
 link_manager = None      # LinkManager
 hci_gate = None          # HciOperationGate
 route_patchbay = None    # VirtualRoutePatchBay
+_classic_probe_done = set()
 
 
 
@@ -151,6 +153,45 @@ def _on_command(source, command):
         asyncio.ensure_future(mac.command(command))
 
 
+def _best_bonded_source_address():
+    if gui is not None:
+        try:
+            gui.app_state.load_trusted()
+            for row in gui.app_state.trusted_sources:
+                address = row.get("address")
+                if address:
+                    return address
+        except Exception:
+            pass
+    return None
+
+
+async def _post_pair_classic_probe(address, reason="post-pair"):
+    """Quiet BR/EDR nudge after a successful BLE/CTKD bond.
+
+    This does not make the accessory classic-discoverable and does not create a
+    second pairing surface. It only tries to open a BR/EDR ACL to the already
+    bonded source using the CTKD-derived link key so iOS has a reason to browse
+    our Classic SDP/A2DP surface.
+    """
+    if os.environ.get("CARTHING_POST_PAIR_CLASSIC_PROBE") != "1":
+        return
+    if transfer is None or getattr(transfer, "bridge", None) is None:
+        return
+    from app_state import normalize_address
+    address = normalize_address(address)
+    if not address or address in _classic_probe_done:
+        return
+    _classic_probe_done.add(address)
+    await asyncio.sleep(1.0)
+    try:
+        logger.info("post-pair classic probe: dialing %s (%s)", address, reason)
+        await transfer.bridge.connect_source(address)
+        logger.info("post-pair classic probe OK: %s", address)
+    except Exception as e:
+        logger.warning("post-pair classic probe failed for %s: %s", address, e)
+
+
 def _on_pairing(enabled, role="source"):
     role = role or "source"
     if power is not None:
@@ -159,7 +200,11 @@ def _on_pairing(enabled, role="source"):
         async def _run_device_pairing():
             if enabled:
                 if orch is not None:
-                    await orch.arm_pairing(True, disconnect_current=False)
+                    await orch.arm_pairing(True, disconnect_current=False,
+                                           classic_discoverable=False)
+                # Сканер для источников = тот же инквайри что и для колонок.
+                # transfer_service.start_speaker_enrollment() восстанавливает BLE-рекламу
+                # через orch.apply_visibility() после каждого цикла инквайри — радио не теряется.
                 if transfer is not None:
                     asyncio.create_task(transfer.start_speaker_enrollment())
             else:
@@ -177,7 +222,10 @@ def _on_pairing(enabled, role="source"):
             else:
                 asyncio.ensure_future(transfer.stop_speaker_enrollment())
     elif orch is not None:
-        asyncio.ensure_future(orch.arm_pairing(bool(enabled)))
+        asyncio.ensure_future(orch.arm_pairing(
+            bool(enabled),
+            classic_discoverable=False,
+        ))
     if gui is not None:
         gui.set_pairing_mode(bool(enabled), role=role)
 
@@ -217,6 +265,20 @@ def _on_trusted_remove(key):
                 if device.get("key") == key:
                     address = device.get("address") or key
                     break
+        # [CLAUDE 2026-06-04] Разрываем активное соединение ДО удаления ключа.
+        # Иначе: iPhone переподключается по BLE пока keys.json ещё содержит его бонд,
+        # _bonded_source_rows снова добавляет его в trusted — удаление «не работает».
+        dev = orch.device if orch is not None else None
+        if dev is not None:
+            from app_state import normalize_address
+            norm = normalize_address(address)
+            for conn in list(getattr(dev, "connections", {}).values()):
+                try:
+                    peer = normalize_address(str(getattr(conn, "peer_address", "")))
+                    if peer and peer == norm:
+                        await conn.disconnect()
+                except Exception:
+                    pass
         if transfer is not None:
             await transfer.forget_trusted(address)
         dev = orch.device if orch is not None else None
@@ -232,25 +294,70 @@ def _on_trusted_remove(key):
     asyncio.ensure_future(_run())
 
 
+async def _teardown_current_route():
+    """[CLAUDE 2026-06-03] ЖЁСТКИЙ переход (#12a): ПОЛНОСТЬЮ снести текущий маршрут перед любым
+    новым. Закрываем A2DP-поток + рвём classic-источник (transfer.deactivate), снимаем patchbay,
+    останавливаем session_runner. Так новый маршрут не тащит за собой старые коннекты и не
+    занимает интерфейс (HCI/Bumble освобождаются; HCI — единый владелец). Порядок: сверху вниз."""
+    logger.info("ROUTE TEARDOWN >>> закрываю текущий маршрут (transfer -> patchbay -> session)")
+    if transfer is not None:
+        try:
+            await transfer.deactivate()      # stop_receiver_stream + disconnect_source
+            logger.info("ROUTE TEARDOWN: transfer.deactivate ok (A2DP-поток закрыт, источник отключён)")
+        except Exception as exc:
+            logger.warning("teardown: transfer.deactivate failed: %s", exc)
+    if route_patchbay is not None:
+        try:
+            await route_patchbay.deactivate()
+            logger.info("ROUTE TEARDOWN: patchbay.deactivate ok")
+        except Exception as exc:
+            logger.warning("teardown: patchbay.deactivate failed: %s", exc)
+    if session_runner is not None:
+        try:
+            await session_runner.stop_current()
+            logger.info("ROUTE TEARDOWN: session_runner.stop_current ok")
+        except Exception as exc:
+            logger.warning("teardown: session stop failed: %s", exc)
+    model.clear_route_plan()
+    try:
+        gui.app_state.transfer_active = False
+    except Exception:
+        pass
+    logger.info("ROUTE TEARDOWN <<< интерфейс свободен (HCI/Bumble), можно поднимать новый маршрут")
+
+
 async def _activate_route():
-    """[CLAUDE 2026-06-02] РЕЖИМЫ УДАЛЕНЫ. Единственная активируемая сущность — ребро
-    input->output. Нет глобального mode/session, меняющего поведение коннектов. Присутствие
-    (BLE-control + A2DP listener) живёт всегда; classic/A2DP открывается ТОЛЬКО здесь, при
-    наличии выбранного маршрута. Это убирает баг «выбран transfer -> connect iPhone лезет classic»."""
+    """[CLAUDE 2026-06-02/06-03] Единственная активируемая сущность — ребро input->output.
+    ЖЁСТКИЙ переход: всегда сначала полный teardown текущего маршрута, потом новый. Присутствие
+    (BLE-control + A2DP listener) живёт всегда; classic/A2DP открывается ТОЛЬКО здесь."""
     if session_runner is None or gui is None:
         return
     app_state = gui.app_state
     route_input = str(getattr(app_state, "route_input", "") or "").strip()
     route_output = str(getattr(app_state, "route_output", "") or "").strip()
+    logger.info("ROUTE ACTIVATE запрошен: %s -> %s", route_input or "—", route_output or "—")
+
+    # 1) ВСЕГДА сначала полностью снести текущий маршрут (жёсткий переход).
+    await _teardown_current_route()
+
+    # 2) Маршрут не выбран целиком -> остаёмся выключенными (звук на встроенном).
     if not route_input or not route_output:
-        if route_patchbay is not None:
-            await route_patchbay.deactivate()
-        await session_runner.stop_current()
-        model.clear_route_plan()
         model.audio_sink = "builtin"
         _on_publish()
         return
-    registry = TrustedDeviceRegistry(getattr(app_state, "trusted_path", None)).load()
+
+    # 3) Выход = сам Car Thing -> Play Now (control по BLE), без A2DP/patchbay.
+    if route_output == getattr(app_state, "SELF_OUTPUT_KEY", "carthing"):
+        model.audio_sink = "builtin"
+        logger.info("route active: %s -> Car Thing (Play Now / BLE control)", route_input)
+        _on_publish()
+        return
+
+    # 4) Аудио-маршрут (вход -> внешний выход). Старый уже снят -> поднимаем новый.
+    # [CLAUDE 2026-06-04] Из памяти app_state.trusted, а не с диска (см. _recompute_route_compat).
+    registry = TrustedDeviceRegistry.from_trusted_list(
+        getattr(app_state, "trusted", [])
+    )
     planner = RoutePlanner(registry)
     try:
         routed = planner.plan_simple_route(route_input, route_output, name="route")
@@ -273,6 +380,40 @@ async def _activate_route():
     _on_publish()
 
 
+def _recompute_route_compat():
+    """[CLAUDE 2026-06-02] Быстрая проверка «может ли быть такое сочетание вход→выход».
+    Гоняет планировщик всухую (без подключения): успех -> route_compatible=True (зелёный),
+    RoutePlanError -> False (красный). Если выбран не весь маршрут -> None."""
+    if gui is None:
+        return
+    app_state = gui.app_state
+    ri = str(getattr(app_state, "route_input", "") or "").strip()
+    ro = str(getattr(app_state, "route_output", "") or "").strip()
+    if not ri or not ro:
+        app_state.route_compatible = None
+        return
+    # [CLAUDE 2026-06-03] Выход = сам Car Thing (Play Now / control) — это НЕ A2DP-маршрут,
+    # а BLE-control, который всегда доступен. Совместимо без планировщика.
+    if ro == getattr(app_state, "SELF_OUTPUT_KEY", "carthing"):
+        app_state.route_compatible = True
+        return
+    try:
+        # [CLAUDE 2026-06-04] Читаем из app_state.trusted (память), а не с диска.
+        # state.json может содержать устаревшие данные (RPA-адрес / пустые endpoints),
+        # тогда как app_state.trusted уже слит с _bonded_source_rows из keystore.
+        registry = TrustedDeviceRegistry.from_trusted_list(
+            getattr(app_state, "trusted", [])
+        )
+        RoutePlanner(registry).plan_simple_route(ri, ro, name="probe")
+        app_state.route_compatible = True
+    except RoutePlanError as exc:
+        app_state.route_compatible = False
+        logger.info("route incompatible: %s -> %s: %s", ri, ro, exc)
+    except Exception as exc:
+        app_state.route_compatible = False
+        logger.warning("route compat probe failed: %s", exc)
+
+
 def _on_session_select(session):
     pass  # [CLAUDE 2026-06-02] режимы удалены — выбор режима больше ничего не делает
 
@@ -283,8 +424,33 @@ def _on_route_input_select(key):
     if gui is not None:
         selected = gui.app_state.select_route_input(key)
         gui.app_state.save_trusted()
+        _recompute_route_compat()
     model.clear_route_plan()
     logger.info("route input selected: %s", key)
+    _on_publish()
+
+
+async def _apply_route_output(key):
+    """[CLAUDE 2026-06-04] ТРУБА: единственное действие — куда лить A2DP-поток iPhone.
+      • выбран динамик (Fosi) → держим его в standby, forward_packet сам льёт туда
+      • Play Now (сам Car Thing) / не выбран → закрываем канал, поток никуда → Play Now
+    Источник (iPhone) не выбирается — труба ретранслирует что бы iPhone ни прислал."""
+    if transfer is None or gui is None:
+        return
+    self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+    if key and key != self_key:
+        try:
+            gui.app_state.select_default_speaker(key)
+        except Exception as e:
+            logger.warning("select speaker %s failed: %s", key, e)
+        await transfer.bridge.ensure_trusted_speakers_connected()
+        await transfer.bridge.request_receiver_connection()
+        model.audio_sink = "speaker"
+        logger.info("ТРУБА: выход = %s (динамик) — поток льётся туда", key)
+    else:
+        await transfer.bridge.stop_receiver_stream()
+        model.audio_sink = "builtin"
+        logger.info("ТРУБА: выход = Play Now — поток на динамик НЕ льётся")
     _on_publish()
 
 
@@ -292,17 +458,24 @@ def _on_route_output_select(key):
     if power is not None:
         power.note_activity("route_output_select")
     if gui is not None:
-        selected = gui.app_state.select_route_output(key)
+        gui.app_state.select_route_output(key)
         gui.app_state.save_trusted()
-    model.clear_route_plan()
     logger.info("route output selected: %s", key)
-    _on_publish()
+    asyncio.ensure_future(_apply_route_output(key))
 
 
 def _on_route_activate():
+    # [CLAUDE 2026-06-04] ТРУБА. Кнопка НЕ делает teardown/режимы — только выбирает КУДА лить:
+    #  • выбран внешний динамик (Fosi) → держим его, A2DP-поток iPhone льётся туда (forward сам)
+    #  • выход = Play Now (сам Car Thing) или не выбран → закрываем канал к динамику, поток
+    #    никуда не идёт, остаётся Play Now (метаданные по BLE)
+    # iPhone connectable всегда; что iPhone отдаёт — то Car Thing и ретранслирует.
     if power is not None:
         power.note_activity("route_activate")
-    asyncio.ensure_future(_activate_route())
+    if gui is None:
+        return
+    ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
+    asyncio.ensure_future(_apply_route_output(ro))
 
 
 def _on_toggle_sleep(on):
@@ -379,6 +552,12 @@ async def _on_connection(connection):
             await transfer.on_incoming_classic(connection)
         return
 
+    if orch is not None:
+        # A connected central should be the only visible iPhone surface. Stop
+        # pairing advertising immediately; if pairing fails and disconnects,
+        # on_disconnect/kick_reconnect will re-apply the proper visibility.
+        await orch.on_le_connection_started()
+
     _iphone = IPhoneService(model, on_update=_on_publish, hci_gate=hci_gate)
     started = {"v": False}
 
@@ -393,8 +572,30 @@ async def _on_connection(connection):
         except Exception as e:
             started["v"] = False
             logger.warning("iphone setup failed: %s", e)
+            return
+        peer = None
+        if gui is not None:
+            try:
+                gui.app_state.load_trusted()
+                try:
+                    # iOS connects over an RPA; the persisted source row is keyed by
+                    # the identity address from the keystore. Label AMS-capable sources
+                    # as iPhone instead of leaving the generic "Bluetooth Source".
+                    for row in gui.app_state.trusted_sources:
+                        if row.get("label") == "Bluetooth Source":
+                            row["label"] = "iPhone"
+                            row["type"] = row.get("type") or "Источник"
+                            peer = row.get("address") or peer
+                    gui.app_state.save_trusted()
+                finally:
+                    logger.info("trusted sources synced after AMS: %s", peer or "ok")
+            except Exception as e:
+                logger.warning("trusted source sync after AMS failed: %s", e)
         if orch is not None:
             await orch.on_bonded()
+        probe_address = peer or _best_bonded_source_address()
+        if probe_address:
+            asyncio.create_task(_post_pair_classic_probe(probe_address, reason=why))
 
     def _disc(*_):
         if _iphone is not None:
@@ -413,16 +614,17 @@ async def _on_connection(connection):
         # свежая пара создаётся автоматически, без ручного rm keys.json.
         # Codex: это закрывает "forget на iPhone -> не пере-парится". Долгосрочно лучше дроп бонда
         # на СТАРТЕ пары (pairing request), но reactive-на-failure надёжно (iPhone сам ретраит).
-        transfer_busy = bool(
-            getattr(model, "active_session", "") == "router"
-            or getattr(model, "transfer_active", False)
-            or (
-                transfer is not None
-                and bool(getattr(getattr(transfer, "bridge", None), "source_stream_active", False))
-            )
+        # [CLAUDE 2026-06-04] Блокируем авто-forget ТОЛЬКО при РЕАЛЬНОЙ передаче звука
+        # (source_stream_active). РАНЬШЕ сюда входил transfer_active/active_session==router —
+        # но с «трубой» transfer_active=True ПОСТОЯННО, из-за чего авто-forget НИКОГДА не
+        # срабатывал → битый BLE-бонд (DHKEY_CHECK_FAILED) не чистился → iPhone вечно
+        # откатывался на classic-only. Открытая труба ≠ идёт поток. (INVARIANTS п.1 и п.3)
+        streaming_now = bool(
+            transfer is not None
+            and getattr(getattr(transfer, "bridge", None), "source_stream_active", False)
         )
-        if transfer_busy:
-            logger.error("SMP pairing failed during active transfer/router: %s — keeping bonds", reason)
+        if streaming_now:
+            logger.error("SMP pairing failed во время РЕАЛЬНОГО потока: %s — keeping bonds", reason)
             return
 
         logger.error("SMP pairing failed: %s — auto-forget stale source bond + resolving", reason)
@@ -481,7 +683,7 @@ async def _on_connection(connection):
 
 
 async def main():
-    global orch, gui, transfer, backchannel, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
+    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
     _verify_persistent()
 
     # Per-boot инвентарь возможностей + настройки.
@@ -498,8 +700,14 @@ async def main():
 
     def _configure(device):
         global orch
-        orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p))
+        orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p),
+                                     hci_gate=hci_gate)
         orch.install()  # CTKD pairing config + classic enabled (для CTKD)
+        # [CLAUDE 2026-06-04] CoD до power_on() — iOS запоминает CoD при ПЕРВОМ сопряжении.
+        # Если CoD=0 в момент pairing, iPhone не поймёт что это аудиоустройство и не покажет
+        # в списке аудиовыходов. 0x240414 = Audio/Video Major + Loudspeaker minor + Audio service.
+        from a2dp_bridge import COD_AUDIO_LOUDSPEAKER
+        device.class_of_device = COD_AUDIO_LOUDSPEAKER
 
     # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
     device = None
@@ -518,11 +726,24 @@ async def main():
     device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
 
     # GUI: один home-surface + views поверх DRM (если дисплей доступен).
-    if hw_caps.get("display_drm"):
+    # На macOS: WebDisplay через браузер (env CAR_THING_WEB_DISPLAY=1, рекомендуется)
+    #           MacDisplay через pygame (env CAR_THING_MAC_DISPLAY=1)
+    _gui_enabled = os.environ.get("CARTHING_GUI_ENABLE", "1") != "0"
+    _use_web_display = os.environ.get("CAR_THING_WEB_DISPLAY") == "1"
+    _use_mac_display = os.environ.get("CAR_THING_MAC_DISPLAY") == "1"
+    if _gui_enabled and (_use_web_display or _use_mac_display or hw_caps.get("display_drm")):
         try:
-            from drm_display import DRMDisplay
+            if _use_web_display:
+                from web_display import WebDisplay
+                _display = WebDisplay()
+            elif _use_mac_display:
+                from mac_display import MacDisplay, _instance as _mac_instance
+                _display = _mac_instance or MacDisplay()
+            else:
+                from drm_display import DRMDisplay
+                _display = DRMDisplay()
             from gui_controller import GuiController
-            gui = GuiController(DRMDisplay(),
+            gui = GuiController(_display,
                                 on_command=_on_command, on_pairing=_on_pairing,
                                 on_transfer_rescan=_on_transfer_rescan,
                                 on_transfer_select=_on_transfer_select,
@@ -537,6 +758,18 @@ async def main():
                                 on_set_off_timeout=_on_set_off_timeout,
                                 on_toggle_notif_blink=_on_toggle_notif_blink)
             logger.info("GUI active (modular Compositor)")
+            # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
+            # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма
+            # через call_soon_threadsafe, иначе клики/свайпы падают «attached to a different loop».
+            if (_use_mac_display or _use_web_display) and hasattr(_display, "set_on_event"):
+                _rt_loop = asyncio.get_event_loop()
+                def _gui_input(event):
+                    if power is not None:
+                        power.note_activity("input")
+                    gui.handle_input(event)
+                def _on_input(event):
+                    _rt_loop.call_soon_threadsafe(_gui_input, event)
+                _display.set_on_event(_on_input)
             from power_policy import IdlePowerController
             power = IdlePowerController(settings)
             # [CLAUDE] начальные значения для Settings = реальные из power
@@ -546,24 +779,50 @@ async def main():
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)
+    elif not _gui_enabled:
+        logger.info("GUI disabled by CARTHING_GUI_ENABLE=0")
 
     # Transfer: A2DP relay + backchannel (внутри единого рантайма).
-    try:
-        from transfer_service import TransferService
-        from transfer_control import TransferControlBackchannel
-        app_state = gui.app_state if gui is not None else None
-        transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
-        backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
-        await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
-        for protocol in (
-            Protocol.CLASSIC_A2DP_SINK,
-            Protocol.CLASSIC_A2DP_SOURCE,
-            Protocol.CLASSIC_AVRCP,
-        ):
-            session_runner.register(TransferRouteConnector(protocol, transfer))
-    except Exception as e:
+    #
+    # Clean Bumble lab uses CARTHING_TRANSFER_ENABLE=0 to prove the BLE/Bumble
+    # pairing surface without installing any Classic A2DP/AVRCP SDP records.
+    # Production/default stays enabled unless this explicit lab switch is used.
+    if os.environ.get("CARTHING_TRANSFER_ENABLE", "1") == "1":
+        try:
+            from transfer_service import TransferService
+            from transfer_control import TransferControlBackchannel
+            app_state = gui.app_state if gui is not None else None
+            transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
+            backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
+            await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
+            for protocol in (
+                Protocol.CLASSIC_A2DP_SINK,
+                Protocol.CLASSIC_A2DP_SOURCE,
+                Protocol.CLASSIC_AVRCP,
+            ):
+                session_runner.register(TransferRouteConnector(protocol, transfer))
+        except Exception as e:
+            transfer = None
+            logger.warning("transfer disabled: %s", e)
+    else:
         transfer = None
-        logger.warning("transfer disabled: %s", e)
+        logger.info("transfer disabled by CARTHING_TRANSFER_ENABLE=0 for clean Bumble lab")
+
+    # iAP2/MFi: Apple accessory слой поверх того же Bumble runtime.
+    #
+    # Keep it opt-in during dual-mode audio pairing tests. Exposing an iAP2
+    # RFCOMM/SDP surface too early can show up on iOS as a generic "Accessory"
+    # row and pollute the first-pair experiment.
+    if os.environ.get("CARTHING_IAP2_ENABLE") == "1":
+        try:
+            from iap2_service import IAP2Service
+            iap2 = IAP2Service(device)
+            await iap2.start()
+        except Exception as e:
+            iap2 = None
+            logger.warning("iAP2 disabled: %s", e)
+    else:
+        logger.info("iAP2 disabled by default for clean dual-mode audio pairing")
 
     # macOS-источник (Фаза 4, каркас).
     from mac_service import MacService
@@ -581,30 +840,46 @@ async def main():
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
     await orch.apply_visibility()
-    # Старт с существующим бондом -> активно прилипнуть (high-duty directed burst).
+    logger.info("apply_visibility done")
+    if os.environ.get("CAR_THING_AUTO_PAIRING") == "1":
+        if gui is not None:
+            gui.set_pairing_mode(True, role="source")
+        if power is not None:
+            power.set_pairing(True)
+        await orch.arm_pairing(True, disconnect_current=False,
+                               classic_discoverable=False)
+        logger.info("auto pairing armed (CAR_THING_AUTO_PAIRING=1)")
     asyncio.ensure_future(orch.kick_reconnect())
+    logger.info("kick_reconnect scheduled")
 
     # Рендер-цикл — ОТДЕЛЬНАЯ задача (не зависит от input.start, который блокирует loop).
     async def _render_loop():
         tick = 0
+        logger.info("_render_loop started, gui=%s power=%s", gui, power)
         while True:
-            # Во время шторки экраном владеет отдельный тикер (_shade_loop) — основной
-            # цикл молчит, чтобы не было двойного рендера/гонки за дисплей.
-            shade = gui is not None and gui.needs_fast_render()
-            if power is not None:
-                power.note_model(model)
-                power.tick()
-                model.power_tier = power.runtime_tier
-            if gui is not None and not shade:
-                gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
-                if power is None or power.display_awake:
-                    gui.render()
-            publish_due = (tick % PUBLISH_EVERY == 0) if power is None else power.should_publish()
-            if not shade and publish_due:
-                _on_publish()         # runtime-bt.json для дирижёра/sync
-            tick += 1
-            interval = RENDER_INTERVAL if power is None else power.render_interval
-            await asyncio.sleep(interval)
+            try:
+                # Во время шторки экраном владеет отдельный тикер (_shade_loop) — основной
+                # цикл молчит, чтобы не было двойного рендера/гонки за дисплей.
+                shade = gui is not None and gui.needs_fast_render()
+                if power is not None:
+                    power.note_model(model)
+                    power.tick()
+                    model.power_tier = power.runtime_tier
+                if gui is not None and not shade:
+                    gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
+                    if power is None or power.display_awake:
+                        gui.render()
+                publish_due = (tick % PUBLISH_EVERY == 0) if power is None else power.should_publish()
+                if not shade and publish_due:
+                    _on_publish()         # runtime-bt.json для дирижёра/sync
+                tick += 1
+                interval = RENDER_INTERVAL if power is None else power.render_interval
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error("_render_loop error: %s", e, exc_info=True)
+                await asyncio.sleep(1.0)
 
     asyncio.ensure_future(_render_loop())
 
@@ -625,4 +900,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if os.environ.get("CAR_THING_MAC_DISPLAY") == "1":
+        from mac_display import MacDisplay, run_with_display
+        MacDisplay()
+        run_with_display(main)
+    else:
+        asyncio.run(main())

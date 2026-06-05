@@ -3,11 +3,11 @@ set -eu
 
 . /etc/default/carthing
 
-# This file is deliberately named ":S50-carthing-remote.disabled" so rcS will
+# This file is deliberately named "disabled-S50-carthing-remote" so rcS will
 # not match it as an S?? boot script. It is kept as a documented manual entry
 # point only; the runtime is not deleted because the old tests are still useful.
 if [ "${CARTHING_BUMBLE_QUARANTINE:-1}" != "0" ] || [ "${CARTHING_ALLOW_BUMBLE_RUN:-0}" != "1" ]; then
-    echo "[:S50-carthing-remote.disabled] Bumble runtime quarantined; not starting"
+    echo "[disabled-S50-carthing-remote] Bumble runtime quarantined; not starting"
     exit 0
 fi
 

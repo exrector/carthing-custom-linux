@@ -50,7 +50,12 @@ CONTENT_CX = OCCLUSION_LEFT // 2      # 370 — main horizontal center (left edg
 CONTENT_W  = 2 * (CONTENT_CX - CONTENT_X0)   # 660
 MAIN_CY    = OCCLUSION_BOTTOM // 2    # 172 — main vertical center
 CONTENT_TOP = 24                      # top-aligned content (lists) start
-LIST_X1     = W - MARGIN              # full-width rows in pushed/fullscreen views
+# [CLAUDE 2026-06-02] Дуга стоит левым краем на CONTENT_X1=740, НО зелёные сегменты громкости
+# выпирают наружу (R+7 => до x≈733). Поэтому контент ВЕРХНЕЙ полосы (списки/колонки) должен
+# кончаться с запасом, чтобы не лезть под штрихи. Нижний бар (y>=OCCLUSION_BOTTOM) — под дугой
+# пусто, он на всю ширину W.
+ARC_SAFE_X  = CONTENT_X1 - 24         # 716 — правая граница контента в верхней полосе
+LIST_X1     = ARC_SAFE_X              # full-width rows в fullscreen-вью держат зазор от дуги
 
 # BOTTOM BAR fills the bottom band exactly (top aligned with occlusion bottom)
 STATUSBAR_TOP = OCCLUSION_BOTTOM      # 318
@@ -110,6 +115,39 @@ def icon_pause(draw, cx, cy, r, color=FG):
 
 def icon_dot(draw, cx, cy, r, color=FG):
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
+
+
+def icon_plus(draw, cx, cy, r, color=FG, width=3):
+    """[CLAUDE 2026-06-03] Плюс (добавить/сопряжение)."""
+    draw.line([(cx - r, cy), (cx + r, cy)], fill=color, width=width)
+    draw.line([(cx, cy - r), (cx, cy + r)], fill=color, width=width)
+
+
+def icon_gear(draw, cx, cy, r, color=FG, width=2):
+    """[CLAUDE 2026-06-03] Простая шестерёнка (настройки): спицы + два кольца."""
+    n = 8
+    for i in range(n):
+        a = (math.pi * 2) * i / n
+        draw.line([(cx + r * 0.62 * math.cos(a), cy + r * 0.62 * math.sin(a)),
+                   (cx + r * math.cos(a), cy + r * math.sin(a))], fill=color, width=width)
+    draw.ellipse([cx - r * 0.62, cy - r * 0.62, cx + r * 0.62, cy + r * 0.62], outline=color, width=width)
+    draw.ellipse([cx - r * 0.24, cy - r * 0.24, cx + r * 0.24, cy + r * 0.24], outline=color, width=width)
+
+
+def dashed_line(draw, x0, y0, x1, y1, color=HAIRLINE, dash=8, gap=6, width=2):
+    """[CLAUDE 2026-06-02] Штриховая линия — визуальный язык дуги/сегментов (вместо сплошных
+    «секционных» делителей)."""
+    dx, dy = x1 - x0, y1 - y0
+    length = math.hypot(dx, dy)
+    if length <= 0:
+        return
+    ux, uy = dx / length, dy / length
+    pos = 0.0
+    while pos < length:
+        e = min(pos + dash, length)
+        draw.line([(x0 + ux * pos, y0 + uy * pos), (x0 + ux * e, y0 + uy * e)],
+                  fill=color, width=width)
+        pos += dash + gap
 
 
 def icon_prev(draw, cx, cy, r, color=FG):

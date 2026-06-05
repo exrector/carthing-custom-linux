@@ -19,6 +19,7 @@ class AnimDriver:
         # transient transition
         self.transition_active = False
         self.transition_dir = 0          # +1 next desktop, -1 prev
+        self.transition_from = None      # [CLAUDE] явный исходный экран (индексы вью НЕ соседние)
         self.transition_progress = 0.0   # 0..1
         self._trans_dur = 0.22           # seconds — light, no excess
 
@@ -34,9 +35,10 @@ class AnimDriver:
         return 0.35 + 0.65 * (0.5 + 0.5 * math.sin(phase))
 
     # ── transient swipe transition ─────────────────────────────────────────
-    def start_transition(self, direction):
+    def start_transition(self, direction, from_index=None):
         self.transition_active = True
         self.transition_dir = direction
+        self.transition_from = from_index
         self.transition_progress = 0.0
         self._trans_start = time.monotonic()
 

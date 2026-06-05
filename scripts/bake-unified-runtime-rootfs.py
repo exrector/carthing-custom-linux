@@ -26,7 +26,7 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "775ab59ab41c4329d443c5f20e7b35849f4cb91f"
+EXPECTED_RUNTIME_TREE_SHA1 = "a4e79ba71e3382cba7c0d18d1eaec5c2c570b944"
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
 )
@@ -38,6 +38,11 @@ RETIRED_RUNTIME_FILES = (
     "now_playing_ui.py",
     "system_menu.py",
     "trusted_devices.py",
+)
+RETIRED_INIT_FILES = (
+    ":S50-carthing-remote.disabled",
+    "S50-carthing-remote",
+    "S50-carthing-remote.disabled",
 )
 
 
@@ -202,6 +207,14 @@ def copy_runtime(image: Path) -> None:
     e2rm_tree(image, "/usr/lib/carthing/vendor/bumble")
     copy_overlay_tree(image, runtime_dir / "vendor", "/usr/lib/carthing/vendor")
 
+    # Hardware modules are part of the release overlay too. Copy them
+    # explicitly so a bake cannot accidentally depend on whichever modules
+    # happened to exist in its base image.
+    modules_dir = runtime_dir / "modules"
+    if modules_dir.is_dir():
+        e2rm_tree(image, "/usr/lib/carthing/modules")
+        copy_overlay_tree(image, modules_dir, "/usr/lib/carthing/modules")
+
     for name in NATIVE_RUNTIME_FILES:
         src = runtime_dir / name
         if src.exists():
@@ -210,6 +223,8 @@ def copy_runtime(image: Path) -> None:
 
 def copy_support_files(image: Path) -> None:
     copy_overlay_tree(image, OVERLAY / "usr/libexec/carthing", "/usr/libexec/carthing")
+    for name in RETIRED_INIT_FILES:
+        e2rm_file(image, f"/etc/init.d/{name}")
     copy_overlay_tree(image, OVERLAY / "etc/init.d", "/etc/init.d")
 
 
@@ -253,6 +268,17 @@ def verify_image(image: Path) -> None:
         if missing_vendor:
             raise SystemExit(f"vendored runtime dependency missing from rootfs: {missing_vendor}")
 
+        required_modules = [
+            "/usr/lib/carthing/modules/mfi/apple-mfi-auth.ko",
+            "/usr/lib/carthing/modules/mfi/apple-mfi-auth-i2c.ko",
+        ]
+        missing_modules = [
+            path for path in required_modules
+            if (OVERLAY / path.lstrip("/")).exists() and not e2path_exists(image, path)
+        ]
+        if missing_modules:
+            raise SystemExit(f"hardware overlay module missing from rootfs: {missing_modules}")
+
         leaked = [
             name for name in RETIRED_RUNTIME_FILES
             if e2path_exists(image, f"/usr/lib/carthing/{name}")
@@ -281,6 +307,16 @@ def verify_image(image: Path) -> None:
         missing_init = [path for path in required_init if not e2path_exists(image, path)]
         if missing_init:
             raise SystemExit(f"early init scripts missing from rootfs: {missing_init}")
+
+        retired_init = [
+            name for name in RETIRED_INIT_FILES
+            if e2path_exists(image, f"/etc/init.d/{name}")
+        ]
+        if retired_init:
+            raise SystemExit(f"retired init files leaked into rootfs: {retired_init}")
+
+        if not e2path_exists(image, "/etc/init.d/disabled-S50-carthing-remote"):
+            raise SystemExit("quarantined manual Bumble launcher missing from rootfs")
 
 
 def write_manifest(bundle: Path, base_bundle: Path) -> None:

@@ -32,15 +32,38 @@ class TransferService:
             autoconnect=False,                  # никакого авто-коннекта/визибилити по умолчанию
             hci_gate=hci_gate,
             on_state_change=self._sync,
+            on_visibility_request=self._on_bridge_visibility,
         )
         self._speaker_enroll_task = None
 
+    async def _on_bridge_visibility(self, connectable: bool, discoverable: bool):
+        """Callback от a2dp_bridge — перенаправляем в оркестратор асинхронно.
+        НЕ await здесь: этот callback вызывается изнутри _gate оркестратора →
+        прямой await вызвал бы дедлок на asyncio.Lock."""
+        if self.orch is None:
+            return
+        import asyncio
+        asyncio.ensure_future(self.orch.set_transfer_connectable(connectable))
+
     async def start(self):
-        """Поднять SDP + relay-машинерию (listener). Видимость остаётся за orchestrator."""
+        """[CLAUDE 2026-06-04] ТРУБА ВСЕГДА ОТКРЫТА. Никаких режимов/кнопок/teardown.
+        Car Thing = простой ретранслятор: iPhone connectable всегда; что iPhone пришлёт
+        (метаданные по BLE = Play Now, или A2DP-поток = музыка) — то и обрабатываем.
+        Если выбран динамик (Fosi) и он держится в standby — A2DP-поток льётся на него
+        (forward_packet делает это сам, когда receiver_rtp_channel открыт). Если динамик не
+        выбран — поток никуда не идёт, остаётся Play Now."""
         self.bridge.install_sdp_records()
         self.bridge.install_safe_link_key_provider()
         await self.bridge.start()               # AVDTP listener up
-        # ВАЖНО: вызвать orchestrator.apply_visibility() ПОСЛЕ — он перегейтит classic в not-connectable.
+        # transfer_active=True ПОСТОЯННО — труба всегда «активна», forward работает сам.
+        self.model.transfer_active = True
+        try:
+            self.bridge.state.transfer_active = True
+        except Exception:
+            pass
+        # Standby держит выбранный динамик с загрузки (звонит только спаренным колонкам).
+        self.bridge.start_standby_loop()
+        await self.orch.on_a2dp_state(True)
 
     async def start_speaker_enrollment(self):
         if self._speaker_enroll_task is not None and not self._speaker_enroll_task.done():
@@ -63,13 +86,22 @@ class TransferService:
                 self._sync()
                 await asyncio.sleep(1.0)
                 continue
+            # [CLAUDE 2026-06-03] start_discovery (инквайри) гасит BLE-advertising на одном
+            # радиочипе. Возрождаем рекламу СРАЗУ после каждого скана, иначе BLE «Car Thing»
+            # умирает навсегда (источники перестают видеть его в эфире).
+            try:
+                await self.orch.apply_visibility()
+            except Exception as e:
+                logger.warning("revive advertising after inquiry failed: %s", e)
             if bool(getattr(self.bridge.state, "pairing_mode", False)):
                 try:
                     self.bridge.state.speaker_pairing_status = "scan"
                 except Exception:
                     pass
                 self._sync()
-                await asyncio.sleep(1.0)
+                # [CLAUDE 2026-06-03] Ленивая каденция: пауза между инквайри больше (устройства
+                # не мелькают в эфире). Список накопительный — спешить незачем.
+                await asyncio.sleep(5.0)
 
     async def stop_speaker_enrollment(self):
         if self._speaker_enroll_task is not None and not self._speaker_enroll_task.done():
@@ -120,8 +152,23 @@ class TransferService:
             candidate = None
         if candidate is None:
             candidate = {"address": normalized, "label": normalized, "audio": True}
-        elif not candidate.get("audio"):
-            candidate = {**candidate, "audio": True}
+        # [CLAUDE 2026-06-03] УНИВЕРСАЛЬНЫЙ enroll: НЕ-аудио (телефон/ноут = источник) просто
+        # заносим в доверенные как ИСТОЧНИК, БЕЗ classic-коннекта (иначе PAGE_TIMEOUT/AUTH флуд).
+        # Реальная привязка источника — по BLE со стороны самого устройства (выбери Car Thing).
+        if not candidate.get("audio"):
+            try:
+                self.bridge.state.enroll_trusted_device(
+                    normalized, name=candidate.get("label") or normalized,
+                    class_of_device=candidate.get("class_of_device"),
+                    capabilities=["audio_input", "metadata_input", "control_output"])
+                self.bridge.state.save_trusted()
+                self.bridge.state.speaker_pairing_status = "done"
+                self.bridge.state.pairing_message = (candidate.get("label") or normalized) + " добавлен (источник)"
+                self.bridge.state.pairing_mode = False
+            except Exception as e:
+                logger.warning("source enroll failed: %s", e)
+            self._sync()
+            return
         try:
             existing = list(getattr(self.bridge.state, "speaker_candidates", []))
             existing = [c for c in existing if c.get("address") != normalized]
@@ -129,10 +176,14 @@ class TransferService:
             self.bridge.state.speaker_candidates = existing
         except Exception:
             pass
+        ok = False
         try:
             await self.bridge.pair_speaker(normalized)
             if getattr(self.bridge.state, "speaker_pairing_status", "") == "done":
+                ok = True
                 await asyncio.sleep(1.2)
+                # закрываем сканер, но СОЕДИНЕНИЕ ДЕРЖИМ (как настоящая ОС): set_speaker_connected
+                # уже выставлен в True в bridge.pair_speaker, соединение лежит в _speaker_connections.
                 self.bridge.state.pairing_mode = False
                 self.bridge.state.speaker_pairing_status = "idle"
         except Exception as e:
@@ -142,9 +193,11 @@ class TransferService:
                 self.bridge.state.pairing_message = "Пара не завершена"
             except Exception:
                 pass
-        finally:
-            # Silent enrollment: trust the speaker, but do not keep the media path open.
-            # Pairing stays as a bonding action only; transfer is explicit.
+        if not ok:
+            # [CLAUDE 2026-06-03] Раньше здесь был «silent enrollment»: бридж соединял колонку,
+            # а обёртка тут же РВАЛА линк -> Fosi возвращалась в мигание (режим пары). Теперь
+            # рвём ТОЛЬКО при неудаче (очистка); при успехе держим ACL/AVDTP — колонка
+            # перестаёт мигать и показывается подключённой (зелёной) в Routes.
             paired_connection = self.bridge._speaker_connections.pop(normalized, None)
             if paired_connection is not None:
                 try:
@@ -176,28 +229,17 @@ class TransferService:
             self.bridge.state.transfer_status = "armed"
         except Exception:
             pass
-        await self.orch.set_transfer_connectable(True)   # classic connectable (bonded-only, не discoverable)
+        # [CLAUDE 2026-06-03] МАРШРУТ ПАССИВЕН. Car Thing НИКОГО НЕ ДЁРГАЕТ:
+        #  - источник (iPhone) НЕ дозваниваем (раньше connect_source -> AUTHENTICATION_FAILURE 0x5
+        #    и вообще неверно по модели). Просто становимся готовым connectable-sink'ом и ЖДЁМ,
+        #    пока пользователь сам выберет Car Thing аудиовыходом на iPhone — он подключится сам.
+        #  - выход (Fosi) — НАШЕ устройство вывода, его держим/реконнектим сами.
+        await self.orch.set_transfer_connectable(True)   # connectable для bonded-источника (не discoverable)
         await self.orch.on_a2dp_state(True)
         self.bridge.start_standby_loop()
-        # [CLAUDE 2026-06-02] CarThing САМ звонит bonded айфону по classic (исходящий) — это
-        # «мы инициируем classic из меню, айфон подхватывает». Раньше код только ЖДАЛ входящего.
-        src = None
-        try:
-            sources = list(self.bridge.state.trusted_sources)
-            if sources:
-                src = sources[0].get("address")
-        except Exception:
-            src = None
-        if src:
-            try:
-                await self.bridge.connect_source(src)
-                logger.info("transfer: dialed bonded source over classic: %s", src)
-            except Exception as e:
-                logger.warning("source classic dial failed (iPhone may still pick up): %s", e)
-        else:
-            logger.info("transfer armed: no bonded source yet — nothing to dial")
         await self.bridge.ensure_trusted_speakers_connected()
         await self.bridge.request_receiver_connection()
+        logger.info("transfer armed: route set, waiting for iPhone to pick Car Thing as output")
         self._sync()
 
     async def deactivate(self):

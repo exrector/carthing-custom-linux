@@ -74,12 +74,15 @@ class GuiController:
             DRMDisplayAdapter(display), screens,
             status_bar=StatusBar(), anim=AnimDriver(),
             state=self.app_state, on_intent=self._nav_intent,
-            show_dots=False,                       # без точек-десктопов: один home
+            show_dots=True,                        # [CLAUDE] 3 точки-индикатора: ‹Маршруты · Play Now · Уведомления›
+            nav_order=[ROUTER, HOME, NOTIF],        # [CLAUDE 2026-06-03] слева-направо: Маршруты | Play Now | Уведомления
             pairing_modal=PairingModal(emit=emit),
         )
         self.app_state.active_desktop = HOME
         self._prev_iphone_connected = False
+        self._prev_pairing_mode = False             # [CLAUDE] для возврата на Routes после пары
         self._shade_task = None        # единственный рендер-тикер шторки (~60fps)
+        self._anim_task = None         # [CLAUDE] тикер слайда вью (~60fps)
         self._snap = None              # None = следуем за пальцем; иначе доводка
         self._scroll_task = None       # единый scroll render/inertia ticker для всех экранов
         self._scroll_velocity = 0.0
@@ -92,6 +95,12 @@ class GuiController:
         if intent == StatusBar.INTENT_NOTIFICATIONS:
             self._push_view(self.compositor.active)
             self.compositor.active = NOTIF
+            self.compositor.render()
+            return
+        if intent == "open_settings":               # [CLAUDE 2026-06-03] круглая кнопка в Routes -> Настройки
+            if self.compositor.active != SETTINGS:
+                self._push_view(self.compositor.active)
+            self.compositor.active = SETTINGS
             self.compositor.render()
             return
         if intent == StatusBar.INTENT_ASSISTANT:
@@ -136,18 +145,37 @@ class GuiController:
 
     def needs_fast_render(self):
         """Рендер-циклу рантайма: пока активна шторка, экраном владеет ОТДЕЛЬНЫЙ тикер
-        (_shade_loop) — основной цикл не должен рисовать (иначе двойной рендер/гонка)."""
-        return self.compositor.shade_active
+        (_shade_loop) — основной цикл не должен рисовать (иначе двойной рендер/гонка).
+        Также во время слайда вью экраном владеет _anim_loop."""
+        anim = getattr(self.compositor, "anim", None)
+        return self.compositor.shade_active or bool(anim and anim.transition_active)
+
+    def _ensure_anim_task(self):
+        if getattr(self, "_anim_task", None) is None or self._anim_task.done():
+            self._anim_task = asyncio.ensure_future(self._anim_loop())
+
+    async def _anim_loop(self):
+        """[CLAUDE 2026-06-02] Тикер слайда вью ~60fps: двигает transition_progress и рисует
+        кадры, пока переход активен. Завершается финальным кадром без transition."""
+        anim = getattr(self.compositor, "anim", None)
+        try:
+            while anim is not None and anim.transition_active:
+                anim.tick()
+                self.compositor.render()
+                await asyncio.sleep(0.016)
+        finally:
+            self.compositor.render()
 
     # ── интерактивная шторка (game-loop: касание ТОЛЬКО двигает p, рисует тикер) ──
     def _on_drag(self, kind, finger_y):
+        # [CLAUDE 2026-06-03] Верхняя шторка убрана: открытие drag-ом сверху игнорируем
+        # (уведомления — отдельный свайп-вью справа).
+        if kind == "open":
+            return
         # НИЖНИЙ край шторки = позиция пальца по вертикали (абсолютная) -> едет ровно за пальцем
         p = max(0.0, min(1.0, finger_y / float(T.H)))
-        if kind == "open":
-            if self.compositor.active == NOTIF:
-                return                                  # уже открыто
-            if not self.compositor.shade_active:
-                self.compositor.begin_shade(self.compositor.active, NOTIF, p)
+        if False:
+            pass
         else:  # close
             if self.compositor.active != NOTIF:
                 return                                  # нечего закрывать
@@ -161,8 +189,8 @@ class GuiController:
         if not self.compositor.shade_active:
             # быстрый флик без промежуточных кадров — мгновенно по порогу
             if offset >= 100:
-                if kind == "open" and self.compositor.active != NOTIF:
-                    self.compositor.active = NOTIF; self.compositor.render()
+                if kind == "open":
+                    return                              # [CLAUDE 2026-06-03] верхняя шторка убрана
                 elif kind == "close" and self.compositor.active == NOTIF:
                     self.compositor.active = HOME; self.compositor.render()
             return
@@ -280,6 +308,12 @@ class GuiController:
             self.dispatcher.dispatch("media_vol_up" if up else "media_vol_down")
             self.compositor.render()
             return
+        # [CLAUDE 2026-06-02] Если открыт модал (полноэкранный сканер сопряжения) — ВСЕ события
+        # (Back/Press/Tap) идут в него, а не в навигацию вьюх. Иначе из сканера было не выйти:
+        # _handle_back перехватывал Back до модала. Энкодер (выше) остаётся громкостью.
+        if self.compositor.modal is not None:
+            self.compositor.handle_input(event)
+            return
         if event == Input.SETTINGS:
             self._cancel_scroll_inertia()
             if self.compositor.active != SETTINGS:
@@ -292,13 +326,9 @@ class GuiController:
             if self._handle_back():
                 return
             return
-        # Жест ОТ ВЕРХНЕГО КРАЯ вниз -> открыть уведомления (как «шторка» iOS).
+        # [CLAUDE 2026-06-03] Верхняя «шторка» уведомлений УБРАНА — уведомления теперь
+        # отдельный свайп-вью (справа). EDGE_TOP игнорируем.
         if event == Input.EDGE_TOP:
-            self._cancel_scroll_inertia()
-            if self.compositor.active != NOTIF:
-                self._push_view(self.compositor.active)
-                self.compositor.active = NOTIF
-                self.compositor.render()
             return
         # Жест ОТ НИЖНЕГО КРАЯ вверх -> сначала свернуть карточку, потом закрыть вью на home.
         if event == Input.EDGE_BOTTOM:
@@ -306,10 +336,19 @@ class GuiController:
             self._handle_back()
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
-            # свайп-влево в списке уведомлений = очистить выбранное; иначе игнор.
-            if event == Input.SWIPE_LEFT and self.compositor.active == NOTIF:
-                if self.compositor.current.on_input(event):
-                    self.compositor.render()
+            # [CLAUDE 2026-06-03] Горизонталь: [Маршруты] <- Play Now -> [Уведомления].
+            # Настройки больше НЕ свайп-вью — вход по круглой кнопке в Routes (intent open_settings).
+            order = [ROUTER, HOME, NOTIF]
+            if self.compositor.active in order:
+                i = order.index(self.compositor.active)
+                j = max(0, min(len(order) - 1, i + (1 if event == Input.SWIPE_RIGHT else -1)))
+                target = order[j]
+                if target != self.compositor.active:
+                    # слайд СЛЕДУЕТ ЗА ПАЛЬЦЕМ: свайп вправо -> контент едет вправо
+                    # (новый въезжает слева, текущий уходит вправо) = direction -1.
+                    direction = -1 if event == Input.SWIPE_RIGHT else 1
+                    self.compositor.animate_switch(target, direction)
+                    self._ensure_anim_task()
             return
         # Средние свайпы вверх/вниз (и энкодер) -> прокрутка активного вью.
         self.compositor.handle_input(event)
@@ -356,6 +395,13 @@ class GuiController:
         if a.iphone.connected and not self._prev_iphone_connected:
             a.active_desktop = HOME                 # подключился iPhone -> на home
         self._prev_iphone_connected = a.iphone.connected
+        # [CLAUDE 2026-06-03] После создания пары (сканер закрылся: pairing_mode True->False)
+        # возвращаемся на view Входы/Выходы (Routes), а НЕ на главный. Ставится ПОСЛЕ iPhone-флипа,
+        # чтобы перебить «подключился iPhone -> HOME», случившийся во время сопряжения.
+        pm = bool(getattr(a, "pairing_mode", False))
+        if self._prev_pairing_mode and not pm:
+            a.active_desktop = ROUTER
+        self._prev_pairing_mode = pm
         if a.iphone.connected:
             if s.title != a.iphone.title:          # смена трека -> сбросить локальный «лайк»
                 a.iphone.liked = False

@@ -7,6 +7,7 @@
 
 import json
 import logging
+import os
 
 import state_paths
 
@@ -17,6 +18,8 @@ _DEFAULTS = {
     "active_session": "remote",        # route-graph session preset
     "default_speaker": None,           # адрес динамика по умолчанию для Transfer
     "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
+    "notif_blink": True,               # [CLAUDE 2026-06-03] моргание уведомлений (раньше НЕ грузился -> сбрасывался)
+    "volume": 0.5,                     # [CLAUDE 2026-06-03] последняя громкость (восстанавливается на буст)
     "screen_dim_after_sec": 45,         # сначала только подсветка, без BT/suspend
     "screen_off_after_sec": 150,
     "screen_active_brightness": 100,
@@ -37,20 +40,23 @@ class SettingsService:
         self.load()
 
     def load(self):
+        # [CLAUDE 2026-06-03] Настройки — секция "settings" ЕДИНОГО state.json (один источник
+        # правды вместе с devices). Грузим ВСЕ ключи (а не только дефолты), иначе notif_blink и пр.
+        # сбрасывались на ребуте.
         try:
-            if state_paths.SETTINGS_PATH.exists():
-                data = json.loads(state_paths.SETTINGS_PATH.read_text() or "{}")
-                self.values.update({k: data[k] for k in _DEFAULTS if k in data})
+            data = state_paths.read_state().get("settings", {})
+            if isinstance(data, dict):
                 if "active_session" not in data and "device_mode" in data:
-                    self.values["active_session"] = data["device_mode"]
+                    data["active_session"] = data["device_mode"]
+                self.values.update(data)
         except Exception as e:
             logger.warning("settings load failed: %s", e)
 
     def save(self):
+        # [CLAUDE 2026-06-03] Пишем секцию settings в единый state.json (write_state делает
+        # read-modify-write + atomic + сохраняет секцию devices). Полный отпечаток всех значений.
         try:
-            state_paths.require_persistent()
-            data = {k: v for k, v in self.values.items() if _DEFAULTS.get(k) != v}
-            state_paths.SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False))
+            state_paths.write_state({"settings": dict(self.values)})
         except Exception as e:
             logger.warning("settings save failed (degraded?): %s", e)
 
