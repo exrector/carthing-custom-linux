@@ -84,12 +84,13 @@ SuperbirdDevice.WRITE_CHUNK_SIZE = 512
 ADDR_TMP = 0x13000000
 TRANSFER_BLOCK_SIZE = int(os.environ.get("CARTHING_FLASH_TRANSFER_BLOCK_SIZE", "32768"))
 SECTOR = 512
-WRITE_CHUNK_SECTORS = int(os.environ.get("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "128"))
+WRITE_CHUNK_SECTORS = int(os.environ.get("CARTHING_FLASH_WRITE_CHUNK_SECTORS", "1024"))
 WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS * SECTOR
 MAX_RETRIES = int(os.environ.get("CARTHING_FLASH_MAX_RETRIES", "16"))
 RECONNECT_WAIT = float(os.environ.get("CARTHING_FLASH_RECONNECT_WAIT", "6"))
-MAKE_DEV_RETRIES = int(os.environ.get("CARTHING_FLASH_MAKE_DEV_RETRIES", "10"))
+MAKE_DEV_RETRIES = int(os.environ.get("CARTHING_FLASH_MAKE_DEV_RETRIES", "20"))
 MAKE_DEV_INITIAL_SETTLE = float(os.environ.get("CARTHING_FLASH_MAKE_DEV_INITIAL_SETTLE", "3"))
+BULKCMD_TIMEOUT_MS = int(os.environ.get("CARTHING_FLASH_BULKCMD_TIMEOUT_MS", "10000"))
 USE_RESTORE_PARTITION = os.environ.get("CARTHING_FLASH_USE_RESTORE_PARTITION", "0") != "0"
 
 SuperbirdDevice.TRANSFER_BLOCK_SIZE = TRANSFER_BLOCK_SIZE
@@ -97,11 +98,21 @@ SuperbirdDevice.WRITE_CHUNK_SIZE = WRITE_CHUNK_SECTORS
 
 
 def raw_bulkcmd(dev: SuperbirdDevice, cmd: str):
-    resp = dev.device.bulkCmd(cmd)
+    dev.device.dev.default_timeout = BULKCMD_TIMEOUT_MS
+    resp = dev.device.bulkCmd(cmd, timeout=BULKCMD_TIMEOUT_MS)
     response = dev.decode(resp)
     if "success" not in response:
         raise RuntimeError(f"not success: {cmd!r}: {response!r}")
     time.sleep(0.05)
+
+
+def release_dev(dev: SuperbirdDevice | None):
+    if dev is not None:
+        try:
+            usb.util.dispose_resources(dev.device.dev)
+        except Exception:
+            pass
+    gc.collect()
 
 
 def get_device() -> SuperbirdDevice:
@@ -150,14 +161,8 @@ def make_dev(max_retries: int = MAKE_DEV_RETRIES, initial_settle: float = MAKE_D
             raw_bulkcmd(dev, "mmc dev 1 0")
             raw_bulkcmd(dev, "amlmmc key")
             return dev
-        except SystemExit:
-            raise
-        except Exception as exc:
-            if dev is not None:
-                try:
-                    usb.util.dispose_resources(dev.device.dev)
-                except Exception:
-                    pass
+        except (Exception, SystemExit) as exc:
+            release_dev(dev)
             last_err = exc
             print(f"  ~ make_dev #{attempt + 1}/{max_retries}: {exc.__class__.__name__}: {str(exc)[:80]}")
 
@@ -203,6 +208,7 @@ def write_image(dev: SuperbirdDevice, infile: str, sector_offset: int, label: st
                 except Exception as exc:
                     failures += 1
                     print(f"  ! {exc.__class__.__name__} blk={hex(target_blk)} #{attempt + 1}/{MAX_RETRIES}: {str(exc)[:80]}")
+                    release_dev(dev)
                     time.sleep(RECONNECT_WAIT)
                     dev = make_dev()
                     print("  + reconnected")
@@ -242,6 +248,7 @@ def main() -> int:
         f"retries={MAX_RETRIES} "
         f"reconnect_wait={RECONNECT_WAIT}s "
         f"make_dev_retries={MAKE_DEV_RETRIES} "
+        f"bulkcmd_timeout={BULKCMD_TIMEOUT_MS}ms "
         f"use_restore_partition={int(USE_RESTORE_PARTITION)}\n"
     )
     input("boot device №1 into Burn Mode, then press enter >>> ")
