@@ -49,6 +49,7 @@ log "stage-2 entry"
 
 [ -f /etc/default/carthing ] && . /etc/default/carthing
 
+run_early_service /etc/init.d/S02-runtime-tmp
 run_early_service /etc/init.d/S03-runtime-state
 run_early_service /etc/init.d/S04-usbgadget
 run_early_service /etc/init.d/S05-usbnet

@@ -45,6 +45,24 @@ HOST_E2FSPROGS_CONF_ENV += \
 	CPP="$(HOST_DARWIN_CLANG) -E"
 endif
 
+# ncurses' configure probes use /usr/bin/cpp by default. On current macOS that
+# standalone preprocessor cannot parse the Xcode SDK availability macros, so it
+# incorrectly reports standard headers such as sys/ioctl.h as missing. Build
+# host-ncurses with clang consistently, as we already do for host Python.
+ifneq ($(HOST_DARWIN_APPLE_CLANG),)
+HOST_NCURSES_CONF_ENV += \
+	CC="$(HOST_DARWIN_APPLE_CLANG)" \
+	GCC="$(HOST_DARWIN_APPLE_CLANG)" \
+	CXX="$(HOST_DARWIN_APPLE_CLANGXX)" \
+	CPP="$(HOST_DARWIN_APPLE_CLANG) -E"
+endif
+
+# zstd derives the target shared-library format from the build host's uname.
+# During a Darwin-to-Linux cross-build that makes the target compiler receive
+# macOS-only -install_name flags and try to produce a dylib. Pin the target
+# format to Linux while leaving host-zstd's native Darwin build untouched.
+ZSTD_OPTS += TARGET_SYSTEM=Linux UNAME_TARGET_SYSTEM=Linux
+
 # host-gawk enables a macOS-only respawn path when configure finds
 # _NSGetExecutablePath, but the upstream build then reaches an undeclared call
 # in posix/gawkmisc.c on this host. Buildroot only needs a working host awk, so

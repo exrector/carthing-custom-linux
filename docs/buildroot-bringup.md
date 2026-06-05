@@ -110,9 +110,24 @@ That is the first safe migration step because it does not change the bootloader,
 - `iproute2`
 - `libgpiod`
 - Python 3
+- full Python application runtime:
+  - `.py` sources and compiled bytecode
+  - `pip` and `setuptools`
+  - SSL, SQLite, readline/curses, decimal, bz2, xz/lzma, zlib/zstd, XML, and CJK codecs
+  - intentionally excludes CPython tests, Tk/IDLE, and obsolete `2to3`
 - `carthing-bt-fwload`
 - `carthing-btattach-mini`
 - our init scripts under `/etc/init.d`
+
+The generated ext4 rootfs is fixed at `512M`. This preserves the deliberately
+expanded release layout and leaves room for userspace development without
+changing the device partition map.
+
+The stock 4.9 kernel cannot service the modern libc `posix_spawn()` path, so
+target CPython is built without that unusable API and `subprocess` reliably
+falls back to fork/exec. `S02-runtime-tmp` exposes `/run/tmp` at `/tmp` early in
+boot so `tempfile`, `pip`, and `venv` work while the root filesystem stays
+read-only.
 
 ## What This Rootfs Should Not Contain
 

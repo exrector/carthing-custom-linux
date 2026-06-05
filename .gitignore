@@ -1,6 +1,8 @@
 flash-bake-*/
 *.img
 previews/
+host-tools/
+distfiles/
 __pycache__/
 *.pyc
 .DS_Store

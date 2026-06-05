@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+mkdir -p /run/tmp /tmp
+chmod 1777 /run/tmp
+
+if ! awk '$2 == "/tmp" { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
+    mount --bind /run/tmp /tmp
+fi
+
+echo "[S02-runtime-tmp] writable /tmp backed by /run/tmp"

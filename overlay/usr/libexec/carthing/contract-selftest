@@ -53,6 +53,13 @@ check_cmd python3
 check_cmd dropbear
 check_cmd dropbearkey
 
+if /usr/libexec/carthing/python-runtime-selftest; then
+    echo "[ok] full Python application runtime"
+else
+    echo "[missing] full Python application runtime"
+    failed=1
+fi
+
 if [ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ]; then
     if command -v httpd >/dev/null 2>&1 || command -v busybox >/dev/null 2>&1; then
         echo "[ok] debug httpd available"

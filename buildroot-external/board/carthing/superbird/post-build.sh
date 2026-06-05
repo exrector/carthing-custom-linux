@@ -31,6 +31,36 @@ find "$TARGET_DIR/etc/init.d" -type f -name 'S*' -exec chmod 0755 {} +
 find "$TARGET_DIR/usr/libexec/carthing" -type f -exec chmod 0755 {} +
 find "$TARGET_DIR" -type d -name '__pycache__' -prune -exec rm -rf {} +
 find "$TARGET_DIR" -type f -name '*.pyc' -delete
+find "$TARGET_DIR" -type f -name '._*' -delete
+
+target_python_dir=$(find "$TARGET_DIR/usr/lib" -maxdepth 1 -type d -name 'python3.*' -print -quit)
+if [ -n "$target_python_dir" ]; then
+    python_version=$(basename "$target_python_dir")
+    host_python="$HOST_DIR/bin/$python_version"
+    if [ ! -x "$host_python" ]; then
+        echo "missing matching host Python: $host_python" >&2
+        exit 1
+    fi
+
+    set -- "$target_python_dir"
+    for python_dir in \
+        "$TARGET_DIR/usr/lib/carthing" \
+        "$TARGET_DIR/usr/libexec/carthing"
+    do
+        if [ -d "$python_dir" ]; then
+            set -- "$@" "$python_dir"
+        fi
+    done
+
+    # The overlay can contain stale host caches. Rebuild bytecode only after
+    # the final overlay has been copied and cleaned.
+    "$host_python" -m compileall \
+        -q \
+        --invalidation-mode checked-hash \
+        -s "$TARGET_DIR" \
+        -p / \
+        "$@"
+fi
 
 if [ -d "$TARGET_DIR/root/.ssh" ]; then
     chmod 0700 "$TARGET_DIR/root/.ssh"

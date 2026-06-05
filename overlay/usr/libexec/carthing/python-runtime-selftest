@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Verify the Python capabilities required by the release rootfs."""
+
+from __future__ import annotations
+
+import importlib
+import pathlib
+import subprocess
+import sys
+import tempfile
+import venv
+
+
+REQUIRED_MODULES = (
+    "_bz2",
+    "_ctypes",
+    "_decimal",
+    "_hashlib",
+    "_lzma",
+    "_multiprocessing",
+    "_sqlite3",
+    "_ssl",
+    "_zstd",
+    "asyncio",
+    "bz2",
+    "compression.zstd",
+    "curses",
+    "ctypes",
+    "decimal",
+    "lzma",
+    "multiprocessing",
+    "pip",
+    "readline",
+    "sqlite3",
+    "ssl",
+    "venv",
+    "zlib",
+)
+
+
+def run_functional_checks() -> list[str]:
+    import bz2
+    import compression.zstd
+    import decimal
+    import lzma
+    import sqlite3
+    import ssl
+    import zlib
+
+    failures: list[str] = []
+    payload = b"carthing-python-runtime" * 32
+
+    codecs = {
+        "bz2": (bz2.compress, bz2.decompress),
+        "lzma": (lzma.compress, lzma.decompress),
+        "zlib": (zlib.compress, zlib.decompress),
+        "zstd": (compression.zstd.compress, compression.zstd.decompress),
+    }
+    for name, (compress, decompress) in codecs.items():
+        try:
+            if decompress(compress(payload)) != payload:
+                failures.append(f"{name}: compression round-trip mismatch")
+        except Exception as exc:
+            failures.append(f"{name}: {type(exc).__name__}: {exc}")
+
+    try:
+        with sqlite3.connect(":memory:") as database:
+            value = database.execute("select 6 * 7").fetchone()
+        if value != (42,):
+            failures.append(f"sqlite3: unexpected query result: {value!r}")
+    except Exception as exc:
+        failures.append(f"sqlite3: {type(exc).__name__}: {exc}")
+
+    try:
+        if decimal.Decimal("0.1") + decimal.Decimal("0.2") != decimal.Decimal("0.3"):
+            failures.append("decimal: exact arithmetic mismatch")
+    except Exception as exc:
+        failures.append(f"decimal: {type(exc).__name__}: {exc}")
+
+    try:
+        ssl.create_default_context()
+    except Exception as exc:
+        failures.append(f"ssl: {type(exc).__name__}: {exc}")
+
+    try:
+        output = subprocess.check_output(["/bin/echo", "subprocess-ok"], text=True).strip()
+        if output != "subprocess-ok":
+            failures.append(f"subprocess: unexpected output: {output!r}")
+    except Exception as exc:
+        failures.append(f"subprocess: {type(exc).__name__}: {exc}")
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="carthing-python-selftest-") as directory:
+            venv_dir = pathlib.Path(directory) / "venv"
+            venv.EnvBuilder(with_pip=True).create(venv_dir)
+            output = subprocess.check_output(
+                [str(venv_dir / "bin" / "python"), "-m", "pip", "--version"],
+                text=True,
+            )
+            if "pip " not in output:
+                failures.append(f"venv: unexpected pip output: {output!r}")
+    except Exception as exc:
+        failures.append(f"venv: {type(exc).__name__}: {exc}")
+
+    return failures
+
+
+def main() -> int:
+    failures: list[str] = []
+    for name in REQUIRED_MODULES:
+        try:
+            importlib.import_module(name)
+        except Exception as exc:
+            failures.append(f"{name}: {type(exc).__name__}: {exc}")
+
+    if not failures:
+        failures.extend(run_functional_checks())
+
+    if failures:
+        print("Python runtime self-test failed:", file=sys.stderr)
+        for failure in failures:
+            print(f"  {failure}", file=sys.stderr)
+        return 1
+
+    print(f"Python runtime OK: {sys.version.split()[0]} ({len(REQUIRED_MODULES)} capabilities)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
