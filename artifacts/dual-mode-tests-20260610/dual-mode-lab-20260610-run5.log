@@ -1,0 +1,173 @@
+2026-06-10 02:43:46,413 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-10 02:43:46,472 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-10 02:43:46,473 INFO ble_transport: Opening transport hci-socket:0
+2026-06-10 02:43:46,490 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-10 02:43:47,885 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-10 02:43:47,891 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-10 02:43:47,892 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-10 02:43:47,896 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-10 02:43:47,922 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-10 02:43:47,923 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-10 02:43:47,926 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-10 02:43:47,927 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-10 02:43:47,928 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-10 02:43:47,929 INFO carthing_runtime: phase=ready
+2026-06-10 02:43:47,951 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:43:47,951 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:43:47,952 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-10 02:43:47,963 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 02:43:47,964 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:43:47,965 WARNING accessory_orchestrator: bonded-only advertising failed: HCI_Error(hci/COMMAND_DISALLOWED_ERROR [0xC])
+2026-06-10 02:43:47,965 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:43:47,969 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:43:47,970 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-10 02:43:47,977 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:43:47,978 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:43:47,978 INFO carthing_runtime: apply_visibility done
+2026-06-10 02:43:47,978 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-10 02:43:47,979 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-10 02:43:47,983 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-10 02:43:47,991 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:43:47,992 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:43:48,271 INFO carthing_runtime: AMS start (encryption)
+2026-06-10 02:43:48,272 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 02:43:48,666 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 02:43:48,770 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 02:43:48,928 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 02:43:48,980 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 02:43:49,006 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 02:43:49,032 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'Repeat', 'Shuffle', 'SkipFwd', 'SkipBack', 'Like', 'Dislike']
+2026-06-10 02:43:49,059 INFO ams_client: AMS raw notification: 020000d090d0bad0b2d0b0d180d0b8d183d0bc
+2026-06-10 02:43:49,059 INFO ams_client: State: ⏸  — Аквариум [0/0s] vol=0%
+2026-06-10 02:43:49,084 INFO ams_client: AMS raw notification: 0203003231302e323134
+2026-06-10 02:43:49,085 INFO ams_client: State: ⏸  — Аквариум [0/210s] vol=0%
+2026-06-10 02:43:49,111 INFO ams_client: AMS raw notification: 020200d098d0b720d181d0b8d18fd18ed189d0b5d0b920d0bfd183d181d182d0bed182d18b
+2026-06-10 02:43:49,112 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [0/210s] vol=0%
+2026-06-10 02:43:49,137 INFO ams_client: AMS raw notification: 020100
+2026-06-10 02:43:49,137 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [0/210s] vol=0%
+2026-06-10 02:43:49,163 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 02:43:49,163 INFO ams_client: AMS: ready
+2026-06-10 02:43:49,164 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 02:43:49,190 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-10 02:43:49,190 INFO ams_client: AMS player: Музыка
+2026-06-10 02:43:49,190 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [0/210s] vol=0%
+2026-06-10 02:43:49,216 INFO ams_client: AMS raw notification: 000100302c302e302c3137362e313534
+2026-06-10 02:43:49,216 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [176/210s] vol=0%
+2026-06-10 02:43:49,244 INFO ams_client: AMS raw notification: 000200302e34393734383836
+2026-06-10 02:43:49,245 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [176/210s] vol=50%
+2026-06-10 02:43:49,427 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 02:43:49,584 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 02:43:49,768 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 02:43:49,768 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 02:43:49,793 INFO ancs_client: ANCS: +#29 [Other]
+2026-06-10 02:43:49,873 INFO ancs_client: ANCS: requested attrs for #29 (16 bytes)
+2026-06-10 02:43:49,900 INFO ancs_client: ANCS detail: +#29 [Other] com.apple.podcasts: СИНТЕТИК — Доступны 3 новых выпуска.
+2026-06-10 02:43:50,030 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 02:43:50,135 INFO cts_client: CTS: 2026-06-10 02:43:50 (adjust=0x02)
+2026-06-10 02:43:50,144 INFO cts_client: CTS: system clock set to Wed Jun 10 02:43:50 2026
+2026-06-10 02:43:50,238 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 02:43:50,248 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:43:50,249 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:43:50,981 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50 (attempt 1/3)
+2026-06-10 02:43:50,982 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-10 02:43:51,237 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-10 02:43:51,238 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-10 02:43:51,245 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-10 02:43:51,698 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-10 02:43:51,701 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:43:51,701 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:43:52,457 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-10 02:43:52,495 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-10 02:43:52,495 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-10 02:43:52,495 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-10 02:43:52,496 INFO a2dp_bridge: AVRCP session started; local target supports Absolute Volume notifications
+2026-06-10 02:43:52,511 INFO a2dp_bridge: AVRCP source supported events: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED', 'PLAYER_APPLICATION_SETTING_CHANGED', 'NOW_PLAYING_CONTENT_CHANGED', 'AVAILABLE_PLAYERS_CHANGED', 'ADDRESSED_PLAYER_CHANGED', 'UIDS_CHANGED']
+2026-06-10 02:43:52,528 INFO a2dp_bridge: AVRCP source playback-status=2
+2026-06-10 02:43:59,734 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-10 02:43:59,735 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-10 02:43:59,736 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-10 02:43:59,737 INFO a2dp_bridge: A2DP source endpoint profile=AAC+SBC
+2026-06-10 02:43:59,808 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-10 02:43:59,824 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-10 02:43:59,851 INFO a2dp_bridge: A2DP_SOURCE_RTP_OPEN codec=AAC
+2026-06-10 02:43:59,982 INFO carthing_runtime: speaker enroll: pairing C4:A9:B8:70:2F:E5
+2026-06-10 02:43:59,984 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 02:44:00,058 INFO ams_client: AMS raw notification: 000200302e3035323739343838
+2026-06-10 02:44:00,058 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [176/210s] vol=5%
+2026-06-10 02:44:00,060 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-10 02:44:03,929 INFO carthing_runtime: connected: C4:A9:B8:70:2F:E5/P classic=True encrypted=False
+2026-06-10 02:44:03,930 INFO a2dp_bridge: Classic BT connection: C4:A9:B8:70:2F:E5/P handle=14 encrypted=False
+2026-06-10 02:44:03,930 WARNING a2dp_bridge: Classic BT peer is not trusted for transfer: C4:A9:B8:70:2F:E5
+2026-06-10 02:44:03,937 INFO a2dp_bridge: A2DP classic link-key missing for C4:A9:B8:70:2F:E5/P
+2026-06-10 02:44:05,112 INFO a2dp_bridge: A2DP_SPEAKER_STANDBY_CONNECTED C4:A9:B8:70:2F:E5
+2026-06-10 02:44:05,138 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:44:05,139 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:44:05,143 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 02:44:05,276 INFO a2dp_bridge: device card enriched: C4:A9:B8:70:2F:E5 -> []
+2026-06-10 02:44:05,278 INFO a2dp_bridge: A2DP receiver ACL ready: C4:A9:B8:70:2F:E5
+2026-06-10 02:44:05,281 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 02:44:05,340 INFO a2dp_bridge: A2DP receiver link ENCRYPTED ok: C4:A9:B8:70:2F:E5 (encrypted=True)
+2026-06-10 02:44:05,340 INFO a2dp_bridge: A2DP receiver SDP version lookup ignored: find_avdtp_service_with_connection() takes 1 positional argument but 2 were given
+2026-06-10 02:44:05,341 INFO a2dp_bridge: A2DP receiver AVDTP connect: C4:A9:B8:70:2F:E5 version=(1, 2)
+2026-06-10 02:44:05,488 INFO a2dp_bridge: A2DP receiver discover endpoints: C4:A9:B8:70:2F:E5
+2026-06-10 02:44:05,764 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=7 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\xd7\x00\x00\x00$\x002\x00\x00\x00\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=215, codec_id=36, value=b'2\x00\x00\x00\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,765 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=5 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=79, codec_id=1, value=b'2')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,765 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=3 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC|MPEG_4_AAC_LC: 192>, sampling_frequency=<SamplingFrequency.SF_8000|SF_11025|SF_12000|SF_16000|SF_22050|SF_24000|SF_32000|SF_44100|SF_48000: 4088>, channels=<Channels.MONO|STEREO: 3>, vbr=1, bitrate=320000)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,765 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=53 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,766 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=21 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,766 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=51 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,766 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=19 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,766 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=49 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,767 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=17 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,767 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=33 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,767 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=1 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 02:44:05,768 INFO a2dp_bridge: A2DP receiver sink selected: address=C4:A9:B8:70:2F:E5 codec=AAC seid=3
+2026-06-10 02:44:05,846 INFO a2dp_bridge: A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3
+2026-06-10 02:44:05,846 INFO a2dp_bridge: A2DP stream opened+held after pairing: C4:A9:B8:70:2F:E5
+2026-06-10 02:44:07,053 INFO carthing_runtime: speaker enroll finished: C4:A9:B8:70:2F:E5 status=idle
+2026-06-10 02:44:07,608 ERROR bumble.l2cap: Mode mismatch, abort connection
+2026-06-10 02:44:08,184 ERROR bumble.l2cap: Mode mismatch, abort connection
+2026-06-10 02:44:20,099 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:44:20,116 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-10 02:44:20,124 INFO a2dp_bridge: A2DP_SOURCE_START codec=AAC
+2026-06-10 02:44:20,126 INFO a2dp_bridge: A2DP receiver already ready: C4:A9:B8:70:2F:E5
+2026-06-10 02:44:20,130 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-10 02:44:20,196 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 02:44:20,198 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 02:44:20,214 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 02:44:20,217 INFO ams_client: AMS raw notification: 000100312c312e302c3137352e323038
+2026-06-10 02:44:20,218 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [175/210s] vol=5%
+2026-06-10 02:44:20,234 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4 dropped=0 bytes=719 sent_to_speaker=True
+2026-06-10 02:44:20,259 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=5 dropped=0 bytes=710 sent_to_speaker=True
+2026-06-10 02:44:20,279 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=6 dropped=0 bytes=753 sent_to_speaker=True
+2026-06-10 02:44:20,303 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=7 dropped=0 bytes=731 sent_to_speaker=True
+2026-06-10 02:44:20,329 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=8 dropped=0 bytes=719 sent_to_speaker=True
+2026-06-10 02:44:20,356 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=9 dropped=0 bytes=724 sent_to_speaker=True
+2026-06-10 02:44:25,978 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=250 dropped=0 bytes=717 sent_to_speaker=True
+2026-06-10 02:44:31,756 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=500 dropped=0 bytes=670 sent_to_speaker=True
+2026-06-10 02:44:37,559 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=750 dropped=0 bytes=699 sent_to_speaker=True
+2026-06-10 02:44:43,379 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1000 dropped=0 bytes=726 sent_to_speaker=True
+2026-06-10 02:44:49,209 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1250 dropped=0 bytes=731 sent_to_speaker=True
+2026-06-10 02:44:54,989 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1500 dropped=0 bytes=700 sent_to_speaker=True
+2026-06-10 02:44:55,393 INFO ams_client: AMS raw notification: 000100302c302e302c3231302e323238
+2026-06-10 02:44:55,393 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [210/210s] vol=5%
+2026-06-10 02:44:55,419 INFO ams_client: AMS raw notification: 000100312c312e302c302e303530
+2026-06-10 02:44:55,419 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [0/210s] vol=5%
+2026-06-10 02:44:55,445 INFO ams_client: AMS raw notification: 0200004172617368
+2026-06-10 02:44:55,445 INFO ams_client: State: ▶ Из сияющей пустоты — Arash [0/210s] vol=5%
+2026-06-10 02:44:55,499 INFO ams_client: AMS raw notification: 0203003139392e303638
+2026-06-10 02:44:55,500 INFO ams_client: State: ▶ Из сияющей пустоты — Arash [0/199s] vol=5%
+2026-06-10 02:44:55,524 INFO ams_client: AMS raw notification: 02020053756464656e6c79205b526164696f20456469745d2028666561742e205265626563636129
+2026-06-10 02:44:55,525 INFO ams_client: State: ▶ Suddenly [Radio Edit] (feat. Rebecca) — Arash [0/199s] vol=5%
+2026-06-10 02:45:00,792 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1750 dropped=0 bytes=730 sent_to_speaker=True
+2026-06-10 02:45:06,608 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2000 dropped=0 bytes=681 sent_to_speaker=True
+2026-06-10 02:45:12,408 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2250 dropped=0 bytes=712 sent_to_speaker=True
+2026-06-10 02:45:18,192 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2500 dropped=0 bytes=693 sent_to_speaker=True
+2026-06-10 02:45:23,996 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2750 dropped=0 bytes=724 sent_to_speaker=True
+2026-06-10 02:45:29,849 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3000 dropped=0 bytes=670 sent_to_speaker=True
+2026-06-10 02:45:35,614 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3250 dropped=0 bytes=665 sent_to_speaker=True
+2026-06-10 02:45:41,449 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3500 dropped=0 bytes=716 sent_to_speaker=True
+2026-06-10 02:45:47,227 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3750 dropped=0 bytes=704 sent_to_speaker=True
+2026-06-10 02:45:53,076 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4000 dropped=0 bytes=721 sent_to_speaker=True
+2026-06-10 02:45:58,827 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4250 dropped=0 bytes=683 sent_to_speaker=True
+2026-06-10 02:46:04,633 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4500 dropped=0 bytes=721 sent_to_speaker=True

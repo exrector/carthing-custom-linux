@@ -317,3 +317,43 @@ legacy runtime захватить HCI на загрузке.
 Пока это проверено временным lab runtime из `/run/carthing-dual-mode-lab`.
 Переживание перезагрузки требует отдельного bake release overlay в rootfs и
 стандартной прошивки.
+
+---
+
+## ADDENDUM 2026-06-10 — ТРУБА iPhone → Car Thing → Fosi ДОКАЗАНА на свежем bond
+
+Полный маршрут проверен живьём (музыка реально звучала из Fosi):
+
+- чистая BLE-first пара iPhone → CTKD выдал новый полный bond (ltk+irk+link_key);
+- classic-активация подключила iPhone, Control Center показал Car Thing,
+  iOS стримил AAC (`A2DP_SOURCE_START codec=AAC`);
+- Fosi спарен headless по адресу, AVDTP endpoints опрошены:
+  **Fosi умеет AAC** (44.1/48 kHz stereo, VBR, до 320 kbps) и SBC;
+- sink выбран AAC seid=3, канал открыт и держится ДО старта потока iPhone
+  (инвариант п.3 соблюдён);
+- `A2DP_BRIDGE_RTP forwarded=1750 dropped=0 sent_to_speaker=True` — сквозной
+  AAC без транскодирования.
+
+Новые проверенные механизмы (НЕ ломать):
+
+- **Ретраи classic-дозвона**: `_resume_bonded_classic_audio` делает 3 попытки
+  с паузами 3/8/15 c. Одна попытка через 1 c после старта почти всегда даёт
+  `PAGE_TIMEOUT` — page гонится с BLE-реконнектом за одно радио. НЕ возвращать
+  одноразовый дозвон.
+- **`CARTHING_PAIR_SPEAKER=<addr>`**: однократный headless-enroll колонки по
+  известному адресу (колонка в режиме пары) — без инквайри, без GUI.
+  Полный цикл: forget старого ключа → SSP пара → enroll trusted → держать ACL.
+- Деплой lab runtime: tar `overlay/usr/lib/carthing` → `/run/carthing-dual-mode-lab`,
+  env: `CAR_THING_TRANSPORT=hci-socket:0`,
+  `CAR_THING_KEYSTORE=/run/carthing-state/carthing/keys.json`,
+  `CAR_THING_LIB=.../vendor`, `CARTHING_GUI_ENABLE=0`,
+  `CARTHING_CLASSIC_AUDIO_RECONNECT=1` + lab override (карантин).
+- busybox: процессы убивать ТОЛЬКО по PID из `ps` (pgrep -f не работает);
+  runtime сам выходит после 8 неудачных попыток открыть занятый HCI.
+
+Evidence: `artifacts/dual-mode-tests-20260610/` (run5 = труба, run4 = baseline,
+SHA256SUMS). Бонды обоих устройств — в персистентном keystore
+`/run/carthing-state/carthing/keys.json` (переживают ребут устройства).
+
+Runtime по-прежнему lab-only (`/run/carthing-dual-mode-lab`) — НЕ переживает
+ребут до bake (блок D ранбука docs/dual-mode-test-plan-2026-06-10.md).

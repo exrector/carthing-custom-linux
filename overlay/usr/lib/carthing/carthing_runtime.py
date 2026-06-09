@@ -742,13 +742,40 @@ async def _resume_bonded_classic_audio():
     if not address:
         logger.info("classic audio reconnect skipped: no dual-mode bond")
         return
-    await asyncio.sleep(1.0)
+    # Page при активном BLE-линке (один радиочип) часто даёт PAGE_TIMEOUT —
+    # даём BLE-реконнекту устаканиться и ретраим с нарастающей паузой.
+    delays = (3.0, 8.0, 15.0)
+    for attempt, delay in enumerate(delays, start=1):
+        await asyncio.sleep(delay)
+        try:
+            logger.info("classic audio reconnect: dialing %s (attempt %d/%d)",
+                        address, attempt, len(delays))
+            await transfer.bridge.connect_source(address)
+            logger.info("classic audio reconnect ready: %s", address)
+            return
+        except Exception as e:
+            logger.warning("classic audio reconnect attempt %d failed for %s: %s",
+                           attempt, address, e)
+
+
+async def _pair_speaker_once():
+    """Однократный headless-enroll динамика по известному адресу (lab/тесты).
+
+    Колонка должна быть в режиме сопряжения. Инквайри не нужен: адрес задаётся
+    через CARTHING_PAIR_SPEAKER, пара идёт сразу transfer.pair_speaker().
+    """
+    address = os.environ.get("CARTHING_PAIR_SPEAKER", "").strip()
+    if not address or transfer is None:
+        return
+    # Дать iPhone-реконнекту (BLE + classic dial) занять радио и устаканиться.
+    await asyncio.sleep(12.0)
     try:
-        logger.info("classic audio reconnect: dialing %s", address)
-        await transfer.bridge.connect_source(address)
-        logger.info("classic audio reconnect ready: %s", address)
+        logger.info("speaker enroll: pairing %s", address)
+        await transfer.pair_speaker(address)
+        status = getattr(transfer.bridge.state, "speaker_pairing_status", "")
+        logger.info("speaker enroll finished: %s status=%s", address, status)
     except Exception as e:
-        logger.warning("classic audio reconnect failed for %s: %s", address, e)
+        logger.warning("speaker enroll failed for %s: %s", address, e)
 
 
 async def main():
@@ -915,6 +942,7 @@ async def main():
     await orch.apply_visibility()
     logger.info("apply_visibility done")
     asyncio.create_task(_resume_bonded_classic_audio())
+    asyncio.create_task(_pair_speaker_once())
     if os.environ.get("CAR_THING_AUTO_PAIRING") == "1":
         if gui is not None:
             gui.set_pairing_mode(True, role="source")

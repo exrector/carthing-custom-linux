@@ -1,0 +1,690 @@
+2026-06-10 02:38:52,428 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-10 02:38:52,488 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-10 02:38:52,489 INFO ble_transport: Opening transport hci-socket:0
+2026-06-10 02:38:52,507 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-10 02:38:53,783 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-10 02:38:53,789 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-10 02:38:53,789 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-10 02:38:53,793 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-10 02:38:53,820 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-10 02:38:53,820 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-10 02:38:53,824 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-10 02:38:53,825 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-10 02:38:53,826 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-10 02:38:53,827 INFO carthing_runtime: phase=ready
+2026-06-10 02:38:53,849 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:38:53,849 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:38:53,849 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-10 02:38:53,866 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:38:53,866 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:38:53,883 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:38:53,883 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:38:53,883 INFO carthing_runtime: apply_visibility done
+2026-06-10 02:38:53,884 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-10 02:38:53,884 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-10 02:38:53,888 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-10 02:38:53,905 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:38:53,905 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:38:54,104 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 02:38:54,106 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:38:54,107 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-10 02:38:54,506 INFO carthing_runtime: AMS start (encryption)
+2026-06-10 02:38:54,507 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 02:38:54,743 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 02:38:54,848 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 02:38:54,850 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 02:38:54,873 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'Repeat', 'Shuffle', 'SkipFwd', 'SkipBack', 'Like', 'Dislike']
+2026-06-10 02:38:54,953 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 02:38:55,005 INFO ams_client: AMS raw notification: 02000044656164204f7220416c697665
+2026-06-10 02:38:55,005 INFO ams_client: State: ⏸  — Dead Or Alive [0/0s] vol=0%
+2026-06-10 02:38:55,007 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 02:38:55,031 INFO ams_client: AMS raw notification: 0203003139362e303635
+2026-06-10 02:38:55,031 INFO ams_client: State: ⏸  — Dead Or Alive [0/196s] vol=0%
+2026-06-10 02:38:55,033 INFO ams_client: AMS raw notification: 020200596f75205370696e204d6520526f756e6420284c696b652061205265636f726429
+2026-06-10 02:38:55,034 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [0/196s] vol=0%
+2026-06-10 02:38:55,057 INFO ams_client: AMS raw notification: 020100
+2026-06-10 02:38:55,057 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [0/196s] vol=0%
+2026-06-10 02:38:55,059 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 02:38:55,060 INFO ams_client: AMS: ready
+2026-06-10 02:38:55,060 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 02:38:55,083 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-10 02:38:55,084 INFO ams_client: AMS player: Музыка
+2026-06-10 02:38:55,084 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [0/196s] vol=0%
+2026-06-10 02:38:55,086 INFO ams_client: AMS raw notification: 000100302c302e302c35352e343537
+2026-06-10 02:38:55,086 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [55/196s] vol=0%
+2026-06-10 02:38:55,109 INFO ams_client: AMS raw notification: 000200302e34393734383836
+2026-06-10 02:38:55,110 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [55/196s] vol=50%
+2026-06-10 02:38:55,268 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 02:38:55,372 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 02:38:55,478 INFO ancs_client: ANCS: +#29 [Other]
+2026-06-10 02:38:55,479 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 02:38:55,479 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 02:38:55,582 INFO ancs_client: ANCS: requested attrs for #29 (16 bytes)
+2026-06-10 02:38:55,585 INFO ancs_client: ANCS detail: +#29 [Other] com.apple.podcasts: СИНТЕТИК — Доступны 3 новых выпуска.
+2026-06-10 02:38:55,740 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 02:38:55,845 INFO cts_client: CTS: 2026-06-10 02:38:55 (adjust=0x02)
+2026-06-10 02:38:55,855 INFO cts_client: CTS: system clock set to Wed Jun 10 02:38:55 2026
+2026-06-10 02:38:55,949 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 02:38:55,959 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:38:55,960 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:38:56,887 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50 (attempt 1/3)
+2026-06-10 02:38:56,887 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-10 02:38:57,842 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-10 02:38:57,843 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-10 02:38:57,850 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-10 02:38:58,269 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-10 02:38:58,272 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:38:58,272 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:39:00,238 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-10 02:39:00,549 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-10 02:39:00,549 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-10 02:39:00,550 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-10 02:39:00,550 INFO a2dp_bridge: AVRCP session started; local target supports Absolute Volume notifications
+2026-06-10 02:39:00,566 INFO a2dp_bridge: AVRCP source supported events: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED', 'PLAYER_APPLICATION_SETTING_CHANGED', 'NOW_PLAYING_CONTENT_CHANGED', 'AVAILABLE_PLAYERS_CHANGED', 'ADDRESSED_PLAYER_CHANGED', 'UIDS_CHANGED']
+2026-06-10 02:39:00,644 INFO a2dp_bridge: AVRCP source playback-status=2
+2026-06-10 02:39:08,967 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-10 02:39:08,968 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-10 02:39:08,969 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-10 02:39:08,969 INFO a2dp_bridge: A2DP source endpoint profile=AAC+SBC
+2026-06-10 02:39:09,285 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-10 02:39:09,387 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-10 02:39:09,636 INFO a2dp_bridge: A2DP_SOURCE_RTP_OPEN codec=AAC
+2026-06-10 02:39:09,638 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-10 02:39:09,836 INFO ams_client: AMS raw notification: 000200302e34343533313633
+2026-06-10 02:39:09,836 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [55/196s] vol=45%
+2026-06-10 02:39:57,066 INFO a2dp_bridge: A2DP_SOURCE_START codec=AAC
+2026-06-10 02:39:57,069 INFO a2dp_bridge: A2DP receiver not requested: no trusted speaker
+2026-06-10 02:39:57,271 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,273 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,274 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,320 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,321 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,372 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,374 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,427 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8 bytes=54 sent_to_speaker=False
+2026-06-10 02:39:57,428 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=9 bytes=54 sent_to_speaker=False
+2026-06-10 02:40:01,024 INFO a2dp_bridge: AVRCP target absolute volume=56
+2026-06-10 02:40:01,047 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-10 02:40:01,082 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-10 02:40:01,106 INFO a2dp_bridge: AVRCP target absolute volume=56
+2026-06-10 02:40:01,159 INFO a2dp_bridge: AVRCP target absolute volume=56
+2026-06-10 02:40:01,209 INFO ams_client: AMS raw notification: 0203003139362e303534
+2026-06-10 02:40:01,209 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [55/196s] vol=45%
+2026-06-10 02:40:01,235 INFO ams_client: AMS raw notification: 000100312c312e302c35352e343738
+2026-06-10 02:40:01,235 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [55/196s] vol=45%
+2026-06-10 02:40:03,006 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=250 bytes=675 sent_to_speaker=False
+2026-06-10 02:40:03,868 INFO a2dp_bridge: AVRCP target absolute volume=54
+2026-06-10 02:40:03,869 INFO a2dp_bridge: AVRCP target absolute volume=51
+2026-06-10 02:40:03,884 INFO a2dp_bridge: AVRCP target absolute volume=49
+2026-06-10 02:40:03,896 INFO a2dp_bridge: AVRCP target absolute volume=46
+2026-06-10 02:40:03,897 INFO a2dp_bridge: AVRCP target absolute volume=44
+2026-06-10 02:40:03,903 INFO a2dp_bridge: AVRCP target absolute volume=42
+2026-06-10 02:40:03,927 INFO a2dp_bridge: AVRCP target absolute volume=39
+2026-06-10 02:40:03,928 INFO a2dp_bridge: AVRCP target absolute volume=37
+2026-06-10 02:40:03,929 INFO a2dp_bridge: AVRCP target absolute volume=35
+2026-06-10 02:40:03,942 INFO a2dp_bridge: AVRCP target absolute volume=33
+2026-06-10 02:40:03,965 INFO ams_client: AMS raw notification: 000200302e343039313633
+2026-06-10 02:40:03,965 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=41%
+2026-06-10 02:40:03,982 INFO a2dp_bridge: AVRCP target absolute volume=31
+2026-06-10 02:40:03,995 INFO a2dp_bridge: AVRCP target absolute volume=30
+2026-06-10 02:40:03,997 INFO a2dp_bridge: AVRCP target absolute volume=29
+2026-06-10 02:40:04,000 INFO a2dp_bridge: AVRCP target absolute volume=28
+2026-06-10 02:40:04,010 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,011 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,014 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,016 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,026 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,027 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,033 INFO a2dp_bridge: AVRCP target absolute volume=27
+2026-06-10 02:40:04,039 INFO a2dp_bridge: AVRCP target absolute volume=26
+2026-06-10 02:40:04,043 INFO ams_client: AMS raw notification: 000200302e33363939313039
+2026-06-10 02:40:04,044 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=37%
+2026-06-10 02:40:04,046 INFO ams_client: AMS raw notification: 000200302e33353133313738
+2026-06-10 02:40:04,046 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=35%
+2026-06-10 02:40:04,053 INFO a2dp_bridge: AVRCP target absolute volume=26
+2026-06-10 02:40:04,060 INFO a2dp_bridge: AVRCP target absolute volume=26
+2026-06-10 02:40:04,073 INFO a2dp_bridge: AVRCP target absolute volume=25
+2026-06-10 02:40:04,078 INFO a2dp_bridge: AVRCP target absolute volume=25
+2026-06-10 02:40:04,086 INFO a2dp_bridge: AVRCP target absolute volume=25
+2026-06-10 02:40:04,099 INFO a2dp_bridge: AVRCP target absolute volume=24
+2026-06-10 02:40:04,105 INFO a2dp_bridge: AVRCP target absolute volume=24
+2026-06-10 02:40:04,113 INFO a2dp_bridge: AVRCP target absolute volume=24
+2026-06-10 02:40:04,121 INFO a2dp_bridge: AVRCP target absolute volume=24
+2026-06-10 02:40:04,123 INFO ams_client: AMS raw notification: 000200302e33333337353736
+2026-06-10 02:40:04,123 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=33%
+2026-06-10 02:40:04,130 INFO a2dp_bridge: AVRCP target absolute volume=23
+2026-06-10 02:40:04,141 INFO a2dp_bridge: AVRCP target absolute volume=23
+2026-06-10 02:40:04,148 INFO ams_client: AMS raw notification: 000200302e33313431333135
+2026-06-10 02:40:04,149 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=31%
+2026-06-10 02:40:04,161 INFO a2dp_bridge: AVRCP target absolute volume=23
+2026-06-10 02:40:04,164 INFO a2dp_bridge: AVRCP target absolute volume=23
+2026-06-10 02:40:04,167 INFO a2dp_bridge: AVRCP target absolute volume=23
+2026-06-10 02:40:04,175 INFO ams_client: AMS raw notification: 000200302e32393535333834
+2026-06-10 02:40:04,175 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=30%
+2026-06-10 02:40:04,188 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,201 INFO ams_client: AMS raw notification: 000200302e32373739373832
+2026-06-10 02:40:04,201 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=28%
+2026-06-10 02:40:04,227 INFO ams_client: AMS raw notification: 000200302e323632343834
+2026-06-10 02:40:04,228 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=26%
+2026-06-10 02:40:04,230 INFO ams_client: AMS raw notification: 000200302e32323934323935
+2026-06-10 02:40:04,230 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=23%
+2026-06-10 02:40:04,253 INFO ams_client: AMS raw notification: 000200302e32323332333138
+2026-06-10 02:40:04,254 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=22%
+2026-06-10 02:40:04,256 INFO ams_client: AMS raw notification: 000200302e32313931
+2026-06-10 02:40:04,256 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [58/196s] vol=22%
+2026-06-10 02:40:04,280 INFO ams_client: AMS raw notification: 000200302e32313830363731
+2026-06-10 02:40:04,280 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=22%
+2026-06-10 02:40:04,282 INFO ams_client: AMS raw notification: 000200302e32313730333431
+2026-06-10 02:40:04,282 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=22%
+2026-06-10 02:40:04,306 INFO ams_client: AMS raw notification: 000200302e32313630303132
+2026-06-10 02:40:04,306 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=22%
+2026-06-10 02:40:04,308 INFO ams_client: AMS raw notification: 000200302e32313439363832
+2026-06-10 02:40:04,309 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=21%
+2026-06-10 02:40:04,328 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,333 INFO ams_client: AMS raw notification: 000200302e32313339333533
+2026-06-10 02:40:04,334 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=21%
+2026-06-10 02:40:04,337 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,342 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,360 INFO ams_client: AMS raw notification: 000200302e32313239303233
+2026-06-10 02:40:04,360 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=21%
+2026-06-10 02:40:04,364 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,365 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,366 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,385 INFO ams_client: AMS raw notification: 000200302e32313038333634
+2026-06-10 02:40:04,385 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=21%
+2026-06-10 02:40:04,391 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,394 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,395 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,401 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,408 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,411 INFO ams_client: AMS raw notification: 000200302e32303837373035
+2026-06-10 02:40:04,411 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=21%
+2026-06-10 02:40:04,416 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,440 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,443 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,444 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,449 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,459 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,473 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,474 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,483 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,499 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,500 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,514 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,526 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,527 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,539 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,543 INFO ams_client: AMS raw notification: 000200302e32303536373137
+2026-06-10 02:40:04,544 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=21%
+2026-06-10 02:40:04,547 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,550 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,568 INFO ams_client: AMS raw notification: 000200302e32303336303537
+2026-06-10 02:40:04,569 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=20%
+2026-06-10 02:40:04,575 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:40:04,595 INFO ams_client: AMS raw notification: 000200302e32303035303639
+2026-06-10 02:40:04,595 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=20%
+2026-06-10 02:40:04,621 INFO ams_client: AMS raw notification: 000200302e313937343038
+2026-06-10 02:40:04,621 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=20%
+2026-06-10 02:40:04,647 INFO ams_client: AMS raw notification: 000200302e31393533343231
+2026-06-10 02:40:04,648 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=20%
+2026-06-10 02:40:04,650 INFO ams_client: AMS raw notification: 000200302e31393332373632
+2026-06-10 02:40:04,650 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=19%
+2026-06-10 02:40:04,673 INFO ams_client: AMS raw notification: 000200302e31393132313033
+2026-06-10 02:40:04,674 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=19%
+2026-06-10 02:40:04,700 INFO ams_client: AMS raw notification: 000200302e31383931343434
+2026-06-10 02:40:04,700 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=19%
+2026-06-10 02:40:04,726 INFO ams_client: AMS raw notification: 000200302e31383730373835
+2026-06-10 02:40:04,726 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=19%
+2026-06-10 02:40:04,752 INFO ams_client: AMS raw notification: 000200302e31383630343536
+2026-06-10 02:40:04,753 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=19%
+2026-06-10 02:40:04,778 INFO ams_client: AMS raw notification: 000200302e31383339373937
+2026-06-10 02:40:04,779 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,805 INFO ams_client: AMS raw notification: 000200302e31383239343637
+2026-06-10 02:40:04,805 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,807 INFO ams_client: AMS raw notification: 000200302e31383139313338
+2026-06-10 02:40:04,807 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,831 INFO ams_client: AMS raw notification: 000200302e31383038383038
+2026-06-10 02:40:04,831 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,833 INFO ams_client: AMS raw notification: 000200302e31383031353539
+2026-06-10 02:40:04,834 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,857 INFO ams_client: AMS raw notification: 000200302e313739363039
+2026-06-10 02:40:04,858 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,860 INFO ams_client: AMS raw notification: 000200302e31373932303732
+2026-06-10 02:40:04,860 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,883 INFO ams_client: AMS raw notification: 000200302e31373839323331
+2026-06-10 02:40:04,884 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,886 INFO ams_client: AMS raw notification: 000200302e313738373334
+2026-06-10 02:40:04,886 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,910 INFO ams_client: AMS raw notification: 000200302e31373836323038
+2026-06-10 02:40:04,910 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,912 INFO ams_client: AMS raw notification: 000200302e31373835363737
+2026-06-10 02:40:04,912 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,936 INFO ams_client: AMS raw notification: 000200302e31373835363137
+2026-06-10 02:40:04,936 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,938 INFO ams_client: AMS raw notification: 000200302e313738353932
+2026-06-10 02:40:04,939 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,963 INFO ams_client: AMS raw notification: 000200302e31373836343938
+2026-06-10 02:40:04,964 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:04,988 INFO ams_client: AMS raw notification: 000200302e31373837323738
+2026-06-10 02:40:04,989 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,015 INFO ams_client: AMS raw notification: 000200302e31373838323033
+2026-06-10 02:40:05,015 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,067 INFO ams_client: AMS raw notification: 000200302e31373839323236
+2026-06-10 02:40:05,067 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,093 INFO ams_client: AMS raw notification: 000200302e31373930333037
+2026-06-10 02:40:05,094 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,096 INFO ams_client: AMS raw notification: 000200302e31373931343138
+2026-06-10 02:40:05,096 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,120 INFO ams_client: AMS raw notification: 000200302e31373932353335
+2026-06-10 02:40:05,120 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,122 INFO ams_client: AMS raw notification: 000200302e313739333634
+2026-06-10 02:40:05,123 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,148 INFO ams_client: AMS raw notification: 000200302e31373934373139
+2026-06-10 02:40:05,148 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,172 INFO ams_client: AMS raw notification: 000200302e31373935373631
+2026-06-10 02:40:05,173 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,198 INFO ams_client: AMS raw notification: 000200302e313739363736
+2026-06-10 02:40:05,199 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,225 INFO ams_client: AMS raw notification: 000200302e313739373731
+2026-06-10 02:40:05,225 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,251 INFO ams_client: AMS raw notification: 000200302e31373938363038
+2026-06-10 02:40:05,251 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,253 INFO ams_client: AMS raw notification: 000200302e31373939343533
+2026-06-10 02:40:05,254 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [59/196s] vol=18%
+2026-06-10 02:40:05,277 INFO ams_client: AMS raw notification: 000200302e31383030323435
+2026-06-10 02:40:05,277 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [60/196s] vol=18%
+2026-06-10 02:40:05,303 INFO ams_client: AMS raw notification: 000200302e31383030393833
+2026-06-10 02:40:05,304 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [60/196s] vol=18%
+2026-06-10 02:40:05,330 INFO ams_client: AMS raw notification: 000200302e31383031363638
+2026-06-10 02:40:05,330 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [60/196s] vol=18%
+2026-06-10 02:40:05,357 INFO ams_client: AMS raw notification: 000200302e31383032333033
+2026-06-10 02:40:05,358 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [60/196s] vol=18%
+2026-06-10 02:40:05,382 INFO ams_client: AMS raw notification: 000200302e313830323839
+2026-06-10 02:40:05,382 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [60/196s] vol=18%
+2026-06-10 02:40:05,409 INFO ams_client: AMS raw notification: 000200302e31383038383038
+2026-06-10 02:40:05,409 INFO ams_client: State: ▶ You Spin Me Round (Like a Record) — Dead Or Alive [60/196s] vol=18%
+2026-06-10 02:40:08,811 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=500 bytes=724 sent_to_speaker=False
+2026-06-10 02:40:14,616 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=750 bytes=673 sent_to_speaker=False
+2026-06-10 02:40:20,427 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1000 bytes=669 sent_to_speaker=False
+2026-06-10 02:40:26,225 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1250 bytes=703 sent_to_speaker=False
+2026-06-10 02:40:32,040 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1500 bytes=677 sent_to_speaker=False
+2026-06-10 02:40:37,864 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1750 bytes=681 sent_to_speaker=False
+2026-06-10 02:40:43,419 INFO ams_client: AMS raw notification: 000100302c302e302c39372e343331
+2026-06-10 02:40:43,419 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [97/196s] vol=18%
+2026-06-10 02:40:43,421 INFO ams_client: AMS raw notification: 000100302c302e302c302e303030
+2026-06-10 02:40:43,422 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Dead Or Alive [0/196s] vol=18%
+2026-06-10 02:40:43,445 INFO ams_client: AMS raw notification: 020000d09cd0b0d180d196d18f20d0a1d0bed0b1d0bad0be
+2026-06-10 02:40:43,445 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Марія Собко [0/196s] vol=18%
+2026-06-10 02:40:43,447 INFO ams_client: AMS raw notification: 0203003237302e333932
+2026-06-10 02:40:43,448 INFO ams_client: State: ⏸ You Spin Me Round (Like a Record) — Марія Собко [0/270s] vol=18%
+2026-06-10 02:40:43,471 INFO ams_client: AMS raw notification: 020200d0af20d182d0b5d0b1d18f20d0bbd18ed0b1d0bbd18e
+2026-06-10 02:40:43,472 INFO ams_client: State: ⏸ Я тебя люблю — Марія Собко [0/270s] vol=18%
+2026-06-10 02:40:43,576 INFO ams_client: AMS raw notification: 000100312c312e302c302e303139
+2026-06-10 02:40:43,577 INFO ams_client: State: ▶ Я тебя люблю — Марія Собко [0/270s] vol=18%
+2026-06-10 02:40:43,579 INFO ams_client: AMS raw notification: 0203003237302e333831
+2026-06-10 02:40:43,579 INFO ams_client: State: ▶ Я тебя люблю — Марія Собко [0/270s] vol=18%
+2026-06-10 02:40:43,639 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2000 bytes=695 sent_to_speaker=False
+2026-06-10 02:40:47,540 INFO ams_client: AMS raw notification: 000100302c302e302c302e303030
+2026-06-10 02:40:47,540 INFO ams_client: State: ⏸ Я тебя люблю — Марія Собко [0/270s] vol=18%
+2026-06-10 02:40:47,542 INFO ams_client: AMS raw notification: 0200004176656e74757261
+2026-06-10 02:40:47,543 INFO ams_client: State: ⏸ Я тебя люблю — Aventura [0/270s] vol=18%
+2026-06-10 02:40:47,567 INFO ams_client: AMS raw notification: 0203003531362e343030
+2026-06-10 02:40:47,567 INFO ams_client: State: ⏸ Я тебя люблю — Aventura [0/516s] vol=18%
+2026-06-10 02:40:47,593 INFO ams_client: AMS raw notification: 0202004c61204775657272612028576974682048696464656e20547261636b2022446f6e2774205761737465204d792054696d652229
+2026-06-10 02:40:47,593 INFO ams_client: State: ⏸ La Guerra (With Hidden Track "Don't Waste My Time") — Aventura [0/516s] vol=18%
+2026-06-10 02:40:47,619 INFO ams_client: AMS raw notification: 0203003531362e333838
+2026-06-10 02:40:47,619 INFO ams_client: State: ⏸ La Guerra (With Hidden Track "Don't Waste My Time") — Aventura [0/516s] vol=18%
+2026-06-10 02:40:47,671 INFO ams_client: AMS raw notification: 000100312c312e302c302e303137
+2026-06-10 02:40:47,672 INFO ams_client: State: ▶ La Guerra (With Hidden Track "Don't Waste My Time") — Aventura [0/516s] vol=18%
+2026-06-10 02:40:49,445 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2250 bytes=679 sent_to_speaker=False
+2026-06-10 02:40:52,396 INFO ams_client: AMS raw notification: 000100302c302e302c302e303030
+2026-06-10 02:40:52,397 INFO ams_client: State: ⏸ La Guerra (With Hidden Track "Don't Waste My Time") — Aventura [0/516s] vol=18%
+2026-06-10 02:40:52,399 INFO ams_client: AMS raw notification: 020000d090d0bad0b2d0b0d180d0b8d183d0bc
+2026-06-10 02:40:52,399 INFO ams_client: State: ⏸ La Guerra (With Hidden Track "Don't Waste My Time") — Аквариум [0/516s] vol=18%
+2026-06-10 02:40:52,422 INFO ams_client: AMS raw notification: 0203003231302e323235
+2026-06-10 02:40:52,423 INFO ams_client: State: ⏸ La Guerra (With Hidden Track "Don't Waste My Time") — Аквариум [0/210s] vol=18%
+2026-06-10 02:40:52,449 INFO ams_client: AMS raw notification: 020200d098d0b720d181d0b8d18fd18ed189d0b5d0b920d0bfd183d181d182d0bed182d18b
+2026-06-10 02:40:52,449 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [0/210s] vol=18%
+2026-06-10 02:40:52,501 INFO ams_client: AMS raw notification: 0203003231302e323134
+2026-06-10 02:40:52,502 INFO ams_client: State: ⏸ Из сияющей пустоты — Аквариум [0/210s] vol=18%
+2026-06-10 02:40:52,527 INFO ams_client: AMS raw notification: 000100312c312e302c302e303138
+2026-06-10 02:40:52,528 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [0/210s] vol=18%
+2026-06-10 02:40:55,263 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2500 bytes=732 sent_to_speaker=False
+2026-06-10 02:41:01,058 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2750 bytes=709 sent_to_speaker=False
+2026-06-10 02:41:06,887 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3000 bytes=672 sent_to_speaker=False
+2026-06-10 02:41:12,668 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3250 bytes=719 sent_to_speaker=False
+2026-06-10 02:41:18,474 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3500 bytes=719 sent_to_speaker=False
+2026-06-10 02:41:22,258 INFO carthing_runtime: connected: C4:A9:B8:70:2F:E5/P classic=True encrypted=False
+2026-06-10 02:41:22,258 INFO a2dp_bridge: Classic BT connection: C4:A9:B8:70:2F:E5/P handle=12 encrypted=False
+2026-06-10 02:41:22,259 WARNING a2dp_bridge: Classic BT peer is not trusted for transfer: C4:A9:B8:70:2F:E5
+2026-06-10 02:41:22,266 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:41:22,267 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:41:22,415 INFO a2dp_bridge: A2DP classic link-key missing for C4:A9:B8:70:2F:E5/P
+2026-06-10 02:41:23,440 INFO a2dp_bridge: A2DP classic link-key missing for C4:A9:B8:70:2F:E5/P
+2026-06-10 02:41:24,277 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3750 bytes=701 sent_to_speaker=False
+2026-06-10 02:41:30,082 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4000 bytes=706 sent_to_speaker=False
+2026-06-10 02:41:35,899 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4250 bytes=665 sent_to_speaker=False
+2026-06-10 02:41:41,693 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4500 bytes=716 sent_to_speaker=False
+2026-06-10 02:41:47,496 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4750 bytes=664 sent_to_speaker=False
+2026-06-10 02:41:53,303 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5000 bytes=704 sent_to_speaker=False
+2026-06-10 02:41:59,115 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5250 bytes=669 sent_to_speaker=False
+2026-06-10 02:42:04,924 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5500 bytes=700 sent_to_speaker=False
+2026-06-10 02:42:10,717 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5750 bytes=712 sent_to_speaker=False
+2026-06-10 02:42:16,520 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6000 bytes=669 sent_to_speaker=False
+2026-06-10 02:42:22,330 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6250 bytes=692 sent_to_speaker=False
+2026-06-10 02:42:28,131 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6500 bytes=688 sent_to_speaker=False
+2026-06-10 02:42:29,551 INFO a2dp_bridge: AVRCP target absolute volume=22
+2026-06-10 02:42:29,553 INFO a2dp_bridge: AVRCP target absolute volume=21
+2026-06-10 02:42:29,558 INFO a2dp_bridge: AVRCP target absolute volume=21
+2026-06-10 02:42:29,574 INFO ams_client: AMS raw notification: 000200302e31373236313732
+2026-06-10 02:42:29,575 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=17%
+2026-06-10 02:42:29,600 INFO ams_client: AMS raw notification: 000200302e31363834383534
+2026-06-10 02:42:29,601 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=17%
+2026-06-10 02:42:29,612 INFO a2dp_bridge: AVRCP target absolute volume=21
+2026-06-10 02:42:29,613 INFO a2dp_bridge: AVRCP target absolute volume=20
+2026-06-10 02:42:29,616 INFO a2dp_bridge: AVRCP target absolute volume=19
+2026-06-10 02:42:29,629 INFO a2dp_bridge: AVRCP target absolute volume=19
+2026-06-10 02:42:29,634 INFO a2dp_bridge: AVRCP target absolute volume=19
+2026-06-10 02:42:29,635 INFO a2dp_bridge: AVRCP target absolute volume=18
+2026-06-10 02:42:29,636 INFO a2dp_bridge: AVRCP target absolute volume=18
+2026-06-10 02:42:29,640 INFO a2dp_bridge: AVRCP target absolute volume=17
+2026-06-10 02:42:29,644 INFO a2dp_bridge: AVRCP target absolute volume=17
+2026-06-10 02:42:29,645 INFO a2dp_bridge: AVRCP target absolute volume=17
+2026-06-10 02:42:29,649 INFO a2dp_bridge: AVRCP target absolute volume=17
+2026-06-10 02:42:29,653 INFO ams_client: AMS raw notification: 000200302e31363533383636
+2026-06-10 02:42:29,653 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=17%
+2026-06-10 02:42:29,657 INFO a2dp_bridge: AVRCP target absolute volume=17
+2026-06-10 02:42:29,664 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,674 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,706 INFO ams_client: AMS raw notification: 000200302e31363132353437
+2026-06-10 02:42:29,707 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=16%
+2026-06-10 02:42:29,713 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,722 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,732 INFO ams_client: AMS raw notification: 000200302e31353731323239
+2026-06-10 02:42:29,733 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=16%
+2026-06-10 02:42:29,734 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,738 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,747 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,758 INFO ams_client: AMS raw notification: 000200302e31353430323431
+2026-06-10 02:42:29,758 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=15%
+2026-06-10 02:42:29,767 INFO a2dp_bridge: AVRCP target absolute volume=16
+2026-06-10 02:42:29,768 INFO a2dp_bridge: AVRCP target absolute volume=15
+2026-06-10 02:42:29,773 INFO a2dp_bridge: AVRCP target absolute volume=15
+2026-06-10 02:42:29,784 INFO ams_client: AMS raw notification: 000200302e31343938393233
+2026-06-10 02:42:29,784 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=15%
+2026-06-10 02:42:29,787 INFO a2dp_bridge: AVRCP target absolute volume=15
+2026-06-10 02:42:29,806 INFO a2dp_bridge: AVRCP target absolute volume=15
+2026-06-10 02:42:29,808 INFO a2dp_bridge: AVRCP target absolute volume=15
+2026-06-10 02:42:29,810 INFO ams_client: AMS raw notification: 000200302e31343637393334
+2026-06-10 02:42:29,811 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=15%
+2026-06-10 02:42:29,813 INFO ams_client: AMS raw notification: 000200302e31343437323735
+2026-06-10 02:42:29,813 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=14%
+2026-06-10 02:42:29,824 INFO a2dp_bridge: AVRCP target absolute volume=15
+2026-06-10 02:42:29,839 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,852 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,854 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,863 INFO ams_client: AMS raw notification: 000200302e31343136323837
+2026-06-10 02:42:29,863 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=14%
+2026-06-10 02:42:29,865 INFO ams_client: AMS raw notification: 000200302e31333935363238
+2026-06-10 02:42:29,866 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=14%
+2026-06-10 02:42:29,889 INFO ams_client: AMS raw notification: 000200302e31333734393639
+2026-06-10 02:42:29,890 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=14%
+2026-06-10 02:42:29,901 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,907 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,908 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,924 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,927 INFO a2dp_bridge: AVRCP target absolute volume=14
+2026-06-10 02:42:29,935 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:29,936 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:29,938 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:29,942 INFO ams_client: AMS raw notification: 000200302e313335343331
+2026-06-10 02:42:29,943 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=14%
+2026-06-10 02:42:29,947 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:29,956 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:29,969 INFO ams_client: AMS raw notification: 000200302e313334333938
+2026-06-10 02:42:29,969 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=13%
+2026-06-10 02:42:29,970 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:29,994 INFO ams_client: AMS raw notification: 000200302e31333333363531
+2026-06-10 02:42:29,995 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=13%
+2026-06-10 02:42:29,997 INFO ams_client: AMS raw notification: 000200302e31333233333231
+2026-06-10 02:42:29,997 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [97/210s] vol=13%
+2026-06-10 02:42:30,000 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:30,009 INFO a2dp_bridge: AVRCP target absolute volume=13
+2026-06-10 02:42:30,020 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,021 INFO ams_client: AMS raw notification: 000200302e31333132393932
+2026-06-10 02:42:30,022 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=13%
+2026-06-10 02:42:30,047 INFO ams_client: AMS raw notification: 000200302e31333032363632
+2026-06-10 02:42:30,047 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=13%
+2026-06-10 02:42:30,049 INFO ams_client: AMS raw notification: 000200302e31323932333333
+2026-06-10 02:42:30,050 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=13%
+2026-06-10 02:42:30,065 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,092 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,097 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,152 INFO ams_client: AMS raw notification: 000200302e31323832303033
+2026-06-10 02:42:30,152 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=13%
+2026-06-10 02:42:30,178 INFO ams_client: AMS raw notification: 000200302e31323731363734
+2026-06-10 02:42:30,178 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=13%
+2026-06-10 02:42:30,205 INFO ams_client: AMS raw notification: 000200302e31323631333434
+2026-06-10 02:42:30,205 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=13%
+2026-06-10 02:42:30,207 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,213 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,226 INFO a2dp_bridge: AVRCP target absolute volume=12
+2026-06-10 02:42:30,247 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,257 INFO ams_client: AMS raw notification: 000200302e31323430363835
+2026-06-10 02:42:30,258 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,266 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,283 INFO ams_client: AMS raw notification: 000200302e31323330333536
+2026-06-10 02:42:30,283 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,285 INFO ams_client: AMS raw notification: 000200302e31323230303236
+2026-06-10 02:42:30,286 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,288 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,294 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,297 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,308 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,310 INFO ams_client: AMS raw notification: 000200302e31323039363937
+2026-06-10 02:42:30,311 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,313 INFO ams_client: AMS raw notification: 000200302e31313939333637
+2026-06-10 02:42:30,313 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,321 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,323 INFO a2dp_bridge: AVRCP target absolute volume=11
+2026-06-10 02:42:30,331 INFO a2dp_bridge: AVRCP target absolute volume=10
+2026-06-10 02:42:30,337 INFO ams_client: AMS raw notification: 000200302e31313839303338
+2026-06-10 02:42:30,337 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,340 INFO a2dp_bridge: AVRCP target absolute volume=10
+2026-06-10 02:42:30,348 INFO a2dp_bridge: AVRCP target absolute volume=10
+2026-06-10 02:42:30,362 INFO ams_client: AMS raw notification: 000200302e31313738373038
+2026-06-10 02:42:30,363 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,367 INFO a2dp_bridge: AVRCP target absolute volume=10
+2026-06-10 02:42:30,369 INFO a2dp_bridge: AVRCP target absolute volume=10
+2026-06-10 02:42:30,376 INFO a2dp_bridge: AVRCP target absolute volume=9
+2026-06-10 02:42:30,388 INFO ams_client: AMS raw notification: 000200302e31313638333739
+2026-06-10 02:42:30,388 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,394 INFO a2dp_bridge: AVRCP target absolute volume=9
+2026-06-10 02:42:30,398 INFO a2dp_bridge: AVRCP target absolute volume=9
+2026-06-10 02:42:30,406 INFO a2dp_bridge: AVRCP target absolute volume=9
+2026-06-10 02:42:30,414 INFO ams_client: AMS raw notification: 000200302e31313538303439
+2026-06-10 02:42:30,415 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=12%
+2026-06-10 02:42:30,417 INFO ams_client: AMS raw notification: 000200302e31313437373139
+2026-06-10 02:42:30,417 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,420 INFO a2dp_bridge: AVRCP target absolute volume=8
+2026-06-10 02:42:30,422 INFO a2dp_bridge: AVRCP target absolute volume=8
+2026-06-10 02:42:30,436 INFO a2dp_bridge: AVRCP target absolute volume=8
+2026-06-10 02:42:30,444 INFO a2dp_bridge: AVRCP target absolute volume=8
+2026-06-10 02:42:30,452 INFO a2dp_bridge: AVRCP target absolute volume=8
+2026-06-10 02:42:30,456 INFO a2dp_bridge: AVRCP target absolute volume=7
+2026-06-10 02:42:30,467 INFO ams_client: AMS raw notification: 000200302e313133373339
+2026-06-10 02:42:30,467 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,476 INFO a2dp_bridge: AVRCP target absolute volume=7
+2026-06-10 02:42:30,483 INFO a2dp_bridge: AVRCP target absolute volume=7
+2026-06-10 02:42:30,484 INFO a2dp_bridge: AVRCP target absolute volume=7
+2026-06-10 02:42:30,490 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,493 INFO ams_client: AMS raw notification: 000200302e31313237303631
+2026-06-10 02:42:30,493 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,500 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,506 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,514 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,527 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,531 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,541 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:30,554 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:30,556 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:30,573 INFO ams_client: AMS raw notification: 000200302e31313136373331
+2026-06-10 02:42:30,573 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,577 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:30,578 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:30,582 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:30,598 INFO ams_client: AMS raw notification: 000200302e31313036343031
+2026-06-10 02:42:30,598 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,600 INFO ams_client: AMS raw notification: 000200302e31303936303732
+2026-06-10 02:42:30,601 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,606 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:30,624 INFO ams_client: AMS raw notification: 000200302e31303835373432
+2026-06-10 02:42:30,625 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,627 INFO ams_client: AMS raw notification: 000200302e31303735343133
+2026-06-10 02:42:30,627 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,650 INFO ams_client: AMS raw notification: 000200302e31303635303833
+2026-06-10 02:42:30,651 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,653 INFO ams_client: AMS raw notification: 000200302e31303534373534
+2026-06-10 02:42:30,653 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=11%
+2026-06-10 02:42:30,677 INFO ams_client: AMS raw notification: 000200302e31303434343234
+2026-06-10 02:42:30,677 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,679 INFO ams_client: AMS raw notification: 000200302e31303334303935
+2026-06-10 02:42:30,680 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,703 INFO ams_client: AMS raw notification: 000200302e31303233373635
+2026-06-10 02:42:30,703 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,705 INFO ams_client: AMS raw notification: 000200302e31303133343336
+2026-06-10 02:42:30,706 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,730 INFO ams_client: AMS raw notification: 000200302e31303033313036
+2026-06-10 02:42:30,731 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,757 INFO ams_client: AMS raw notification: 000200302e3039393237373638
+2026-06-10 02:42:30,757 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,782 INFO ams_client: AMS raw notification: 000200302e3039383234343733
+2026-06-10 02:42:30,782 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,784 INFO ams_client: AMS raw notification: 000200302e3039373231313738
+2026-06-10 02:42:30,785 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,809 INFO ams_client: AMS raw notification: 000200302e3039363137383833
+2026-06-10 02:42:30,810 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,834 INFO ams_client: AMS raw notification: 000200302e3039353134353838
+2026-06-10 02:42:30,835 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=10%
+2026-06-10 02:42:30,837 INFO ams_client: AMS raw notification: 000200302e3039343131323933
+2026-06-10 02:42:30,837 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,860 INFO ams_client: AMS raw notification: 000200302e3039333037393938
+2026-06-10 02:42:30,861 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,863 INFO ams_client: AMS raw notification: 000200302e3039323034373032
+2026-06-10 02:42:30,863 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,887 INFO ams_client: AMS raw notification: 000200302e3039313031343037
+2026-06-10 02:42:30,887 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,889 INFO ams_client: AMS raw notification: 000200302e3038393938313132
+2026-06-10 02:42:30,890 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,913 INFO ams_client: AMS raw notification: 000200302e3038383934383137
+2026-06-10 02:42:30,913 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,915 INFO ams_client: AMS raw notification: 000200302e3038373931353232
+2026-06-10 02:42:30,916 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,939 INFO ams_client: AMS raw notification: 000200302e3038363838323237
+2026-06-10 02:42:30,940 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=9%
+2026-06-10 02:42:30,942 INFO ams_client: AMS raw notification: 000200302e3038343831363337
+2026-06-10 02:42:30,942 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=8%
+2026-06-10 02:42:30,965 INFO ams_client: AMS raw notification: 000200302e3038333738333432
+2026-06-10 02:42:30,966 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=8%
+2026-06-10 02:42:30,992 INFO ams_client: AMS raw notification: 000200302e3038313731373531
+2026-06-10 02:42:30,992 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [98/210s] vol=8%
+2026-06-10 02:42:31,018 INFO ams_client: AMS raw notification: 000200302e3038303638343537
+2026-06-10 02:42:31,018 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=8%
+2026-06-10 02:42:31,020 INFO ams_client: AMS raw notification: 000200302e3037393635313631
+2026-06-10 02:42:31,021 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=8%
+2026-06-10 02:42:31,044 INFO ams_client: AMS raw notification: 000200302e3037373538353731
+2026-06-10 02:42:31,045 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=8%
+2026-06-10 02:42:31,047 INFO ams_client: AMS raw notification: 000200302e3037363535323736
+2026-06-10 02:42:31,047 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=8%
+2026-06-10 02:42:31,061 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:31,070 INFO ams_client: AMS raw notification: 000200302e3037343438363835
+2026-06-10 02:42:31,071 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=7%
+2026-06-10 02:42:31,073 INFO ams_client: AMS raw notification: 000200302e3037323432303935
+2026-06-10 02:42:31,073 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=7%
+2026-06-10 02:42:31,083 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:31,097 INFO ams_client: AMS raw notification: 000200302e3037303335353035
+2026-06-10 02:42:31,097 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=7%
+2026-06-10 02:42:31,099 INFO ams_client: AMS raw notification: 000200302e30363933323231
+2026-06-10 02:42:31,100 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=7%
+2026-06-10 02:42:31,124 INFO ams_client: AMS raw notification: 000200302e30363732353632
+2026-06-10 02:42:31,124 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=7%
+2026-06-10 02:42:31,128 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:31,149 INFO ams_client: AMS raw notification: 000200302e3036353139303239
+2026-06-10 02:42:31,150 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=7%
+2026-06-10 02:42:31,175 INFO ams_client: AMS raw notification: 000200302e30363331323434
+2026-06-10 02:42:31,176 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=6%
+2026-06-10 02:42:31,186 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:31,202 INFO ams_client: AMS raw notification: 000200302e3036313035383439
+2026-06-10 02:42:31,202 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=6%
+2026-06-10 02:42:31,228 INFO ams_client: AMS raw notification: 000200302e3035383939323539
+2026-06-10 02:42:31,229 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=6%
+2026-06-10 02:42:31,231 INFO ams_client: AMS raw notification: 000200302e3035373935393633
+2026-06-10 02:42:31,231 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=6%
+2026-06-10 02:42:31,254 INFO ams_client: AMS raw notification: 000200302e3035353839333733
+2026-06-10 02:42:31,255 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=6%
+2026-06-10 02:42:31,257 INFO ams_client: AMS raw notification: 000200302e3035343836303738
+2026-06-10 02:42:31,257 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,282 INFO ams_client: AMS raw notification: 000200302e3035323739343838
+2026-06-10 02:42:31,282 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,285 INFO a2dp_bridge: AVRCP target absolute volume=5
+2026-06-10 02:42:31,307 INFO ams_client: AMS raw notification: 000200302e3035313736313933
+2026-06-10 02:42:31,307 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,309 INFO ams_client: AMS raw notification: 000200302e3035303732383938
+2026-06-10 02:42:31,310 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,333 INFO ams_client: AMS raw notification: 000200302e3034393639363033
+2026-06-10 02:42:31,333 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,335 INFO ams_client: AMS raw notification: 000200302e3034383636333038
+2026-06-10 02:42:31,336 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,359 INFO ams_client: AMS raw notification: 000200302e3034373633303132
+2026-06-10 02:42:31,360 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,362 INFO ams_client: AMS raw notification: 000200302e3034363539373138
+2026-06-10 02:42:31,362 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,387 INFO ams_client: AMS raw notification: 000200302e3034353536343232
+2026-06-10 02:42:31,387 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,395 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:31,412 INFO ams_client: AMS raw notification: 000200302e3034343533313237
+2026-06-10 02:42:31,412 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,414 INFO ams_client: AMS raw notification: 000200302e3034333439383332
+2026-06-10 02:42:31,415 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,438 INFO ams_client: AMS raw notification: 000200302e3034323436353337
+2026-06-10 02:42:31,438 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,440 INFO ams_client: AMS raw notification: 000200302e3034313433323432
+2026-06-10 02:42:31,441 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,464 INFO ams_client: AMS raw notification: 000200302e3034323436353337
+2026-06-10 02:42:31,465 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,467 INFO ams_client: AMS raw notification: 000200302e3034333439383332
+2026-06-10 02:42:31,467 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,471 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:31,477 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:31,490 INFO ams_client: AMS raw notification: 000200302e3034343533313237
+2026-06-10 02:42:31,491 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=4%
+2026-06-10 02:42:31,493 INFO ams_client: AMS raw notification: 000200302e3034353536343232
+2026-06-10 02:42:31,493 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,506 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:31,517 INFO ams_client: AMS raw notification: 000200302e3034363539373138
+2026-06-10 02:42:31,517 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,519 INFO ams_client: AMS raw notification: 000200302e3034373633303132
+2026-06-10 02:42:31,519 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,543 INFO ams_client: AMS raw notification: 000200302e3034383636333038
+2026-06-10 02:42:31,543 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,545 INFO ams_client: AMS raw notification: 000200302e3034393639363033
+2026-06-10 02:42:31,546 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,569 INFO ams_client: AMS raw notification: 000200302e3035303732383938
+2026-06-10 02:42:31,570 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,585 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:31,596 INFO ams_client: AMS raw notification: 000200302e3035313736313933
+2026-06-10 02:42:31,596 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:31,627 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:42:31,648 INFO ams_client: AMS raw notification: 000200302e3035323739343838
+2026-06-10 02:42:31,649 INFO ams_client: State: ▶ Из сияющей пустоты — Аквариум [99/210s] vol=5%
+2026-06-10 02:42:33,942 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6750 bytes=693 sent_to_speaker=False
+2026-06-10 02:42:39,744 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7000 bytes=696 sent_to_speaker=False
+2026-06-10 02:42:45,546 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7250 bytes=724 sent_to_speaker=False
+2026-06-10 02:42:51,350 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7500 bytes=675 sent_to_speaker=False
+2026-06-10 02:42:57,170 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7750 bytes=678 sent_to_speaker=False
+2026-06-10 02:43:02,965 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8000 bytes=720 sent_to_speaker=False
+2026-06-10 02:43:08,770 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8250 bytes=715 sent_to_speaker=False
+2026-06-10 02:43:14,572 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8500 bytes=576 sent_to_speaker=False
+2026-06-10 02:43:20,375 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8750 bytes=698 sent_to_speaker=False
+2026-06-10 02:43:26,178 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=9000 bytes=687 sent_to_speaker=False
+2026-06-10 02:43:32,014 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=9250 bytes=715 sent_to_speaker=False
