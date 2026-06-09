@@ -11,7 +11,17 @@ sys.path.insert(0, str(RUNTIME / "vendor"))
 sys.path.insert(0, str(RUNTIME))
 
 import bumble  # noqa: E402
-from bumble.smp import Session  # noqa: E402
+from bumble import hci  # noqa: E402
+from bumble.l2cap import (  # noqa: E402
+    ClassicChannel,
+    L2CAP_Configure_Request,
+    L2CAP_Configure_Response,
+    L2CAP_Control_Frame,
+    TransmissionMode,
+)
+from bumble.pairing import PairingConfig  # noqa: E402
+from bumble.sdp import SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID  # noqa: E402
+from bumble.smp import AuthReq, Session  # noqa: E402
 
 
 EXPECTED_VERSION = "0.0.229"
@@ -50,11 +60,79 @@ def main() -> int:
     if any(actual != expected for actual, expected in vectors):
         raise SystemExit("Bumble CTKD test vector mismatch")
 
+    config = PairingConfig(ct2=True)
+    auth_req = AuthReq.from_booleans(
+        bonding=config.bonding,
+        sc=config.sc,
+        mitm=config.mitm,
+        ct2=config.ct2,
+    )
+    if not auth_req & AuthReq.CT2:
+        raise SystemExit("Bumble CT2 integration is disabled")
+
+    import a2dp_bridge  # noqa: E402
     import accessory_orchestrator  # noqa: F401
     import carthing_runtime  # noqa: F401
     import media_remote  # noqa: F401
 
-    print(f"Bumble vendor OK: {bumble.__version__}, CTKD vectors OK")
+    audio_sink_features = [
+        attribute.value.value
+        for attribute in a2dp_bridge.make_audio_sink_sdp_records()
+        if attribute.id == SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID
+    ]
+    if audio_sink_features != [a2dp_bridge.A2DP_SINK_FEATURE_SPEAKER]:
+        raise SystemExit(f"A2DP AudioSink SupportedFeatures mismatch: {audio_sink_features}")
+
+    flush_timeout_command = hci.HCI_Write_Automatic_Flush_Timeout_Command(
+        connection_handle=12,
+        flush_timeout=200,
+    )
+    if flush_timeout_command.op_code != hci.HCI_WRITE_AUTOMATIC_FLUSH_TIMEOUT_COMMAND:
+        raise SystemExit("Bumble HCI Write Automatic Flush Timeout opcode mismatch")
+    if bytes(flush_timeout_command).hex() != "01280c040c00c800":
+        raise SystemExit(
+            "Bumble HCI Write Automatic Flush Timeout serialization mismatch: "
+            f"{bytes(flush_timeout_command).hex()}"
+        )
+
+    responses = []
+    channel = object.__new__(ClassicChannel)
+    channel.state = ClassicChannel.State.WAIT_CONFIG_REQ_RSP
+    channel.mode = TransmissionMode.BASIC
+    channel.destination_cid = 0x0041
+    channel.peer_flush_timeout_ms = None
+    channel.send_control_frame = responses.append
+    channel._change_state = lambda state: setattr(channel, "state", state)
+    channel.on_configure_request(
+        L2CAP_Configure_Request(
+            identifier=1,
+            destination_cid=0x0040,
+            flags=0,
+            options=L2CAP_Control_Frame.encode_configuration_options(
+                [
+                    (
+                        L2CAP_Configure_Request.ParameterType.FLUSH_TIMEOUT,
+                        bytes.fromhex("c800"),
+                    )
+                ]
+            ),
+        )
+    )
+    if channel.peer_flush_timeout_ms != 200:
+        raise SystemExit(
+            f"Bumble L2CAP peer flush timeout mismatch: {channel.peer_flush_timeout_ms}"
+        )
+    if (
+        len(responses) != 1
+        or not isinstance(responses[0], L2CAP_Configure_Response)
+        or responses[0].result != L2CAP_Configure_Response.Result.SUCCESS
+    ):
+        raise SystemExit("Bumble L2CAP peer flush timeout was not accepted")
+
+    print(
+        f"Bumble vendor OK: {bumble.__version__}, CTKD vectors, CT2 integration, "
+        "AudioSink SDP, HCI automatic flush command, and L2CAP peer flush timeout OK"
+    )
     return 0
 
 

@@ -117,7 +117,15 @@ class AccessoryOrchestrator:
             PairingDelegate.KeyDistribution.DISTRIBUTE_ENCRYPTION_KEY
             | PairingDelegate.KeyDistribution.DISTRIBUTE_IDENTITY_KEY
         )
-        if classic_enabled:
+        # CTKD direction matters:
+        # - LE pairing distributes LINK_KEY so BR/EDR can be derived from the LTK.
+        # - SMP over BR/EDR keeps the controller-created Link Key and distributes
+        #   ENC_KEY so the LE LTK is derived from it. Asking for LINK_KEY again in
+        #   that direction can replace the primary Classic key with another
+        #   derived key and split the accessory identity.
+        from bumble.core import BT_BR_EDR_TRANSPORT
+        is_classic = getattr(connection, "transport", None) == BT_BR_EDR_TRANSPORT
+        if classic_enabled and not is_classic:
             keydist |= PairingDelegate.KeyDistribution.DISTRIBUTE_LINK_KEY
         delegate = PairingDelegate(
             io_capability=PairingDelegate.NO_OUTPUT_NO_INPUT,
@@ -128,6 +136,7 @@ class AccessoryOrchestrator:
             sc=True,
             mitm=False,
             bonding=True,
+            ct2=classic_enabled,
             delegate=delegate,
             identity_address_type=PairingConfig.AddressType.PUBLIC,
         )
@@ -135,14 +144,20 @@ class AccessoryOrchestrator:
     def install(self):
         """Повесить pairing_config_factory на Device. Classic-HW держим включённым."""
         self.device.pairing_config_factory = self.pairing_config_factory
-        # Classic включён всегда (для CTKD), но не connectable/discoverable вне нужды.
+        # Configure the controller as a real dual-mode host before power_on().
+        # The BLE advertising flags already claim simultaneous LE + BR/EDR;
+        # HCI_Write_LE_Host_Support must report the same capability.
         if os.environ.get("CARTHING_CLASSIC_ENABLE", "1") == "0":
             logger.info("classic disabled by CARTHING_CLASSIC_ENABLE=0 for LE-only lab")
             return
         try:
+            self.device.le_enabled = True
             self.device.classic_enabled = True
+            self.device.le_simultaneous_enabled = True
+            self.device.classic_smp_enabled = True
+            logger.info("dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD")
         except Exception as e:
-            logger.warning("classic_enable failed: %s", e)
+            logger.warning("dual-mode host enable failed: %s", e)
 
     # ── состояние бондов ─────────────────────────────────────────────────────
     async def _bonds(self):
@@ -188,7 +203,10 @@ class AccessoryOrchestrator:
         # BLE-добор становится второй записью с тем же именем. Поэтому source/iPhone pairing
         # должен быть BLE-first; classic discoverable можно включать только для отдельных
         # classic enrollment flows, не для общего iPhone pairing.
-        classic_discoverable = self.pairing_armed and self.classic_pairing_discoverable
+        classic_first = os.environ.get("CARTHING_PAIRING_PRIMARY", "").lower() == "classic"
+        classic_discoverable = self.pairing_armed and (
+            self.classic_pairing_discoverable or classic_first
+        )
         await self._set_classic(connectable=True, discoverable=classic_discoverable)
 
         # 2) BLE advertising по фазе/режиму (рабочая 4-веточная логика коммита):
@@ -206,6 +224,11 @@ class AccessoryOrchestrator:
         except Exception:
             pass
         if ble_connected:
+            await self._advertise_silent()
+        elif self.pairing_armed and classic_first:
+            # Audio-first lab flow: expose exactly one Classic pairing surface.
+            # After Classic SSP, SMP over BR/EDR derives the LE bond through CTKD;
+            # the user must not have to tap a second BLE row.
             await self._advertise_silent()
         elif self.pairing_armed:
             await self._advertise_general()

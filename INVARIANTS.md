@@ -277,3 +277,43 @@ CARTHING_BUMBLE_QUARANTINE=0 CARTHING_ALLOW_BUMBLE_RUN=1 <command>
 
 Возвращать имя `S50-carthing-remote` в release image нельзя: это снова позволит
 legacy runtime захватить HCI на загрузке.
+
+---
+
+## ADDENDUM 2026-06-05 — iPhone A2DP требует поддержки L2CAP Flush Timeout
+
+Финальный аппаратный тест нашёл причину пустого Control Center после уже
+успешной единой dual-mode пары:
+
+- iPhone при настройке A2DP media channel передаёт L2CAP option
+  `FLUSH_TIMEOUT=0x00C8`;
+- vendored Bumble отвергал известную опцию ответом
+  `FAILURE_UNKNOWN_OPTIONS`;
+- стороны бесконечно повторяли L2CAP Configure, media channel не переходил в
+  OPEN, поэтому iPhone не отправлял AVDTP `START`.
+
+Обязательный инвариант vendored Bumble:
+
+- существует и правильно сериализуется
+  `HCI_Write_Automatic_Flush_Timeout_Command`;
+- Classic L2CAP принимает `FLUSH_TIMEOUT`, сохраняет его как политику
+  удалённого отправителя и отвечает Configure SUCCESS;
+- значение из входящего L2CAP Configure нельзя применять к локальному
+  контроллеру: направление и единицы L2CAP/HCI различаются;
+- `scripts/check-bumble-vendor.py` проверяет HCI-команду, чтобы этот фикс нельзя
+  было случайно потерять при обновлении vendor-кода.
+
+Доказанный результат полного dual-mode runtime:
+
+- используется одна уже созданная пара iPhone и Car Thing;
+- активация Classic/A2DP на Linux-стороне автоматически подключает
+  `Car Thing (SN: QN19)` и публикует его как аудиовыход в Control Center;
+- iPhone выбирает AAC, открывает RTP, отправляет AVDTP `START`, передаёт
+  реальный RTP-поток и AVRCP Absolute Volume.
+
+Аппаратное доказательство:
+`artifacts/dual-mode-20260605/dual-mode-flush-fix-success.log`.
+
+Пока это проверено временным lab runtime из `/run/carthing-dual-mode-lab`.
+Переживание перезагрузки требует отдельного bake release overlay в rootfs и
+стандартной прошивки.

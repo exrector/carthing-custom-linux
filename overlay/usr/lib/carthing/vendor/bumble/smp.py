@@ -704,7 +704,7 @@ class Session:
         self.sc: bool = pairing_config.sc
         self.mitm: bool = pairing_config.mitm
         self.keypress = False
-        self.ct2: bool = False
+        self.ct2: bool = pairing_config.ct2
 
         # I/O Capabilities
         self.io_capability = IoCapability(pairing_config.delegate.io_capability)
@@ -1511,6 +1511,7 @@ class Session:
         # Bonding and SC require both sides to request/support it
         self.bonding = self.bonding and (command.auth_req & AuthReq.BONDING != 0)
         self.sc = self.sc and (command.auth_req & AuthReq.SC != 0)
+        self.ct2 = self.ct2 and (command.auth_req & AuthReq.CT2 != 0)
 
         # Infer the pairing method
         if (self.sc and (self.oob_data_flag != 0 or command.oob_data_flag != 0)) or (
@@ -2009,6 +2010,7 @@ class Manager(utils.EventEmitter):
                 bonding=pairing_config.bonding,
                 sc=pairing_config.sc,
                 mitm=pairing_config.mitm,
+                ct2=pairing_config.ct2,
             )
         else:
             auth_req = AuthReq(0)

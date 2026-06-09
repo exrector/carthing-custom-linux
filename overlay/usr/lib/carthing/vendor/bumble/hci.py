@@ -3440,6 +3440,25 @@ class HCI_Read_Local_Name_Command(
 
 
 # -----------------------------------------------------------------------------
+@dataclasses.dataclass
+class HCI_Write_Automatic_Flush_Timeout_ReturnParameters(HCI_StatusReturnParameters):
+    connection_handle: int = field(metadata=metadata(2))
+
+
+@HCI_SyncCommand.sync_command(HCI_Write_Automatic_Flush_Timeout_ReturnParameters)
+@dataclasses.dataclass
+class HCI_Write_Automatic_Flush_Timeout_Command(
+    HCI_SyncCommand[HCI_Write_Automatic_Flush_Timeout_ReturnParameters]
+):
+    '''
+    See Bluetooth spec @ 7.3.32 Write Automatic Flush Timeout Command
+    '''
+
+    connection_handle: int = field(metadata=metadata(2))
+    flush_timeout: int = field(metadata=metadata(2))
+
+
+# -----------------------------------------------------------------------------
 @HCI_SyncCommand.sync_command(HCI_StatusReturnParameters)
 @dataclasses.dataclass
 class HCI_Write_Connection_Accept_Timeout_Command(

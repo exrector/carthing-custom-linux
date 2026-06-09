@@ -1,0 +1,73 @@
+2026-06-05 22:48:10,201 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-05 22:48:10,248 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-05 22:48:10,249 INFO ble_transport: Opening transport hci-socket:0
+2026-06-05 22:48:10,259 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-05 22:48:11,171 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-05 22:48:11,177 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-05 22:48:11,177 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-05 22:48:11,181 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-05 22:48:11,188 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-05 22:48:11,189 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-05 22:48:11,193 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-05 22:48:11,193 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-05 22:48:11,194 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-05 22:48:11,195 INFO carthing_runtime: phase=ready
+2026-06-05 22:48:11,217 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 22:48:11,217 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 22:48:11,218 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-05 22:48:11,230 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 22:48:11,231 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 22:48:11,247 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 22:48:11,247 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 22:48:11,247 INFO carthing_runtime: apply_visibility done
+2026-06-05 22:48:11,248 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-05 22:48:11,248 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-05 22:48:11,252 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-05 22:48:11,268 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 22:48:11,268 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 22:48:12,252 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50
+2026-06-05 22:48:12,252 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-05 22:48:12,392 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-05 22:48:12,392 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=12 encrypted=False
+2026-06-05 22:48:12,400 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-05 22:48:12,479 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=12 encrypted=True
+2026-06-05 22:48:12,758 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-05 22:48:12,766 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 22:48:12,766 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 22:48:12,833 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-05 22:48:12,834 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-05 22:48:12,834 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-05 22:48:12,834 INFO a2dp_bridge: AVRCP session started; local target supports Absolute Volume notifications
+2026-06-05 22:48:12,849 INFO a2dp_bridge: AVRCP source supported events: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED', 'PLAYER_APPLICATION_SETTING_CHANGED', 'NOW_PLAYING_CONTENT_CHANGED', 'AVAILABLE_PLAYERS_CHANGED', 'ADDRESSED_PLAYER_CHANGED', 'UIDS_CHANGED']
+2026-06-05 22:48:12,868 INFO a2dp_bridge: AVRCP source playback-status=2
+2026-06-05 22:48:20,763 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-05 22:48:20,764 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-05 22:48:20,766 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-05 22:48:20,766 INFO a2dp_bridge: A2DP source endpoint profile=AAC+SBC
+2026-06-05 22:48:21,152 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-05 22:48:21,256 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-05 22:48:21,525 INFO a2dp_bridge: A2DP_SOURCE_RTP_OPEN codec=AAC
+2026-06-05 22:48:21,564 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-05 22:49:03,886 INFO a2dp_bridge: AVRCP target absolute volume=56
+2026-06-05 22:49:03,888 INFO a2dp_bridge: A2DP_SOURCE_START codec=AAC
+2026-06-05 22:49:03,890 INFO a2dp_bridge: A2DP receiver not requested: no trusted speaker
+2026-06-05 22:49:03,892 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-05 22:49:03,934 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-05 22:49:03,960 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1 bytes=54 sent_to_speaker=False
+2026-06-05 22:49:03,962 INFO a2dp_bridge: AVRCP target absolute volume=56
+2026-06-05 22:49:03,963 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2 bytes=54 sent_to_speaker=False
+2026-06-05 22:49:03,990 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3 bytes=54 sent_to_speaker=False
+2026-06-05 22:49:04,015 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4 bytes=54 sent_to_speaker=False
+2026-06-05 22:49:04,042 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5 bytes=54 sent_to_speaker=False
+2026-06-05 22:49:04,080 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6 bytes=704 sent_to_speaker=False
+2026-06-05 22:49:04,084 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7 bytes=760 sent_to_speaker=False
+2026-06-05 22:49:04,113 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8 bytes=733 sent_to_speaker=False
+2026-06-05 22:49:04,143 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=9 bytes=737 sent_to_speaker=False
+2026-06-05 22:49:09,723 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=250 bytes=739 sent_to_speaker=False
+2026-06-05 22:49:15,541 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=500 bytes=747 sent_to_speaker=False
+2026-06-05 22:49:21,339 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=750 bytes=742 sent_to_speaker=False
+2026-06-05 22:49:27,149 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1000 bytes=698 sent_to_speaker=False
+2026-06-05 22:49:32,951 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1250 bytes=670 sent_to_speaker=False
+2026-06-05 22:49:38,760 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1500 bytes=714 sent_to_speaker=False
+2026-06-05 22:49:44,581 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1750 bytes=711 sent_to_speaker=False
+2026-06-05 22:49:50,381 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2000 bytes=714 sent_to_speaker=False

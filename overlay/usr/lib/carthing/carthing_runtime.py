@@ -154,10 +154,16 @@ def _on_command(source, command):
 
 
 def _best_bonded_source_address():
+    states = []
     if gui is not None:
+        states.append(gui.app_state)
+    bridge_state = getattr(getattr(transfer, "bridge", None), "state", None)
+    if bridge_state is not None and bridge_state not in states:
+        states.append(bridge_state)
+    for app_state in states:
         try:
-            gui.app_state.load_trusted()
-            for row in gui.app_state.trusted_sources:
+            app_state.load_trusted()
+            for row in app_state.trusted_sources:
                 address = row.get("address")
                 if address:
                     return address
@@ -550,6 +556,11 @@ async def _on_connection(connection):
     if classic:
         if transfer is not None:
             await transfer.on_incoming_classic(connection)
+        if (
+            os.environ.get("CARTHING_PAIRING_PRIMARY", "").lower() == "classic"
+            and getattr(orch, "pairing_armed", False)
+        ):
+            asyncio.create_task(_complete_classic_first_ctkd(connection))
         return
 
     if orch is not None:
@@ -682,6 +693,64 @@ async def _on_connection(connection):
             logger.warning("request_pairing failed: %s", e)
 
 
+async def _complete_classic_first_ctkd(connection):
+    """Finish one audio-first pairing by deriving the LE bond over BR/EDR SMP."""
+    peer = getattr(connection, "peer_address", "?")
+
+    async def _on_ctkd_complete():
+        logger.info("classic-first CTKD complete: one Classic pair derived LE bond for %s", peer)
+        if orch is not None:
+            await orch.on_bonded()
+        if transfer is not None and getattr(transfer, "bridge", None) is not None:
+            await transfer.bridge.ensure_source_avrcp(connection)
+
+    connection.on(
+        "pairing",
+        lambda *_: asyncio.create_task(_on_ctkd_complete()),
+    )
+    connection.on(
+        "pairing_failure",
+        lambda reason: logger.warning("classic-first SMP pairing failed for %s: %s", peer, reason),
+    )
+    try:
+        logger.info("classic-first CTKD: authenticate %s", peer)
+        if not getattr(connection, "authenticated", False):
+            await connection.authenticate()
+        if not getattr(connection, "is_encrypted", False):
+            await connection.encrypt()
+        logger.info("classic-first CTKD: encrypted, requesting SMP over BR/EDR for %s", peer)
+        connection.request_pairing()
+    except Exception as e:
+        logger.warning("classic-first CTKD failed for %s: %s", peer, e)
+
+
+async def _resume_bonded_classic_audio():
+    """Reconnect the Classic audio/control profile without starting pairing."""
+    if os.environ.get("CARTHING_CLASSIC_AUDIO_RECONNECT") != "1":
+        return
+    if transfer is None or getattr(transfer, "bridge", None) is None:
+        return
+    address = _best_bonded_source_address()
+    if not address:
+        try:
+            for candidate, keys in reversed(await transfer.bridge.device.keystore.get_all()):
+                if getattr(keys, "link_key", None) is not None and getattr(keys, "ltk", None) is not None:
+                    address = candidate
+                    break
+        except Exception as e:
+            logger.warning("classic audio reconnect bond lookup failed: %s", e)
+    if not address:
+        logger.info("classic audio reconnect skipped: no dual-mode bond")
+        return
+    await asyncio.sleep(1.0)
+    try:
+        logger.info("classic audio reconnect: dialing %s", address)
+        await transfer.bridge.connect_source(address)
+        logger.info("classic audio reconnect ready: %s", address)
+    except Exception as e:
+        logger.warning("classic audio reconnect failed for %s: %s", address, e)
+
+
 async def main():
     global orch, gui, transfer, backchannel, iap2, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
     _verify_persistent()
@@ -791,7 +860,11 @@ async def main():
         try:
             from transfer_service import TransferService
             from transfer_control import TransferControlBackchannel
-            app_state = gui.app_state if gui is not None else None
+            if gui is not None:
+                app_state = gui.app_state
+            else:
+                from app_state import AppState
+                app_state = AppState()
             transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
             backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
             await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
@@ -841,6 +914,7 @@ async def main():
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
     await orch.apply_visibility()
     logger.info("apply_visibility done")
+    asyncio.create_task(_resume_bonded_classic_audio())
     if os.environ.get("CAR_THING_AUTO_PAIRING") == "1":
         if gui is not None:
             gui.set_pairing_mode(True, role="source")

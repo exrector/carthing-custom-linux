@@ -238,6 +238,7 @@ class PairingConfig:
         sc: bool = True,
         mitm: bool = True,
         bonding: bool = True,
+        ct2: bool = False,
         delegate: PairingDelegate | None = None,
         identity_address_type: AddressType | None = None,
         oob: OobConfig | None = None,
@@ -245,6 +246,7 @@ class PairingConfig:
         self.sc = sc
         self.mitm = mitm
         self.bonding = bonding
+        self.ct2 = ct2
         self.delegate = delegate or PairingDelegate()
         self.identity_address_type = identity_address_type
         self.oob = oob
@@ -252,7 +254,7 @@ class PairingConfig:
     def __str__(self) -> str:
         return (
             f'PairingConfig(sc={self.sc}, '
-            f'mitm={self.mitm}, bonding={self.bonding}, '
+            f'mitm={self.mitm}, bonding={self.bonding}, ct2={self.ct2}, '
             f'identity_address_type={self.identity_address_type}, '
             f'delegate[{self.delegate.io_capability}]), '
             f'oob[{self.oob}])'

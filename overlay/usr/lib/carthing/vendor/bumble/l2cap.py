@@ -1172,6 +1172,7 @@ class ClassicChannel(utils.EventEmitter):
     connection: Connection
     mtu: int
     peer_mtu: int
+    peer_flush_timeout_ms: int | None
     processor: Processor
 
     def __init__(
@@ -1190,6 +1191,7 @@ class ClassicChannel(utils.EventEmitter):
         self.state = self.State.CLOSED
         self.mtu = spec.mtu
         self.peer_mtu = L2CAP_MIN_BR_EDR_MTU
+        self.peer_flush_timeout_ms = None
         self.psm = psm
         self.source_cid = source_cid
         self.destination_cid = 0
@@ -1398,6 +1400,13 @@ class ClassicChannel(utils.EventEmitter):
                 case L2CAP_Configure_Request.ParameterType.MTU:
                     self.peer_mtu = struct.unpack('<H', option[1])[0]
                     logger.debug('Peer MTU = %d', self.peer_mtu)
+                    replied_options.append(option)
+                case L2CAP_Configure_Request.ParameterType.FLUSH_TIMEOUT:
+                    self.peer_flush_timeout_ms = struct.unpack('<H', option[1])[0]
+                    logger.debug(
+                        'Peer flush timeout = %d ms',
+                        self.peer_flush_timeout_ms,
+                    )
                     replied_options.append(option)
                 case (
                     L2CAP_Configure_Request.ParameterType.RETRANSMISSION_AND_FLOW_CONTROL

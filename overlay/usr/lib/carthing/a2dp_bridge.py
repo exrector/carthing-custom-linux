@@ -4,12 +4,17 @@ import asyncio
 import logging
 import os
 
-from bumble import a2dp, avdtp
+from bumble import a2dp, avdtp, avrcp
 from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, Device
 from bumble.hci import (
     HCI_Read_Class_Of_Device_Command,
     HCI_Write_Class_Of_Device_Command,
+)
+from bumble.sdp import (
+    SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID,
+    DataElement,
+    ServiceAttribute,
 )
 
 from app_state import normalize_address
@@ -24,108 +29,132 @@ COD_AUDIO_LOUDSPEAKER = 0x240414
 SERVICE_RECORD_AUDIO_SOURCE = 0x10001
 SERVICE_RECORD_AUDIO_SINK = 0x10002
 SERVICE_RECORD_AVRCP_TARGET = 0x10003
-AVCTP_PSM = 0x0017
+SERVICE_RECORD_AVRCP_CONTROLLER = 0x10004
 BT_AUDIO_SOURCE_UUID16 = 0x110A
 BT_AUDIO_SINK_UUID16 = 0x110B
 BT_AV_REMOTE_CONTROL_TARGET_UUID16 = 0x110C
+BT_AV_REMOTE_CONTROL_UUID16 = 0x110E
+BT_AV_REMOTE_CONTROL_CONTROLLER_UUID16 = 0x110F
 IAP2_UUID128 = UUID("00000000-deca-fade-deca-deafdecacaff", "iAP2 Accessory")
 COD_MAJOR_AUDIO_VIDEO = 0x0400
+# A2DP 1.3.2, Audio Sink SupportedFeatures: bit 1 identifies a speaker.
+A2DP_SINK_FEATURE_SPEAKER = 0x0002
+# AVDTP delay units are 1/10 ms. Report a conservative 150 ms relay delay.
+A2DP_SINK_DELAY_REPORT = 1500
 
 
 def error_text(error: Exception) -> str:
     return str(error) or type(error).__name__
 
 
+class AudioSinkAvrcpDelegate(avrcp.Delegate):
+    """Minimal AVRCP Target state required by an A2DP audio sink."""
+
+    def __init__(self, logger):
+        super().__init__(supported_events=[avrcp.EventId.VOLUME_CHANGED])
+        self.logger = logger
+        self.volume = 64
+
+    async def set_absolute_volume(self, volume: int) -> None:
+        await super().set_absolute_volume(volume)
+        self.logger.info("AVRCP target absolute volume=%d", volume)
+
+    async def on_key_event(self, key, pressed: bool, data: bytes) -> None:
+        self.logger.info("AVRCP target key=%s pressed=%s", key, pressed)
+
+
+def make_audio_sink_sdp_records():
+    records = a2dp.make_audio_sink_service_sdp_records(SERVICE_RECORD_AUDIO_SINK)
+    records.append(
+        ServiceAttribute(
+            SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID,
+            DataElement.unsigned_integer_16(A2DP_SINK_FEATURE_SPEAKER),
+        )
+    )
+    return records
+
+
 def make_aac_capabilities(max_bitrate: int = 320000):
+    codec = a2dp.AacMediaCodecInformation
     return avdtp.MediaCodecCapabilities(
         avdtp.AVDTP_AUDIO_MEDIA_TYPE,
         a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE,
-        a2dp.AacMediaCodecInformation.from_lists(
-            [a2dp.MPEG_2_AAC_LC_OBJECT_TYPE, a2dp.MPEG_4_AAC_LC_OBJECT_TYPE],
-            [44100, 48000],
-            [2],
-            1,
-            max_bitrate,
+        codec(
+            object_type=codec.ObjectType.MPEG_2_AAC_LC | codec.ObjectType.MPEG_4_AAC_LC,
+            sampling_frequency=codec.SamplingFrequency.SF_44100
+            | codec.SamplingFrequency.SF_48000,
+            channels=codec.Channels.STEREO,
+            vbr=1,
+            bitrate=max_bitrate,
         ),
     )
 
 
 def make_aac_stream_configuration(codec_info=None):
+    codec = a2dp.AacMediaCodecInformation
     object_type = _first_supported(
         getattr(codec_info, "object_type", 0),
-        (
-            a2dp.AacMediaCodecInformation.OBJECT_TYPE_BITS[a2dp.MPEG_4_AAC_LC_OBJECT_TYPE],
-            a2dp.AacMediaCodecInformation.OBJECT_TYPE_BITS[a2dp.MPEG_2_AAC_LC_OBJECT_TYPE],
-        ),
-    ) or a2dp.AacMediaCodecInformation.OBJECT_TYPE_BITS[a2dp.MPEG_4_AAC_LC_OBJECT_TYPE]
+        (codec.ObjectType.MPEG_4_AAC_LC, codec.ObjectType.MPEG_2_AAC_LC),
+    ) or codec.ObjectType.MPEG_4_AAC_LC
     sampling = _first_supported(
         getattr(codec_info, "sampling_frequency", 0),
-        (
-            a2dp.AacMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100],
-            a2dp.AacMediaCodecInformation.SAMPLING_FREQUENCY_BITS[48000],
-        ),
-    ) or a2dp.AacMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100]
+        (codec.SamplingFrequency.SF_44100, codec.SamplingFrequency.SF_48000),
+    ) or codec.SamplingFrequency.SF_44100
     channels = _first_supported(
         getattr(codec_info, "channels", 0),
-        (
-            a2dp.AacMediaCodecInformation.CHANNELS_BITS[2],
-            a2dp.AacMediaCodecInformation.CHANNELS_BITS[1],
-        ),
-    ) or a2dp.AacMediaCodecInformation.CHANNELS_BITS[2]
+        (codec.Channels.STEREO, codec.Channels.MONO),
+    ) or codec.Channels.STEREO
     bitrate = min(int(getattr(codec_info, "bitrate", 0) or 256000), 256000)
     return [
         avdtp.ServiceCapabilities(avdtp.AVDTP_MEDIA_TRANSPORT_SERVICE_CATEGORY),
         avdtp.MediaCodecCapabilities(
             avdtp.AVDTP_AUDIO_MEDIA_TYPE,
             a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE,
-            a2dp.AacMediaCodecInformation(object_type, sampling, channels, 1, bitrate),
+            codec(object_type, sampling, channels, 1, bitrate),
         ),
     ]
 
 
 def make_sbc_capabilities():
+    codec = a2dp.SbcMediaCodecInformation
     return avdtp.MediaCodecCapabilities(
         avdtp.AVDTP_AUDIO_MEDIA_TYPE,
         a2dp.A2DP_SBC_CODEC_TYPE,
-        a2dp.SbcMediaCodecInformation.from_lists(
-            [44100, 48000],
-            [a2dp.SBC_JOINT_STEREO_CHANNEL_MODE, a2dp.SBC_STEREO_CHANNEL_MODE],
-            [16],
-            [8],
-            [a2dp.SBC_LOUDNESS_ALLOCATION_METHOD],
-            2,
-            53,
+        codec(
+            sampling_frequency=codec.SamplingFrequency.SF_44100
+            | codec.SamplingFrequency.SF_48000,
+            channel_mode=codec.ChannelMode.JOINT_STEREO | codec.ChannelMode.STEREO,
+            block_length=codec.BlockLength.BL_16,
+            subbands=codec.Subbands.S_8,
+            allocation_method=codec.AllocationMethod.LOUDNESS,
+            minimum_bitpool_value=2,
+            maximum_bitpool_value=53,
         ),
     )
 
 
 def make_sbc_stream_configuration(codec_info=None):
+    codec = a2dp.SbcMediaCodecInformation
     sampling = _first_supported(
         getattr(codec_info, "sampling_frequency", 0),
-        (
-            a2dp.SbcMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100],
-            a2dp.SbcMediaCodecInformation.SAMPLING_FREQUENCY_BITS[48000],
-        ),
-    ) or a2dp.SbcMediaCodecInformation.SAMPLING_FREQUENCY_BITS[44100]
+        (codec.SamplingFrequency.SF_44100, codec.SamplingFrequency.SF_48000),
+    ) or codec.SamplingFrequency.SF_44100
     channel_mode = _first_supported(
         getattr(codec_info, "channel_mode", 0),
-        (
-            a2dp.SbcMediaCodecInformation.CHANNEL_MODE_BITS[a2dp.SBC_JOINT_STEREO_CHANNEL_MODE],
-            a2dp.SbcMediaCodecInformation.CHANNEL_MODE_BITS[a2dp.SBC_STEREO_CHANNEL_MODE],
-        ),
-    ) or a2dp.SbcMediaCodecInformation.CHANNEL_MODE_BITS[a2dp.SBC_JOINT_STEREO_CHANNEL_MODE]
+        (codec.ChannelMode.JOINT_STEREO, codec.ChannelMode.STEREO),
+    ) or codec.ChannelMode.JOINT_STEREO
     block_length = _first_supported(
         getattr(codec_info, "block_length", 0),
-        (a2dp.SbcMediaCodecInformation.BLOCK_LENGTH_BITS[16],),
-    ) or a2dp.SbcMediaCodecInformation.BLOCK_LENGTH_BITS[16]
+        (codec.BlockLength.BL_16,),
+    ) or codec.BlockLength.BL_16
     subbands = _first_supported(
         getattr(codec_info, "subbands", 0),
-        (a2dp.SbcMediaCodecInformation.SUBBANDS_BITS[8],),
-    ) or a2dp.SbcMediaCodecInformation.SUBBANDS_BITS[8]
+        (codec.Subbands.S_8,),
+    ) or codec.Subbands.S_8
     allocation = _first_supported(
         getattr(codec_info, "allocation_method", 0),
-        (a2dp.SbcMediaCodecInformation.ALLOCATION_METHOD_BITS[a2dp.SBC_LOUDNESS_ALLOCATION_METHOD],),
-    ) or a2dp.SbcMediaCodecInformation.ALLOCATION_METHOD_BITS[a2dp.SBC_LOUDNESS_ALLOCATION_METHOD]
+        (codec.AllocationMethod.LOUDNESS,),
+    ) or codec.AllocationMethod.LOUDNESS
     min_bitpool = max(2, int(getattr(codec_info, "minimum_bitpool_value", 2) or 2))
     max_bitpool = min(53, int(getattr(codec_info, "maximum_bitpool_value", 53) or 53))
     return [
@@ -133,7 +162,7 @@ def make_sbc_stream_configuration(codec_info=None):
         avdtp.MediaCodecCapabilities(
             avdtp.AVDTP_AUDIO_MEDIA_TYPE,
             a2dp.A2DP_SBC_CODEC_TYPE,
-            a2dp.SbcMediaCodecInformation(
+            codec(
                 sampling,
                 channel_mode,
                 block_length,
@@ -221,6 +250,16 @@ class A2DPBridge:
         self.logger = logger or logging.getLogger(__name__)
 
         self.listener: avdtp.Listener | None = None
+        self.avrcp_protocol = avrcp.Protocol(AudioSinkAvrcpDelegate(self.logger))
+        self.avrcp_protocol.on(
+            self.avrcp_protocol.EVENT_START,
+            lambda: asyncio.create_task(self._start_source_avrcp_session()),
+        )
+        self.avrcp_protocol.on(
+            self.avrcp_protocol.EVENT_STOP,
+            self._stop_source_avrcp_session,
+        )
+        self._avrcp_monitor_tasks: set[asyncio.Task] = set()
         self.receiver_connection = None
         self.receiver_protocol: avdtp.Protocol | None = None
         self.receiver_source = None
@@ -267,51 +306,21 @@ class A2DPBridge:
         await self.device.set_connectable(connectable)
         await self.device.set_discoverable(discoverable)
 
-    @staticmethod
-    def _make_avrcp_target_sdp_records(handle):
-        """[CLAUDE 2026-06-04] AVRCP Target SDP — Codex: iOS почти всегда требует AVRCP, чтобы
-        показать устройство как аудиовыход в Control Center. В этом vendored Bumble нет helper'а,
-        собираем вручную: AVRCP Target (0x110C) + AVCTP (PSM 0x0017) + AVRCP profile 1.6."""
-        from bumble.sdp import DataElement, ServiceAttribute
-        from bumble.core import (UUID, BT_L2CAP_PROTOCOL_ID,
-                                 BT_AV_REMOTE_CONTROL_TARGET_SERVICE,
-                                 BT_AV_REMOTE_CONTROL_SERVICE)
-        avctp = UUID.from_16_bits(0x0017, "AVCTP")
-        return [
-            ServiceAttribute(a2dp.SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,
-                             DataElement.unsigned_integer_32(handle)),
-            ServiceAttribute(a2dp.SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
-                             DataElement.sequence([DataElement.uuid(a2dp.SDP_PUBLIC_BROWSE_ROOT)])),
-            ServiceAttribute(a2dp.SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,
-                             DataElement.sequence([DataElement.uuid(BT_AV_REMOTE_CONTROL_TARGET_SERVICE)])),
-            ServiceAttribute(a2dp.SDP_PROTOCOL_DESCRIPTOR_LIST_ATTRIBUTE_ID, DataElement.sequence([
-                DataElement.sequence([DataElement.uuid(BT_L2CAP_PROTOCOL_ID),
-                                      DataElement.unsigned_integer_16(AVCTP_PSM)]),
-                DataElement.sequence([DataElement.uuid(avctp),
-                                      DataElement.unsigned_integer_16(0x0104)]),
-            ])),
-            ServiceAttribute(a2dp.SDP_BLUETOOTH_PROFILE_DESCRIPTOR_LIST_ATTRIBUTE_ID, DataElement.sequence([
-                DataElement.sequence([DataElement.uuid(BT_AV_REMOTE_CONTROL_SERVICE),
-                                      DataElement.unsigned_integer_16(0x0106)]),
-            ])),
-            # SupportedFeatures (0x0311): category 2 (player/recorder) — типично для аудио-приёмника.
-            ServiceAttribute(0x0311, DataElement.unsigned_integer_16(0x0002)),
-        ]
-
     def install_sdp_records(self):
         records = dict(self.device.sdp_service_records)
-        # [CLAUDE 2026-06-04] ТОЛЬКО A2DP Sink (Codex: не рекламировать AudioSource если мы только
-        # приёмник — иначе iPhone получает двусмысленную картину ролей и не кладёт в аудиовыходы).
-        # + AVRCP Target — без него iOS обычно не показывает устройство как audio output.
         records.pop(SERVICE_RECORD_AUDIO_SOURCE, None)
-        records[SERVICE_RECORD_AUDIO_SINK] = a2dp.make_audio_sink_service_sdp_records(
-            SERVICE_RECORD_AUDIO_SINK
-        )
-        records[SERVICE_RECORD_AVRCP_TARGET] = self._make_avrcp_target_sdp_records(
+        records[SERVICE_RECORD_AUDIO_SINK] = make_audio_sink_sdp_records()
+        records[SERVICE_RECORD_AVRCP_CONTROLLER] = avrcp.ControllerServiceSdpRecord(
+            SERVICE_RECORD_AVRCP_CONTROLLER
+        ).to_service_attributes()
+        records[SERVICE_RECORD_AVRCP_TARGET] = avrcp.TargetServiceSdpRecord(
             SERVICE_RECORD_AVRCP_TARGET
-        )
+        ).to_service_attributes()
         self.device.sdp_service_records = records
-        self.logger.info("A2DP SDP records installed: AudioSink + AVRCP Target (CoD loudspeaker)")
+        self.logger.info(
+            "A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target "
+            "(CoD loudspeaker)"
+        )
 
     def install_safe_link_key_provider(self):
         def legacy_link_key(address):
@@ -361,8 +370,9 @@ class A2DPBridge:
         await self._gate("a2dp-start", self.enable_classic_visibility)
         self.listener = avdtp.Listener(avdtp.Listener.create_registrar(self.device))
         self.listener.on("connection", self.on_avdtp_connection)
+        self.avrcp_protocol.listen(self.device)
         self.logger.info(
-            "A2DP bridge started: local=%s name=%s trusted_sources=%d trusted_speakers=%d",
+            "A2DP bridge started: local=%s name=%s trusted_sources=%d trusted_speakers=%d; AVCTP listening",
             self.device.public_address,
             self.bt_name,
             len(self.state.trusted_sources),
@@ -434,22 +444,25 @@ class A2DPBridge:
             self.logger.info("A2DP classic CoD active: 0x%06x", int(actual_cod))
         except Exception as exc:
             self.logger.warning("A2DP classic CoD readback failed: %s", error_text(exc))
-        self.device.inquiry_response = bytes(
-            AdvertisingData(
-                [
-                    (
-                        AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
-                        BT_AUDIO_SINK_UUID16.to_bytes(2, "little")
-                        + BT_AV_REMOTE_CONTROL_TARGET_UUID16.to_bytes(2, "little"),
-                    ),
-                    (
-                        AdvertisingData.COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
-                        IAP2_UUID128.to_bytes(),
-                    ),
-                    (AdvertisingData.COMPLETE_LOCAL_NAME, self.bt_name.encode("utf-8")),
-                ]
+        inquiry_items = [
+            (
+                AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
+                BT_AUDIO_SINK_UUID16.to_bytes(2, "little")
+                + BT_AV_REMOTE_CONTROL_TARGET_UUID16.to_bytes(2, "little")
+                + BT_AV_REMOTE_CONTROL_UUID16.to_bytes(2, "little")
+                + BT_AV_REMOTE_CONTROL_CONTROLLER_UUID16.to_bytes(2, "little"),
+            ),
+            (AdvertisingData.COMPLETE_LOCAL_NAME, self.bt_name.encode("utf-8")),
+        ]
+        if os.environ.get("CARTHING_IAP2_ENABLE") == "1":
+            inquiry_items.insert(
+                1,
+                (
+                    AdvertisingData.COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
+                    IAP2_UUID128.to_bytes(),
+                ),
             )
-        )
+        self.device.inquiry_response = bytes(AdvertisingData(inquiry_items))
         await self._request_visibility(connectable=True, discoverable=False)
         self.logger.info("A2DP classic connectable (not discoverable) enabled")
 
@@ -900,19 +913,12 @@ class A2DPBridge:
         tokens = set()
 
         async def _do():
-            sdp = SDPClient(self.device)
-            await sdp.connect(connection)
-            try:
+            async with SDPClient(connection) as sdp:
                 results = await asyncio.wait_for(
                     sdp.search_attributes([SDP_PUBLIC_BROWSE_ROOT], [SDP_ALL_ATTRIBUTES_RANGE]),
                     timeout=self.connect_timeout,
                 )
                 self._collect_uuid_tokens(results, tokens)
-            finally:
-                try:
-                    await sdp.disconnect()
-                except Exception:
-                    pass
 
         await self._gate("a2dp-sdp-scan", _do)
         return tokens
@@ -1032,10 +1038,82 @@ class A2DPBridge:
             self.logger.warning("A2DP source dial auth/encrypt failed: %s", error_text(exc))
             raise
         await self.handle_classic_connection(connection)
+        try:
+            capabilities = await self.scan_device_capabilities(connection)
+            self.logger.info("A2DP source peer SDP UUIDs: %s", sorted(capabilities))
+        except Exception as exc:
+            self.logger.info("A2DP source peer SDP scan ignored: %s", error_text(exc))
+        await self.ensure_source_avrcp(connection)
         self._source_connection = connection
         connection.on("disconnection", lambda _r: self._clear_source_connection())
         self.logger.info("A2DP_SOURCE_CLASSIC_DIALED %s", address)
         return connection
+
+    async def ensure_source_avrcp(self, connection):
+        """Open the control profile on an existing bonded Classic ACL."""
+        try:
+            if self.avrcp_protocol.avctp_protocol is None:
+                await self._gate(
+                    "a2dp-source-avrcp-connect",
+                    lambda: asyncio.wait_for(
+                        self.avrcp_protocol.connect(connection), timeout=self.connect_timeout
+                    ),
+                )
+            self.logger.info("A2DP source AVCTP/AVRCP connected")
+        except Exception as exc:
+            self.logger.warning("A2DP source AVCTP/AVRCP connect failed: %s", error_text(exc))
+
+    async def _start_source_avrcp_session(self):
+        """Register the audio sink for the source's AVRCP notifications."""
+        self._stop_source_avrcp_session()
+        self.logger.info(
+            "AVRCP session started; local target supports Absolute Volume notifications"
+        )
+        try:
+            supported_events = await asyncio.wait_for(
+                self.avrcp_protocol.get_supported_events(),
+                timeout=self.connect_timeout,
+            )
+            self.logger.info(
+                "AVRCP source supported events: %s",
+                [event.name for event in supported_events],
+            )
+        except Exception as exc:
+            self.logger.warning("AVRCP source capabilities query failed: %s", error_text(exc))
+            return
+
+        monitors = (
+            (
+                avrcp.EventId.PLAYBACK_STATUS_CHANGED,
+                self.avrcp_protocol.monitor_playback_status,
+                "playback-status",
+            ),
+            (
+                avrcp.EventId.VOLUME_CHANGED,
+                self.avrcp_protocol.monitor_volume,
+                "volume",
+            ),
+        )
+        for event_id, monitor, label in monitors:
+            if event_id not in supported_events:
+                continue
+            task = asyncio.create_task(self._consume_avrcp_monitor(label, monitor()))
+            self._avrcp_monitor_tasks.add(task)
+            task.add_done_callback(self._avrcp_monitor_tasks.discard)
+
+    async def _consume_avrcp_monitor(self, label, events):
+        try:
+            async for value in events:
+                self.logger.info("AVRCP source %s=%s", label, value)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.logger.warning("AVRCP source %s monitor stopped: %s", label, error_text(exc))
+
+    def _stop_source_avrcp_session(self):
+        for task in self._avrcp_monitor_tasks:
+            task.cancel()
+        self._avrcp_monitor_tasks.clear()
 
     def _clear_source_connection(self):
         self._source_connection = None
@@ -1120,8 +1198,22 @@ class A2DPBridge:
             return
 
         self.logger.info("A2DP incoming trusted source: %s", peer_address)
-        sink = protocol.add_sink(make_aac_capabilities())
+        # SBC-only is the mandatory A2DP interoperability baseline. Keep it as
+        # an isolated lab switch so optional AAC cannot obscure route failures.
+        baseline = os.environ.get("CARTHING_A2DP_SINK_BASELINE") == "1"
+        if not baseline:
+            self._install_source_sink(protocol, peer_address, "AAC", make_aac_capabilities())
+        self._install_source_sink(protocol, peer_address, "SBC", make_sbc_capabilities())
+        self.logger.info(
+            "A2DP source endpoint profile=%s",
+            "SBC-only baseline" if baseline else "AAC+SBC",
+        )
 
+    def _install_source_sink(self, protocol, peer_address, codec_name, capabilities):
+        sink = protocol.add_sink(capabilities)
+        sink.capabilities.append(
+            avdtp.ServiceCapabilities(avdtp.AVDTP_DELAY_REPORTING_SERVICE_CATEGORY)
+        )
         original_set_configuration = sink.on_set_configuration_command
         original_start = sink.on_start_command
         original_open = sink.on_open_command
@@ -1130,15 +1222,16 @@ class A2DPBridge:
         original_abort = sink.on_abort_command
 
         def on_set_configuration(configuration):
-            self.logger.info("A2DP_SOURCE_SET_CONFIGURATION %s", configuration)
+            self.logger.info("A2DP_SOURCE_SET_CONFIGURATION codec=%s %s", codec_name, configuration)
             return original_set_configuration(configuration)
 
         def on_open():
-            self.logger.info("A2DP_SOURCE_OPEN")
+            self.logger.info("A2DP_SOURCE_OPEN codec=%s", codec_name)
+            asyncio.create_task(self._send_source_delay_report(protocol, sink, codec_name))
             return original_open()
 
         def on_start():
-            self.logger.info("A2DP_SOURCE_START")
+            self.logger.info("A2DP_SOURCE_START codec=%s", codec_name)
             self.source_stream_active = True
             self.state.transfer_active = True
             self.state.transfer_source = normalize_address(peer_address)
@@ -1148,24 +1241,22 @@ class A2DPBridge:
             return original_start()
 
         def on_suspend():
-            self.logger.info("A2DP_SOURCE_SUSPEND")
+            self.logger.info("A2DP_SOURCE_SUSPEND codec=%s", codec_name)
             self.source_stream_active = False
             asyncio.create_task(self.stop_receiver_stream())
             return original_suspend()
 
         def on_close():
-            self.logger.info("A2DP_SOURCE_CLOSE")
+            self.logger.info("A2DP_SOURCE_CLOSE codec=%s", codec_name)
             self.source_stream_active = False
-            # [CLAUDE 2026-06-03] Поток источника закрыт -> маршрут больше НЕ активен. Раньше
-            # transfer_active залипал True (сбрасывался только source_stream_active) -> route_active
-            # навсегда True -> кнопка «Активировать» показывала «Активен» и не тапалась.
+            # Поток источника закрыт -> маршрут больше не активен.
             self.state.transfer_active = False
             self.state.transfer_source = ""
             asyncio.create_task(self.stop_receiver_stream())
             return original_close()
 
         def on_abort():
-            self.logger.info("A2DP_SOURCE_ABORT")
+            self.logger.info("A2DP_SOURCE_ABORT codec=%s", codec_name)
             self.source_stream_active = False
             self.state.transfer_active = False
             self.state.transfer_source = ""
@@ -1179,6 +1270,42 @@ class A2DPBridge:
         sink.on_close_command = on_close
         sink.on_abort_command = on_abort
         sink.on("rtp_packet", self.forward_packet)
+        sink.on(
+            sink.EVENT_RTP_CHANNEL_OPEN,
+            lambda: self.logger.info("A2DP_SOURCE_RTP_OPEN codec=%s", codec_name),
+        )
+        sink.on(
+            sink.EVENT_RTP_CHANNEL_CLOSE,
+            lambda: self.logger.info("A2DP_SOURCE_RTP_CLOSE codec=%s", codec_name),
+        )
+        self.logger.info("A2DP source sink endpoint installed: codec=%s seid=%s", codec_name, sink.seid)
+
+    async def _send_source_delay_report(self, protocol, sink, codec_name):
+        await asyncio.sleep(0.2)
+        stream = getattr(sink, "stream", None)
+        remote_endpoint = getattr(stream, "remote_endpoint", None)
+        remote_seid = getattr(remote_endpoint, "seid", None)
+        if remote_seid is None:
+            self.logger.info("A2DP delay report skipped: codec=%s remote-seid unavailable", codec_name)
+            return
+        try:
+            await asyncio.wait_for(
+                protocol.send_command(
+                    avdtp.DelayReport_Command(
+                        acp_seid=remote_seid,
+                        delay=A2DP_SINK_DELAY_REPORT,
+                    )
+                ),
+                timeout=self.connect_timeout,
+            )
+            self.logger.info(
+                "A2DP delay report accepted: codec=%s delay=%d",
+                codec_name,
+                A2DP_SINK_DELAY_REPORT,
+            )
+        except Exception as exc:
+            # A2DP permits a Source to omit Delay Reporting support.
+            self.logger.info("A2DP delay report ignored by source: %s", error_text(exc))
 
     def forward_packet(self, packet):
         payload = bytes(packet)
