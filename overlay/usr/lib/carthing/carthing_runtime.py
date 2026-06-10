@@ -560,7 +560,22 @@ async def _on_connection(connection):
             os.environ.get("CARTHING_PAIRING_PRIMARY", "").lower() == "classic"
             and getattr(orch, "pairing_armed", False)
         ):
-            asyncio.create_task(_complete_classic_first_ctkd(connection))
+            # CTKD — только для НОВЫХ источников. Доверенная колонка, переподключившаяся
+            # в окно пары, в SMP не умеет (цикл 4 A3: SMP-запрос улетал в Fosi).
+            peer_addr = None
+            try:
+                from app_state import normalize_address as _norm
+                peer_addr = _norm(str(connection.peer_address))
+            except Exception:
+                pass
+            if (
+                transfer is not None
+                and peer_addr
+                and transfer.bridge.state.is_trusted_speaker(peer_addr)
+            ):
+                logger.info("classic-first CTKD skipped for trusted speaker %s", peer_addr)
+            else:
+                asyncio.create_task(_complete_classic_first_ctkd(connection))
         return
 
     if orch is not None:
@@ -719,6 +734,23 @@ async def _complete_classic_first_ctkd(connection):
         if not getattr(connection, "is_encrypted", False):
             await connection.encrypt()
         logger.info("classic-first CTKD: encrypted, requesting SMP over BR/EDR for %s", peer)
+        # A3 (ревью 2026-06-05): Link Key сохраняется в keystore АСИНХРОННО после
+        # encrypt, а SMP-CTKD читает его сразу и падает
+        # CROSS_TRANSPORT_KEY_DERIVATION_NOT_ALLOWED. Ждём появления ключа.
+        device = getattr(connection, "device", None)
+        if device is not None:
+            for _ in range(50):  # до ~5 c
+                try:
+                    if await device.get_link_key(connection.peer_address) is not None:
+                        logger.info("classic-first CTKD: link key persisted for %s", peer)
+                        break
+                except Exception:
+                    pass
+                await asyncio.sleep(0.1)
+            else:
+                logger.warning(
+                    "classic-first CTKD: link key not persisted in time for %s", peer
+                )
         connection.request_pairing()
     except Exception as e:
         logger.warning("classic-first CTKD failed for %s: %s", peer, e)
