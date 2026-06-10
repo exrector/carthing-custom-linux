@@ -159,6 +159,10 @@ def patch_default_carthing(image: Path) -> None:
             "CARTHING_A2DP_RECEIVER=": "CARTHING_A2DP_RECEIVER=",
             "CARTHING_A2DP_NAME=": "CARTHING_A2DP_NAME=",
             "CARTHING_A2DP_AUTOCONNECT=": "CARTHING_A2DP_AUTOCONNECT=0",
+            # Карантин снят решением владельца 2026-06-10 (автостарт =
+            # S60-carthing-runtime; рубильник: no-autostart на state-разделе).
+            "CARTHING_BUMBLE_QUARANTINE=": "CARTHING_BUMBLE_QUARANTINE=0",
+            "CARTHING_ALLOW_BUMBLE_RUN=": "CARTHING_ALLOW_BUMBLE_RUN=1",
         }
 
         out: list[str] = []
