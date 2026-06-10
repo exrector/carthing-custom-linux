@@ -442,3 +442,15 @@ ssh root@172.16.42.77 'cd /usr/lib/carthing && env CARTHING_BUMBLE_QUARANTINE=0 
   CARTHING_CLASSIC_AUDIO_RECONNECT=1 nohup python3 -B carthing_runtime.py \
   > /run/carthing/carthing-runtime.log 2>&1 &'
 ```
+
+---
+
+## ADDENDUM 2026-06-10 (вечер) — КАРАНТИН BUMBLE СНЯТ решением владельца
+
+Стек валидирован (см. таблицу dual-mode-test-plan) и запечён → автостарт включён:
+- `/etc/init.d/S60-carthing-runtime` — supervisor-петля (respawn 5 c), дефолтный
+  режим Play Now (classic только по тумблеру `/run/carthing/route-cmd`);
+- `/etc/default/carthing`: `CARTHING_BUMBLE_QUARANTINE=0`, `ALLOW_BUMBLE_RUN=1`;
+- **аварийный рубильник без перепрошивки**:
+  `touch /run/carthing-state/carthing/no-autostart && reboot`;
+- имя `S50-carthing-remote` ПО-ПРЕЖНЕМУ запрещено (этот запрет не снят).

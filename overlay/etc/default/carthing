@@ -40,8 +40,11 @@ CARTHING_AUTOSTART_REMOTE=1
 # accident. A manual lab run must set both:
 #   CARTHING_BUMBLE_QUARANTINE=0
 #   CARTHING_ALLOW_BUMBLE_RUN=1
-CARTHING_BUMBLE_QUARANTINE=1
-CARTHING_ALLOW_BUMBLE_RUN=0
+# 2026-06-10: карантин СНЯТ решением владельца — стек валидирован и запечён.
+# Автостарт: /etc/init.d/S60-carthing-runtime (рубильник: touch
+# /run/carthing-state/carthing/no-autostart). Имя S50-carthing-remote запрещено.
+CARTHING_BUMBLE_QUARANTINE=0
+CARTHING_ALLOW_BUMBLE_RUN=1
 CARTHING_BD_ADDRESS=30:E3:D6:00:5F:A4
 CARTHING_FONT_PATH=/usr/share/fonts/truetype/DejaVuSans.ttf
 # One name everywhere comes from manufacturing efuse USID when available.

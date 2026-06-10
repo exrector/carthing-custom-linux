@@ -1,0 +1,34 @@
+#!/bin/sh
+# Автостарт carthing_runtime — карантин Bumble снят решением владельца 2026-06-10
+# (стек валидирован и запечён: труба, AVRCP-коммутатор, тумблер маршрута, C1, A3).
+# Имя S50-carthing-remote ЗАПРЕЩЕНО навсегда (INVARIANTS) — это НОВЫЙ скрипт.
+#
+# Аварийный рубильник БЕЗ перепрошивки:
+#   touch /run/carthing-state/carthing/no-autostart && reboot
+set -u
+
+FLAG=/run/carthing-state/carthing/no-autostart
+LOG=/run/carthing/carthing-runtime.log
+
+if [ -f "$FLAG" ]; then
+    echo "[S60-carthing-runtime] autostart disabled by $FLAG"
+    exit 0
+fi
+
+# Дефолтный режим владельца: Play Now (BLE всегда), classic — только по тумблеру
+# (echo connect > /run/carthing/route-cmd). GUI пока выключен (отдельная дорожка).
+(
+    while :; do
+        cd /usr/lib/carthing && env \
+            CARTHING_BUMBLE_QUARANTINE=0 \
+            CARTHING_ALLOW_BUMBLE_RUN=1 \
+            CAR_THING_TRANSPORT=hci-socket:0 \
+            CAR_THING_KEYSTORE=/run/carthing-state/carthing/keys.json \
+            CAR_THING_LIB=/usr/lib/carthing/vendor \
+            CARTHING_GUI_ENABLE=0 \
+            python3 -B carthing_runtime.py >> "$LOG" 2>&1
+        echo "[S60-carthing-runtime] runtime exited, respawn in 5s" >> "$LOG"
+        sleep 5
+    done
+) &
+echo "[S60-carthing-runtime] supervisor started (pid $!)"
