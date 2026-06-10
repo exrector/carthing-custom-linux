@@ -1,17 +1,26 @@
 """A2DP transfer service for the Car Thing runtime."""
 
 import asyncio
+import hashlib
 import logging
 import os
 
 from bumble import a2dp, avc, avctp, avdtp, avrcp, l2cap
-from bumble.core import BT_BR_EDR_TRANSPORT, UUID
+from bumble.core import (
+    BT_BR_EDR_TRANSPORT,
+    BT_SERVICE_DISCOVERY_SERVER_SERVICE_CLASS_ID_SERVICE,
+    UUID,
+)
 from bumble.device import AdvertisingData, Device
 from bumble.hci import (
     HCI_Read_Class_Of_Device_Command,
     HCI_Write_Class_Of_Device_Command,
 )
 from bumble.sdp import (
+    SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
+    SDP_PUBLIC_BROWSE_ROOT,
+    SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,
+    SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,
     SDP_SUPPORTED_FEATURES_ATTRIBUTE_ID,
     DataElement,
     ServiceAttribute,
@@ -30,6 +39,11 @@ SERVICE_RECORD_AUDIO_SOURCE = 0x10001
 SERVICE_RECORD_AUDIO_SINK = 0x10002
 SERVICE_RECORD_AVRCP_TARGET = 0x10003
 SERVICE_RECORD_AVRCP_CONTROLLER = 0x10004
+# C1 (Apple ADG 57.11.2): ServiceDiscoveryServer + ServiceDatabaseState —
+# смена значения обязывает iOS сбросить SDP-кэш (без «Forget This Device»).
+SERVICE_RECORD_SDS = 0x10005
+SDP_VERSION_NUMBER_LIST_ATTRIBUTE_ID = 0x0200
+SDP_SERVICE_DATABASE_STATE_ATTRIBUTE_ID = 0x0201
 BT_AUDIO_SOURCE_UUID16 = 0x110A
 BT_AUDIO_SINK_UUID16 = 0x110B
 BT_AV_REMOTE_CONTROL_TARGET_UUID16 = 0x110C
@@ -327,6 +341,7 @@ class A2DPBridge:
     def install_sdp_records(self):
         records = dict(self.device.sdp_service_records)
         records.pop(SERVICE_RECORD_AUDIO_SOURCE, None)
+        records.pop(SERVICE_RECORD_SDS, None)
         records[SERVICE_RECORD_AUDIO_SINK] = make_audio_sink_sdp_records()
         records[SERVICE_RECORD_AVRCP_CONTROLLER] = avrcp.ControllerServiceSdpRecord(
             SERVICE_RECORD_AVRCP_CONTROLLER
@@ -334,10 +349,43 @@ class A2DPBridge:
         records[SERVICE_RECORD_AVRCP_TARGET] = avrcp.TargetServiceSdpRecord(
             SERVICE_RECORD_AVRCP_TARGET
         ).to_service_attributes()
+        # ServiceDatabaseState = отпечаток содержимого всех записей: любая правка
+        # SDP автоматически меняет state -> iOS обязан перечитать кэш (ADG 57.11.2).
+        fingerprint = hashlib.sha1()
+        for handle in sorted(records):
+            for attribute in records[handle]:
+                fingerprint.update(int(attribute.id).to_bytes(2, "big"))
+                fingerprint.update(bytes(attribute.value))
+        database_state = int.from_bytes(fingerprint.digest()[:4], "big")
+        records[SERVICE_RECORD_SDS] = [
+            ServiceAttribute(
+                SDP_SERVICE_RECORD_HANDLE_ATTRIBUTE_ID,
+                DataElement.unsigned_integer_32(SERVICE_RECORD_SDS),
+            ),
+            ServiceAttribute(
+                SDP_SERVICE_CLASS_ID_LIST_ATTRIBUTE_ID,
+                DataElement.sequence(
+                    [DataElement.uuid(BT_SERVICE_DISCOVERY_SERVER_SERVICE_CLASS_ID_SERVICE)]
+                ),
+            ),
+            ServiceAttribute(
+                SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
+                DataElement.sequence([DataElement.uuid(SDP_PUBLIC_BROWSE_ROOT)]),
+            ),
+            ServiceAttribute(
+                SDP_VERSION_NUMBER_LIST_ATTRIBUTE_ID,
+                DataElement.sequence([DataElement.unsigned_integer_16(0x0100)]),
+            ),
+            ServiceAttribute(
+                SDP_SERVICE_DATABASE_STATE_ATTRIBUTE_ID,
+                DataElement.unsigned_integer_32(database_state),
+            ),
+        ]
         self.device.sdp_service_records = records
         self.logger.info(
             "A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target "
-            "(CoD loudspeaker)"
+            "(CoD loudspeaker); ServiceDatabaseState=0x%08x",
+            database_state,
         )
 
     def install_safe_link_key_provider(self):
