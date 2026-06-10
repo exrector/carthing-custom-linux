@@ -166,6 +166,11 @@ def patch_default_carthing(image: Path) -> None:
             # S60-carthing-runtime; рубильник: no-autostart на state-разделе).
             "CARTHING_BUMBLE_QUARANTINE=": "CARTHING_BUMBLE_QUARANTINE=0",
             "CARTHING_ALLOW_BUMBLE_RUN=": "CARTHING_ALLOW_BUMBLE_RUN=1",
+            # Единый источник правды доверенных = state.json (унификация
+            # 2026-06-03). Старое значение (trusted-devices.json) раздваивало
+            # хранилище: под продуктовым стартером runtime затирал state.json
+            # без колонок — Fosi «исчезал» после каждого boot (найдено 2026-06-10).
+            "CARTHING_TRUSTED_DEVICES=": "CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/state.json",
         }
 
         out: list[str] = []
