@@ -1121,6 +1121,12 @@ async def main():
             def _on_input(event):
                 if power is not None:
                     power.note_activity("input")
+                if event == "btn_1":
+                    # ВРЕМЕННО (до RouteBuilder): кнопка 1 = тумблер маршрута и в
+                    # GUI-режиме (gui_controller btn_* не обрабатывает — пустота).
+                    logger.info("route toggle: button 1 pressed (gui mode)")
+                    asyncio.create_task(_route_toggle_flip())
+                    return
                 gui.handle_input(event)
             asyncio.ensure_future(input_handler.start(on_event=_on_input))
         except Exception as e:

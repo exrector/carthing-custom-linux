@@ -1138,14 +1138,21 @@ class A2DPBridge:
             self.logger.warning("A2DP source dial auth/encrypt failed: %s", error_text(exc))
             raise
         await self.handle_classic_connection(connection)
-        try:
-            capabilities = await self.scan_device_capabilities(connection)
-            self.logger.info("A2DP source peer SDP UUIDs: %s", sorted(capabilities))
-        except Exception as exc:
-            self.logger.info("A2DP source peer SDP scan ignored: %s", error_text(exc))
-        await self.ensure_source_avrcp(connection)
         self._source_connection = connection
         connection.on("disconnection", lambda _r: self._clear_source_connection())
+
+        async def _enrich_source_card():
+            try:
+                capabilities = await self.scan_device_capabilities(connection)
+                self.logger.info("A2DP source peer SDP UUIDs: %s", sorted(capabilities))
+            except Exception as exc:
+                self.logger.info("A2DP source peer SDP scan ignored: %s", error_text(exc))
+
+        # Диагностический SDP-скан карточки — НЕ на горячем пути включения
+        # маршрута (жалоба владельца: тумблер «вкл» тянет ~2 лишних секунды).
+        # AVRCP остаётся синхронным: iOS требует его для публикации выхода.
+        asyncio.create_task(_enrich_source_card())
+        await self.ensure_source_avrcp(connection)
         self.logger.info("A2DP_SOURCE_CLASSIC_DIALED %s", address)
         return connection
 

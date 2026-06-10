@@ -304,7 +304,11 @@ class GuiController:
             up = event == Input.ENCODER_CW
             cs = self.app_state.control_source            # оптимистично двигаем дугу сразу
             if cs is not None:
-                cs.volume = max(0.0, min(1.0, (cs.volume or 0.0) + (0.05 if up else -0.05)))
+                # Шаг = 1/16 (нативный шаг громкости iOS) — меньше дрейф при сверке с AMS.
+                cs.volume = max(0.0, min(1.0, (cs.volume or 0.0) + (0.0625 if up else -0.0625)))
+            # Окно подавления: пока крутят — AMS-подтверждения НЕ затирают дугу
+            # (запоздавшие vol% откатывали её назад = «дребезг насечек», 2026-06-10).
+            self._volume_touch_ts = time.monotonic()
             self.dispatcher.dispatch("media_vol_up" if up else "media_vol_down")
             self.compositor.render()
             return
@@ -410,7 +414,8 @@ class GuiController:
             a.iphone.duration = s.duration
             a.iphone.position = s.elapsed
             a.iphone.playing = s.playing
-            a.iphone.volume = s.volume
+            if time.monotonic() - getattr(self, "_volume_touch_ts", 0.0) > 0.8:
+                a.iphone.volume = s.volume
             a.iphone.supported_commands = set(s.supported_commands)
         else:
             a.iphone.title = a.iphone.artist = ""
@@ -436,7 +441,8 @@ class GuiController:
             a.mac.duration = s.duration
             a.mac.position = s.elapsed
             a.mac.playing = s.playing
-            a.mac.volume = s.volume
+            if time.monotonic() - getattr(self, "_volume_touch_ts", 0.0) > 0.8:
+                a.mac.volume = s.volume
         else:
             a.mac.connected = False
             a.mac.title = a.mac.artist = ""
