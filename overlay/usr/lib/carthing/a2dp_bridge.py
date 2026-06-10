@@ -54,13 +54,16 @@ class AudioSinkAvrcpDelegate(avrcp.Delegate):
         super().__init__(supported_events=[avrcp.EventId.VOLUME_CHANGED])
         self.logger = logger
         self.volume = 64
+        # Адрес пира текущей AVCTP-сессии — без него команды iPhone и колонки
+        # неотличимы в логе (стоило двух ложных выводов 2026-06-10).
+        self.peer = "?"
 
     async def set_absolute_volume(self, volume: int) -> None:
         await super().set_absolute_volume(volume)
-        self.logger.info("AVRCP target absolute volume=%d", volume)
+        self.logger.info("AVRCP target absolute volume=%d peer=%s", volume, self.peer)
 
     async def on_key_event(self, key, pressed: bool, data: bytes) -> None:
-        self.logger.info("AVRCP target key=%s pressed=%s", key, pressed)
+        self.logger.info("AVRCP target key=%s pressed=%s peer=%s", key, pressed, self.peer)
 
 
 def make_audio_sink_sdp_records():
@@ -250,7 +253,8 @@ class A2DPBridge:
         self.logger = logger or logging.getLogger(__name__)
 
         self.listener: avdtp.Listener | None = None
-        self.avrcp_protocol = avrcp.Protocol(AudioSinkAvrcpDelegate(self.logger))
+        self.avrcp_delegate = AudioSinkAvrcpDelegate(self.logger)
+        self.avrcp_protocol = avrcp.Protocol(self.avrcp_delegate)
         self.avrcp_protocol.on(
             self.avrcp_protocol.EVENT_START,
             lambda: asyncio.create_task(self._start_source_avrcp_session()),
@@ -1069,11 +1073,23 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.warning("A2DP source AVCTP/AVRCP connect failed: %s", error_text(exc))
 
+    def _avrcp_peer(self) -> str:
+        """Адрес пира активной AVCTP-сессии (атрибуция команд в логе)."""
+        try:
+            return str(
+                self.avrcp_protocol.avctp_protocol.l2cap_channel.connection.peer_address
+            )
+        except Exception:
+            return "?"
+
     async def _start_source_avrcp_session(self):
         """Register the audio sink for the source's AVRCP notifications."""
         self._stop_source_avrcp_session()
+        peer = self._avrcp_peer()
+        self.avrcp_delegate.peer = peer
         self.logger.info(
-            "AVRCP session started; local target supports Absolute Volume notifications"
+            "AVRCP session started with peer=%s; local target supports Absolute Volume notifications",
+            peer,
         )
         try:
             supported_events = await asyncio.wait_for(
@@ -1110,7 +1126,7 @@ class A2DPBridge:
     async def _consume_avrcp_monitor(self, label, events):
         try:
             async for value in events:
-                self.logger.info("AVRCP source %s=%s", label, value)
+                self.logger.info("AVRCP source %s=%s peer=%s", label, value, self._avrcp_peer())
         except asyncio.CancelledError:
             raise
         except Exception as exc:
