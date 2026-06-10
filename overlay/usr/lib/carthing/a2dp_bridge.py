@@ -275,6 +275,8 @@ class A2DPBridge:
         self._speaker_volume_unsupported: set[str] = set()
         # Единая громкость маршрута — гасит эхо iPhone↔Fosi.
         self._route_volume = None
+        # Адреса колонок, чьё начальное (interim) значение громкости уже съедено.
+        self._speaker_volume_seen: set[str] = set()
         self._avrcp_monitor_tasks: set[asyncio.Task] = set()
         self.receiver_connection = None
         self.receiver_protocol: avdtp.Protocol | None = None
@@ -1165,7 +1167,23 @@ class A2DPBridge:
             task.add_done_callback(self._avrcp_monitor_tasks.discard)
 
     def _on_speaker_volume(self, volume, address):
-        """Громкость от колонки -> VOLUME_CHANGED-нотификация источнику (iPhone)."""
+        """Громкость от колонки -> VOLUME_CHANGED-нотификация источнику (iPhone).
+
+        Начальное (interim) значение при регистрации — НЕ действие пользователя,
+        а сохранённое состояние колонки. Его не форвардим (иначе при коннекте
+        старая громкость колонки залпом затирает громкость iPhone — наблюдалось:
+        50% → 93). Источник — хозяин громкости маршрута: наоборот, выравниваем
+        колонку под известную громкость маршрута.
+        """
+        if address not in self._speaker_volume_seen:
+            self._speaker_volume_seen.add(address)
+            if self._route_volume is not None and self._route_volume != volume:
+                self._pending_speaker_volume = self._route_volume
+                if self._speaker_volume_task is None or self._speaker_volume_task.done():
+                    self._speaker_volume_task = asyncio.create_task(
+                        self._push_speaker_volume(address)
+                    )
+            return
         if volume == self._route_volume:
             return  # эхо нашего SetAbsoluteVolume
         self._route_volume = volume
@@ -1209,6 +1227,8 @@ class A2DPBridge:
     def _on_avrcp_session_stop(self, address, protocol):
         if self.avrcp_sessions.get(address) is protocol:
             self.avrcp_sessions.pop(address, None)
+        # Новая сессия колонки снова начнётся с interim-значения — съесть заново.
+        self._speaker_volume_seen.discard(address)
         if self._source_avrcp is protocol:
             self._source_avrcp = None
             self._stop_source_avrcp_session()
