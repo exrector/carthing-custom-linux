@@ -420,3 +420,25 @@ abort), run13 (двойная сессия + рабочий backchannel).
   коде — работает с любой колонкой, которая честно нотифицирует.
 - Приём «подписка вопреки заявленным capabilities» — рабочий: ZD3 врёт в
   GetCapabilities (не заявляет VOLUME_CHANGED), но регистрацию принимает.
+
+---
+
+## ADDENDUM 2026-06-10 (вечер) — стек ЗАПЕЧЁН в rootfs
+
+Бандл `flash-bake-unified-stable-20260610-130003` (rootfs sha256 `57312f12…`,
+runtime tree `519e6d47…`) прошит rootfs-only @sector 352256. Boot-цепочка и
+p1-раздел (keystore/state) не тронуты — бонды переживают прошивку и ребут.
+Проверено живой загрузкой: весь коммутатор (Fosi standby+stream+AVRCP,
+iPhone BLE+classic+AVRCP) поднимается из `/usr/lib/carthing` одной командой
+(lab-override, карантин действует). Автостарт НЕ включён — снятие карантина
+требует отдельного решения владельца (см. ADDENDUM 2026-06-04 про карантин).
+Команда запуска после любого ребута:
+
+```sh
+ssh root@172.16.42.77 'cd /usr/lib/carthing && env CARTHING_BUMBLE_QUARANTINE=0 \
+  CARTHING_ALLOW_BUMBLE_RUN=1 CAR_THING_TRANSPORT=hci-socket:0 \
+  CAR_THING_KEYSTORE=/run/carthing-state/carthing/keys.json \
+  CAR_THING_LIB=/usr/lib/carthing/vendor CARTHING_GUI_ENABLE=0 \
+  CARTHING_CLASSIC_AUDIO_RECONNECT=1 nohup python3 -B carthing_runtime.py \
+  > /run/carthing/carthing-runtime.log 2>&1 &'
+```
