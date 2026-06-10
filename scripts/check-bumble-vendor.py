@@ -60,7 +60,27 @@ def main() -> int:
     if any(actual != expected for actual, expected in vectors):
         raise SystemExit("Bumble CTKD test vector mismatch")
 
-    config = PairingConfig(ct2=True)
+    import a2dp_bridge  # noqa: E402
+    import accessory_orchestrator  # noqa: E402
+    import carthing_runtime  # noqa: F401
+    import media_remote  # noqa: F401
+
+    # A6 (ревью 2026-06-05): гоняем РЕАЛЬНУЮ pairing-фабрику оркестратора,
+    # а не синтетический PairingConfig — регрессия runtime-CTKD теперь ловится.
+    from bumble.core import BT_BR_EDR_TRANSPORT
+    from bumble.pairing import PairingDelegate
+
+    orchestrator = object.__new__(accessory_orchestrator.AccessoryOrchestrator)
+
+    class _LeConnection:
+        transport = None
+
+    class _ClassicConnection:
+        transport = BT_BR_EDR_TRANSPORT
+
+    config = orchestrator.pairing_config_factory(_LeConnection())
+    if not (config.sc and config.bonding and config.ct2):
+        raise SystemExit("runtime pairing config lost sc/bonding/ct2")
     auth_req = AuthReq.from_booleans(
         bonding=config.bonding,
         sc=config.sc,
@@ -69,11 +89,16 @@ def main() -> int:
     )
     if not auth_req & AuthReq.CT2:
         raise SystemExit("Bumble CT2 integration is disabled")
-
-    import a2dp_bridge  # noqa: E402
-    import accessory_orchestrator  # noqa: F401
-    import carthing_runtime  # noqa: F401
-    import media_remote  # noqa: F401
+    link_flag = PairingDelegate.KeyDistribution.DISTRIBUTE_LINK_KEY
+    if not (config.delegate.local_initiator_key_distribution & link_flag):
+        raise SystemExit(
+            "LE pairing no longer distributes the Classic link key (CTKD broken)"
+        )
+    classic_config = orchestrator.pairing_config_factory(_ClassicConnection())
+    if classic_config.delegate.local_initiator_key_distribution & link_flag:
+        raise SystemExit(
+            "BR/EDR SMP must not redistribute the link key (identity split)"
+        )
 
     audio_sink_features = [
         attribute.value.value

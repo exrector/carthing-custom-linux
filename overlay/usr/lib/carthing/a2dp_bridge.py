@@ -315,6 +315,9 @@ class A2DPBridge:
         self._standby_connecting = set()
         self._speaker_connections = {}
         self._stale_link_key_addresses = set()
+        # Backoff дозвона к недоступной колонке: каждый page = ~5 c радио;
+        # без backoff выключенная колонка съедала эфир каждые 12 c (run10).
+        self._speaker_backoff: dict[str, tuple[int, float]] = {}
 
     async def _gate(self, label, operation):
         if self.hci_gate is None:
@@ -499,6 +502,9 @@ class A2DPBridge:
             # и висит в режиме пары. request_receiver_connection открывает и держит A2DP-поток ->
             # колонка выходит из пары и горит «подключено». RTP не форвардится, пока нет источника —
             # канал просто живёт в фоне. Идемпотентно: если уже held на этот адрес — no-op.
+            _, not_before = self._speaker_backoff.get(address, (0, 0.0))
+            if asyncio.get_running_loop().time() < not_before:
+                continue
             await self.request_receiver_connection(address)
 
     async def enable_classic_visibility(self):
@@ -851,6 +857,7 @@ class A2DPBridge:
     async def _connect_receiver(self, address):
         try:
             await self.setup_receiver(address=address)
+            self._speaker_backoff.pop(address, None)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -863,7 +870,18 @@ class A2DPBridge:
             if address in self._speaker_connections:
                 self.state.set_speaker_connected(address, True)
             self.on_state_change()
-            self.logger.warning("A2DP receiver connect failed: %s", error_text(exc))
+            failures, _ = self._speaker_backoff.get(address, (0, 0.0))
+            failures = min(failures + 1, 5)
+            delay = min(12.0 * (2 ** failures), 300.0)
+            self._speaker_backoff[address] = (
+                failures,
+                asyncio.get_running_loop().time() + delay,
+            )
+            self.logger.warning(
+                "A2DP receiver connect failed: %s (retry in %.0fs)",
+                error_text(exc),
+                delay,
+            )
 
     async def scan_trusted_speakers(self, duration: float = 6.0):
         found = set()
@@ -1714,6 +1732,8 @@ class A2DPBridge:
     async def on_speaker_disconnected(self, address, reason):
         address = normalize_address(address)
         self._speaker_connections.pop(address, None)
+        # Свежий дисконнект = новая попытка без штрафа (колонку могли включить).
+        self._speaker_backoff.pop(address, None)
         self.state.set_speaker_online(address, False)
         self.state.set_speaker_connected(address, False)
         if self.receiver_address == address:
