@@ -43,6 +43,9 @@ RETIRED_INIT_FILES = (
     ":S50-carthing-remote.disabled",
     "S50-carthing-remote",
     "S50-carthing-remote.disabled",
+    # S60 — ошибочный дублёр автостарта (2026-06-10): настоящий стартер =
+    # init-wrapper -> disabled-S50-carthing-remote. Вычищать из образов.
+    "S60-carthing-runtime",
 )
 
 

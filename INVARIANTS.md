@@ -454,3 +454,24 @@ ssh root@172.16.42.77 'cd /usr/lib/carthing && env CARTHING_BUMBLE_QUARANTINE=0 
 - **аварийный рубильник без перепрошивки**:
   `touch /run/carthing-state/carthing/no-autostart && reboot`;
 - имя `S50-carthing-remote` ПО-ПРЕЖНЕМУ запрещено (этот запрет не снят).
+
+---
+
+## ПОПРАВКА к ADDENDUM о снятии карантина (2026-06-10, вечер)
+
+Реальный автостарт оказался НЕ S60: настоящий стартер — цепочка
+**inittab → rcS/init-wrapper → `/etc/init.d/disabled-S50-carthing-remote`**
+(init-wrapper вызывает его ПО ИМЕНИ; имя обманчиво — скрипт активный, его
+гейтом был карантин в /etc/default/carthing). После снятия карантина он и
+запускает runtime с полным продуктовым env-контрактом + supervisor-петля
+(respawn 4 c, pid-файл /run/carthing/media-remote-supervisor.pid).
+
+- S60-carthing-runtime УДАЛЁН (ошибочный дублёр; внесён в RETIRED_INIT_FILES).
+- Аварийный рубильник вшит в настоящий стартер:
+  `touch /run/carthing-state/carthing/no-autostart && reboot`.
+- Комментарий в скрипте исправлен — больше не врёт про «manual entry point only».
+
+⚠️ Урок: state.json потерял Fosi-строку (trusted_speakers=0 после ребута) —
+восстановлена штатным enrollment'ом (`AppState.enroll_trusted_device` с
+audio_sink). ПРИЧИНА НЕ УСТАНОВЛЕНА — наблюдать; кандидат: миграция/перезапись
+state при стартах эпохи A3-циклов.

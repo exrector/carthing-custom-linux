@@ -3,15 +3,25 @@ set -eu
 
 . /etc/default/carthing
 
-# This file is deliberately named "disabled-S50-carthing-remote" so rcS will
-# not match it as an S?? boot script. It is kept as a documented manual entry
-# point only; the runtime is not deleted because the old tests are still useful.
+# ВНИМАНИЕ (исправлено 2026-06-10): имя обманчиво — это АКТИВНЫЙ стартер.
+# rcS его действительно не матчит (нет префикса S??), но init-wrapper запускает
+# его ПО ИМЕНИ на каждом boot. Пока действовал карантин, гейт ниже выходил по
+# exit 0; после снятия карантина (решение владельца 2026-06-10) именно этот
+# скрипт владеет автостартом runtime (supervisor-петля + pid-файл).
+#
+# Аварийный рубильник БЕЗ перепрошивки:
+#   touch /run/carthing-state/carthing/no-autostart && reboot
 if [ "${CARTHING_BUMBLE_QUARANTINE:-1}" != "0" ] || [ "${CARTHING_ALLOW_BUMBLE_RUN:-0}" != "1" ]; then
     echo "[disabled-S50-carthing-remote] Bumble runtime quarantined; not starting"
     exit 0
 fi
 
 [ "$CARTHING_AUTOSTART_REMOTE" = "1" ] || exit 0
+
+if [ -f /run/carthing-state/carthing/no-autostart ]; then
+    echo "[carthing-remote] autostart disabled by no-autostart flag"
+    exit 0
+fi
 
 if [ ! -x /usr/libexec/carthing/run-media-remote ]; then
     echo "[S50-carthing-remote] missing runtime launcher"
