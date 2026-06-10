@@ -1487,6 +1487,18 @@ class A2DPBridge:
         self._source_connection = None
         if connection is None:
             return
+        # Сначала вежливо закрыть AVDTP-сигналинг: по спецификации это teardown
+        # всех потоков, и iOS переключает звук сразу. Голый обрыв ACL iOS трактует
+        # как «вышел из радиуса» и держит маршрут до своих таймаутов (жалоба
+        # владельца: долгое переключение на динамик iPhone).
+        protocol = getattr(self, "_source_avdtp", None)
+        if protocol is not None:
+            try:
+                await asyncio.wait_for(protocol.l2cap_channel.disconnect(), timeout=2.0)
+                self.logger.info("A2DP source AVDTP signaling closed gracefully")
+                await asyncio.sleep(0.3)
+            except Exception as exc:
+                self.logger.info("A2DP source AVDTP close ignored: %s", error_text(exc))
         try:
             await connection.disconnect()
             self.logger.info("A2DP source classic ACL disconnected (back to BLE-only)")
@@ -1559,6 +1571,17 @@ class A2DPBridge:
             return
 
         self.logger.info("A2DP incoming trusted source: %s", peer_address)
+        # Храним сигналинг источника: при disconnect_source закрываем его ПЕРВЫМ,
+        # чтобы iOS мгновенно понял «поток завершён» и переключил звук без таймаутов.
+        self._source_avdtp = protocol
+
+        def _clear_source_avdtp():
+            if getattr(self, "_source_avdtp", None) is protocol:
+                self._source_avdtp = None
+
+        protocol.l2cap_channel.on(
+            protocol.l2cap_channel.EVENT_CLOSE, _clear_source_avdtp
+        )
         # SBC-only is the mandatory A2DP interoperability baseline. Keep it as
         # an isolated lab switch so optional AAC cannot obscure route failures.
         baseline = os.environ.get("CARTHING_A2DP_SINK_BASELINE") == "1"
