@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 
-from bumble import a2dp, avdtp, avrcp
+from bumble import a2dp, avctp, avdtp, avrcp, l2cap
 from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, Device
 from bumble.hci import (
@@ -50,13 +50,15 @@ def error_text(error: Exception) -> str:
 class AudioSinkAvrcpDelegate(avrcp.Delegate):
     """Minimal AVRCP Target state required by an A2DP audio sink."""
 
-    def __init__(self, logger):
+    def __init__(self, logger, peer="?", on_key=None):
         super().__init__(supported_events=[avrcp.EventId.VOLUME_CHANGED])
         self.logger = logger
         self.volume = 64
         # Адрес пира текущей AVCTP-сессии — без него команды iPhone и колонки
         # неотличимы в логе (стоило двух ложных выводов 2026-06-10).
-        self.peer = "?"
+        self.peer = peer
+        # Транспортные кнопки пира (play/pause/next/...) — наружу, в backchannel.
+        self.on_key = on_key
 
     async def set_absolute_volume(self, volume: int) -> None:
         await super().set_absolute_volume(volume)
@@ -64,6 +66,8 @@ class AudioSinkAvrcpDelegate(avrcp.Delegate):
 
     async def on_key_event(self, key, pressed: bool, data: bytes) -> None:
         self.logger.info("AVRCP target key=%s pressed=%s peer=%s", key, pressed, self.peer)
+        if self.on_key is not None:
+            await self.on_key(key, pressed, self.peer)
 
 
 def make_audio_sink_sdp_records():
@@ -253,16 +257,14 @@ class A2DPBridge:
         self.logger = logger or logging.getLogger(__name__)
 
         self.listener: avdtp.Listener | None = None
-        self.avrcp_delegate = AudioSinkAvrcpDelegate(self.logger)
-        self.avrcp_protocol = avrcp.Protocol(self.avrcp_delegate)
-        self.avrcp_protocol.on(
-            self.avrcp_protocol.EVENT_START,
-            lambda: asyncio.create_task(self._start_source_avrcp_session()),
-        )
-        self.avrcp_protocol.on(
-            self.avrcp_protocol.EVENT_STOP,
-            self._stop_source_avrcp_session,
-        )
+        # AVRCP: СЕССИЯ НА КАЖДОГО ПИРА (finding A2 ревью 2026-06-05). Один
+        # глобальный Protocol допускал ровно одну AVCTP-сессию: её занимал
+        # iPhone, и колонка не могла поднять backchannel в принципе.
+        self.avrcp_sessions: dict[str, avrcp.Protocol] = {}
+        self._source_avrcp: avrcp.Protocol | None = None
+        self._source_avrcp_addr = "?"
+        # transfer_service/runtime подключают сюда TransferControlBackchannel.
+        self.speaker_command_handler = None
         self._avrcp_monitor_tasks: set[asyncio.Task] = set()
         self.receiver_connection = None
         self.receiver_protocol: avdtp.Protocol | None = None
@@ -374,7 +376,12 @@ class A2DPBridge:
         await self._gate("a2dp-start", self.enable_classic_visibility)
         self.listener = avdtp.Listener(avdtp.Listener.create_registrar(self.device))
         self.listener.on("connection", self.on_avdtp_connection)
-        self.avrcp_protocol.listen(self.device)
+        # Свой L2CAP-сервер на AVCTP PSM вместо Protocol.listen(): на каждое
+        # входящее соединение — отдельная AVRCP-сессия (iPhone и колонка живут
+        # одновременно, маршрутизация по trust в _on_avrcp_session_start).
+        self.device.create_l2cap_server(
+            l2cap.ClassicChannelSpec(avctp.AVCTP_PSM), self._on_incoming_avctp
+        )
         self.logger.info(
             "A2DP bridge started: local=%s name=%s trusted_sources=%d trusted_speakers=%d; AVCTP listening",
             self.device.public_address,
@@ -604,6 +611,11 @@ class A2DPBridge:
         self.state.set_connected_speaker(target_address)
         self.on_state_change()
         self.logger.info("A2DP_SPEAKER_STREAM_STARTED codec=%s seid=%s", codec_name, getattr(sink, "seid", "?"))
+        # Коммутатор сам поднимает AVRCP к колонке (backchannel-кнопки, volume),
+        # не дожидаясь её инициативы.
+        speaker_connection = self._speaker_connections.get(target_address) or self.receiver_connection
+        if speaker_connection is not None:
+            asyncio.create_task(self.ensure_speaker_avrcp(speaker_connection))
 
     def _select_receiver_codec(self, protocol):
         for codec_type, codec_name, capability_factory, configuration_factory in (
@@ -1059,41 +1071,118 @@ class A2DPBridge:
         self.logger.info("A2DP_SOURCE_CLASSIC_DIALED %s", address)
         return connection
 
+    def _make_avrcp_session(self, address: str) -> avrcp.Protocol:
+        """Отдельный AVRCP Protocol на пира; маршрутизация по trust на старте сессии."""
+        delegate = AudioSinkAvrcpDelegate(
+            self.logger, peer=address, on_key=self._on_avrcp_key
+        )
+        protocol = avrcp.Protocol(delegate)
+        self.avrcp_sessions[address] = protocol
+        protocol.on(
+            protocol.EVENT_START,
+            lambda: self._on_avrcp_session_start(address, protocol),
+        )
+        protocol.on(
+            protocol.EVENT_STOP,
+            lambda: self._on_avrcp_session_stop(address, protocol),
+        )
+        return protocol
+
+    def _on_incoming_avctp(self, l2cap_channel):
+        try:
+            address = normalize_address(str(l2cap_channel.connection.peer_address))
+        except Exception:
+            address = "?"
+        self.logger.info("AVCTP incoming connection from %s", address)
+        protocol = self._make_avrcp_session(address)
+        l2cap_channel.on(
+            l2cap_channel.EVENT_OPEN,
+            lambda: protocol._on_avctp_channel_open(l2cap_channel),
+        )
+
+    def _on_avrcp_session_start(self, address, protocol):
+        self.logger.info("AVRCP session started with peer=%s", address)
+        if self.state.is_trusted_source(address):
+            self._source_avrcp = protocol
+            self._source_avrcp_addr = address
+            asyncio.create_task(self._start_source_avrcp_session())
+        elif self.state.is_trusted_speaker(address):
+            self.logger.info("AVRCP speaker backchannel armed: %s", address)
+
+    def _on_avrcp_session_stop(self, address, protocol):
+        if self.avrcp_sessions.get(address) is protocol:
+            self.avrcp_sessions.pop(address, None)
+        if self._source_avrcp is protocol:
+            self._source_avrcp = None
+            self._stop_source_avrcp_session()
+
+    async def _on_avrcp_key(self, key, pressed, peer):
+        """Транспортные кнопки колонки -> backchannel -> активный источник."""
+        if not pressed or self.speaker_command_handler is None:
+            return
+        if not self.state.is_trusted_speaker(peer):
+            return
+        command = getattr(key, "name", str(key)).lower()
+        try:
+            await self.speaker_command_handler(peer, command)
+        except Exception as exc:
+            self.logger.warning("speaker backchannel command failed: %s", error_text(exc))
+
     async def ensure_source_avrcp(self, connection):
         """Open the control profile on an existing bonded Classic ACL."""
+        address = normalize_address(str(connection.peer_address))
+        existing = self.avrcp_sessions.get(address)
+        if existing is not None and existing.avctp_protocol is not None:
+            self.logger.info("A2DP source AVCTP/AVRCP already connected: %s", address)
+            return
         try:
-            if self.avrcp_protocol.avctp_protocol is None:
-                await self._gate(
-                    "a2dp-source-avrcp-connect",
-                    lambda: asyncio.wait_for(
-                        self.avrcp_protocol.connect(connection), timeout=self.connect_timeout
-                    ),
-                )
-            self.logger.info("A2DP source AVCTP/AVRCP connected")
+            protocol = self._make_avrcp_session(address)
+            await self._gate(
+                "a2dp-source-avrcp-connect",
+                lambda: asyncio.wait_for(
+                    protocol.connect(connection), timeout=self.connect_timeout
+                ),
+            )
+            self.logger.info("A2DP source AVCTP/AVRCP connected peer=%s", address)
         except Exception as exc:
             self.logger.warning("A2DP source AVCTP/AVRCP connect failed: %s", error_text(exc))
 
-    def _avrcp_peer(self) -> str:
-        """Адрес пира активной AVCTP-сессии (атрибуция команд в логе)."""
+    async def ensure_speaker_avrcp(self, connection):
+        """Поднять AVRCP к колонке: канал для её кнопок и будущего volume-контроля.
+
+        Fosi открывает AVCTP сам через ~0.2 c после старта аудиоканала; встречный
+        одновременный connect даёт L2CAP-коллизию (mode mismatch, run11). Даём
+        пиру право первой инициативы и звоним только если он промолчал.
+        """
+        address = normalize_address(str(connection.peer_address))
+        await asyncio.sleep(3.0)
+        existing = self.avrcp_sessions.get(address)
+        if existing is not None and existing.avctp_protocol is not None:
+            return
         try:
-            return str(
-                self.avrcp_protocol.avctp_protocol.l2cap_channel.connection.peer_address
+            protocol = self._make_avrcp_session(address)
+            await self._gate(
+                "a2dp-speaker-avrcp-connect",
+                lambda: asyncio.wait_for(
+                    protocol.connect(connection), timeout=self.connect_timeout
+                ),
             )
-        except Exception:
-            return "?"
+            self.logger.info("A2DP speaker AVCTP/AVRCP connected peer=%s", address)
+        except Exception as exc:
+            # У колонки может не быть AVRCP CT — это не ошибка маршрута.
+            self.logger.info(
+                "A2DP speaker AVRCP unavailable (%s): %s", address, error_text(exc)
+            )
 
     async def _start_source_avrcp_session(self):
         """Register the audio sink for the source's AVRCP notifications."""
+        protocol = self._source_avrcp
+        if protocol is None:
+            return
         self._stop_source_avrcp_session()
-        peer = self._avrcp_peer()
-        self.avrcp_delegate.peer = peer
-        self.logger.info(
-            "AVRCP session started with peer=%s; local target supports Absolute Volume notifications",
-            peer,
-        )
         try:
             supported_events = await asyncio.wait_for(
-                self.avrcp_protocol.get_supported_events(),
+                protocol.get_supported_events(),
                 timeout=self.connect_timeout,
             )
             self.logger.info(
@@ -1107,12 +1196,12 @@ class A2DPBridge:
         monitors = (
             (
                 avrcp.EventId.PLAYBACK_STATUS_CHANGED,
-                self.avrcp_protocol.monitor_playback_status,
+                protocol.monitor_playback_status,
                 "playback-status",
             ),
             (
                 avrcp.EventId.VOLUME_CHANGED,
-                self.avrcp_protocol.monitor_volume,
+                protocol.monitor_volume,
                 "volume",
             ),
         )
@@ -1126,7 +1215,9 @@ class A2DPBridge:
     async def _consume_avrcp_monitor(self, label, events):
         try:
             async for value in events:
-                self.logger.info("AVRCP source %s=%s peer=%s", label, value, self._avrcp_peer())
+                self.logger.info(
+                    "AVRCP source %s=%s peer=%s", label, value, self._source_avrcp_addr
+                )
         except asyncio.CancelledError:
             raise
         except Exception as exc:

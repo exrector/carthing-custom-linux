@@ -129,9 +129,60 @@ def main() -> int:
     ):
         raise SystemExit("Bumble L2CAP peer flush timeout was not accepted")
 
+    # L2CAP mode negotiation: на запрос не-Basic режима отвечаем
+    # UNACCEPTABLE_PARAMETERS с Basic (peer повторит Configure), а не abort.
+    # Abort ломал AVCTP/AVRCP от Fosi (run11/run12 2026-06-10).
+    import struct
+
+    responses = []
+    channel = object.__new__(ClassicChannel)
+    channel.state = ClassicChannel.State.WAIT_CONFIG_REQ_RSP
+    channel.mode = TransmissionMode.BASIC
+    channel.destination_cid = 0x0041
+    channel.peer_flush_timeout_ms = None
+    channel.send_control_frame = responses.append
+    channel._change_state = lambda state: setattr(channel, "state", state)
+    channel.on_configure_request(
+        L2CAP_Configure_Request(
+            identifier=2,
+            destination_cid=0x0040,
+            flags=0,
+            options=L2CAP_Control_Frame.encode_configuration_options(
+                [
+                    (
+                        L2CAP_Configure_Request.ParameterType.RETRANSMISSION_AND_FLOW_CONTROL,
+                        struct.pack(
+                            "<BBBHHH",
+                            int(TransmissionMode.ENHANCED_RETRANSMISSION),
+                            8, 3, 2000, 12000, 1010,
+                        ),
+                    )
+                ]
+            ),
+        )
+    )
+    if (
+        len(responses) != 1
+        or not isinstance(responses[0], L2CAP_Configure_Response)
+        or responses[0].result
+        != L2CAP_Configure_Response.Result.FAILURE_UNACCEPTABLE_PARAMETERS
+    ):
+        raise SystemExit(
+            "Bumble L2CAP mode negotiation must counter with UNACCEPTABLE_PARAMETERS, not abort"
+        )
+    countered = L2CAP_Control_Frame.decode_configuration_options(responses[0].options)
+    if (
+        len(countered) != 1
+        or countered[0][0]
+        != L2CAP_Configure_Request.ParameterType.RETRANSMISSION_AND_FLOW_CONTROL
+        or countered[0][1][0] != int(TransmissionMode.BASIC)
+    ):
+        raise SystemExit("Bumble L2CAP mode counter-proposal must offer BASIC mode")
+
     print(
         f"Bumble vendor OK: {bumble.__version__}, CTKD vectors, CT2 integration, "
-        "AudioSink SDP, HCI automatic flush command, and L2CAP peer flush timeout OK"
+        "AudioSink SDP, HCI automatic flush command, L2CAP peer flush timeout, "
+        "and L2CAP mode negotiation OK"
     )
     return 0
 

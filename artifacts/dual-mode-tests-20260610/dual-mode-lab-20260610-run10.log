@@ -1,0 +1,1434 @@
+2026-06-10 09:52:00,450 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-10 09:52:00,510 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-10 09:52:00,511 INFO ble_transport: Opening transport hci-socket:0
+2026-06-10 09:52:00,529 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-10 09:52:01,929 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-10 09:52:01,934 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-10 09:52:01,935 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-10 09:52:01,939 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-10 09:52:01,967 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-10 09:52:01,968 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-10 09:52:01,972 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-10 09:52:01,972 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-10 09:52:01,973 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=1; AVCTP listening
+2026-06-10 09:52:01,974 INFO carthing_runtime: phase=ready
+2026-06-10 09:52:01,979 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:52:07,110 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:52:07,129 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 09:52:07,129 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 09:52:07,130 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-10 09:52:07,147 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 09:52:07,148 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 09:52:07,163 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 09:52:07,164 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 09:52:07,164 INFO carthing_runtime: apply_visibility done
+2026-06-10 09:52:07,164 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-10 09:52:07,165 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-10 09:52:07,169 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-10 09:52:07,185 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 09:52:07,186 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 09:52:08,110 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 09:52:08,113 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 09:52:08,114 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-10 09:52:08,720 INFO carthing_runtime: AMS start (encryption)
+2026-06-10 09:52:08,721 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 09:52:09,272 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 09:52:09,429 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 09:52:09,481 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 09:52:09,508 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'VolUp', 'VolDown', 'SkipFwd', 'SkipBack']
+2026-06-10 09:52:09,744 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 09:52:09,823 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 09:52:09,901 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 09:52:09,901 INFO ams_client: AMS: ready
+2026-06-10 09:52:09,902 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 09:52:09,980 INFO ams_client: AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2026-06-10 09:52:09,980 INFO ams_client: AMS player: Подкасты
+2026-06-10 09:52:09,981 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-10 09:52:10,032 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-10 09:52:10,033 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-10 09:52:10,058 INFO ams_client: AMS raw notification: 000200302e34393734383836
+2026-06-10 09:52:10,059 INFO ams_client: State: ⏸  —  [0/0s] vol=50%
+2026-06-10 09:52:10,168 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50 (attempt 1/3)
+2026-06-10 09:52:10,169 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-10 09:52:10,506 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 09:52:10,767 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 09:52:10,925 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 09:52:10,977 INFO ancs_client: ANCS: +#29 [Other]
+2026-06-10 09:52:11,003 INFO ancs_client: ANCS: +#30 [Other]
+2026-06-10 09:52:11,057 INFO ancs_client: ANCS: +#32 [Other]
+2026-06-10 09:52:11,083 INFO ancs_client: ANCS: +#34 [Unknown(12)]
+2026-06-10 09:52:11,109 INFO ancs_client: ANCS: +#31 [Other]
+2026-06-10 09:52:11,135 INFO ancs_client: ANCS: requested attrs for #29 (16 bytes)
+2026-06-10 09:52:11,163 INFO ancs_client: ANCS detail: +#29 [Other] com.apple.podcasts: СИНТЕТИК — Доступны 3 новых выпуска.
+2026-06-10 09:52:11,198 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-10 09:52:11,198 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-10 09:52:11,200 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 09:52:11,371 INFO ancs_client: ANCS: requested attrs for #30 (16 bytes)
+2026-06-10 09:52:11,400 INFO ancs_client: ANCS detail: +#30 [Other] com.google.NotebookLM: 🎧 Масса информации и пятое состояние материи — Your Audio Overview is ready!
+2026-06-10 09:52:11,529 INFO ancs_client: ANCS: requested attrs for #32 (16 bytes)
+2026-06-10 09:52:11,557 INFO ancs_client: ANCS detail: +#32 [Other] com.apple.findmy: Низкий уровень заряда AirTag — Замените элемент питания вещи «NA4» в ближайшее время.
+2026-06-10 09:52:11,766 INFO ancs_client: ANCS: requested attrs for #34 (16 bytes)
+2026-06-10 09:52:11,950 INFO ancs_client: ANCS detail: +#34 [Unknown(12)] com.apple.facetime: Дмитрий Попандопуло — Активный вызов
+2026-06-10 09:52:12,160 INFO ancs_client: ANCS: requested attrs for #31 (16 bytes)
+2026-06-10 09:52:12,317 INFO ancs_client: ANCS detail: +#31 [Other] com.apple.FindMySafetyAlertsNotifications: При Вас есть AirPods Pro (2nd generation) — Геопозиция этой вещи видна ее владельцу. Коснитесь, чтобы открыть Локатор и просмотреть доступные действия.
+2026-06-10 09:52:12,343 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 09:52:12,553 INFO cts_client: CTS: 2026-06-10 09:52:12 (adjust=0x02)
+2026-06-10 09:52:12,418 INFO cts_client: CTS: system clock set to Wed Jun 10 09:52:12 2026
+2026-06-10 09:52:12,801 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 09:52:12,809 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-10 09:52:13,023 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-10 09:52:13,030 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 09:52:13,030 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 09:52:13,836 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:52:14,208 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-10 09:52:14,211 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 09:52:14,211 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 09:52:19,341 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:52:19,342 WARNING bumble.host: connection 0x000D not found
+2026-06-10 09:52:25,837 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:52:39,342 WARNING a2dp_bridge: A2DP source AVCTP/AVRCP connect failed: TimeoutError
+2026-06-10 09:52:39,343 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-10 09:52:39,343 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-10 09:52:44,470 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:52:49,840 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:52:54,968 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:53:01,841 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:53:06,969 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:53:13,843 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:53:18,969 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:53:25,845 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:53:30,974 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:53:37,847 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:53:42,974 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:53:49,849 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:53:54,977 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:54:01,850 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:54:06,978 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:54:13,851 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:54:18,979 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:54:25,854 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:54:30,981 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:54:37,855 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:54:42,983 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:54:49,857 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:54:54,984 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:55:01,858 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:55:06,986 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:55:13,860 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:55:18,987 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:55:25,862 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:55:30,990 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:55:37,865 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:55:42,992 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:55:49,866 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:55:54,993 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:56:01,867 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:56:06,994 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:56:13,870 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:56:18,997 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:56:25,871 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:56:30,997 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:56:37,872 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:56:43,000 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:56:49,875 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:56:55,002 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:57:01,876 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:57:07,003 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:57:13,878 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:57:19,006 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:57:25,880 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:57:31,008 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:57:37,882 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:57:43,010 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:57:49,884 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:57:55,011 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:58:01,885 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:58:07,012 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:58:13,886 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:58:19,014 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:58:25,887 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:58:31,015 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:58:37,889 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:58:43,016 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:58:49,890 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:58:55,017 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:59:01,892 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:59:07,020 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:59:13,894 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:59:19,022 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:59:25,896 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:59:31,024 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:59:37,898 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:59:43,025 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 09:59:49,899 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 09:59:55,026 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:00:01,900 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:00:07,028 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:00:13,903 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:00:19,030 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:00:25,904 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:00:31,031 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:00:37,906 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:00:43,034 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:00:49,908 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:00:55,035 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:01:01,909 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:01:07,036 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:01:13,911 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:01:19,038 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:01:25,913 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:01:31,040 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:01:37,914 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:01:43,042 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:01:49,916 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:01:55,043 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:02:01,918 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:02:07,046 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:02:13,920 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:02:19,048 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:02:25,921 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:02:31,049 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:02:37,923 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:02:43,050 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:02:49,925 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:02:55,052 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:03:01,926 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:03:07,053 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:03:13,927 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:03:19,053 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:03:25,929 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:03:31,056 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:03:37,930 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:03:43,058 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:03:49,934 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:03:55,061 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:04:01,935 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:04:07,064 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:04:13,938 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:04:19,066 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:04:25,940 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:04:31,067 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:04:37,941 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:04:43,070 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:04:49,943 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:04:55,071 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:05:01,944 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:05:07,072 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:05:13,946 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:05:19,074 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:05:25,948 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:05:31,075 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:05:37,949 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:05:43,077 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:05:49,951 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:05:55,079 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:06:01,953 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:06:07,080 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:06:13,954 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:06:19,083 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:06:25,956 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:06:31,084 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:06:37,957 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:06:43,085 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:06:49,959 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:06:55,087 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:07:01,961 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:07:07,088 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:07:13,962 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:07:19,090 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:07:25,963 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:07:31,090 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:07:37,965 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:07:43,093 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:07:49,967 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:07:55,094 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:08:01,968 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:08:07,096 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:08:13,971 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:08:19,098 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:08:25,972 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:08:31,099 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:08:37,974 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:08:43,102 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:08:49,976 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:08:55,103 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:09:01,977 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:09:07,103 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:09:13,979 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:09:19,107 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:09:25,981 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:09:31,108 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:09:37,982 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:09:43,110 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:09:49,984 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:09:55,111 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:10:01,985 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:10:07,111 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:10:13,986 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:10:19,114 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:10:25,989 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:10:31,116 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:10:37,990 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:10:43,117 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:10:49,991 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:10:55,119 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:11:01,993 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:11:07,121 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:11:13,995 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:11:19,123 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:11:25,996 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:11:31,124 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:11:37,998 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:11:43,126 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:11:50,000 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:11:55,128 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:12:02,001 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:12:07,129 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:12:14,003 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:12:19,130 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:12:26,004 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:12:31,132 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:12:38,006 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:12:43,133 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:12:50,007 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:12:55,136 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:13:02,009 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:13:07,136 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:13:14,011 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:13:19,138 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:13:26,012 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:13:31,141 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:13:38,014 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:13:43,142 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:13:50,016 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:13:55,144 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:14:02,018 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:14:07,146 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:14:14,019 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:14:19,147 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:14:26,021 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:14:31,150 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:14:38,024 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:14:43,151 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:14:50,025 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:14:55,152 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:15:02,026 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:15:07,154 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:15:14,028 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:15:19,155 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:15:26,030 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:15:31,157 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:15:38,031 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:15:43,158 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:15:50,033 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:15:55,161 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:16:02,035 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:16:07,163 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:16:14,037 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:16:19,165 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:16:26,038 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:16:31,166 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:16:38,040 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:16:43,168 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:16:50,042 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:16:55,170 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:17:02,043 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:17:07,171 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:17:14,045 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:17:19,172 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:17:26,046 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:17:31,174 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:17:38,048 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:17:43,175 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:17:50,050 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:17:55,178 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:18:02,052 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:18:07,180 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:18:14,053 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:18:19,181 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:18:26,055 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:18:31,183 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:18:38,058 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:18:43,185 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:18:50,059 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:18:55,185 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:19:02,061 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:19:07,189 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:19:14,063 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:19:19,190 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:19:26,065 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:19:31,193 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:19:38,067 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:19:43,194 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:19:50,069 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:19:55,198 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:20:02,071 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:20:07,199 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:20:14,073 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:20:19,200 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:20:26,074 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:20:31,202 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:20:38,076 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:20:43,204 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:20:50,078 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:20:55,206 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:21:02,080 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:21:07,207 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:21:14,082 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:21:19,209 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:21:26,083 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:21:31,211 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:21:38,085 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:21:43,212 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:21:50,086 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:21:55,214 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:22:02,088 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:22:07,216 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:22:14,089 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:22:19,217 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:22:26,090 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:22:31,218 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:22:38,092 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:22:43,220 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:22:50,093 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:22:55,221 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:23:02,095 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:23:07,222 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:23:14,097 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:23:19,224 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:23:26,099 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:23:31,226 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:23:38,100 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:23:43,228 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:23:50,102 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:23:55,230 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:24:02,104 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:24:07,231 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:24:14,108 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:24:19,235 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:24:26,109 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:24:31,236 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:24:38,111 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:24:43,236 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:24:50,112 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:24:55,240 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:25:02,115 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:25:07,243 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:25:14,117 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:25:19,244 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:25:26,118 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:25:31,246 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:25:38,120 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:25:43,248 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:25:50,122 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:25:55,249 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:26:02,123 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:26:07,250 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:26:14,125 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:26:19,252 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:26:26,127 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:26:31,255 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:26:38,128 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:26:43,257 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:26:50,130 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:26:55,257 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:27:02,132 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:27:07,259 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:27:14,134 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:27:19,261 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:27:26,135 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:27:26,944 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 10:27:31,262 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:27:31,266 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 10:27:31,267 INFO carthing_runtime: AMS start (connected-encrypted)
+2026-06-10 10:27:31,272 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 10:27:31,656 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 10:27:31,864 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 10:27:31,891 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 10:27:31,918 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'VolUp', 'VolDown', 'SkipFwd', 'SkipBack']
+2026-06-10 10:27:31,996 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 10:27:32,048 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 10:27:32,259 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 10:27:32,259 INFO ams_client: AMS: ready
+2026-06-10 10:27:32,262 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 10:27:32,262 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 10:27:32,262 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 10:27:32,363 INFO ams_client: AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2026-06-10 10:27:32,364 INFO ams_client: AMS player: Подкасты
+2026-06-10 10:27:32,364 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-10 10:27:32,390 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-10 10:27:32,391 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-10 10:27:32,495 INFO ams_client: AMS raw notification: 000200302e34393734383836
+2026-06-10 10:27:32,495 INFO ams_client: State: ⏸  —  [0/0s] vol=50%
+2026-06-10 10:27:32,784 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 10:27:32,915 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 10:27:33,046 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 10:27:33,046 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 10:27:33,125 INFO ancs_client: ANCS: +#29 [Other]
+2026-06-10 10:27:33,151 INFO ancs_client: ANCS: +#30 [Other]
+2026-06-10 10:27:33,177 INFO ancs_client: ANCS: +#32 [Other]
+2026-06-10 10:27:33,229 INFO ancs_client: ANCS: +#34 [Unknown(12)]
+2026-06-10 10:27:33,256 INFO ancs_client: ANCS: +#31 [Other]
+2026-06-10 10:27:33,361 INFO ancs_client: ANCS: requested attrs for #29 (16 bytes)
+2026-06-10 10:27:33,388 INFO ancs_client: ANCS detail: +#29 [Other] com.apple.podcasts: СИНТЕТИК — Доступны 3 новых выпуска.
+2026-06-10 10:27:33,492 INFO ancs_client: ANCS: requested attrs for #30 (16 bytes)
+2026-06-10 10:27:33,546 INFO ancs_client: ANCS detail: +#30 [Other] com.google.NotebookLM: 🎧 Масса информации и пятое состояние материи — Your Audio Overview is ready!
+2026-06-10 10:27:33,676 INFO ancs_client: ANCS: requested attrs for #32 (16 bytes)
+2026-06-10 10:27:33,704 INFO ancs_client: ANCS detail: +#32 [Other] com.apple.findmy: Низкий уровень заряда AirTag — Замените элемент питания вещи «NA4» в ближайшее время.
+2026-06-10 10:27:33,860 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 10:27:33,991 INFO ancs_client: ANCS: requested attrs for #34 (16 bytes)
+2026-06-10 10:27:34,123 INFO ancs_client: ANCS detail: +#34 [Unknown(12)] com.apple.facetime: Дмитрий Попандопуло — Активный вызов
+2026-06-10 10:27:34,411 INFO ancs_client: ANCS: requested attrs for #31 (16 bytes)
+2026-06-10 10:27:34,543 INFO ancs_client: ANCS detail: +#31 [Other] com.apple.FindMySafetyAlertsNotifications: При Вас есть AirPods Pro (2nd generation) — Геопозиция этой вещи видна ее владельцу. Коснитесь, чтобы открыть Локатор и просмотреть доступные действия.
+2026-06-10 10:27:34,568 INFO cts_client: CTS: 2026-06-10 10:27:34 (adjust=0x02)
+2026-06-10 10:27:34,277 INFO cts_client: CTS: system clock set to Wed Jun 10 10:27:34 2026
+2026-06-10 10:27:34,407 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 10:27:34,416 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 10:27:34,417 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 10:27:37,844 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:27:42,972 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:27:49,846 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:27:54,973 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:28:01,847 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:28:06,974 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:28:13,850 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:28:18,977 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:28:25,851 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:28:30,977 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:28:37,852 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:28:42,980 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:28:49,854 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:28:54,982 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:29:01,855 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:29:06,982 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:29:13,856 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:29:18,983 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:29:25,858 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:29:30,983 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:29:37,861 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:29:42,987 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:29:49,862 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:29:54,990 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:30:01,865 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:30:06,992 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:30:13,866 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:30:18,993 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:30:25,869 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:30:30,996 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:30:37,870 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:30:42,997 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:30:49,871 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:30:54,999 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:31:01,874 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:31:07,001 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:31:13,875 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:31:19,002 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:31:25,877 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:31:31,003 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:31:37,878 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:31:43,007 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:31:49,880 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:31:55,008 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:32:01,882 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:32:07,010 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:32:13,885 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:32:17,808 INFO ancs_client: ANCS: removed #29
+2026-06-10 10:32:19,012 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:32:19,042 INFO ancs_client: ANCS: removed #30
+2026-06-10 10:32:25,886 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:32:26,261 INFO ancs_client: ANCS: removed #31
+2026-06-10 10:32:28,623 INFO ancs_client: ANCS: removed #32
+2026-06-10 10:32:31,014 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:32:37,888 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:32:43,016 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:32:49,889 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:32:55,017 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:33:01,891 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:33:07,019 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:33:13,893 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:33:19,021 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:33:25,895 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:33:31,021 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:33:37,897 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:33:43,024 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:33:49,898 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:33:55,025 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:34:01,899 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:34:07,028 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:34:13,901 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:34:19,029 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:34:25,902 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:34:31,029 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:34:37,904 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:34:43,031 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:34:49,906 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:34:55,031 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:35:01,907 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:35:07,035 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:35:13,909 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:35:19,037 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:35:25,910 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:35:31,037 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:35:37,912 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:35:43,039 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:35:49,914 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:35:55,042 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:36:01,916 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:36:07,043 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:36:13,917 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:36:19,045 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:36:25,919 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:36:31,047 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:36:37,921 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:36:43,048 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:36:49,922 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:36:55,050 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:37:01,924 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:37:07,051 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:37:13,926 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:37:19,053 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:37:25,928 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:37:31,054 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:37:37,930 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:37:43,057 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:37:49,931 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:37:55,058 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:38:01,933 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:38:07,061 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:38:13,935 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:38:19,063 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:38:25,937 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:38:31,065 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:38:37,938 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:38:43,066 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:38:49,939 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:38:55,067 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:39:01,941 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:39:07,068 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:39:13,943 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:39:19,070 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:39:22,797 INFO ancs_client: ANCS: +#35 [Other]
+2026-06-10 10:39:22,823 INFO ancs_client: ANCS: +#36 [Other]
+2026-06-10 10:39:22,876 INFO ancs_client: ANCS: requested attrs for #35 (16 bytes)
+2026-06-10 10:39:22,983 INFO ancs_client: ANCS detail: +#35 [Other] com.google.Gmail: Google Payments — Google Изменен способ оплаты в Kondratev Andrey Для следующих учетных параметров изменен способ оплаты (например, кредитная карта или банковский счет): название платежного профиля Kondratev Andrey
+2026-06-10 10:39:23,034 INFO ancs_client: ANCS: requested attrs for #36 (16 bytes)
+2026-06-10 10:39:23,088 INFO ancs_client: ANCS detail: +#36 [Other] com.google.Gmail: Google Payments — Google AdSense Основной способ оплаты изменен 10 июн. 2026 г. Вы изменили основной способ оплаты для аккаунта "Google AdSense" в Google AdSense. Проверьте обновленные данные. Если у Вас
+2026-06-10 10:39:25,945 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:39:31,072 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:39:37,947 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:39:43,073 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:39:49,948 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:39:55,076 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:40:01,950 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:40:07,077 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:40:13,951 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:40:19,079 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:40:25,953 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:40:31,081 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:40:37,954 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:40:43,082 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:40:49,955 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:40:55,084 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:41:01,957 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:41:07,085 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:41:13,958 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:41:19,086 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:41:25,960 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:41:31,087 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:41:37,962 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:41:43,089 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:41:49,963 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:41:55,090 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:42:01,965 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:42:07,092 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:42:13,967 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:42:19,094 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:42:25,968 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:42:31,096 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:42:37,970 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:42:43,097 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:42:49,972 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:42:55,099 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:43:01,974 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:43:07,101 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:43:13,976 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:43:19,104 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:43:25,977 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:43:31,105 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:43:37,979 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:43:43,107 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:43:49,980 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:43:55,108 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:43:55,244 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-10 10:43:55,245 INFO ams_client: AMS player: Музыка
+2026-06-10 10:43:55,245 INFO ams_client: State: ⏸  —  [0/0s] vol=50%
+2026-06-10 10:43:55,270 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 10:44:01,982 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:44:07,110 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:44:13,985 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:44:19,111 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:44:25,986 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:44:31,113 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:44:37,987 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:44:42,127 INFO ancs_client: ANCS: removed #36
+2026-06-10 10:44:42,153 INFO ancs_client: ANCS: removed #35
+2026-06-10 10:44:43,114 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:44:49,988 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:44:55,115 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:45:01,990 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:45:07,118 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:45:13,991 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:45:19,119 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:45:25,992 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:45:31,120 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:45:37,994 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:45:43,122 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:45:49,996 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:45:55,124 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:46:01,999 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:46:07,126 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:46:14,001 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:46:19,128 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:46:26,003 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:46:31,130 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:46:38,005 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:46:43,133 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:46:50,006 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:46:55,134 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:47:02,008 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:47:07,135 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:47:14,010 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:47:19,138 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:47:26,012 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:47:31,139 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:47:38,013 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:47:43,141 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:47:50,015 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:47:55,142 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:48:02,018 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:48:07,146 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:48:14,019 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:48:19,146 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:48:26,021 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:48:31,148 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:48:38,022 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:48:43,150 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:48:50,024 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:48:55,152 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:49:02,026 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:49:07,154 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:49:14,028 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:49:19,155 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:49:26,029 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:49:31,156 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:49:38,031 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:49:43,159 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:49:50,034 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:49:55,161 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:50:02,035 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:50:07,162 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:50:14,037 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:50:19,164 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:50:26,039 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:50:31,166 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:50:38,041 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:50:43,170 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:50:50,043 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:50:55,170 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:51:02,044 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:51:07,171 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:51:14,046 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:51:19,173 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:51:26,047 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:51:31,174 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:51:38,049 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:51:43,177 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:51:50,050 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:51:55,178 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:52:02,052 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:52:07,179 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:52:14,053 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:52:19,180 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:52:26,055 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:52:31,182 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:52:38,056 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:52:43,183 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:52:50,058 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:52:55,187 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:53:02,060 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:53:07,187 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:53:14,062 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:53:19,189 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:53:26,064 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:53:31,191 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:53:38,065 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:53:43,193 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:53:50,067 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:53:55,195 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:54:02,069 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:54:07,196 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:54:14,070 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:54:19,197 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:54:26,072 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:54:31,200 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:54:38,074 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:54:43,201 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:54:50,076 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:54:55,204 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:55:02,078 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:55:07,206 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:55:14,080 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:55:19,207 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:55:26,082 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:55:31,210 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:55:38,084 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:55:43,211 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:55:50,085 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:55:55,213 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:56:02,087 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:56:07,215 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:56:14,089 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:56:19,216 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:56:26,091 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:56:31,218 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:56:38,093 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:56:43,220 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:56:50,095 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:56:55,223 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:57:02,097 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:57:07,224 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:57:14,098 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:57:19,225 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:57:26,099 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:57:31,227 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:57:38,101 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:57:43,229 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:57:50,103 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:57:55,230 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:58:02,105 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:58:07,232 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:58:14,106 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:58:19,233 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:58:26,108 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:58:31,236 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:58:38,110 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:58:43,238 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:58:50,112 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:58:55,239 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:59:02,114 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:59:07,241 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:59:14,115 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:59:19,242 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:59:26,117 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:59:31,245 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:59:38,118 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:59:43,246 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 10:59:50,121 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 10:59:55,247 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:00:02,122 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:00:07,250 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:00:14,125 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:00:19,252 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:00:26,127 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:00:31,254 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:00:38,128 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:00:43,256 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:00:50,130 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:00:55,258 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:01:02,131 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:01:07,259 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:01:14,133 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:01:19,260 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:01:26,134 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:01:31,262 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:01:38,136 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:01:43,264 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:01:50,138 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:01:55,265 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:02:02,139 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:02:07,267 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:02:14,141 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:02:19,269 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:02:26,142 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:02:31,269 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:02:38,144 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:02:43,272 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:02:50,145 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:02:55,273 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:03:02,146 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:03:07,273 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:03:14,147 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:03:19,274 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:03:26,150 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:03:31,277 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:03:38,151 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:03:43,279 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:03:50,153 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:03:55,281 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:04:02,154 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:04:07,282 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:04:14,156 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:04:19,283 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:04:26,158 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:04:31,285 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:04:38,161 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:04:43,288 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:04:50,162 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:04:55,290 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:05:02,165 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:05:07,292 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:05:14,166 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:05:19,294 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:05:26,168 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:05:31,295 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:05:38,170 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:05:43,297 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:05:50,172 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:05:55,299 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:06:02,174 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:06:07,301 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:06:14,175 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:06:19,303 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:06:26,177 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:06:31,304 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:06:38,179 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:06:43,306 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:06:50,180 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:06:55,308 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:07:02,182 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:07:07,309 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:07:14,183 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:07:19,310 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:07:26,185 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:07:31,313 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:07:38,187 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:07:43,314 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:07:50,188 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:07:55,315 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:08:02,190 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:08:07,317 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:08:14,191 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:08:19,318 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:08:26,193 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:08:31,320 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:08:38,194 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:08:43,322 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:08:50,196 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:08:55,323 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:09:02,197 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:09:07,325 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:09:14,199 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:09:19,327 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:09:26,200 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:09:31,328 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:09:38,202 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:09:43,329 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:09:50,204 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:09:55,331 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:10:02,205 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:10:07,332 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:10:14,206 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:10:19,335 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:10:26,208 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:10:28,434 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 11:10:31,336 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:10:31,341 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:10:31,341 INFO carthing_runtime: AMS start (connected-encrypted)
+2026-06-10 11:10:31,346 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 11:10:31,727 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 11:10:31,831 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 11:10:31,857 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 11:10:31,936 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 11:10:31,988 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 11:10:32,041 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 11:10:32,042 INFO ams_client: AMS: ready
+2026-06-10 11:10:32,044 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:10:32,044 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:10:32,045 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 11:10:32,067 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-10 11:10:32,067 INFO ams_client: AMS player: Музыка
+2026-06-10 11:10:32,068 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-10 11:10:32,094 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-10 11:10:32,095 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-10 11:10:32,120 INFO ams_client: AMS raw notification: 000200302e34393734383836
+2026-06-10 11:10:32,120 INFO ams_client: State: ⏸  —  [0/0s] vol=50%
+2026-06-10 11:10:32,383 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 11:10:32,540 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 11:10:32,881 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 11:10:32,882 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 11:10:32,907 INFO ancs_client: ANCS: +#34 [Unknown(12)]
+2026-06-10 11:10:33,013 INFO ancs_client: ANCS: requested attrs for #34 (16 bytes)
+2026-06-10 11:10:33,040 INFO ancs_client: ANCS detail: +#34 [Unknown(12)] com.apple.facetime: Дмитрий Попандопуло — Активный вызов
+2026-06-10 11:10:33,171 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 11:10:33,328 INFO cts_client: CTS: 2026-06-10 11:10:33 (adjust=0x02)
+2026-06-10 11:10:33,601 INFO cts_client: CTS: system clock set to Wed Jun 10 11:10:33 2026
+2026-06-10 11:10:33,757 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 11:10:33,766 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:10:33,767 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:10:38,481 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:10:43,609 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:10:50,483 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:10:55,611 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:11:02,485 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:11:07,613 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:11:14,486 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:11:19,615 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:11:26,488 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:11:31,616 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:11:38,491 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:11:43,618 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:11:50,493 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:11:55,621 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:12:02,494 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:12:07,622 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:12:14,497 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:12:19,624 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:12:26,498 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:12:31,626 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:12:38,500 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:12:43,627 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:12:50,502 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:12:55,629 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:13:02,503 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:13:07,631 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:13:14,505 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:13:19,633 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:13:26,506 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:13:31,634 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:13:38,508 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:13:43,635 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:13:50,510 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:13:53,625 INFO ams_client: AMS raw notification: 00020031
+2026-06-10 11:13:53,626 INFO ams_client: State: ⏸  —  [0/0s] vol=100%
+2026-06-10 11:13:55,620 INFO ams_client: AMS raw notification: 000000596f7554756265
+2026-06-10 11:13:55,621 INFO ams_client: AMS player: YouTube
+2026-06-10 11:13:55,621 INFO ams_client: State: ⏸  —  [0/0s] vol=100%
+2026-06-10 11:13:55,637 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:13:55,646 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown']
+2026-06-10 11:13:55,673 INFO ams_client: AMS raw notification: 000100312c2c
+2026-06-10 11:13:55,673 INFO ams_client: State: ▶  —  [0/0s] vol=100%
+2026-06-10 11:14:02,512 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:14:07,640 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:14:08,115 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-10 11:14:08,116 INFO ams_client: State: ⏸  —  [0/0s] vol=100%
+2026-06-10 11:14:09,664 INFO ams_client: AMS raw notification: 000100312c2c
+2026-06-10 11:14:09,664 INFO ams_client: State: ▶  —  [0/0s] vol=100%
+2026-06-10 11:14:14,021 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-10 11:14:14,022 INFO ams_client: State: ⏸  —  [0/0s] vol=100%
+2026-06-10 11:14:14,514 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:14:19,640 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:14:26,517 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:14:30,979 INFO ams_client: AMS raw notification: 000200302e39333735
+2026-06-10 11:14:30,979 INFO ams_client: State: ⏸  —  [0/0s] vol=94%
+2026-06-10 11:14:31,644 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:14:38,518 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:14:41,972 INFO ams_client: AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2026-06-10 11:14:41,972 INFO ams_client: AMS player: Подкасты
+2026-06-10 11:14:41,973 INFO ams_client: State: ⏸  —  [0/0s] vol=94%
+2026-06-10 11:14:41,998 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'SkipFwd', 'SkipBack']
+2026-06-10 11:14:42,024 INFO ams_client: AMS raw notification: 000100302c302e302c302e303030
+2026-06-10 11:14:42,025 INFO ams_client: State: ⏸  —  [0/0s] vol=94%
+2026-06-10 11:14:42,051 INFO ams_client: AMS raw notification: 020000d0a1d098d09dd0a2d095d0a2d098d09a
+2026-06-10 11:14:42,051 INFO ams_client: State: ⏸  — СИНТЕТИК [0/0s] vol=94%
+2026-06-10 11:14:42,077 INFO ams_client: AMS raw notification: 0203003634392e303030
+2026-06-10 11:14:42,077 INFO ams_client: State: ⏸  — СИНТЕТИК [0/649s] vol=94%
+2026-06-10 11:14:42,104 INFO ams_client: AMS raw notification: 020200d09dd0b5d0b9d180d0bed0b1d0b8d0bed0bbd0bed0b3d0b8d18f20d0bcd0bed0b7d0b3d0b020d0bfd181d0b8d185d0bed0bfd0b0d182d0bed0b220d0b820d181d0b5d180d0b8d0b9d0bdd18bd18520d183d0b1d0b8d0b9d186
+2026-06-10 11:14:42,104 INFO ams_client: State: ⏸ Нейробиология мозга психопатов и серийных убийц — СИНТЕТИК [0/649s] vol=94%
+2026-06-10 11:14:42,156 INFO ams_client: AMS raw notification: 020100313020d0b8d18ed0bdd18f2032303236e280afd0b32e
+2026-06-10 11:14:42,156 INFO ams_client: State: ⏸ Нейробиология мозга психопатов и серийных убийц — СИНТЕТИК [0/649s] vol=94%
+2026-06-10 11:14:43,645 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:14:50,520 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:14:55,648 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:15:02,521 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:15:07,649 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:15:14,523 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:15:19,650 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:15:26,525 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:15:31,652 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:15:38,527 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:15:43,654 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:15:50,528 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:15:55,656 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:16:02,530 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:16:07,657 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:16:14,532 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:16:19,661 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:16:26,534 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:16:31,662 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:16:38,536 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:16:43,663 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:16:50,537 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:16:55,665 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:17:02,539 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:17:07,666 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:17:14,541 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:17:19,668 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:17:26,543 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:17:31,670 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:17:38,544 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:17:43,672 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:17:50,546 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:17:55,674 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:18:02,547 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:18:07,675 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:18:14,548 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:18:19,675 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:18:26,551 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:18:31,679 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:18:38,553 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:18:43,681 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:18:50,555 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:18:55,683 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:19:02,557 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:19:07,685 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:19:14,558 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:19:19,686 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:19:26,560 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:19:31,688 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:19:38,562 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:19:43,689 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:19:50,564 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:19:55,690 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:20:02,565 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:20:07,693 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:20:14,566 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:20:19,692 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:20:26,569 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:20:31,697 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:20:38,571 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:20:43,698 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:20:50,572 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:20:55,699 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:21:02,574 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:21:07,702 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:21:14,576 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:21:19,703 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:21:26,578 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:21:31,704 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:21:38,579 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:21:43,706 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:21:50,580 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:21:55,707 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:22:02,581 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:22:07,708 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:22:14,583 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:22:19,711 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:22:26,585 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:22:31,712 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:22:38,587 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:22:43,715 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:22:50,588 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:22:55,717 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:23:02,590 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:23:07,719 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:23:14,592 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:23:19,720 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:23:26,593 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:23:31,721 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:23:38,595 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:23:43,722 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:23:50,597 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:23:55,724 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:24:02,599 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:24:07,726 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:24:14,602 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:24:19,729 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:24:26,603 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:24:31,730 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:24:38,604 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:24:43,731 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:24:50,606 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:24:55,733 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:25:02,608 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:25:07,735 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:25:14,609 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:25:19,737 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:25:26,611 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:25:31,738 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:25:38,612 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:25:43,739 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:25:50,613 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:25:55,741 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:26:02,615 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:26:07,743 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:26:14,617 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:26:19,744 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:26:26,619 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:26:31,747 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:26:38,621 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:26:43,749 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:26:50,623 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:26:55,751 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:27:02,624 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:27:07,752 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:27:14,626 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:27:19,753 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:27:26,628 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:27:31,755 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:27:38,629 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:27:43,757 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:27:50,630 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:27:55,758 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:28:02,632 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:28:07,760 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:28:14,634 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:28:19,761 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:28:26,635 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:28:31,762 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:28:38,637 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:28:43,764 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:28:50,639 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:28:55,766 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:29:02,641 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:29:07,769 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:29:14,643 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:29:19,770 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:29:26,645 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:29:31,773 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:29:38,647 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:29:43,774 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:29:50,649 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:29:55,776 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:30:02,650 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:30:07,778 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:30:14,652 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:30:19,780 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:30:26,655 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:30:31,783 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:30:38,657 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:30:43,784 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:30:50,658 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:30:55,785 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:31:02,661 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:31:07,788 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:31:14,663 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:31:19,790 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:31:26,665 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:31:31,793 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:31:38,666 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:31:43,794 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:31:47,084 INFO ancs_client: ANCS: +#37 [Other]
+2026-06-10 11:31:47,163 INFO ancs_client: ANCS: requested attrs for #37 (16 bytes)
+2026-06-10 11:31:47,192 INFO ancs_client: ANCS detail: +#37 [Other] con.pnn.ble-browser: Bluefy — Соединение BLE может быть потеряно, пока приложение работает в фоновом режиме
+2026-06-10 11:31:50,668 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:31:55,795 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:32:02,670 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:32:07,797 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:32:14,671 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:32:16,954 INFO cts_client: CTS: 2026-06-10 11:32:17 (adjust=0x02)
+2026-06-10 11:32:17,082 INFO cts_client: CTS: system clock set to Wed Jun 10 11:32:17 2026
+2026-06-10 11:32:19,924 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:32:26,799 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:32:31,927 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:32:38,800 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:32:43,928 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:32:50,801 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:32:55,929 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:33:02,803 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:33:07,931 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:33:14,805 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:33:19,933 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:33:26,807 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:33:31,935 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:33:38,808 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:33:43,935 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:33:50,810 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:33:55,938 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:34:02,813 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:34:07,939 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:34:14,814 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:34:19,941 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:34:26,816 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:34:31,944 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:34:38,818 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:34:43,946 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:34:50,820 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:34:55,948 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:35:02,821 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:35:07,948 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:35:14,822 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:35:19,950 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:35:26,824 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:35:31,952 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:35:38,826 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:35:43,953 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:35:50,827 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:35:55,955 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:36:02,829 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:36:07,956 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:36:14,831 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:36:19,959 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:36:26,832 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:36:31,959 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:36:38,835 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:36:43,962 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:36:50,836 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:36:55,964 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:37:02,838 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:37:07,966 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:37:14,840 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:37:19,968 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:37:26,843 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:37:31,971 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:37:38,844 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:37:43,972 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:37:50,847 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:37:55,975 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:38:02,849 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:38:07,977 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:38:14,851 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:38:19,980 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:38:26,853 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:38:31,981 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:38:38,854 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:38:43,982 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:38:50,856 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:38:55,982 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:39:02,858 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:39:07,986 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:39:14,860 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:39:19,987 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:39:26,861 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:39:31,989 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:39:38,863 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:39:43,991 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:39:50,865 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:39:55,992 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:40:02,866 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:40:07,994 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:40:14,867 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:40:19,995 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:40:26,869 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:40:31,996 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:40:38,871 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:40:43,998 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:40:50,872 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:40:56,000 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:41:02,874 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:41:08,001 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:41:14,875 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:41:20,001 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:41:26,876 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:41:32,004 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:41:38,878 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:41:44,005 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:41:50,880 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:41:56,008 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:42:02,882 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:42:08,009 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:42:14,883 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:42:20,010 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:42:26,885 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:42:32,012 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:42:38,886 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:42:44,013 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:42:50,888 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:42:56,016 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:43:02,890 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:43:08,018 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:43:14,892 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:43:20,019 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:43:26,893 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:43:32,021 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:43:38,895 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:43:44,022 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:43:50,896 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:43:56,024 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:44:02,898 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:44:08,026 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:44:14,900 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:44:20,027 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:44:26,901 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:44:32,028 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:44:38,902 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:44:44,030 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:44:50,904 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:44:56,032 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:45:02,905 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:45:08,033 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:45:14,908 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:45:20,035 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:45:26,909 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:45:32,035 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:45:38,911 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:45:44,039 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:45:50,913 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:45:56,041 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:46:02,915 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:46:08,043 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:46:14,917 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:46:20,045 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:46:26,919 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:46:32,046 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:46:38,920 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:46:44,048 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:46:50,922 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:46:56,050 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:47:02,923 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:47:08,051 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:47:14,925 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:47:20,052 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:47:26,927 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:47:32,055 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:47:38,928 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:47:44,055 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:47:50,930 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:47:56,058 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:48:02,933 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:48:08,060 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:48:14,935 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:48:20,062 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:48:26,937 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:48:32,064 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:48:38,939 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:48:44,066 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:48:50,941 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:48:56,068 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:49:02,943 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:49:08,070 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:49:14,945 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:49:20,073 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:49:26,947 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:49:32,075 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:49:38,949 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:49:44,077 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:49:50,950 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:49:56,078 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:50:02,952 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:50:08,079 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:50:14,953 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:50:20,080 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:50:26,955 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:50:32,082 WARNING a2dp_bridge: A2DP receiver connect failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 11:50:33,452 INFO ancs_client: ANCS: removed #34
+2026-06-10 11:50:38,956 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:50:43,357 INFO carthing_runtime: connected: C4:A9:B8:70:2F:E5/P classic=True encrypted=False
+2026-06-10 11:50:43,357 INFO a2dp_bridge: Classic BT connection: C4:A9:B8:70:2F:E5/P handle=11 encrypted=False
+2026-06-10 11:50:43,365 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 11:50:43,411 INFO a2dp_bridge: A2DP_SPEAKER_STANDBY_CONNECTED C4:A9:B8:70:2F:E5
+2026-06-10 11:50:43,412 INFO a2dp_bridge: A2DP receiver ACL ready: C4:A9:B8:70:2F:E5
+2026-06-10 11:50:43,414 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:50:43,414 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:50:43,419 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 11:50:43,460 INFO a2dp_bridge: A2DP receiver link ENCRYPTED ok: C4:A9:B8:70:2F:E5 (encrypted=True)
+2026-06-10 11:50:43,461 INFO a2dp_bridge: A2DP receiver SDP version lookup ignored: find_avdtp_service_with_connection() takes 1 positional argument but 2 were given
+2026-06-10 11:50:43,461 INFO a2dp_bridge: A2DP receiver AVDTP connect: C4:A9:B8:70:2F:E5 version=(1, 2)
+2026-06-10 11:50:43,491 INFO a2dp_bridge: A2DP receiver discover endpoints: C4:A9:B8:70:2F:E5
+2026-06-10 11:50:43,694 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=7 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\xd7\x00\x00\x00$\x002\x00\x00\x00\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=215, codec_id=36, value=b'2\x00\x00\x00\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,694 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=5 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=79, codec_id=1, value=b'2')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,694 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=3 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC|MPEG_4_AAC_LC: 192>, sampling_frequency=<SamplingFrequency.SF_8000|SF_11025|SF_12000|SF_16000|SF_22050|SF_24000|SF_32000|SF_44100|SF_48000: 4088>, channels=<Channels.MONO|STEREO: 3>, vbr=1, bitrate=320000)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,695 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=53 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,695 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=21 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,695 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=51 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,696 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=19 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,696 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=49 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,696 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=17 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,697 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=33 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,697 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=1 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:50:43,698 INFO a2dp_bridge: A2DP receiver sink selected: address=C4:A9:B8:70:2F:E5 codec=AAC seid=3
+2026-06-10 11:50:43,825 INFO a2dp_bridge: A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3
+2026-06-10 11:50:44,168 ERROR bumble.l2cap: Mode mismatch, abort connection
+2026-06-10 11:50:44,170 INFO a2dp_bridge: A2DP speaker AVRCP unavailable (C4:A9:B8:70:2F:E5): L2capError(L2CAP/Abort on configuration - mode mismatch [0x0])
+2026-06-10 11:50:44,181 WARNING bumble.l2cap: [31mchannel 66 not found for 0x000B:1[0m
+2026-06-10 11:50:44,690 INFO a2dp_bridge: AVCTP incoming connection from C4:A9:B8:70:2F:E5
+2026-06-10 11:50:44,752 ERROR bumble.l2cap: Mode mismatch, abort connection

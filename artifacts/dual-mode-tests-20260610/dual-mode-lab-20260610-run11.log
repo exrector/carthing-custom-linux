@@ -1,0 +1,506 @@
+2026-06-10 11:51:59,763 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-10 11:51:59,823 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-10 11:51:59,823 INFO ble_transport: Opening transport hci-socket:0
+2026-06-10 11:51:59,841 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-10 11:52:01,259 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-10 11:52:01,265 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-10 11:52:01,265 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-10 11:52:01,269 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-10 11:52:01,295 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-10 11:52:01,296 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-10 11:52:01,300 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-10 11:52:01,301 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-10 11:52:01,302 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=1; AVCTP listening
+2026-06-10 11:52:01,303 INFO carthing_runtime: phase=ready
+2026-06-10 11:52:01,307 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 11:52:04,928 INFO carthing_runtime: connected: C4:A9:B8:70:2F:E5/P classic=True encrypted=False
+2026-06-10 11:52:04,929 INFO a2dp_bridge: Classic BT connection: C4:A9:B8:70:2F:E5/P handle=12 encrypted=False
+2026-06-10 11:52:04,945 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 11:52:04,993 INFO a2dp_bridge: A2DP_SPEAKER_STANDBY_CONNECTED C4:A9:B8:70:2F:E5
+2026-06-10 11:52:04,993 INFO a2dp_bridge: A2DP receiver ACL ready: C4:A9:B8:70:2F:E5
+2026-06-10 11:52:05,001 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 11:52:05,002 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:05,002 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-10 11:52:05,019 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 11:52:05,019 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:05,026 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 11:52:05,056 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 11:52:05,057 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:05,064 INFO a2dp_bridge: A2DP receiver link ENCRYPTED ok: C4:A9:B8:70:2F:E5 (encrypted=True)
+2026-06-10 11:52:05,069 INFO a2dp_bridge: A2DP receiver SDP version lookup ignored: find_avdtp_service_with_connection() takes 1 positional argument but 2 were given
+2026-06-10 11:52:05,070 INFO a2dp_bridge: A2DP receiver AVDTP connect: C4:A9:B8:70:2F:E5 version=(1, 2)
+2026-06-10 11:52:05,158 INFO a2dp_bridge: A2DP receiver discover endpoints: C4:A9:B8:70:2F:E5
+2026-06-10 11:52:05,169 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 11:52:05,169 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:05,170 INFO carthing_runtime: apply_visibility done
+2026-06-10 11:52:05,170 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-10 11:52:05,171 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-10 11:52:05,175 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-10 11:52:05,427 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 11:52:05,777 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=7 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\xd7\x00\x00\x00$\x002\x00\x00\x00\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=215, codec_id=36, value=b'2\x00\x00\x00\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,778 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=5 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=79, codec_id=1, value=b'2')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,778 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=3 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC|MPEG_4_AAC_LC: 192>, sampling_frequency=<SamplingFrequency.SF_8000|SF_11025|SF_12000|SF_16000|SF_22050|SF_24000|SF_32000|SF_44100|SF_48000: 4088>, channels=<Channels.MONO|STEREO: 3>, vbr=1, bitrate=320000)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,778 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=53 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,779 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=21 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,779 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=51 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,779 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=19 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,779 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=49 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,780 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=17 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,780 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=33 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,780 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=1 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 11:52:05,781 INFO a2dp_bridge: A2DP receiver sink selected: address=C4:A9:B8:70:2F:E5 codec=AAC seid=3
+2026-06-10 11:52:05,785 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:52:05,786 INFO carthing_runtime: AMS start (connected-encrypted)
+2026-06-10 11:52:05,834 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 11:52:06,142 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 11:52:06,246 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 11:52:06,272 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 11:52:06,299 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'SkipFwd', 'SkipBack']
+2026-06-10 11:52:06,377 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 11:52:06,431 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 11:52:06,456 INFO ams_client: AMS raw notification: 020000d0a1d098d09dd0a2d095d0a2d098d09a
+2026-06-10 11:52:06,456 INFO ams_client: State: ⏸  — СИНТЕТИК [0/0s] vol=0%
+2026-06-10 11:52:06,483 INFO ams_client: AMS raw notification: 0203003438302e323631
+2026-06-10 11:52:06,483 INFO ams_client: State: ⏸  — СИНТЕТИК [0/480s] vol=0%
+2026-06-10 11:52:06,510 INFO ams_client: AMS raw notification: 020200d0add0bdd182d180d0bed0bfd0b8d18f20d0b820d180d0b0d0b7d183d0bc3a20d184d0bed180d0bcd0b0d0bbd18cd0bdd18bd0b920d0b0d0bdd0b0d0bbd0b8d0b720d0b3d0b8d0bfd0bed182d0b5d0b7d18b20d091d0bed0bbd18cd186d0bcd0b0d0bdd0b0
+2026-06-10 11:52:06,510 INFO ams_client: State: ⏸ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [0/480s] vol=0%
+2026-06-10 11:52:06,535 INFO ams_client: AMS raw notification: 020100323220d18fd0bdd0b2d0b0d180d18f2032303236e280afd0b32e
+2026-06-10 11:52:06,536 INFO ams_client: State: ⏸ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [0/480s] vol=0%
+2026-06-10 11:52:06,561 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 11:52:06,561 INFO ams_client: AMS: ready
+2026-06-10 11:52:06,588 INFO ams_client: AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2026-06-10 11:52:06,588 INFO ams_client: AMS player: Подкасты
+2026-06-10 11:52:06,588 INFO ams_client: State: ⏸ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [0/480s] vol=0%
+2026-06-10 11:52:06,614 INFO ams_client: AMS raw notification: 000100302c302e302c31302e333333
+2026-06-10 11:52:06,614 INFO ams_client: State: ⏸ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [10/480s] vol=0%
+2026-06-10 11:52:06,640 INFO ams_client: AMS raw notification: 000200302e36363737353134
+2026-06-10 11:52:06,640 INFO ams_client: State: ⏸ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [10/480s] vol=67%
+2026-06-10 11:52:06,708 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:52:06,708 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:06,708 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 11:52:06,903 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 11:52:07,007 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 11:52:07,112 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 11:52:07,139 INFO ancs_client: ANCS: +#37 [Other]
+2026-06-10 11:52:07,154 INFO a2dp_bridge: A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3
+2026-06-10 11:52:07,154 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 11:52:07,191 INFO ancs_client: ANCS: requested attrs for #37 (16 bytes)
+2026-06-10 11:52:07,220 INFO ancs_client: ANCS detail: +#37 [Other] con.pnn.ble-browser: Bluefy — Соединение BLE может быть потеряно, пока приложение работает в фоновом режиме
+2026-06-10 11:52:07,325 INFO a2dp_bridge: AVCTP incoming connection from C4:A9:B8:70:2F:E5
+2026-06-10 11:52:07,365 ERROR bumble.l2cap: Mode mismatch, abort connection
+2026-06-10 11:52:07,402 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 11:52:07,506 INFO cts_client: CTS: 2026-06-10 11:52:07 (adjust=0x02)
+2026-06-10 11:52:07,461 INFO cts_client: CTS: system clock set to Wed Jun 10 11:52:07 2026
+2026-06-10 11:52:07,555 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 11:52:07,643 ERROR bumble.l2cap: Mode mismatch, abort connection
+2026-06-10 11:52:07,644 INFO a2dp_bridge: A2DP speaker AVRCP unavailable (C4:A9:B8:70:2F:E5): L2capError(L2CAP/Abort on configuration - mode mismatch [0x0])
+2026-06-10 11:52:07,653 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:52:07,653 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:07,674 WARNING bumble.l2cap: [31mchannel 66 not found for 0x000C:1[0m
+2026-06-10 11:52:08,119 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50 (attempt 1/3)
+2026-06-10 11:52:08,120 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-10 11:52:09,082 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-10 11:52:09,083 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=14 encrypted=False
+2026-06-10 11:52:09,089 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-10 11:52:09,949 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=14 encrypted=True
+2026-06-10 11:52:09,952 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 11:52:09,952 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 11:52:11,476 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-10 11:52:11,543 INFO a2dp_bridge: AVRCP session started with peer=10:A2:D3:83:82:50
+2026-06-10 11:52:11,543 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected peer=10:A2:D3:83:82:50
+2026-06-10 11:52:11,544 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-10 11:52:11,544 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-10 11:52:11,640 INFO a2dp_bridge: AVRCP source supported events: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED', 'PLAYER_APPLICATION_SETTING_CHANGED', 'NOW_PLAYING_CONTENT_CHANGED', 'AVAILABLE_PLAYERS_CHANGED', 'ADDRESSED_PLAYER_CHANGED', 'UIDS_CHANGED']
+2026-06-10 11:52:11,771 INFO a2dp_bridge: AVRCP source playback-status=2 peer=10:A2:D3:83:82:50
+2026-06-10 11:52:19,253 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-10 11:52:19,254 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-10 11:52:19,255 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-10 11:52:19,256 INFO a2dp_bridge: A2DP source endpoint profile=AAC+SBC
+2026-06-10 11:52:19,329 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-10 11:52:19,358 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-10 11:52:19,403 INFO a2dp_bridge: A2DP_SOURCE_RTP_OPEN codec=AAC
+2026-06-10 11:52:19,576 INFO a2dp_bridge: AVRCP target absolute volume=8 peer=10:A2:D3:83:82:50
+2026-06-10 11:52:19,584 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-10 11:52:19,657 INFO ams_client: AMS raw notification: 000200302e3037303632323439
+2026-06-10 11:52:19,657 INFO ams_client: State: ⏸ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [10/480s] vol=7%
+2026-06-10 11:52:24,117 INFO a2dp_bridge: AVRCP target absolute volume=8 peer=10:A2:D3:83:82:50
+2026-06-10 11:52:24,141 INFO a2dp_bridge: AVRCP source playback-status=1 peer=10:A2:D3:83:82:50
+2026-06-10 11:52:24,143 INFO a2dp_bridge: AVRCP target absolute volume=8 peer=10:A2:D3:83:82:50
+2026-06-10 11:52:24,156 INFO a2dp_bridge: A2DP_SOURCE_START codec=AAC
+2026-06-10 11:52:24,158 INFO a2dp_bridge: A2DP receiver already ready: C4:A9:B8:70:2F:E5
+2026-06-10 11:52:24,193 INFO a2dp_bridge: AVRCP source playback-status=1 peer=10:A2:D3:83:82:50
+2026-06-10 11:52:24,201 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,221 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,249 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,250 INFO ams_client: AMS raw notification: 000100312c312e302c31302e303330
+2026-06-10 11:52:24,251 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [10/480s] vol=7%
+2026-06-10 11:52:24,268 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,289 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=5 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,320 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=6 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,345 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=7 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 11:52:24,382 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=8 dropped=0 bytes=734 sent_to_speaker=True
+2026-06-10 11:52:24,415 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=9 dropped=0 bytes=714 sent_to_speaker=True
+2026-06-10 11:52:29,983 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=250 dropped=0 bytes=696 sent_to_speaker=True
+2026-06-10 11:52:35,812 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=500 dropped=0 bytes=695 sent_to_speaker=True
+2026-06-10 11:52:41,615 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=750 dropped=0 bytes=679 sent_to_speaker=True
+2026-06-10 11:52:47,410 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1000 dropped=0 bytes=714 sent_to_speaker=True
+2026-06-10 11:52:53,213 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1250 dropped=0 bytes=677 sent_to_speaker=True
+2026-06-10 11:52:59,012 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1500 dropped=0 bytes=690 sent_to_speaker=True
+2026-06-10 11:53:04,813 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1750 dropped=0 bytes=698 sent_to_speaker=True
+2026-06-10 11:53:10,619 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2000 dropped=0 bytes=663 sent_to_speaker=True
+2026-06-10 11:53:16,435 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2250 dropped=0 bytes=689 sent_to_speaker=True
+2026-06-10 11:53:22,230 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2500 dropped=0 bytes=714 sent_to_speaker=True
+2026-06-10 11:53:25,876 INFO a2dp_bridge: AVRCP target absolute volume=10 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,878 INFO a2dp_bridge: AVRCP target absolute volume=10 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,882 INFO a2dp_bridge: AVRCP target absolute volume=11 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,887 INFO ams_client: AMS raw notification: 000200302e3037393038333332
+2026-06-10 11:53:25,887 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=8%
+2026-06-10 11:53:25,891 INFO a2dp_bridge: AVRCP target absolute volume=12 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,893 INFO a2dp_bridge: AVRCP target absolute volume=13 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,894 INFO a2dp_bridge: AVRCP target absolute volume=14 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,900 INFO a2dp_bridge: AVRCP target absolute volume=15 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,924 INFO a2dp_bridge: AVRCP target absolute volume=16 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,925 INFO a2dp_bridge: AVRCP target absolute volume=16 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,931 INFO a2dp_bridge: AVRCP target absolute volume=17 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,934 INFO a2dp_bridge: AVRCP target absolute volume=17 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,938 INFO ams_client: AMS raw notification: 000200302e3038363433393037
+2026-06-10 11:53:25,938 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=9%
+2026-06-10 11:53:25,940 INFO a2dp_bridge: AVRCP target absolute volume=18 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,957 INFO a2dp_bridge: AVRCP target absolute volume=18 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,961 INFO a2dp_bridge: AVRCP target absolute volume=19 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,965 INFO ams_client: AMS raw notification: 000200302e3039333832303133
+2026-06-10 11:53:25,966 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=9%
+2026-06-10 11:53:25,988 INFO a2dp_bridge: AVRCP target absolute volume=19 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,991 INFO ams_client: AMS raw notification: 000200302e31303131313838
+2026-06-10 11:53:25,991 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=10%
+2026-06-10 11:53:25,992 INFO a2dp_bridge: AVRCP target absolute volume=20 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:25,996 INFO a2dp_bridge: AVRCP target absolute volume=20 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,017 INFO ams_client: AMS raw notification: 000200302e3130383438
+2026-06-10 11:53:26,017 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=11%
+2026-06-10 11:53:26,043 INFO ams_client: AMS raw notification: 000200302e31313436383335
+2026-06-10 11:53:26,043 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=11%
+2026-06-10 11:53:26,058 INFO a2dp_bridge: AVRCP target absolute volume=20 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,061 INFO a2dp_bridge: AVRCP target absolute volume=21 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,062 INFO a2dp_bridge: AVRCP target absolute volume=21 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,070 INFO ams_client: AMS raw notification: 000200302e31313939323839
+2026-06-10 11:53:26,071 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=12%
+2026-06-10 11:53:26,095 INFO ams_client: AMS raw notification: 000200302e31323631303533
+2026-06-10 11:53:26,096 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=13%
+2026-06-10 11:53:26,108 INFO a2dp_bridge: AVRCP target absolute volume=22 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,109 INFO a2dp_bridge: AVRCP target absolute volume=22 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,122 INFO ams_client: AMS raw notification: 000200302e31333133333935
+2026-06-10 11:53:26,122 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=13%
+2026-06-10 11:53:26,126 INFO a2dp_bridge: AVRCP target absolute volume=22 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,127 INFO a2dp_bridge: AVRCP target absolute volume=22 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,129 INFO a2dp_bridge: AVRCP target absolute volume=23 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,130 INFO a2dp_bridge: AVRCP target absolute volume=23 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,134 INFO a2dp_bridge: AVRCP target absolute volume=23 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,140 INFO a2dp_bridge: AVRCP target absolute volume=24 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,141 INFO a2dp_bridge: AVRCP target absolute volume=24 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,144 INFO a2dp_bridge: AVRCP target absolute volume=24 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,147 INFO a2dp_bridge: AVRCP target absolute volume=25 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,149 INFO ams_client: AMS raw notification: 000200302e31333634353038
+2026-06-10 11:53:26,149 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=14%
+2026-06-10 11:53:26,162 INFO a2dp_bridge: AVRCP target absolute volume=25 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,163 INFO a2dp_bridge: AVRCP target absolute volume=25 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,178 INFO a2dp_bridge: AVRCP target absolute volume=25 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,179 INFO a2dp_bridge: AVRCP target absolute volume=25 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,227 INFO ams_client: AMS raw notification: 000200302e31343136373532
+2026-06-10 11:53:26,227 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=14%
+2026-06-10 11:53:26,255 INFO ams_client: AMS raw notification: 000200302e31343436383931
+2026-06-10 11:53:26,255 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=14%
+2026-06-10 11:53:26,325 INFO a2dp_bridge: AVRCP target absolute volume=26 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,329 INFO a2dp_bridge: AVRCP target absolute volume=26 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,344 INFO a2dp_bridge: AVRCP target absolute volume=26 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,358 INFO ams_client: AMS raw notification: 000200302e31343838363139
+2026-06-10 11:53:26,358 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=15%
+2026-06-10 11:53:26,361 INFO a2dp_bridge: AVRCP target absolute volume=26 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,363 INFO a2dp_bridge: AVRCP target absolute volume=27 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,368 INFO a2dp_bridge: AVRCP target absolute volume=27 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,372 INFO a2dp_bridge: AVRCP target absolute volume=28 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,380 INFO a2dp_bridge: AVRCP target absolute volume=28 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,387 INFO ams_client: AMS raw notification: 000200302e31353138373632
+2026-06-10 11:53:26,387 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=15%
+2026-06-10 11:53:26,399 INFO a2dp_bridge: AVRCP target absolute volume=29 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,400 INFO a2dp_bridge: AVRCP target absolute volume=29 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,414 INFO a2dp_bridge: AVRCP target absolute volume=30 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,415 INFO a2dp_bridge: AVRCP target absolute volume=30 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,437 INFO ams_client: AMS raw notification: 000200302e31353630343331
+2026-06-10 11:53:26,437 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=16%
+2026-06-10 11:53:26,440 INFO a2dp_bridge: AVRCP target absolute volume=31 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,447 INFO a2dp_bridge: AVRCP target absolute volume=31 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,448 INFO a2dp_bridge: AVRCP target absolute volume=32 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,449 INFO a2dp_bridge: AVRCP target absolute volume=32 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,458 INFO a2dp_bridge: AVRCP target absolute volume=32 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,477 INFO a2dp_bridge: AVRCP target absolute volume=33 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,479 INFO a2dp_bridge: AVRCP target absolute volume=33 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,489 INFO ams_client: AMS raw notification: 000200302e31353930353936
+2026-06-10 11:53:26,490 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=16%
+2026-06-10 11:53:26,492 INFO a2dp_bridge: AVRCP target absolute volume=34 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,494 INFO a2dp_bridge: AVRCP target absolute volume=34 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,514 INFO a2dp_bridge: AVRCP target absolute volume=34 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,542 INFO ams_client: AMS raw notification: 000200302e31363332323134
+2026-06-10 11:53:26,542 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=16%
+2026-06-10 11:53:26,548 INFO a2dp_bridge: AVRCP target absolute volume=35 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,553 INFO a2dp_bridge: AVRCP target absolute volume=35 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,561 INFO a2dp_bridge: AVRCP target absolute volume=36 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,568 INFO ams_client: AMS raw notification: 000200302e313635323032
+2026-06-10 11:53:26,568 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=17%
+2026-06-10 11:53:26,596 INFO ams_client: AMS raw notification: 000200302e3136383332
+2026-06-10 11:53:26,597 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=17%
+2026-06-10 11:53:26,600 INFO a2dp_bridge: AVRCP target absolute volume=36 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,601 INFO a2dp_bridge: AVRCP target absolute volume=36 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,602 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,631 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,634 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,635 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,643 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,648 INFO ams_client: AMS raw notification: 000200302e31373033303738
+2026-06-10 11:53:26,648 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=17%
+2026-06-10 11:53:26,658 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,659 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,661 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,676 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,684 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,685 INFO a2dp_bridge: AVRCP target absolute volume=39 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,701 INFO ams_client: AMS raw notification: 000200302e31373334323239
+2026-06-10 11:53:26,702 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [72/480s] vol=17%
+2026-06-10 11:53:26,705 INFO a2dp_bridge: AVRCP target absolute volume=39 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,706 INFO a2dp_bridge: AVRCP target absolute volume=39 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,707 INFO a2dp_bridge: AVRCP target absolute volume=39 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,727 INFO ams_client: AMS raw notification: 000200302e31373534313737
+2026-06-10 11:53:26,727 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=18%
+2026-06-10 11:53:26,741 INFO a2dp_bridge: AVRCP target absolute volume=39 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,743 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,754 INFO ams_client: AMS raw notification: 000200302e31373835333034
+2026-06-10 11:53:26,754 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=18%
+2026-06-10 11:53:26,767 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,769 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,770 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,779 INFO ams_client: AMS raw notification: 000200302e31383035333138
+2026-06-10 11:53:26,780 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=18%
+2026-06-10 11:53:26,803 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,804 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,806 INFO ams_client: AMS raw notification: 000200302e31383336343235
+2026-06-10 11:53:26,806 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=18%
+2026-06-10 11:53:26,808 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,828 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,837 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,838 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,844 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,845 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,857 INFO ams_client: AMS raw notification: 000200302e31383536353033
+2026-06-10 11:53:26,857 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=19%
+2026-06-10 11:53:26,869 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,883 INFO ams_client: AMS raw notification: 000200302e31383837353931
+2026-06-10 11:53:26,883 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=19%
+2026-06-10 11:53:26,888 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,921 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,923 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,939 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,969 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,972 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,973 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,990 INFO ams_client: AMS raw notification: 000200302e31393037373239
+2026-06-10 11:53:26,990 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=19%
+2026-06-10 11:53:26,994 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,995 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:26,996 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,018 INFO a2dp_bridge: AVRCP target absolute volume=44 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,019 INFO a2dp_bridge: AVRCP target absolute volume=44 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,021 INFO a2dp_bridge: AVRCP target absolute volume=44 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,034 INFO a2dp_bridge: AVRCP target absolute volume=44 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,037 INFO a2dp_bridge: AVRCP target absolute volume=45 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,039 INFO a2dp_bridge: AVRCP target absolute volume=45 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,067 INFO ams_client: AMS raw notification: 000200302e31393238343435
+2026-06-10 11:53:27,067 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=19%
+2026-06-10 11:53:27,069 INFO a2dp_bridge: AVRCP target absolute volume=45 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,074 INFO a2dp_bridge: AVRCP target absolute volume=46 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,082 INFO a2dp_bridge: AVRCP target absolute volume=46 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,083 INFO a2dp_bridge: AVRCP target absolute volume=46 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,100 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,104 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,107 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,108 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,119 INFO ams_client: AMS raw notification: 000200302e31393538393936
+2026-06-10 11:53:27,120 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=20%
+2026-06-10 11:53:27,129 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,132 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,155 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,156 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,162 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,174 INFO ams_client: AMS raw notification: 000200302e31393739373033
+2026-06-10 11:53:27,174 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=20%
+2026-06-10 11:53:27,177 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,178 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,199 INFO ams_client: AMS raw notification: 000200302e31393939393531
+2026-06-10 11:53:27,200 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=20%
+2026-06-10 11:53:27,209 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,213 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,215 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,226 INFO ams_client: AMS raw notification: 000200302e323032303635
+2026-06-10 11:53:27,227 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=20%
+2026-06-10 11:53:27,250 INFO ams_client: AMS raw notification: 000200302e3230333036
+2026-06-10 11:53:27,251 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=20%
+2026-06-10 11:53:27,256 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,258 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,262 INFO a2dp_bridge: AVRCP target absolute volume=50 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,268 INFO a2dp_bridge: AVRCP target absolute volume=50 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,277 INFO ams_client: AMS raw notification: 000200302e32303430393437
+2026-06-10 11:53:27,277 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=20%
+2026-06-10 11:53:27,303 INFO ams_client: AMS raw notification: 000200302e32303530393439
+2026-06-10 11:53:27,303 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=21%
+2026-06-10 11:53:27,316 INFO a2dp_bridge: AVRCP target absolute volume=50 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,317 INFO a2dp_bridge: AVRCP target absolute volume=50 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,318 INFO a2dp_bridge: AVRCP target absolute volume=51 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,328 INFO a2dp_bridge: AVRCP target absolute volume=51 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,356 INFO ams_client: AMS raw notification: 000200302e32303539333931
+2026-06-10 11:53:27,357 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=21%
+2026-06-10 11:53:27,364 INFO a2dp_bridge: AVRCP target absolute volume=51 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,365 INFO a2dp_bridge: AVRCP target absolute volume=52 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,378 INFO a2dp_bridge: AVRCP target absolute volume=52 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,400 INFO a2dp_bridge: AVRCP target absolute volume=53 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,404 INFO a2dp_bridge: AVRCP target absolute volume=53 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,406 INFO a2dp_bridge: AVRCP target absolute volume=54 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,409 INFO ams_client: AMS raw notification: 000200302e32303930333739
+2026-06-10 11:53:27,409 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=21%
+2026-06-10 11:53:27,411 INFO a2dp_bridge: AVRCP target absolute volume=54 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,434 INFO ams_client: AMS raw notification: 000200302e32313231333638
+2026-06-10 11:53:27,435 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=21%
+2026-06-10 11:53:27,446 INFO a2dp_bridge: AVRCP target absolute volume=55 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,448 INFO a2dp_bridge: AVRCP target absolute volume=56 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,452 INFO a2dp_bridge: AVRCP target absolute volume=56 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,476 INFO a2dp_bridge: AVRCP target absolute volume=57 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,477 INFO a2dp_bridge: AVRCP target absolute volume=58 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,502 INFO a2dp_bridge: AVRCP target absolute volume=58 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,504 INFO a2dp_bridge: AVRCP target absolute volume=59 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,505 INFO a2dp_bridge: AVRCP target absolute volume=60 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,517 INFO a2dp_bridge: AVRCP target absolute volume=60 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,543 INFO a2dp_bridge: AVRCP target absolute volume=62 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,545 INFO a2dp_bridge: AVRCP target absolute volume=63 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,551 INFO a2dp_bridge: AVRCP target absolute volume=63 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,562 INFO a2dp_bridge: AVRCP target absolute volume=64 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,563 INFO a2dp_bridge: AVRCP target absolute volume=64 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,567 INFO ams_client: AMS raw notification: 000200302e32313532333537
+2026-06-10 11:53:27,567 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=22%
+2026-06-10 11:53:27,569 INFO a2dp_bridge: AVRCP target absolute volume=65 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,570 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,588 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,593 INFO ams_client: AMS raw notification: 000200302e32313833333435
+2026-06-10 11:53:27,593 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=22%
+2026-06-10 11:53:27,607 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,609 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,620 INFO ams_client: AMS raw notification: 000200302e32323234363633
+2026-06-10 11:53:27,621 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=22%
+2026-06-10 11:53:27,633 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,644 INFO ams_client: AMS raw notification: 000200302e32323635393831
+2026-06-10 11:53:27,645 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=23%
+2026-06-10 11:53:27,656 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,658 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,663 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,697 INFO ams_client: AMS raw notification: 000200302e32333037323939
+2026-06-10 11:53:27,697 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [73/480s] vol=23%
+2026-06-10 11:53:27,707 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,709 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,710 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,724 INFO ams_client: AMS raw notification: 000200302e32333338323838
+2026-06-10 11:53:27,725 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=23%
+2026-06-10 11:53:27,747 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,754 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,763 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,791 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,802 INFO ams_client: AMS raw notification: 000200302e32333639323736
+2026-06-10 11:53:27,802 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=24%
+2026-06-10 11:53:27,804 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,817 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 11:53:27,856 INFO ams_client: AMS raw notification: 000200302e32343130353934
+2026-06-10 11:53:27,856 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=24%
+2026-06-10 11:53:27,935 INFO ams_client: AMS raw notification: 000200302e32343531393132
+2026-06-10 11:53:27,935 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=25%
+2026-06-10 11:53:27,985 INFO ams_client: AMS raw notification: 000200302e32343832393031
+2026-06-10 11:53:27,986 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=25%
+2026-06-10 11:53:28,013 INFO ams_client: AMS raw notification: 000200302e32353234323139
+2026-06-10 11:53:28,013 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=25%
+2026-06-10 11:53:28,045 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2750 dropped=0 bytes=665 sent_to_speaker=True
+2026-06-10 11:53:28,064 INFO ams_client: AMS raw notification: 000200302e32353535323037
+2026-06-10 11:53:28,065 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=26%
+2026-06-10 11:53:28,090 INFO ams_client: AMS raw notification: 000200302e32353836313936
+2026-06-10 11:53:28,091 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=26%
+2026-06-10 11:53:28,117 INFO ams_client: AMS raw notification: 000200302e32363137313835
+2026-06-10 11:53:28,117 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=26%
+2026-06-10 11:53:28,143 INFO ams_client: AMS raw notification: 000200302e32363438313733
+2026-06-10 11:53:28,143 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=26%
+2026-06-10 11:53:28,222 INFO ams_client: AMS raw notification: 000200302e32363739313631
+2026-06-10 11:53:28,222 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=27%
+2026-06-10 11:53:28,300 INFO ams_client: AMS raw notification: 000200302e323732303438
+2026-06-10 11:53:28,301 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=27%
+2026-06-10 11:53:28,327 INFO ams_client: AMS raw notification: 000200302e32373531343638
+2026-06-10 11:53:28,327 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=28%
+2026-06-10 11:53:28,353 INFO ams_client: AMS raw notification: 000200302e32373932373836
+2026-06-10 11:53:28,353 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=28%
+2026-06-10 11:53:28,379 INFO ams_client: AMS raw notification: 000200302e32383233373735
+2026-06-10 11:53:28,380 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=28%
+2026-06-10 11:53:28,405 INFO ams_client: AMS raw notification: 000200302e32383434343334
+2026-06-10 11:53:28,406 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=28%
+2026-06-10 11:53:28,432 INFO ams_client: AMS raw notification: 000200302e32383735343232
+2026-06-10 11:53:28,432 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=29%
+2026-06-10 11:53:28,458 INFO ams_client: AMS raw notification: 000200302e32393036343131
+2026-06-10 11:53:28,458 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=29%
+2026-06-10 11:53:28,484 INFO ams_client: AMS raw notification: 000200302e32393337333939
+2026-06-10 11:53:28,485 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=29%
+2026-06-10 11:53:28,537 INFO ams_client: AMS raw notification: 000200302e32393538303538
+2026-06-10 11:53:28,537 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=30%
+2026-06-10 11:53:28,694 INFO ams_client: AMS raw notification: 000200302e32393738373137
+2026-06-10 11:53:28,695 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [74/480s] vol=30%
+2026-06-10 11:53:28,720 INFO ams_client: AMS raw notification: 000200302e32393839303437
+2026-06-10 11:53:28,721 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=30%
+2026-06-10 11:53:28,773 INFO ams_client: AMS raw notification: 000200302e33303039373036
+2026-06-10 11:53:28,773 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=30%
+2026-06-10 11:53:28,799 INFO ams_client: AMS raw notification: 000200302e33303230303335
+2026-06-10 11:53:28,800 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=30%
+2026-06-10 11:53:28,825 INFO ams_client: AMS raw notification: 000200302e33303330333635
+2026-06-10 11:53:28,826 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=30%
+2026-06-10 11:53:28,878 INFO ams_client: AMS raw notification: 000200302e33303430363935
+2026-06-10 11:53:28,878 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=30%
+2026-06-10 11:53:28,904 INFO ams_client: AMS raw notification: 000200302e33303531303234
+2026-06-10 11:53:28,905 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:28,957 INFO ams_client: AMS raw notification: 000200302e33303631333534
+2026-06-10 11:53:28,957 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:28,984 INFO ams_client: AMS raw notification: 000200302e33303731363833
+2026-06-10 11:53:28,984 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:29,009 INFO ams_client: AMS raw notification: 000200302e33303832303133
+2026-06-10 11:53:29,010 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:29,037 INFO ams_client: AMS raw notification: 000200302e33303932333432
+2026-06-10 11:53:29,037 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:29,062 INFO ams_client: AMS raw notification: 000200302e33313133303031
+2026-06-10 11:53:29,062 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:29,088 INFO ams_client: AMS raw notification: 000200302e333133333636
+2026-06-10 11:53:29,088 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=31%
+2026-06-10 11:53:29,115 INFO ams_client: AMS raw notification: 000200302e33313534333139
+2026-06-10 11:53:29,116 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=32%
+2026-06-10 11:53:29,142 INFO ams_client: AMS raw notification: 000200302e33313734393738
+2026-06-10 11:53:29,142 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=32%
+2026-06-10 11:53:29,167 INFO ams_client: AMS raw notification: 000200302e33313935363337
+2026-06-10 11:53:29,167 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=32%
+2026-06-10 11:53:29,219 INFO ams_client: AMS raw notification: 000200302e33323136323936
+2026-06-10 11:53:29,220 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=32%
+2026-06-10 11:53:29,248 INFO ams_client: AMS raw notification: 000200302e33323336393535
+2026-06-10 11:53:29,248 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=32%
+2026-06-10 11:53:29,272 INFO ams_client: AMS raw notification: 000200302e33323537363134
+2026-06-10 11:53:29,272 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,298 INFO ams_client: AMS raw notification: 000200302e33323738323733
+2026-06-10 11:53:29,299 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,325 INFO ams_client: AMS raw notification: 000200302e33323838363033
+2026-06-10 11:53:29,326 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,350 INFO ams_client: AMS raw notification: 000200302e33323938393332
+2026-06-10 11:53:29,351 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,403 INFO ams_client: AMS raw notification: 000200302e33333039323632
+2026-06-10 11:53:29,403 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,455 INFO ams_client: AMS raw notification: 000200302e33333139353931
+2026-06-10 11:53:29,456 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,482 INFO ams_client: AMS raw notification: 000200302e33333239393231
+2026-06-10 11:53:29,482 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,534 INFO ams_client: AMS raw notification: 000200302e333334303235
+2026-06-10 11:53:29,535 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=33%
+2026-06-10 11:53:29,560 INFO ams_client: AMS raw notification: 000200302e333335303538
+2026-06-10 11:53:29,561 INFO ams_client: State: ▶ Энтропия и разум: формальный анализ гипотезы Больцмана — СИНТЕТИК [75/480s] vol=34%

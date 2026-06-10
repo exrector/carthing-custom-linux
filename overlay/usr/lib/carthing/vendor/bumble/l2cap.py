@@ -1435,12 +1435,26 @@ class ClassicChannel(utils.EventEmitter):
                         peer_mps,
                     )
                     if new_mode != self.mode:
-                        logger.error('Mode mismatch, abort connection')
-                        self._abort_connection_result(
-                            'Abort on configuration - mode mismatch'
+                        # Спецификация L2CAP: на неподдерживаемый режим отвечать
+                        # Configure Response UNACCEPTABLE_PARAMETERS с нашим
+                        # режимом (peer повторит Configure с ним), а НЕ рвать
+                        # соединение. Abort ломал AVCTP от Fosi: его AVRCP-сессия
+                        # не поднималась вообще (run11/run12 2026-06-10).
+                        logger.info(
+                            'Peer requested mode %s, countering with %s',
+                            new_mode.name,
+                            self.mode.name,
                         )
-                        self._disconnect_sync()
-                        return
+                        result = (
+                            L2CAP_Configure_Response.Result.FAILURE_UNACCEPTABLE_PARAMETERS
+                        )
+                        replied_options = [
+                            (
+                                option[0],
+                                struct.pack('<BBBHHH', int(self.mode), 0, 0, 0, 0, 0),
+                            )
+                        ]
+                        break
 
                     if new_mode == TransmissionMode.BASIC:
                         replied_options.append(option)

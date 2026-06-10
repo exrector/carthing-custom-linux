@@ -928,6 +928,9 @@ async def main():
                 app_state = AppState()
             transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
             backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
+            # Кнопки колонки -> backchannel -> активный источник (finding A2:
+            # раньше handler не был подключён, команды умирали в логе моста).
+            transfer.bridge.speaker_command_handler = backchannel.handle_speaker_command
             await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
             for protocol in (
                 Protocol.CLASSIC_A2DP_SINK,
