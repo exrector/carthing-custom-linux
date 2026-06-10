@@ -756,14 +756,51 @@ async def _complete_classic_first_ctkd(connection):
         logger.warning("classic-first CTKD failed for %s: %s", peer, e)
 
 
-async def _route_command_watcher():
-    """Тумблер маршрута: `echo connect|disconnect > /run/carthing/route-cmd`.
+async def _apply_route_command(cmd):
+    """Тумблер маршрута (модель владельца): Play Now — дефолт, выход Car Thing
+    в Control Center появляется ТОЛЬКО по явной активации classic с устройства.
+    Транспорты команды: файл route-cmd, физкнопка (пресет 1), позже GUI."""
+    if transfer is None or getattr(transfer, "bridge", None) is None:
+        return
+    try:
+        if cmd in ("connect", "on", "1"):
+            address = _best_bonded_source_address()
+            if not address:
+                for candidate, keys in reversed(
+                    await transfer.bridge.device.keystore.get_all()
+                ):
+                    if (
+                        getattr(keys, "link_key", None) is not None
+                        and getattr(keys, "ltk", None) is not None
+                    ):
+                        address = candidate
+                        break
+            if not address:
+                logger.warning("route toggle: no dual-mode bond to connect")
+                return
+            logger.info("route toggle: connect_source %s", address)
+            await transfer.bridge.connect_source(address)
+            logger.info("route toggle: classic audio up %s", address)
+        elif cmd in ("disconnect", "off", "0"):
+            logger.info("route toggle: disconnect_source")
+            await transfer.bridge.disconnect_source()
+            logger.info("route toggle: classic audio down")
+        else:
+            logger.warning("route toggle: unknown command %r", cmd)
+    except Exception as e:
+        logger.warning("route toggle %r failed: %s", cmd, e)
 
-    Реализация модели владельца: Play Now — дефолт (BLE всегда), выход
-    Car Thing появляется в Control Center ТОЛЬКО по явной активации classic
-    с устройства. Файл — транспорт команды; физическая кнопка/GUI вешаются
-    на этот же механизм.
-    """
+
+async def _route_toggle_flip():
+    """Кнопка: один тумблер — connect, если маршрута нет, иначе disconnect."""
+    if transfer is None or getattr(transfer, "bridge", None) is None:
+        return
+    active = getattr(transfer.bridge, "_source_connection", None) is not None
+    await _apply_route_command("disconnect" if active else "connect")
+
+
+async def _route_command_watcher():
+    """Файловый транспорт тумблера: `echo connect|disconnect > /run/carthing/route-cmd`."""
     path = "/run/carthing/route-cmd"
     while True:
         await asyncio.sleep(1.0)
@@ -775,35 +812,7 @@ async def _route_command_watcher():
             continue
         except Exception:
             continue
-        if transfer is None or getattr(transfer, "bridge", None) is None:
-            continue
-        try:
-            if cmd in ("connect", "on", "1"):
-                address = _best_bonded_source_address()
-                if not address:
-                    for candidate, keys in reversed(
-                        await transfer.bridge.device.keystore.get_all()
-                    ):
-                        if (
-                            getattr(keys, "link_key", None) is not None
-                            and getattr(keys, "ltk", None) is not None
-                        ):
-                            address = candidate
-                            break
-                if not address:
-                    logger.warning("route toggle: no dual-mode bond to connect")
-                    continue
-                logger.info("route toggle: connect_source %s", address)
-                await transfer.bridge.connect_source(address)
-                logger.info("route toggle: classic audio up %s", address)
-            elif cmd in ("disconnect", "off", "0"):
-                logger.info("route toggle: disconnect_source")
-                await transfer.bridge.disconnect_source()
-                logger.info("route toggle: classic audio down")
-            else:
-                logger.warning("route toggle: unknown command %r", cmd)
-        except Exception as e:
-            logger.warning("route toggle %r failed: %s", cmd, e)
+        await _apply_route_command(cmd)
 
 
 _speaker_enroll_done = None
@@ -1116,6 +1125,20 @@ async def main():
             asyncio.ensure_future(input_handler.start(on_event=_on_input))
         except Exception as e:
             logger.warning("input disabled: %s", e)
+    else:
+        # Headless: пресет-кнопка 1 = тумблер маршрута (решение владельца 2026-06-10).
+        try:
+            import input_handler
+
+            def _on_headless_input(event):
+                if event == "btn_1":
+                    logger.info("route toggle: button 1 pressed")
+                    asyncio.create_task(_route_toggle_flip())
+
+            asyncio.ensure_future(input_handler.start(on_event=_on_headless_input))
+            logger.info("headless input: button 1 = route toggle")
+        except Exception as e:
+            logger.warning("headless input disabled: %s", e)
 
     logger.info("runtime up — name=%s", identity_service.visible_name())
     await asyncio.get_event_loop().create_future()   # работать вечно
