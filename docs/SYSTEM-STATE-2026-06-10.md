@@ -102,3 +102,20 @@ scripts/flash-device1-rootfs-only.py` (устройство в burn mode 1b8e:c0
 5. C2–C9 (DID, EIR TX Power, sniff, тайминги — по `reference/apple-adg/`).
 6. Загадка: один volume-шквал 03:10 со стороны iPhone (не влияет).
 7. Потерянная строка «CTKD complete» в A3-цикле 4 при записанных ключах.
+
+---
+
+## ОБНОВЛЕНИЕ (вечер 2026-06-10): карантин СНЯТ, автостарт работает
+
+Раздел «Как запускать» выше частично устарел: ручной запуск больше НЕ нужен.
+
+- Автостарт: inittab → init-wrapper → `/etc/init.d/disabled-S50-carthing-remote`
+  (имя историческое; это АКТИВНЫЙ стартер с supervisor-петлёй и полным
+  продуктовым env). S60 не существует (retired).
+- Рубильник: `touch /run/carthing-state/carthing/no-autostart && reboot`.
+- Единый реестр доверенных: `CARTHING_TRUSTED_DEVICES=.../state.json` (запечён;
+  легаси trusted-devices.json вызывал двойное хранилище и потерю колонок).
+- Лог runtime: `/run/carthing/carthing-remote.log` (контракт defaults).
+- Замер: питание → ~49 c → iPhone (AMS) + Fosi (standby+stream+AVRCP) сами.
+- Ручная команда из раздела выше остаётся для лаборатории (сначала
+  `kill` supervisor по pid-файлу `/run/carthing/media-remote-supervisor.pid`).
