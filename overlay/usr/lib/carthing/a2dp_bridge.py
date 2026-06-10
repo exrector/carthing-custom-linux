@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 
-from bumble import a2dp, avctp, avdtp, avrcp, l2cap
+from bumble import a2dp, avc, avctp, avdtp, avrcp, l2cap
 from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, Device
 from bumble.hci import (
@@ -50,7 +50,7 @@ def error_text(error: Exception) -> str:
 class AudioSinkAvrcpDelegate(avrcp.Delegate):
     """Minimal AVRCP Target state required by an A2DP audio sink."""
 
-    def __init__(self, logger, peer="?", on_key=None):
+    def __init__(self, logger, peer="?", on_key=None, on_volume=None):
         super().__init__(supported_events=[avrcp.EventId.VOLUME_CHANGED])
         self.logger = logger
         self.volume = 64
@@ -59,10 +59,14 @@ class AudioSinkAvrcpDelegate(avrcp.Delegate):
         self.peer = peer
         # Транспортные кнопки пира (play/pause/next/...) — наружу, в backchannel.
         self.on_key = on_key
+        # Absolute volume от источника — наружу, для синхронизации на колонку.
+        self.on_volume = on_volume
 
     async def set_absolute_volume(self, volume: int) -> None:
         await super().set_absolute_volume(volume)
         self.logger.info("AVRCP target absolute volume=%d peer=%s", volume, self.peer)
+        if self.on_volume is not None:
+            self.on_volume(volume, self.peer)
 
     async def on_key_event(self, key, pressed: bool, data: bytes) -> None:
         self.logger.info("AVRCP target key=%s pressed=%s peer=%s", key, pressed, self.peer)
@@ -265,6 +269,12 @@ class A2DPBridge:
         self._source_avrcp_addr = "?"
         # transfer_service/runtime подключают сюда TransferControlBackchannel.
         self.speaker_command_handler = None
+        # Синхронизация громкости источник→колонка (SetAbsoluteVolume к колонке).
+        self._pending_speaker_volume = None
+        self._speaker_volume_task = None
+        self._speaker_volume_unsupported: set[str] = set()
+        # Единая громкость маршрута — гасит эхо iPhone↔Fosi.
+        self._route_volume = None
         self._avrcp_monitor_tasks: set[asyncio.Task] = set()
         self.receiver_connection = None
         self.receiver_protocol: avdtp.Protocol | None = None
@@ -1074,7 +1084,10 @@ class A2DPBridge:
     def _make_avrcp_session(self, address: str) -> avrcp.Protocol:
         """Отдельный AVRCP Protocol на пира; маршрутизация по trust на старте сессии."""
         delegate = AudioSinkAvrcpDelegate(
-            self.logger, peer=address, on_key=self._on_avrcp_key
+            self.logger,
+            peer=address,
+            on_key=self._on_avrcp_key,
+            on_volume=self._on_source_volume,
         )
         protocol = avrcp.Protocol(delegate)
         self.avrcp_sessions[address] = protocol
@@ -1108,6 +1121,90 @@ class A2DPBridge:
             asyncio.create_task(self._start_source_avrcp_session())
         elif self.state.is_trusted_speaker(address):
             self.logger.info("AVRCP speaker backchannel armed: %s", address)
+            asyncio.create_task(self._start_speaker_avrcp_session(address, protocol))
+
+    async def _start_speaker_avrcp_session(self, address, protocol):
+        """Подписка на нотификации колонки: громкость по AVRCP идёт не кнопками,
+        а EVENT_VOLUME_CHANGED от Target — Controller обязан зарегистрироваться."""
+        try:
+            supported_events = await asyncio.wait_for(
+                protocol.get_supported_events(),
+                timeout=self.connect_timeout,
+            )
+            self.logger.info(
+                "AVRCP speaker supported events peer=%s: %s",
+                address,
+                [event.name for event in supported_events],
+            )
+        except Exception as exc:
+            self.logger.info(
+                "AVRCP speaker capabilities query failed (%s): %s",
+                address,
+                error_text(exc),
+            )
+            return
+        monitors = (
+            # VOLUME_CHANGED регистрируем ПРИНУДИТЕЛЬНО, игнорируя capabilities:
+            # часть колонок не заявляет событие, но репортит его после первого
+            # SetAbsoluteVolume. Отказ безвреден (монитор просто остановится).
+            (avrcp.EventId.VOLUME_CHANGED, protocol.monitor_volume, "volume", True),
+            (
+                avrcp.EventId.PLAYBACK_STATUS_CHANGED,
+                protocol.monitor_playback_status,
+                "playback-status",
+                False,
+            ),
+        )
+        for event_id, monitor, label, force in monitors:
+            if not force and event_id not in supported_events:
+                continue
+            task = asyncio.create_task(
+                self._consume_speaker_avrcp_monitor(address, label, monitor())
+            )
+            self._avrcp_monitor_tasks.add(task)
+            task.add_done_callback(self._avrcp_monitor_tasks.discard)
+
+    def _on_speaker_volume(self, volume, address):
+        """Громкость от колонки -> VOLUME_CHANGED-нотификация источнику (iPhone)."""
+        if volume == self._route_volume:
+            return  # эхо нашего SetAbsoluteVolume
+        self._route_volume = volume
+        protocol = self._source_avrcp
+        if protocol is None:
+            return
+        try:
+            delegate = getattr(protocol, "delegate", None)
+            if delegate is not None:
+                delegate.volume = volume
+            protocol.notify_volume_changed(volume)
+            self.logger.info(
+                "route volume %d: speaker %s -> source notify", volume, address
+            )
+        except Exception as exc:
+            self.logger.info("route volume notify failed: %s", error_text(exc))
+
+    async def _consume_speaker_avrcp_monitor(self, address, label, events):
+        try:
+            async for value in events:
+                self.logger.info(
+                    "AVRCP speaker %s=%s peer=%s", label, value, address
+                )
+                if label == "volume":
+                    try:
+                        self._on_speaker_volume(int(value), address)
+                    except Exception as exc:
+                        self.logger.info(
+                            "speaker volume route failed: %s", error_text(exc)
+                        )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.logger.info(
+                "AVRCP speaker %s monitor stopped (%s): %s",
+                label,
+                address,
+                error_text(exc),
+            )
 
     def _on_avrcp_session_stop(self, address, protocol):
         if self.avrcp_sessions.get(address) is protocol:
@@ -1115,6 +1212,71 @@ class A2DPBridge:
         if self._source_avrcp is protocol:
             self._source_avrcp = None
             self._stop_source_avrcp_session()
+
+    def _on_source_volume(self, volume, peer):
+        """Absolute volume от источника -> SetAbsoluteVolume на колонку (коалесцируя)."""
+        if not self.state.is_trusted_source(peer):
+            return
+        if volume == self._route_volume:
+            return  # эхо нашей же VOLUME_CHANGED-нотификации
+        self._route_volume = volume
+        # Громкость идёт колонке АКТИВНОГО маршрута; default_speaker из реестра —
+        # только фолбэк (там первым может стоять виртуальный выход с пустым адресом).
+        speaker = normalize_address(
+            self.receiver_address or self.state.default_speaker_address()
+        )
+        if not speaker or speaker in self._speaker_volume_unsupported:
+            return
+        self._pending_speaker_volume = volume
+        if self._speaker_volume_task is None or self._speaker_volume_task.done():
+            self._speaker_volume_task = asyncio.create_task(
+                self._push_speaker_volume(speaker)
+            )
+
+    async def _push_speaker_volume(self, speaker):
+        while True:
+            volume = self._pending_speaker_volume
+            if not await self.set_speaker_absolute_volume(speaker, volume):
+                return
+            await asyncio.sleep(0.2)
+            if self._pending_speaker_volume == volume:
+                return
+
+    async def set_speaker_absolute_volume(self, address, volume):
+        protocol = self.avrcp_sessions.get(address)
+        if protocol is None or protocol.avctp_protocol is None:
+            return False
+        try:
+            response_context = await asyncio.wait_for(
+                protocol.send_avrcp_command(
+                    avc.CommandFrame.CommandType.CONTROL,
+                    avrcp.SetAbsoluteVolumeCommand(volume=volume),
+                ),
+                timeout=5.0,
+            )
+            # Для CONTROL-команд код успеха = ACCEPTED (Protocol._check_response
+            # из Bumble ждёт IMPLEMENTED_OR_STABLE и годится только для STATUS).
+            code = getattr(response_context, "response_code", None)
+            response = getattr(response_context, "response", None)
+            if code != avc.ResponseFrame.ResponseCode.ACCEPTED or not isinstance(
+                response, avrcp.SetAbsoluteVolumeResponse
+            ):
+                raise RuntimeError(f"unexpected response: {response_context}")
+            self.logger.info(
+                "AVRCP speaker absolute volume set=%d effective=%s peer=%s",
+                volume,
+                response.volume,
+                address,
+            )
+            return True
+        except Exception as exc:
+            self._speaker_volume_unsupported.add(address)
+            self.logger.info(
+                "AVRCP speaker absolute volume unsupported (%s): %s",
+                address,
+                error_text(exc),
+            )
+            return False
 
     async def _on_avrcp_key(self, key, pressed, peer):
         """Транспортные кнопки колонки -> backchannel -> активный источник."""

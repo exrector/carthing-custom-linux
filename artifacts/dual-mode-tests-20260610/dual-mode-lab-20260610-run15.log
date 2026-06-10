@@ -1,0 +1,793 @@
+2026-06-10 12:07:38,626 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-10 12:07:38,688 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-10 12:07:38,689 INFO ble_transport: Opening transport hci-socket:0
+2026-06-10 12:07:38,707 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-10 12:07:40,206 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-10 12:07:40,212 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-10 12:07:40,212 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-10 12:07:40,216 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-10 12:07:40,242 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-10 12:07:40,243 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-10 12:07:40,247 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-10 12:07:40,248 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-10 12:07:40,248 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=1; AVCTP listening
+2026-06-10 12:07:40,249 INFO carthing_runtime: phase=ready
+2026-06-10 12:07:40,254 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 12:07:43,882 INFO carthing_runtime: connected: C4:A9:B8:70:2F:E5/P classic=True encrypted=False
+2026-06-10 12:07:43,883 INFO a2dp_bridge: Classic BT connection: C4:A9:B8:70:2F:E5/P handle=12 encrypted=False
+2026-06-10 12:07:43,899 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 12:07:43,950 INFO a2dp_bridge: A2DP_SPEAKER_STANDBY_CONNECTED C4:A9:B8:70:2F:E5
+2026-06-10 12:07:43,950 INFO a2dp_bridge: A2DP receiver ACL ready: C4:A9:B8:70:2F:E5
+2026-06-10 12:07:43,959 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 12:07:43,959 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:43,960 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-10 12:07:43,971 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 12:07:43,972 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:43,972 WARNING accessory_orchestrator: bonded-only advertising failed: HCI_Error(hci/COMMAND_DISALLOWED_ERROR [0xC])
+2026-06-10 12:07:43,973 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:43,975 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:43,979 INFO a2dp_bridge: A2DP classic link-key found for C4:A9:B8:70:2F:E5/P
+2026-06-10 12:07:43,996 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:43,997 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-10 12:07:44,000 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:44,001 WARNING accessory_orchestrator: bonded-only advertising failed: HCI_Error(hci/COMMAND_DISALLOWED_ERROR [0xC])
+2026-06-10 12:07:44,001 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:44,015 INFO a2dp_bridge: A2DP receiver link ENCRYPTED ok: C4:A9:B8:70:2F:E5 (encrypted=True)
+2026-06-10 12:07:44,020 INFO a2dp_bridge: A2DP receiver SDP version lookup ignored: find_avdtp_service_with_connection() takes 1 positional argument but 2 were given
+2026-06-10 12:07:44,021 INFO a2dp_bridge: A2DP receiver AVDTP connect: C4:A9:B8:70:2F:E5 version=(1, 2)
+2026-06-10 12:07:44,023 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:44,023 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:44,023 INFO carthing_runtime: apply_visibility done
+2026-06-10 12:07:44,024 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-10 12:07:44,025 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-10 12:07:44,029 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-10 12:07:44,055 INFO a2dp_bridge: A2DP receiver discover endpoints: C4:A9:B8:70:2F:E5
+2026-06-10 12:07:44,252 INFO carthing_runtime: AMS start (encryption)
+2026-06-10 12:07:44,272 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=7 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\xd7\x00\x00\x00$\x002\x00\x00\x00\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=215, codec_id=36, value=b'2\x00\x00\x00\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,273 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=5 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=79, codec_id=1, value=b'2')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,273 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=3 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC|MPEG_4_AAC_LC: 192>, sampling_frequency=<SamplingFrequency.SF_8000|SF_11025|SF_12000|SF_16000|SF_22050|SF_24000|SF_32000|SF_44100|SF_48000: 4088>, channels=<Channels.MONO|STEREO: 3>, vbr=1, bitrate=320000)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,274 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=53 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,274 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=21 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x06\x01\x07\t\x00\xffO\x00\x00\x00\x01\x002', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=262, value=b'\x07\t\x00\xffO\x00\x00\x00\x01\x002')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,274 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=51 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,274 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=19 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x04\x01\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=260, value=b'\x07\x08\x00\x02\xc0\xff\x8c\x84\xe2\x00')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,275 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=49 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,275 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=17 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\xff\n\x00\x00\x00\x03\x01\x07\x06\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.NON_A2DP: 255>, media_codec_information=VendorSpecificMediaCodecInformation(vendor_id=10, codec_id=259, value=b'\x07\x06\x00\x00\xff\xff\x025')); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,275 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=33 in_use=0 media=0 tsep=0 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,276 INFO a2dp_bridge: A2DP receiver endpoint: address=C4:A9:B8:70:2F:E5 seid=1 in_use=0 media=0 tsep=1 caps=ServiceCapabilities(service_category=1, service_capabilities_bytes=b''); MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x00\xff\xff\x025', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.SBC: 0>, media_codec_information=SbcMediaCodecInformation(sampling_frequency=<SamplingFrequency.SF_16000|SF_32000|SF_44100|SF_48000: 15>, channel_mode=<ChannelMode.MONO|DUAL_CHANNEL|STEREO|JOINT_STEREO: 15>, block_length=<BlockLength.BL_4|BL_8|BL_12|BL_16: 15>, subbands=<Subbands.S_4|S_8: 3>, allocation_method=<AllocationMethod.SNR|LOUDNESS: 3>, minimum_bitpool_value=2, maximum_bitpool_value=53)); ServiceCapabilities(service_category=4, service_capabilities_bytes=b'\x02\x00')
+2026-06-10 12:07:44,277 INFO a2dp_bridge: A2DP receiver sink selected: address=C4:A9:B8:70:2F:E5 codec=AAC seid=3
+2026-06-10 12:07:44,282 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 12:07:44,751 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 12:07:44,856 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 12:07:44,881 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 12:07:44,935 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'SkipFwd', 'SkipBack']
+2026-06-10 12:07:44,987 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 12:07:45,040 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 12:07:45,066 INFO ams_client: AMS raw notification: 020000d0a1d098d09dd0a2d095d0a2d098d09a
+2026-06-10 12:07:45,066 INFO ams_client: State: ⏸  — СИНТЕТИК [0/0s] vol=0%
+2026-06-10 12:07:45,092 INFO ams_client: AMS raw notification: 0203003837332e323437
+2026-06-10 12:07:45,092 INFO ams_client: State: ⏸  — СИНТЕТИК [0/873s] vol=0%
+2026-06-10 12:07:45,119 INFO ams_client: AMS raw notification: 020200d092d0bbd0b8d18fd0bdd0b8d0b520d0bcd183d0b7d18bd0bad0b0d0bbd18cd0bdd0bed0b3d0be20d0bed0b1d183d187d0b5d0bdd0b8d18f20d0bdd0b020d0bad0bed0b3d0bdd0b8d182d0b8d0b2d0bdd0bed0b520d180d0b0d0b7d0b2d0b8d182d0b8d0b520d0bfd0bed0b4d180d0bed181d182d0bad0bed0b2
+2026-06-10 12:07:45,120 INFO ams_client: State: ⏸ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [0/873s] vol=0%
+2026-06-10 12:07:45,145 INFO ams_client: AMS raw notification: 020100323120d18fd0bdd0b2d0b0d180d18f2032303236e280afd0b32e
+2026-06-10 12:07:45,145 INFO ams_client: State: ⏸ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [0/873s] vol=0%
+2026-06-10 12:07:45,170 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 12:07:45,171 INFO ams_client: AMS: ready
+2026-06-10 12:07:45,197 INFO ams_client: AMS raw notification: 000000d09fd0bed0b4d0bad0b0d181d182d18b
+2026-06-10 12:07:45,197 INFO ams_client: AMS player: Подкасты
+2026-06-10 12:07:45,198 INFO ams_client: State: ⏸ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [0/873s] vol=0%
+2026-06-10 12:07:45,228 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:45,228 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:45,229 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 12:07:45,249 INFO ams_client: AMS raw notification: 000100302c302e302c39392e383830
+2026-06-10 12:07:45,250 INFO ams_client: State: ⏸ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [100/873s] vol=0%
+2026-06-10 12:07:45,276 INFO ams_client: AMS raw notification: 000200302e36363737353134
+2026-06-10 12:07:45,276 INFO ams_client: State: ⏸ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [100/873s] vol=67%
+2026-06-10 12:07:45,487 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 12:07:45,591 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 12:07:45,696 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 12:07:45,722 INFO ancs_client: ANCS: +#37 [Other]
+2026-06-10 12:07:45,775 INFO ancs_client: ANCS: requested attrs for #37 (16 bytes)
+2026-06-10 12:07:45,803 INFO ancs_client: ANCS detail: +#37 [Other] con.pnn.ble-browser: Bluefy — Соединение BLE может быть потеряно, пока приложение работает в фоновом режиме
+2026-06-10 12:07:45,839 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 12:07:46,064 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 12:07:46,119 INFO a2dp_bridge: AVCTP incoming connection from C4:A9:B8:70:2F:E5
+2026-06-10 12:07:46,138 INFO bumble.l2cap: Peer requested mode ENHANCED_RETRANSMISSION, countering with BASIC
+2026-06-10 12:07:46,151 INFO a2dp_bridge: AVRCP session started with peer=C4:A9:B8:70:2F:E5
+2026-06-10 12:07:46,152 INFO a2dp_bridge: AVRCP speaker backchannel armed: C4:A9:B8:70:2F:E5
+2026-06-10 12:07:46,168 INFO cts_client: CTS: 2026-06-10 12:07:46 (adjust=0x02)
+2026-06-10 12:07:46,179 INFO cts_client: CTS: system clock set to Wed Jun 10 12:07:46 2026
+2026-06-10 12:07:46,184 INFO a2dp_bridge: AVRCP speaker supported events peer=C4:A9:B8:70:2F:E5: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED']
+2026-06-10 12:07:46,198 INFO a2dp_bridge: AVRCP speaker playback-status=0 peer=C4:A9:B8:70:2F:E5
+2026-06-10 12:07:46,274 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 12:07:46,293 INFO a2dp_bridge: A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3
+2026-06-10 12:07:46,301 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:46,301 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:47,030 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50 (attempt 1/3)
+2026-06-10 12:07:47,031 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-10 12:07:48,411 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-10 12:07:48,411 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=14 encrypted=False
+2026-06-10 12:07:48,418 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-10 12:07:48,617 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=14 encrypted=True
+2026-06-10 12:07:48,619 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 12:07:48,620 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 12:07:48,865 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-10 12:07:48,895 INFO a2dp_bridge: AVRCP session started with peer=10:A2:D3:83:82:50
+2026-06-10 12:07:48,895 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected peer=10:A2:D3:83:82:50
+2026-06-10 12:07:48,896 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-10 12:07:48,896 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-10 12:07:48,899 INFO ams_client: AMS raw notification: 000100312c312e302c39392e313038
+2026-06-10 12:07:48,899 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [99/873s] vol=67%
+2026-06-10 12:07:49,067 INFO a2dp_bridge: AVRCP source supported events: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED', 'PLAYER_APPLICATION_SETTING_CHANGED', 'NOW_PLAYING_CONTENT_CHANGED', 'AVAILABLE_PLAYERS_CHANGED', 'ADDRESSED_PLAYER_CHANGED', 'UIDS_CHANGED']
+2026-06-10 12:07:49,198 INFO a2dp_bridge: AVRCP source playback-status=1 peer=10:A2:D3:83:82:50
+2026-06-10 12:07:56,786 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-10 12:07:56,787 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-10 12:07:56,788 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-10 12:07:56,788 INFO a2dp_bridge: A2DP source endpoint profile=AAC+SBC
+2026-06-10 12:07:57,239 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-10 12:07:57,343 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-10 12:07:57,566 INFO a2dp_bridge: A2DP_SOURCE_RTP_OPEN codec=AAC
+2026-06-10 12:07:57,680 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-10 12:07:57,688 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 12:07:57,697 INFO a2dp_bridge: A2DP_SOURCE_START codec=AAC
+2026-06-10 12:07:57,699 INFO a2dp_bridge: A2DP receiver already ready: C4:A9:B8:70:2F:E5
+2026-06-10 12:07:57,841 INFO a2dp_bridge: AVRCP speaker absolute volume unsupported (C4:A9:B8:70:2F:E5): (<ResponseCode.ACCEPTED: 9>, SetAbsoluteVolumeResponse(volume=66))
+2026-06-10 12:07:57,941 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:57,965 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,010 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,012 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,019 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=5 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,044 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=6 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,060 INFO ams_client: AMS raw notification: 000200302e35323631353339
+2026-06-10 12:07:58,060 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [108/873s] vol=53%
+2026-06-10 12:07:58,067 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=7 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,097 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=8 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:07:58,136 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=9 dropped=0 bytes=54 sent_to_speaker=True
+2026-06-10 12:08:03,718 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=250 dropped=0 bytes=562 sent_to_speaker=True
+2026-06-10 12:08:09,538 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=500 dropped=0 bytes=571 sent_to_speaker=True
+2026-06-10 12:08:15,346 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=750 dropped=0 bytes=711 sent_to_speaker=True
+2026-06-10 12:08:17,323 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,325 INFO a2dp_bridge: AVRCP target absolute volume=70 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,329 INFO ams_client: AMS raw notification: 000200302e35343231323638
+2026-06-10 12:08:17,329 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=54%
+2026-06-10 12:08:17,354 INFO ams_client: AMS raw notification: 000200302e35363835393734
+2026-06-10 12:08:17,355 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=57%
+2026-06-10 12:08:17,358 INFO a2dp_bridge: AVRCP target absolute volume=72 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,359 INFO a2dp_bridge: AVRCP target absolute volume=73 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,361 INFO a2dp_bridge: AVRCP target absolute volume=75 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,380 INFO ams_client: AMS raw notification: 000200302e35383030393137
+2026-06-10 12:08:17,381 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=58%
+2026-06-10 12:08:17,405 INFO a2dp_bridge: AVRCP target absolute volume=76 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,406 INFO a2dp_bridge: AVRCP target absolute volume=77 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,407 INFO a2dp_bridge: AVRCP target absolute volume=78 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,408 INFO a2dp_bridge: AVRCP target absolute volume=80 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,409 INFO ams_client: AMS raw notification: 000200302e35393036363737
+2026-06-10 12:08:17,410 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=59%
+2026-06-10 12:08:17,433 INFO ams_client: AMS raw notification: 000200302e35393939363436
+2026-06-10 12:08:17,433 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=60%
+2026-06-10 12:08:17,454 INFO a2dp_bridge: AVRCP target absolute volume=81 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,459 INFO ams_client: AMS raw notification: 000200302e363130353039
+2026-06-10 12:08:17,459 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=61%
+2026-06-10 12:08:17,469 INFO a2dp_bridge: AVRCP target absolute volume=82 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,471 INFO a2dp_bridge: AVRCP target absolute volume=83 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,487 INFO ams_client: AMS raw notification: 000200302e36313937343631
+2026-06-10 12:08:17,488 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=62%
+2026-06-10 12:08:17,513 INFO ams_client: AMS raw notification: 000200302e36333032363231
+2026-06-10 12:08:17,513 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=63%
+2026-06-10 12:08:17,519 INFO a2dp_bridge: AVRCP target absolute volume=85 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,522 INFO a2dp_bridge: AVRCP target absolute volume=86 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,523 INFO a2dp_bridge: AVRCP target absolute volume=87 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,538 INFO ams_client: AMS raw notification: 000200302e36343035303238
+2026-06-10 12:08:17,538 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=64%
+2026-06-10 12:08:17,563 INFO a2dp_bridge: AVRCP target absolute volume=88 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,567 INFO a2dp_bridge: AVRCP target absolute volume=88 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,572 INFO a2dp_bridge: AVRCP target absolute volume=89 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,578 INFO a2dp_bridge: AVRCP target absolute volume=89 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,604 INFO a2dp_bridge: AVRCP target absolute volume=90 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,612 INFO a2dp_bridge: AVRCP target absolute volume=90 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,634 INFO a2dp_bridge: AVRCP target absolute volume=91 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,636 INFO a2dp_bridge: AVRCP target absolute volume=91 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,644 INFO ams_client: AMS raw notification: 000200302e36353039393335
+2026-06-10 12:08:17,644 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=65%
+2026-06-10 12:08:17,695 INFO ams_client: AMS raw notification: 000200302e36363131393639
+2026-06-10 12:08:17,696 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=66%
+2026-06-10 12:08:17,700 INFO a2dp_bridge: AVRCP target absolute volume=92 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,708 INFO a2dp_bridge: AVRCP target absolute volume=92 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,709 INFO a2dp_bridge: AVRCP target absolute volume=93 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,749 INFO ams_client: AMS raw notification: 000200302e36363935373138
+2026-06-10 12:08:17,749 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=67%
+2026-06-10 12:08:17,800 INFO ams_client: AMS raw notification: 000200302e36373837303834
+2026-06-10 12:08:17,801 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=68%
+2026-06-10 12:08:17,803 INFO a2dp_bridge: AVRCP target absolute volume=94 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,804 INFO a2dp_bridge: AVRCP target absolute volume=96 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,826 INFO ams_client: AMS raw notification: 000200302e36383730363735
+2026-06-10 12:08:17,827 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=69%
+2026-06-10 12:08:17,839 INFO a2dp_bridge: AVRCP target absolute volume=99 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,853 INFO ams_client: AMS raw notification: 000200302e36393330363436
+2026-06-10 12:08:17,853 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=69%
+2026-06-10 12:08:17,880 INFO ams_client: AMS raw notification: 000200302e36393832383036
+2026-06-10 12:08:17,880 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=70%
+2026-06-10 12:08:17,939 INFO a2dp_bridge: AVRCP target absolute volume=99 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,943 INFO a2dp_bridge: AVRCP target absolute volume=100 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:17,959 INFO ams_client: AMS raw notification: 000200302e37303332343534
+2026-06-10 12:08:17,959 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=70%
+2026-06-10 12:08:18,010 INFO ams_client: AMS raw notification: 000200302e37303734313233
+2026-06-10 12:08:18,011 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=71%
+2026-06-10 12:08:18,036 INFO ams_client: AMS raw notification: 000200302e37313033313133
+2026-06-10 12:08:18,037 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=71%
+2026-06-10 12:08:18,042 INFO a2dp_bridge: AVRCP target absolute volume=101 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,044 INFO a2dp_bridge: AVRCP target absolute volume=102 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,063 INFO ams_client: AMS raw notification: 000200302e37313334333236
+2026-06-10 12:08:18,063 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=71%
+2026-06-10 12:08:18,116 INFO ams_client: AMS raw notification: 000200302e37313733393137
+2026-06-10 12:08:18,116 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=72%
+2026-06-10 12:08:18,143 INFO ams_client: AMS raw notification: 000200302e37323235383834
+2026-06-10 12:08:18,143 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=72%
+2026-06-10 12:08:18,195 INFO ams_client: AMS raw notification: 000200302e37323635363239
+2026-06-10 12:08:18,196 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [128/873s] vol=73%
+2026-06-10 12:08:18,312 INFO a2dp_bridge: AVRCP target absolute volume=103 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,325 INFO ams_client: AMS raw notification: 000200302e37333137353438
+2026-06-10 12:08:18,326 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=73%
+2026-06-10 12:08:18,351 INFO ams_client: AMS raw notification: 000200302e37333537343433
+2026-06-10 12:08:18,352 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=74%
+2026-06-10 12:08:18,378 INFO ams_client: AMS raw notification: 000200302e37343039333232
+2026-06-10 12:08:18,378 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=74%
+2026-06-10 12:08:18,405 INFO ams_client: AMS raw notification: 000200302e37343730303935
+2026-06-10 12:08:18,406 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=75%
+2026-06-10 12:08:18,431 INFO ams_client: AMS raw notification: 000200302e37353231393339
+2026-06-10 12:08:18,432 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=75%
+2026-06-10 12:08:18,435 INFO a2dp_bridge: AVRCP target absolute volume=104 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,456 INFO ams_client: AMS raw notification: 000200302e37353732343538
+2026-06-10 12:08:18,457 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=76%
+2026-06-10 12:08:18,483 INFO ams_client: AMS raw notification: 000200302e37363234323733
+2026-06-10 12:08:18,483 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=76%
+2026-06-10 12:08:18,509 INFO ams_client: AMS raw notification: 000200302e37363734393036
+2026-06-10 12:08:18,509 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=77%
+2026-06-10 12:08:18,535 INFO ams_client: AMS raw notification: 000200302e37373337303532
+2026-06-10 12:08:18,536 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=77%
+2026-06-10 12:08:18,561 INFO ams_client: AMS raw notification: 000200302e37383038343935
+2026-06-10 12:08:18,562 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=78%
+2026-06-10 12:08:18,615 INFO ams_client: AMS raw notification: 000200302e37383730363136
+2026-06-10 12:08:18,616 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=79%
+2026-06-10 12:08:18,619 INFO a2dp_bridge: AVRCP target absolute volume=107 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,666 INFO ams_client: AMS raw notification: 000200302e37393432313339
+2026-06-10 12:08:18,667 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=79%
+2026-06-10 12:08:18,693 INFO ams_client: AMS raw notification: 000200302e38303234393337
+2026-06-10 12:08:18,693 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=80%
+2026-06-10 12:08:18,719 INFO ams_client: AMS raw notification: 000200302e383039363533
+2026-06-10 12:08:18,719 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=81%
+2026-06-10 12:08:18,765 INFO a2dp_bridge: AVRCP target absolute volume=108 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,798 INFO ams_client: AMS raw notification: 000200302e38313739333034
+2026-06-10 12:08:18,798 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=82%
+2026-06-10 12:08:18,850 INFO ams_client: AMS raw notification: 000200302e38323530393635
+2026-06-10 12:08:18,851 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=83%
+2026-06-10 12:08:18,904 INFO ams_client: AMS raw notification: 000200302e38333233333733
+2026-06-10 12:08:18,904 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=83%
+2026-06-10 12:08:18,913 INFO a2dp_bridge: AVRCP target absolute volume=109 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,936 INFO a2dp_bridge: AVRCP target absolute volume=112 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:18,955 INFO ams_client: AMS raw notification: 000200302e38333834373538
+2026-06-10 12:08:18,956 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=84%
+2026-06-10 12:08:19,006 INFO a2dp_bridge: AVRCP target absolute volume=115 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:19,009 INFO ams_client: AMS raw notification: 000200302e383435373135
+2026-06-10 12:08:19,010 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=85%
+2026-06-10 12:08:19,060 INFO ams_client: AMS raw notification: 000200302e38353138363031
+2026-06-10 12:08:19,061 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=85%
+2026-06-10 12:08:19,088 INFO ams_client: AMS raw notification: 000200302e38353539393631
+2026-06-10 12:08:19,089 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=86%
+2026-06-10 12:08:19,113 INFO ams_client: AMS raw notification: 000200302e38363131313338
+2026-06-10 12:08:19,113 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=86%
+2026-06-10 12:08:19,141 INFO ams_client: AMS raw notification: 000200302e38363632383239
+2026-06-10 12:08:19,141 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=87%
+2026-06-10 12:08:19,244 INFO ams_client: AMS raw notification: 000200302e38373033373237
+2026-06-10 12:08:19,244 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=87%
+2026-06-10 12:08:19,270 INFO ams_client: AMS raw notification: 000200302e38373435303735
+2026-06-10 12:08:19,271 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [129/873s] vol=87%
+2026-06-10 12:08:19,349 INFO ams_client: AMS raw notification: 000200302e38373735363933
+2026-06-10 12:08:19,349 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=88%
+2026-06-10 12:08:19,375 INFO ams_client: AMS raw notification: 000200302e38373936333635
+2026-06-10 12:08:19,376 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=88%
+2026-06-10 12:08:19,402 INFO ams_client: AMS raw notification: 000200302e38383237303335
+2026-06-10 12:08:19,402 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=88%
+2026-06-10 12:08:19,428 INFO ams_client: AMS raw notification: 000200302e38383538303339
+2026-06-10 12:08:19,428 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=89%
+2026-06-10 12:08:19,454 INFO ams_client: AMS raw notification: 000200302e38383738343231
+2026-06-10 12:08:19,454 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=89%
+2026-06-10 12:08:19,480 INFO ams_client: AMS raw notification: 000200302e38393039343232
+2026-06-10 12:08:19,481 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=89%
+2026-06-10 12:08:19,506 INFO ams_client: AMS raw notification: 000200302e38393238353136
+2026-06-10 12:08:19,507 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=89%
+2026-06-10 12:08:19,611 INFO ams_client: AMS raw notification: 000200302e38393439313735
+2026-06-10 12:08:19,612 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=89%
+2026-06-10 12:08:19,638 INFO ams_client: AMS raw notification: 000200302e38393639383334
+2026-06-10 12:08:19,639 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=90%
+2026-06-10 12:08:19,664 INFO ams_client: AMS raw notification: 000200302e38393930343933
+2026-06-10 12:08:19,664 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=90%
+2026-06-10 12:08:19,691 INFO ams_client: AMS raw notification: 000200302e39303131313532
+2026-06-10 12:08:19,692 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=90%
+2026-06-10 12:08:19,795 INFO ams_client: AMS raw notification: 000200302e39303231343831
+2026-06-10 12:08:19,796 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=90%
+2026-06-10 12:08:19,822 INFO ams_client: AMS raw notification: 000200302e39303331383131
+2026-06-10 12:08:19,822 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=90%
+2026-06-10 12:08:19,848 INFO ams_client: AMS raw notification: 000200302e393035323437
+2026-06-10 12:08:19,848 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=91%
+2026-06-10 12:08:19,874 INFO ams_client: AMS raw notification: 000200302e39303632373939
+2026-06-10 12:08:19,874 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=91%
+2026-06-10 12:08:19,900 INFO ams_client: AMS raw notification: 000200302e39303733313239
+2026-06-10 12:08:19,901 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=91%
+2026-06-10 12:08:19,926 INFO ams_client: AMS raw notification: 000200302e39303833343538
+2026-06-10 12:08:19,927 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=91%
+2026-06-10 12:08:19,953 INFO ams_client: AMS raw notification: 000200302e39303933373838
+2026-06-10 12:08:19,953 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=91%
+2026-06-10 12:08:19,979 INFO ams_client: AMS raw notification: 000200302e39313034313138
+2026-06-10 12:08:19,979 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=91%
+2026-06-10 12:08:20,005 INFO ams_client: AMS raw notification: 000200302e38313130323336
+2026-06-10 12:08:20,006 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [130/873s] vol=81%
+2026-06-10 12:08:20,833 INFO a2dp_bridge: AVRCP target absolute volume=103 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,848 INFO a2dp_bridge: AVRCP target absolute volume=104 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,850 INFO a2dp_bridge: AVRCP target absolute volume=105 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,873 INFO ams_client: AMS raw notification: 000200302e38323137313231
+2026-06-10 12:08:20,874 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=82%
+2026-06-10 12:08:20,878 INFO a2dp_bridge: AVRCP target absolute volume=105 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,883 INFO a2dp_bridge: AVRCP target absolute volume=106 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,885 INFO a2dp_bridge: AVRCP target absolute volume=107 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,898 INFO ams_client: AMS raw notification: 000200302e38323831323532
+2026-06-10 12:08:20,898 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=83%
+2026-06-10 12:08:20,904 INFO a2dp_bridge: AVRCP target absolute volume=108 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,909 INFO a2dp_bridge: AVRCP target absolute volume=109 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,912 INFO a2dp_bridge: AVRCP target absolute volume=109 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,913 INFO a2dp_bridge: AVRCP target absolute volume=110 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,927 INFO a2dp_bridge: AVRCP target absolute volume=111 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,930 INFO a2dp_bridge: AVRCP target absolute volume=111 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,931 INFO a2dp_bridge: AVRCP target absolute volume=112 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,935 INFO a2dp_bridge: AVRCP target absolute volume=112 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,936 INFO a2dp_bridge: AVRCP target absolute volume=113 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,955 INFO a2dp_bridge: AVRCP target absolute volume=113 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,956 INFO a2dp_bridge: AVRCP target absolute volume=114 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,958 INFO a2dp_bridge: AVRCP target absolute volume=114 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,964 INFO a2dp_bridge: AVRCP target absolute volume=114 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,976 INFO ams_client: AMS raw notification: 000200302e38333434353035
+2026-06-10 12:08:20,977 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=83%
+2026-06-10 12:08:20,984 INFO a2dp_bridge: AVRCP target absolute volume=115 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,985 INFO a2dp_bridge: AVRCP target absolute volume=115 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,988 INFO a2dp_bridge: AVRCP target absolute volume=115 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:20,991 INFO a2dp_bridge: AVRCP target absolute volume=116 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,003 INFO ams_client: AMS raw notification: 000200302e38343038333936
+2026-06-10 12:08:21,003 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=84%
+2026-06-10 12:08:21,010 INFO a2dp_bridge: AVRCP target absolute volume=116 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,014 INFO a2dp_bridge: AVRCP target absolute volume=117 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,017 INFO a2dp_bridge: AVRCP target absolute volume=117 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,029 INFO ams_client: AMS raw notification: 000200302e38343630333935
+2026-06-10 12:08:21,029 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=85%
+2026-06-10 12:08:21,032 INFO a2dp_bridge: AVRCP target absolute volume=117 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,033 INFO a2dp_bridge: AVRCP target absolute volume=117 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,043 INFO a2dp_bridge: AVRCP target absolute volume=118 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,055 INFO ams_client: AMS raw notification: 000200302e383532343036
+2026-06-10 12:08:21,056 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=85%
+2026-06-10 12:08:21,095 INFO a2dp_bridge: AVRCP target absolute volume=118 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,108 INFO ams_client: AMS raw notification: 000200302e38353836313538
+2026-06-10 12:08:21,108 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=86%
+2026-06-10 12:08:21,112 INFO a2dp_bridge: AVRCP target absolute volume=118 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,120 INFO a2dp_bridge: AVRCP target absolute volume=118 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,141 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1000 dropped=0 bytes=574 sent_to_speaker=True
+2026-06-10 12:08:21,142 INFO a2dp_bridge: AVRCP target absolute volume=118 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,145 INFO a2dp_bridge: AVRCP target absolute volume=118 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,149 INFO a2dp_bridge: AVRCP target absolute volume=119 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,150 INFO a2dp_bridge: AVRCP target absolute volume=119 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,170 INFO a2dp_bridge: AVRCP target absolute volume=119 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,174 INFO a2dp_bridge: AVRCP target absolute volume=119 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,175 INFO a2dp_bridge: AVRCP target absolute volume=119 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,176 INFO a2dp_bridge: AVRCP target absolute volume=120 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,180 INFO a2dp_bridge: AVRCP target absolute volume=120 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,186 INFO a2dp_bridge: AVRCP target absolute volume=121 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,207 INFO a2dp_bridge: AVRCP target absolute volume=121 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,208 INFO a2dp_bridge: AVRCP target absolute volume=122 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,210 INFO a2dp_bridge: AVRCP target absolute volume=122 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,215 INFO ams_client: AMS raw notification: 000200302e38363439363134
+2026-06-10 12:08:21,215 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=86%
+2026-06-10 12:08:21,220 INFO a2dp_bridge: AVRCP target absolute volume=123 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,221 INFO a2dp_bridge: AVRCP target absolute volume=124 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,222 INFO a2dp_bridge: AVRCP target absolute volume=125 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,228 INFO a2dp_bridge: AVRCP target absolute volume=127 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:21,265 INFO ams_client: AMS raw notification: 000200302e38363930313737
+2026-06-10 12:08:21,266 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [131/873s] vol=87%
+2026-06-10 12:08:21,291 INFO ams_client: AMS raw notification: 000200302e38373533343433
+2026-06-10 12:08:21,292 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=88%
+2026-06-10 12:08:21,318 INFO ams_client: AMS raw notification: 000200302e383830343239
+2026-06-10 12:08:21,318 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=88%
+2026-06-10 12:08:21,344 INFO ams_client: AMS raw notification: 000200302e383835363837
+2026-06-10 12:08:21,344 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=89%
+2026-06-10 12:08:21,370 INFO ams_client: AMS raw notification: 000200302e383839373034
+2026-06-10 12:08:21,371 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=89%
+2026-06-10 12:08:21,396 INFO ams_client: AMS raw notification: 000200302e38393238353132
+2026-06-10 12:08:21,397 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=89%
+2026-06-10 12:08:21,423 INFO ams_client: AMS raw notification: 000200302e38393538313831
+2026-06-10 12:08:21,423 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=90%
+2026-06-10 12:08:21,451 INFO ams_client: AMS raw notification: 000200302e38393839353836
+2026-06-10 12:08:21,451 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=90%
+2026-06-10 12:08:21,475 INFO ams_client: AMS raw notification: 000200302e39303139323933
+2026-06-10 12:08:21,476 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=90%
+2026-06-10 12:08:21,501 INFO ams_client: AMS raw notification: 000200302e39303430313931
+2026-06-10 12:08:21,502 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=90%
+2026-06-10 12:08:21,528 INFO ams_client: AMS raw notification: 000200302e39303639393733
+2026-06-10 12:08:21,528 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=91%
+2026-06-10 12:08:21,580 INFO ams_client: AMS raw notification: 000200302e39313031323638
+2026-06-10 12:08:21,581 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=91%
+2026-06-10 12:08:21,633 INFO ams_client: AMS raw notification: 000200302e39313331313136
+2026-06-10 12:08:21,633 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=91%
+2026-06-10 12:08:21,659 INFO ams_client: AMS raw notification: 000200302e39313632333638
+2026-06-10 12:08:21,659 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=92%
+2026-06-10 12:08:21,685 INFO ams_client: AMS raw notification: 000200302e39313831383836
+2026-06-10 12:08:21,686 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=92%
+2026-06-10 12:08:21,712 INFO ams_client: AMS raw notification: 000200302e39323133303939
+2026-06-10 12:08:21,712 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=92%
+2026-06-10 12:08:21,738 INFO ams_client: AMS raw notification: 000200302e39323433313132
+2026-06-10 12:08:21,738 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=92%
+2026-06-10 12:08:21,764 INFO ams_client: AMS raw notification: 000200302e39323633383939
+2026-06-10 12:08:21,764 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=93%
+2026-06-10 12:08:21,790 INFO ams_client: AMS raw notification: 000200302e39323833363135
+2026-06-10 12:08:21,791 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=93%
+2026-06-10 12:08:21,843 INFO ams_client: AMS raw notification: 000200302e39333034333833
+2026-06-10 12:08:21,843 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=93%
+2026-06-10 12:08:21,869 INFO ams_client: AMS raw notification: 000200302e39333133383234
+2026-06-10 12:08:21,869 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=93%
+2026-06-10 12:08:21,896 INFO ams_client: AMS raw notification: 000200302e39333334353736
+2026-06-10 12:08:21,897 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=93%
+2026-06-10 12:08:21,921 INFO ams_client: AMS raw notification: 000200302e39333434313234
+2026-06-10 12:08:21,922 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=93%
+2026-06-10 12:08:21,948 INFO ams_client: AMS raw notification: 000200302e39333534343933
+2026-06-10 12:08:21,948 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:21,974 INFO ams_client: AMS raw notification: 000200302e39333634313432
+2026-06-10 12:08:21,974 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:22,000 INFO ams_client: AMS raw notification: 000200302e39333734353035
+2026-06-10 12:08:22,001 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:22,026 INFO ams_client: AMS raw notification: 000200302e39333934363033
+2026-06-10 12:08:22,027 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:22,053 INFO ams_client: AMS raw notification: 000200302e393430343936
+2026-06-10 12:08:22,053 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:22,079 INFO ams_client: AMS raw notification: 000200302e39343134373734
+2026-06-10 12:08:22,079 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:22,105 INFO ams_client: AMS raw notification: 000200302e39343435383335
+2026-06-10 12:08:22,106 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=94%
+2026-06-10 12:08:22,131 INFO ams_client: AMS raw notification: 000200302e393436363036
+2026-06-10 12:08:22,132 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=95%
+2026-06-10 12:08:22,158 INFO ams_client: AMS raw notification: 000200302e393439373131
+2026-06-10 12:08:22,158 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=95%
+2026-06-10 12:08:22,236 INFO ams_client: AMS raw notification: 000200302e39353338303738
+2026-06-10 12:08:22,237 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=95%
+2026-06-10 12:08:22,263 INFO ams_client: AMS raw notification: 000200302e39353639313138
+2026-06-10 12:08:22,263 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=96%
+2026-06-10 12:08:22,289 INFO ams_client: AMS raw notification: 000200302e39363230343634
+2026-06-10 12:08:22,289 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [132/873s] vol=96%
+2026-06-10 12:08:22,317 INFO ams_client: AMS raw notification: 000200302e39363631383431
+2026-06-10 12:08:22,317 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [133/873s] vol=97%
+2026-06-10 12:08:22,342 INFO ams_client: AMS raw notification: 000200302e39373133323133
+2026-06-10 12:08:22,342 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [133/873s] vol=97%
+2026-06-10 12:08:22,420 INFO ams_client: AMS raw notification: 000200302e39373835363035
+2026-06-10 12:08:22,421 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [133/873s] vol=98%
+2026-06-10 12:08:22,473 INFO ams_client: AMS raw notification: 000200302e39383738333535
+2026-06-10 12:08:22,473 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [133/873s] vol=99%
+2026-06-10 12:08:22,499 INFO ams_client: AMS raw notification: 00020031
+2026-06-10 12:08:22,499 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [133/873s] vol=100%
+2026-06-10 12:08:23,255 INFO a2dp_bridge: AVRCP target absolute volume=123 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,259 INFO a2dp_bridge: AVRCP target absolute volume=120 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,273 INFO a2dp_bridge: AVRCP target absolute volume=117 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,274 INFO a2dp_bridge: AVRCP target absolute volume=115 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,295 INFO a2dp_bridge: AVRCP target absolute volume=112 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,315 INFO a2dp_bridge: AVRCP target absolute volume=109 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,317 INFO a2dp_bridge: AVRCP target absolute volume=106 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,327 INFO a2dp_bridge: AVRCP target absolute volume=104 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,332 INFO a2dp_bridge: AVRCP target absolute volume=101 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,334 INFO a2dp_bridge: AVRCP target absolute volume=99 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,358 INFO a2dp_bridge: AVRCP target absolute volume=96 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,359 INFO a2dp_bridge: AVRCP target absolute volume=94 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,361 INFO a2dp_bridge: AVRCP target absolute volume=91 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,373 INFO a2dp_bridge: AVRCP target absolute volume=88 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,379 INFO a2dp_bridge: AVRCP target absolute volume=85 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,391 INFO ams_client: AMS raw notification: 000200302e39353137313734
+2026-06-10 12:08:23,392 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=95%
+2026-06-10 12:08:23,393 INFO a2dp_bridge: AVRCP target absolute volume=82 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,399 INFO a2dp_bridge: AVRCP target absolute volume=79 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,403 INFO a2dp_bridge: AVRCP target absolute volume=76 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,412 INFO a2dp_bridge: AVRCP target absolute volume=74 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,414 INFO a2dp_bridge: AVRCP target absolute volume=71 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,415 INFO a2dp_bridge: AVRCP target absolute volume=69 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,418 INFO ams_client: AMS raw notification: 000200302e39323831313235
+2026-06-10 12:08:23,418 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=93%
+2026-06-10 12:08:23,444 INFO ams_client: AMS raw notification: 000200302e39303539343131
+2026-06-10 12:08:23,444 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=91%
+2026-06-10 12:08:23,470 INFO ams_client: AMS raw notification: 000200302e383834353634
+2026-06-10 12:08:23,471 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=88%
+2026-06-10 12:08:23,497 INFO ams_client: AMS raw notification: 000200302e38363335393738
+2026-06-10 12:08:23,497 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=86%
+2026-06-10 12:08:23,499 INFO a2dp_bridge: AVRCP target absolute volume=67 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,502 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,503 INFO a2dp_bridge: AVRCP target absolute volume=64 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,523 INFO ams_client: AMS raw notification: 000200302e383432323835
+2026-06-10 12:08:23,523 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=84%
+2026-06-10 12:08:23,537 INFO a2dp_bridge: AVRCP target absolute volume=62 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,542 INFO a2dp_bridge: AVRCP target absolute volume=61 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,564 INFO a2dp_bridge: AVRCP target absolute volume=59 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,568 INFO a2dp_bridge: AVRCP target absolute volume=57 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,574 INFO a2dp_bridge: AVRCP target absolute volume=55 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,575 INFO ams_client: AMS raw notification: 000200302e38323337333739
+2026-06-10 12:08:23,576 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=82%
+2026-06-10 12:08:23,593 INFO a2dp_bridge: AVRCP target absolute volume=54 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,594 INFO a2dp_bridge: AVRCP target absolute volume=52 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,597 INFO a2dp_bridge: AVRCP target absolute volume=50 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,598 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,599 INFO a2dp_bridge: AVRCP target absolute volume=48 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,610 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,615 INFO a2dp_bridge: AVRCP target absolute volume=46 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,630 INFO a2dp_bridge: AVRCP target absolute volume=45 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,642 INFO a2dp_bridge: AVRCP target absolute volume=44 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,652 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,654 INFO ams_client: AMS raw notification: 000200302e38303235303135
+2026-06-10 12:08:23,654 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=80%
+2026-06-10 12:08:23,670 INFO a2dp_bridge: AVRCP target absolute volume=43 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,677 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,678 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,680 INFO ams_client: AMS raw notification: 000200302e37383139393532
+2026-06-10 12:08:23,681 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=78%
+2026-06-10 12:08:23,685 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,694 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,700 INFO a2dp_bridge: AVRCP target absolute volume=41 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,710 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,711 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,720 INFO a2dp_bridge: AVRCP target absolute volume=39 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,725 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,728 INFO a2dp_bridge: AVRCP target absolute volume=38 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,729 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,735 INFO ams_client: AMS raw notification: 000200302e37363038323937
+2026-06-10 12:08:23,735 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=76%
+2026-06-10 12:08:23,740 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,741 INFO a2dp_bridge: AVRCP target absolute volume=36 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,742 INFO a2dp_bridge: AVRCP target absolute volume=35 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,743 INFO a2dp_bridge: AVRCP target absolute volume=35 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,759 INFO ams_client: AMS raw notification: 000200302e37343036303832
+2026-06-10 12:08:23,759 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=74%
+2026-06-10 12:08:23,785 INFO ams_client: AMS raw notification: 000200302e373138343635
+2026-06-10 12:08:23,786 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=72%
+2026-06-10 12:08:23,792 INFO a2dp_bridge: AVRCP target absolute volume=34 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,797 INFO a2dp_bridge: AVRCP target absolute volume=34 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,799 INFO a2dp_bridge: AVRCP target absolute volume=33 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,813 INFO ams_client: AMS raw notification: 000200302e36393630383833
+2026-06-10 12:08:23,813 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=70%
+2026-06-10 12:08:23,817 INFO a2dp_bridge: AVRCP target absolute volume=33 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,818 INFO a2dp_bridge: AVRCP target absolute volume=32 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,854 INFO a2dp_bridge: AVRCP target absolute volume=31 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,857 INFO a2dp_bridge: AVRCP target absolute volume=31 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,858 INFO a2dp_bridge: AVRCP target absolute volume=31 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,860 INFO a2dp_bridge: AVRCP target absolute volume=30 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:23,916 INFO ams_client: AMS raw notification: 000200302e36373139303136
+2026-06-10 12:08:23,917 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=67%
+2026-06-10 12:08:23,943 INFO ams_client: AMS raw notification: 000200302e36343835363038
+2026-06-10 12:08:23,943 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=65%
+2026-06-10 12:08:23,969 INFO ams_client: AMS raw notification: 000200302e36323534383132
+2026-06-10 12:08:23,969 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=63%
+2026-06-10 12:08:23,995 INFO ams_client: AMS raw notification: 000200302e36303332343536
+2026-06-10 12:08:23,996 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=60%
+2026-06-10 12:08:24,049 INFO ams_client: AMS raw notification: 000200302e35383333353535
+2026-06-10 12:08:24,049 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=58%
+2026-06-10 12:08:24,074 INFO ams_client: AMS raw notification: 000200302e35363533323432
+2026-06-10 12:08:24,074 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=57%
+2026-06-10 12:08:24,100 INFO ams_client: AMS raw notification: 000200302e353438363036
+2026-06-10 12:08:24,101 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=55%
+2026-06-10 12:08:24,153 INFO ams_client: AMS raw notification: 000200302e35333336393332
+2026-06-10 12:08:24,153 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=53%
+2026-06-10 12:08:24,179 INFO ams_client: AMS raw notification: 000200302e35323031333137
+2026-06-10 12:08:24,179 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=52%
+2026-06-10 12:08:24,205 INFO ams_client: AMS raw notification: 000200302e35303632323733
+2026-06-10 12:08:24,206 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=51%
+2026-06-10 12:08:24,231 INFO ams_client: AMS raw notification: 000200302e34393337323637
+2026-06-10 12:08:24,232 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=49%
+2026-06-10 12:08:24,258 INFO ams_client: AMS raw notification: 000200302e34383138363233
+2026-06-10 12:08:24,258 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=48%
+2026-06-10 12:08:24,284 INFO ams_client: AMS raw notification: 000200302e34363732393632
+2026-06-10 12:08:24,284 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [134/873s] vol=47%
+2026-06-10 12:08:24,310 INFO ams_client: AMS raw notification: 000200302e34353533383832
+2026-06-10 12:08:24,311 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=46%
+2026-06-10 12:08:24,336 INFO ams_client: AMS raw notification: 000200302e34343038333734
+2026-06-10 12:08:24,337 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=44%
+2026-06-10 12:08:24,363 INFO ams_client: AMS raw notification: 000200302e34323738343739
+2026-06-10 12:08:24,363 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=43%
+2026-06-10 12:08:24,389 INFO ams_client: AMS raw notification: 000200302e34313333313035
+2026-06-10 12:08:24,389 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=41%
+2026-06-10 12:08:24,468 INFO ams_client: AMS raw notification: 000200302e34303133313836
+2026-06-10 12:08:24,468 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=40%
+2026-06-10 12:08:24,494 INFO ams_client: AMS raw notification: 000200302e33383838363736
+2026-06-10 12:08:24,495 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=39%
+2026-06-10 12:08:24,546 INFO ams_client: AMS raw notification: 000200302e33373939343533
+2026-06-10 12:08:24,547 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=38%
+2026-06-10 12:08:24,573 INFO ams_client: AMS raw notification: 000200302e33373136353033
+2026-06-10 12:08:24,573 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=37%
+2026-06-10 12:08:24,599 INFO ams_client: AMS raw notification: 000200302e33363437353633
+2026-06-10 12:08:24,599 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=36%
+2026-06-10 12:08:24,625 INFO ams_client: AMS raw notification: 000200302e33353735303233
+2026-06-10 12:08:24,626 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=36%
+2026-06-10 12:08:24,651 INFO ams_client: AMS raw notification: 000200302e33353035363631
+2026-06-10 12:08:24,652 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=35%
+2026-06-10 12:08:24,678 INFO ams_client: AMS raw notification: 000200302e33343433353135
+2026-06-10 12:08:24,678 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=34%
+2026-06-10 12:08:24,704 INFO ams_client: AMS raw notification: 000200302e33333934343831
+2026-06-10 12:08:24,704 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=34%
+2026-06-10 12:08:24,730 INFO ams_client: AMS raw notification: 000200302e33333432373133
+2026-06-10 12:08:24,731 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=33%
+2026-06-10 12:08:24,809 INFO ams_client: AMS raw notification: 000200302e33333134303236
+2026-06-10 12:08:24,809 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=33%
+2026-06-10 12:08:24,835 INFO ams_client: AMS raw notification: 000200302e33323832393736
+2026-06-10 12:08:24,836 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=33%
+2026-06-10 12:08:24,861 INFO ams_client: AMS raw notification: 000200302e33323634333039
+2026-06-10 12:08:24,862 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=33%
+2026-06-10 12:08:24,888 INFO ams_client: AMS raw notification: 000200302e33323333323639
+2026-06-10 12:08:24,888 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=32%
+2026-06-10 12:08:24,940 INFO ams_client: AMS raw notification: 000200302e333230333937
+2026-06-10 12:08:24,941 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=32%
+2026-06-10 12:08:24,966 INFO ams_client: AMS raw notification: 000200302e33313732393339
+2026-06-10 12:08:24,967 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=32%
+2026-06-10 12:08:25,019 INFO ams_client: AMS raw notification: 000200302e33313132333731
+2026-06-10 12:08:25,019 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=31%
+2026-06-10 12:08:25,027 INFO a2dp_bridge: AVRCP target absolute volume=33 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,030 INFO a2dp_bridge: AVRCP target absolute volume=35 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,065 INFO a2dp_bridge: AVRCP target absolute volume=37 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,068 INFO a2dp_bridge: AVRCP target absolute volume=40 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,069 INFO a2dp_bridge: AVRCP target absolute volume=42 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,073 INFO ams_client: AMS raw notification: 000200302e33303630363632
+2026-06-10 12:08:25,073 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=31%
+2026-06-10 12:08:25,098 INFO ams_client: AMS raw notification: 000200302e33303130323431
+2026-06-10 12:08:25,098 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=30%
+2026-06-10 12:08:25,112 INFO a2dp_bridge: AVRCP target absolute volume=44 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,118 INFO a2dp_bridge: AVRCP target absolute volume=46 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,119 INFO a2dp_bridge: AVRCP target absolute volume=47 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,131 INFO a2dp_bridge: AVRCP target absolute volume=49 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,135 INFO a2dp_bridge: AVRCP target absolute volume=51 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,138 INFO a2dp_bridge: AVRCP target absolute volume=53 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,139 INFO a2dp_bridge: AVRCP target absolute volume=54 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,154 INFO a2dp_bridge: AVRCP target absolute volume=55 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,176 INFO ams_client: AMS raw notification: 000200302e32393538353432
+2026-06-10 12:08:25,177 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=30%
+2026-06-10 12:08:25,189 INFO a2dp_bridge: AVRCP target absolute volume=57 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,191 INFO a2dp_bridge: AVRCP target absolute volume=58 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,198 INFO a2dp_bridge: AVRCP target absolute volume=59 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,200 INFO a2dp_bridge: AVRCP target absolute volume=61 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,204 INFO ams_client: AMS raw notification: 000200302e32393138323838
+2026-06-10 12:08:25,204 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=29%
+2026-06-10 12:08:25,216 INFO a2dp_bridge: AVRCP target absolute volume=62 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,218 INFO a2dp_bridge: AVRCP target absolute volume=63 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,223 INFO a2dp_bridge: AVRCP target absolute volume=65 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,232 INFO a2dp_bridge: AVRCP target absolute volume=66 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,234 INFO a2dp_bridge: AVRCP target absolute volume=68 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,235 INFO a2dp_bridge: AVRCP target absolute volume=69 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,237 INFO a2dp_bridge: AVRCP target absolute volume=71 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,255 INFO ams_client: AMS raw notification: 000200302e32383636353936
+2026-06-10 12:08:25,256 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=29%
+2026-06-10 12:08:25,282 INFO ams_client: AMS raw notification: 000200302e32383236313931
+2026-06-10 12:08:25,282 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [135/873s] vol=28%
+2026-06-10 12:08:25,304 INFO a2dp_bridge: AVRCP target absolute volume=72 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,305 INFO a2dp_bridge: AVRCP target absolute volume=73 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,308 INFO ams_client: AMS raw notification: 000200302e32373834383433
+2026-06-10 12:08:25,308 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=28%
+2026-06-10 12:08:25,310 INFO a2dp_bridge: AVRCP target absolute volume=74 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,341 INFO a2dp_bridge: AVRCP target absolute volume=75 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,345 INFO a2dp_bridge: AVRCP target absolute volume=76 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,361 INFO ams_client: AMS raw notification: 000200302e32373434333036
+2026-06-10 12:08:25,362 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=27%
+2026-06-10 12:08:25,370 INFO a2dp_bridge: AVRCP target absolute volume=76 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,373 INFO a2dp_bridge: AVRCP target absolute volume=77 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,374 INFO a2dp_bridge: AVRCP target absolute volume=77 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,376 INFO a2dp_bridge: AVRCP target absolute volume=77 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,387 INFO ams_client: AMS raw notification: 000200302e32373032393633
+2026-06-10 12:08:25,387 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=27%
+2026-06-10 12:08:25,390 INFO a2dp_bridge: AVRCP target absolute volume=78 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,391 INFO a2dp_bridge: AVRCP target absolute volume=78 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,392 INFO a2dp_bridge: AVRCP target absolute volume=78 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,393 INFO a2dp_bridge: AVRCP target absolute volume=79 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,394 INFO a2dp_bridge: AVRCP target absolute volume=79 peer=10:A2:D3:83:82:50
+2026-06-10 12:08:25,439 INFO ams_client: AMS raw notification: 000200302e32363531393738
+2026-06-10 12:08:25,439 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=27%
+2026-06-10 12:08:25,467 INFO ams_client: AMS raw notification: 000200302e32363030333034
+2026-06-10 12:08:25,467 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=26%
+2026-06-10 12:08:25,493 INFO ams_client: AMS raw notification: 000200302e32353539353539
+2026-06-10 12:08:25,493 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=26%
+2026-06-10 12:08:25,570 INFO ams_client: AMS raw notification: 000200302e32353138323233
+2026-06-10 12:08:25,571 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=25%
+2026-06-10 12:08:25,596 INFO ams_client: AMS raw notification: 000200302e32343830313136
+2026-06-10 12:08:25,597 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=25%
+2026-06-10 12:08:25,624 INFO ams_client: AMS raw notification: 000200302e32343539343537
+2026-06-10 12:08:25,624 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=25%
+2026-06-10 12:08:25,649 INFO ams_client: AMS raw notification: 000200302e32343338373938
+2026-06-10 12:08:25,649 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=24%
+2026-06-10 12:08:25,754 INFO ams_client: AMS raw notification: 000200302e32393735323731
+2026-06-10 12:08:25,754 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=30%
+2026-06-10 12:08:25,780 INFO ams_client: AMS raw notification: 000200302e33333135323536
+2026-06-10 12:08:25,781 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=33%
+2026-06-10 12:08:25,806 INFO ams_client: AMS raw notification: 000200302e333437313731
+2026-06-10 12:08:25,807 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=35%
+2026-06-10 12:08:25,835 INFO ams_client: AMS raw notification: 000200302e33363432303838
+2026-06-10 12:08:25,835 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=36%
+2026-06-10 12:08:25,859 INFO ams_client: AMS raw notification: 000200302e33373735373637
+2026-06-10 12:08:25,859 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=38%
+2026-06-10 12:08:25,885 INFO ams_client: AMS raw notification: 000200302e33393234333139
+2026-06-10 12:08:25,886 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=39%
+2026-06-10 12:08:25,911 INFO ams_client: AMS raw notification: 000200302e34303436333535
+2026-06-10 12:08:25,912 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=40%
+2026-06-10 12:08:25,964 INFO ams_client: AMS raw notification: 000200302e34313733323638
+2026-06-10 12:08:25,964 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=42%
+2026-06-10 12:08:25,990 INFO ams_client: AMS raw notification: 000200302e34323834303635
+2026-06-10 12:08:25,991 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=43%
+2026-06-10 12:08:26,018 INFO ams_client: AMS raw notification: 000200302e34343030303533
+2026-06-10 12:08:26,019 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=44%
+2026-06-10 12:08:26,097 INFO ams_client: AMS raw notification: 000200302e34343939393239
+2026-06-10 12:08:26,097 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=45%
+2026-06-10 12:08:26,174 INFO ams_client: AMS raw notification: 000200302e34363135363034
+2026-06-10 12:08:26,174 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=46%
+2026-06-10 12:08:26,200 INFO ams_client: AMS raw notification: 000200302e34373135323835
+2026-06-10 12:08:26,201 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=47%
+2026-06-10 12:08:26,226 INFO ams_client: AMS raw notification: 000200302e34383230313932
+2026-06-10 12:08:26,227 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=48%
+2026-06-10 12:08:26,254 INFO ams_client: AMS raw notification: 000200302e34393139383231
+2026-06-10 12:08:26,254 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=49%
+2026-06-10 12:08:26,279 INFO ams_client: AMS raw notification: 000200302e35303334393734
+2026-06-10 12:08:26,279 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [136/873s] vol=50%
+2026-06-10 12:08:26,305 INFO ams_client: AMS raw notification: 000200302e35313435303732
+2026-06-10 12:08:26,306 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=51%
+2026-06-10 12:08:26,332 INFO ams_client: AMS raw notification: 000200302e353236303031
+2026-06-10 12:08:26,333 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=53%
+2026-06-10 12:08:26,358 INFO ams_client: AMS raw notification: 000200302e35333830353939
+2026-06-10 12:08:26,358 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=54%
+2026-06-10 12:08:26,384 INFO ams_client: AMS raw notification: 000200302e35343834393138
+2026-06-10 12:08:26,385 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=55%
+2026-06-10 12:08:26,437 INFO ams_client: AMS raw notification: 000200302e35353935313933
+2026-06-10 12:08:26,437 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=56%
+2026-06-10 12:08:26,463 INFO ams_client: AMS raw notification: 000200302e35363939333635
+2026-06-10 12:08:26,463 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=57%
+2026-06-10 12:08:26,489 INFO ams_client: AMS raw notification: 000200302e35373839303035
+2026-06-10 12:08:26,489 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=58%
+2026-06-10 12:08:26,515 INFO ams_client: AMS raw notification: 000200302e35383631383335
+2026-06-10 12:08:26,516 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=59%
+2026-06-10 12:08:26,543 INFO ams_client: AMS raw notification: 000200302e35393431333539
+2026-06-10 12:08:26,543 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=59%
+2026-06-10 12:08:26,568 INFO ams_client: AMS raw notification: 000200302e36303033373139
+2026-06-10 12:08:26,568 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=60%
+2026-06-10 12:08:26,594 INFO ams_client: AMS raw notification: 000200302e363035323339
+2026-06-10 12:08:26,594 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=61%
+2026-06-10 12:08:26,778 INFO ams_client: AMS raw notification: 000200302e36303833353432
+2026-06-10 12:08:26,778 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=61%
+2026-06-10 12:08:26,804 INFO ams_client: AMS raw notification: 000200302e36313131383137
+2026-06-10 12:08:26,804 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=61%
+2026-06-10 12:08:26,856 INFO ams_client: AMS raw notification: 000200302e36313332353639
+2026-06-10 12:08:26,857 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=61%
+2026-06-10 12:08:26,883 INFO ams_client: AMS raw notification: 000200302e363135303833
+2026-06-10 12:08:26,883 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:26,909 INFO ams_client: AMS raw notification: 000200302e36313731353638
+2026-06-10 12:08:26,909 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:26,935 INFO ams_client: AMS raw notification: 000200302e36313739373932
+2026-06-10 12:08:26,936 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:26,949 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1250 dropped=0 bytes=539 sent_to_speaker=True
+2026-06-10 12:08:26,962 INFO ams_client: AMS raw notification: 000200302e36313930313535
+2026-06-10 12:08:26,962 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:26,988 INFO ams_client: AMS raw notification: 000200302e36313938363738
+2026-06-10 12:08:26,988 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:27,066 INFO ams_client: AMS raw notification: 000200302e36323039303336
+2026-06-10 12:08:27,067 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:27,120 INFO ams_client: AMS raw notification: 000200302e36323137383137
+2026-06-10 12:08:27,121 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:27,145 INFO ams_client: AMS raw notification: 000200302e36323238313731
+2026-06-10 12:08:27,146 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:27,198 INFO ams_client: AMS raw notification: 000200302e36323334323333
+2026-06-10 12:08:27,198 INFO ams_client: State: ▶ Влияние музыкального обучения на когнитивное развитие подростков — СИНТЕТИК [137/873s] vol=62%
+2026-06-10 12:08:32,804 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1500 dropped=0 bytes=568 sent_to_speaker=True
+2026-06-10 12:08:38,550 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=1750 dropped=0 bytes=552 sent_to_speaker=True
+2026-06-10 12:08:44,361 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2000 dropped=0 bytes=549 sent_to_speaker=True
+2026-06-10 12:08:50,154 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2250 dropped=0 bytes=560 sent_to_speaker=True
+2026-06-10 12:08:55,991 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2500 dropped=0 bytes=718 sent_to_speaker=True
+2026-06-10 12:09:01,763 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=2750 dropped=0 bytes=547 sent_to_speaker=True
+2026-06-10 12:09:07,566 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3000 dropped=0 bytes=527 sent_to_speaker=True
+2026-06-10 12:09:13,404 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3250 dropped=0 bytes=689 sent_to_speaker=True
+2026-06-10 12:09:19,211 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3500 dropped=0 bytes=552 sent_to_speaker=True
+2026-06-10 12:09:25,002 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=3750 dropped=0 bytes=547 sent_to_speaker=True
+2026-06-10 12:09:30,801 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4000 dropped=0 bytes=550 sent_to_speaker=True
+2026-06-10 12:09:36,597 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4250 dropped=0 bytes=541 sent_to_speaker=True
+2026-06-10 12:09:42,405 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4500 dropped=0 bytes=699 sent_to_speaker=True
+2026-06-10 12:09:48,200 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=4750 dropped=0 bytes=688 sent_to_speaker=True
+2026-06-10 12:09:54,055 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=5000 dropped=0 bytes=691 sent_to_speaker=True
+2026-06-10 12:09:59,806 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=5250 dropped=0 bytes=532 sent_to_speaker=True
+2026-06-10 12:10:05,635 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=5500 dropped=0 bytes=710 sent_to_speaker=True
