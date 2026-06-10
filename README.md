@@ -1,5 +1,8 @@
 # Car Thing Custom Linux
 
+> **АКТУАЛЬНОЕ СОСТОЯНИЕ (вход для агентов): [docs/SYSTEM-STATE-2026-06-10.md](docs/SYSTEM-STATE-2026-06-10.md)**
+> Запреты: [INVARIANTS.md](INVARIANTS.md). Тесты/доказательства: [docs/dual-mode-test-plan-2026-06-10.md](docs/dual-mode-test-plan-2026-06-10.md).
+
 This repository replaces the upstream userspace contract for Superbird with an explicit, minimal contract that we control.
 
 Current project stage:
