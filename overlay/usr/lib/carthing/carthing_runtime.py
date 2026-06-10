@@ -724,12 +724,34 @@ async def _complete_classic_first_ctkd(connection):
         logger.warning("classic-first CTKD failed for %s: %s", peer, e)
 
 
+_speaker_enroll_done = None
+
+
+def _speaker_enroll_gate():
+    """Гейт порядка старта (INVARIANTS п.3): канал к колонке — ДО потока iPhone.
+
+    Если задан CARTHING_PAIR_SPEAKER, classic-дозвон iPhone ждёт исхода enroll
+    колонки: иначе iOS переоткрывает A2DP (выбор в Control Center липкий),
+    радио занимается потоком и page до колонки даёт PAGE_TIMEOUT.
+    """
+    global _speaker_enroll_done
+    if _speaker_enroll_done is None:
+        _speaker_enroll_done = asyncio.Event()
+        if not os.environ.get("CARTHING_PAIR_SPEAKER", "").strip():
+            _speaker_enroll_done.set()
+    return _speaker_enroll_done
+
+
 async def _resume_bonded_classic_audio():
     """Reconnect the Classic audio/control profile without starting pairing."""
     if os.environ.get("CARTHING_CLASSIC_AUDIO_RECONNECT") != "1":
         return
     if transfer is None or getattr(transfer, "bridge", None) is None:
         return
+    try:
+        await asyncio.wait_for(_speaker_enroll_gate().wait(), timeout=90.0)
+    except asyncio.TimeoutError:
+        logger.warning("classic audio reconnect: speaker enroll gate timed out")
     address = _best_bonded_source_address()
     if not address:
         try:
@@ -764,18 +786,30 @@ async def _pair_speaker_once():
     Колонка должна быть в режиме сопряжения. Инквайри не нужен: адрес задаётся
     через CARTHING_PAIR_SPEAKER, пара идёт сразу transfer.pair_speaker().
     """
+    gate = _speaker_enroll_gate()
     address = os.environ.get("CARTHING_PAIR_SPEAKER", "").strip()
     if not address or transfer is None:
+        gate.set()
         return
-    # Дать iPhone-реконнекту (BLE + classic dial) занять радио и устаканиться.
-    await asyncio.sleep(12.0)
+    # Колонка парится ПЕРВОЙ (гейт держит classic-дозвон iPhone), но BLE-реконнект
+    # iPhone идёт сам — даём ему короткую фору и ретраим page с паузами.
     try:
-        logger.info("speaker enroll: pairing %s", address)
-        await transfer.pair_speaker(address)
-        status = getattr(transfer.bridge.state, "speaker_pairing_status", "")
-        logger.info("speaker enroll finished: %s status=%s", address, status)
-    except Exception as e:
-        logger.warning("speaker enroll failed for %s: %s", address, e)
+        delays = (4.0, 10.0, 20.0)
+        for attempt, delay in enumerate(delays, start=1):
+            await asyncio.sleep(delay)
+            try:
+                logger.info("speaker enroll: pairing %s (attempt %d/%d)",
+                            address, attempt, len(delays))
+                await transfer.pair_speaker(address)
+                status = getattr(transfer.bridge.state, "speaker_pairing_status", "")
+                logger.info("speaker enroll finished: %s status=%s", address, status)
+                if status != "error":
+                    return
+            except Exception as e:
+                logger.warning("speaker enroll attempt %d failed for %s: %s",
+                               attempt, address, e)
+    finally:
+        gate.set()
 
 
 async def main():

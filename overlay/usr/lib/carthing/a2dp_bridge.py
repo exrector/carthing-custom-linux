@@ -978,6 +978,12 @@ class A2DPBridge:
         try:
             uuids = await self.scan_device_capabilities(connection)
             cod = (candidate or {}).get("class_of_device")
+            if not uuids and not cod:
+                # Этот flow парит именно колонку (candidate.audio проверен выше), а
+                # SDP-скан мог не пробиться через занятое радио. Без этого минимума
+                # enrollment даёт role="device" → standby-цикл колонку НЕ звонит →
+                # Fosi после рестарта виснет в режиме пары.
+                uuids = {"audio_sink"}
             self.state.enroll_trusted_device(address, name=label,
                                              class_of_device=cod, service_uuids=uuids)
             self.logger.info("device card enriched: %s -> %s", address, sorted(uuids))
@@ -1243,7 +1249,10 @@ class A2DPBridge:
         def on_suspend():
             self.logger.info("A2DP_SOURCE_SUSPEND codec=%s", codec_name)
             self.source_stream_active = False
-            asyncio.create_task(self.stop_receiver_stream())
+            # ПАУЗА ≠ teardown маршрута (INVARIANTS п.3): канал к колонке держим
+            # открытым (opened+held). Teardown на suspend ломал resume: Fosi
+            # отвечал L2CAP 0x4 (no resources) на пересоздание AVDTP, труба
+            # после паузы не восстанавливалась. Закрываем только на CLOSE/ABORT.
             return original_suspend()
 
         def on_close():

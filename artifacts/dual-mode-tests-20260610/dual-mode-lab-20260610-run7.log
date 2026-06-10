@@ -1,0 +1,123 @@
+2026-06-10 02:57:46,831 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-10 02:57:46,890 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-10 02:57:46,891 INFO ble_transport: Opening transport hci-socket:0
+2026-06-10 02:57:46,911 INFO accessory_orchestrator: dual-mode host enabled: LE + Classic + simultaneous + SMP/CTKD
+2026-06-10 02:57:48,440 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-10 02:57:48,446 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-10 02:57:48,447 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-10 02:57:48,450 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-10 02:57:48,477 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-10 02:57:48,478 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-10 02:57:48,482 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-10 02:57:48,483 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-10 02:57:48,483 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=1; AVCTP listening
+2026-06-10 02:57:48,485 INFO carthing_runtime: phase=ready
+2026-06-10 02:57:48,507 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:57:48,507 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:57:48,507 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-10 02:57:48,524 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-10 02:57:48,525 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:57:48,533 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-10 02:57:48,537 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:57:48,538 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-10 02:57:48,541 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:57:48,542 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:57:48,542 INFO carthing_runtime: apply_visibility done
+2026-06-10 02:57:48,542 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-10 02:57:48,543 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-10 02:57:48,547 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-10 02:57:48,555 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:57:48,556 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:57:48,821 INFO carthing_runtime: AMS start (encryption)
+2026-06-10 02:57:48,822 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 02:57:49,346 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-10 02:57:49,450 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-10 02:57:49,477 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-10 02:57:49,503 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'Repeat', 'Shuffle', 'SkipFwd', 'SkipBack', 'Like', 'Dislike']
+2026-06-10 02:57:49,582 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-10 02:57:49,635 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-10 02:57:49,660 INFO ams_client: AMS raw notification: 020000d094d0a0d095d092d09dd09859
+2026-06-10 02:57:49,661 INFO ams_client: State: ⏸  — ДРЕВНИY [0/0s] vol=0%
+2026-06-10 02:57:49,687 INFO ams_client: AMS raw notification: 0203003330342e313438
+2026-06-10 02:57:49,687 INFO ams_client: State: ⏸  — ДРЕВНИY [0/304s] vol=0%
+2026-06-10 02:57:49,713 INFO ams_client: AMS raw notification: 020200d180d183d181d181d0bad0b8d0b9204472756d20616e642042617373
+2026-06-10 02:57:49,714 INFO ams_client: State: ⏸ русский Drum and Bass — ДРЕВНИY [0/304s] vol=0%
+2026-06-10 02:57:49,740 INFO ams_client: AMS raw notification: 020100d180d183d181d181d0bad0b8d0b9204472756d20616e642042617373
+2026-06-10 02:57:49,740 INFO ams_client: State: ⏸ русский Drum and Bass — ДРЕВНИY [0/304s] vol=0%
+2026-06-10 02:57:49,765 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-10 02:57:49,766 INFO ams_client: AMS: ready
+2026-06-10 02:57:49,766 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-10 02:57:49,792 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-10 02:57:49,792 INFO ams_client: AMS player: Музыка
+2026-06-10 02:57:49,792 INFO ams_client: State: ⏸ русский Drum and Bass — ДРЕВНИY [0/304s] vol=0%
+2026-06-10 02:57:49,844 INFO ams_client: AMS raw notification: 000100302c302e302c3135322e363836
+2026-06-10 02:57:49,845 INFO ams_client: State: ⏸ русский Drum and Bass — ДРЕВНИY [153/304s] vol=0%
+2026-06-10 02:57:49,871 INFO ams_client: AMS raw notification: 000200302e34393734383836
+2026-06-10 02:57:49,871 INFO ams_client: State: ⏸ русский Drum and Bass — ДРЕВНИY [153/304s] vol=50%
+2026-06-10 02:57:50,055 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-10 02:57:50,182 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-10 02:57:50,339 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-10 02:57:50,340 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-10 02:57:50,392 INFO ancs_client: ANCS: +#29 [Other]
+2026-06-10 02:57:50,497 INFO ancs_client: ANCS: requested attrs for #29 (16 bytes)
+2026-06-10 02:57:50,551 INFO ancs_client: ANCS detail: +#29 [Other] com.apple.podcasts: СИНТЕТИК — Доступны 3 новых выпуска.
+2026-06-10 02:57:50,734 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-10 02:57:50,892 INFO cts_client: CTS: 2026-06-10 02:57:50 (adjust=0x02)
+2026-06-10 02:57:50,871 INFO cts_client: CTS: system clock set to Wed Jun 10 02:57:50 2026
+2026-06-10 02:57:51,018 INFO cts_client: CTS: subscribed for time updates
+2026-06-10 02:57:51,028 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:57:51,028 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:57:51,515 INFO carthing_runtime: classic audio reconnect: dialing 10:A2:D3:83:82:50 (attempt 1/3)
+2026-06-10 02:57:51,516 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-10 02:57:52,567 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-10 02:57:52,568 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-10 02:57:52,575 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-10 02:57:52,678 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-10 02:57:52,681 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-10 02:57:52,681 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-10 02:57:52,911 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-10 02:57:52,986 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-10 02:57:52,986 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-10 02:57:52,987 INFO carthing_runtime: classic audio reconnect ready: 10:A2:D3:83:82:50
+2026-06-10 02:57:52,987 INFO a2dp_bridge: AVRCP session started; local target supports Absolute Volume notifications
+2026-06-10 02:57:53,000 INFO a2dp_bridge: AVRCP source supported events: ['PLAYBACK_STATUS_CHANGED', 'TRACK_CHANGED', 'PLAYER_APPLICATION_SETTING_CHANGED', 'NOW_PLAYING_CONTENT_CHANGED', 'AVAILABLE_PLAYERS_CHANGED', 'ADDRESSED_PLAYER_CHANGED', 'UIDS_CHANGED']
+2026-06-10 02:57:53,035 INFO a2dp_bridge: AVRCP source playback-status=2
+2026-06-10 02:58:00,415 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-10 02:58:00,416 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-10 02:58:00,417 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-10 02:58:00,417 INFO a2dp_bridge: A2DP source endpoint profile=AAC+SBC
+2026-06-10 02:58:00,517 INFO carthing_runtime: speaker enroll: pairing C4:A9:B8:70:2F:E5
+2026-06-10 02:58:00,519 INFO a2dp_bridge: A2DP removed key for C4:A9:B8:70:2F:E5/P
+2026-06-10 02:58:00,520 INFO a2dp_bridge: A2DP speaker standby connect: C4:A9:B8:70:2F:E5
+2026-06-10 02:58:00,581 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-10 02:58:00,631 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-10 02:58:00,740 INFO a2dp_bridge: A2DP_SOURCE_RTP_OPEN codec=AAC
+2026-06-10 02:58:00,914 INFO ams_client: AMS raw notification: 000200302e3035323739343838
+2026-06-10 02:58:00,914 INFO ams_client: State: ⏸ русский Drum and Bass — ДРЕВНИY [153/304s] vol=5%
+2026-06-10 02:58:02,228 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-10 02:58:08,209 WARNING transfer_service: speaker pair failed: ConnectionError(hci/PAGE_TIMEOUT_ERROR [0x4])
+2026-06-10 02:58:08,210 INFO carthing_runtime: speaker enroll finished: C4:A9:B8:70:2F:E5 status=error
+2026-06-10 02:58:57,088 INFO a2dp_bridge: AVRCP target absolute volume=6
+2026-06-10 02:58:57,093 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-10 02:58:57,098 INFO a2dp_bridge: A2DP_SOURCE_START codec=AAC
+2026-06-10 02:58:57,101 INFO a2dp_bridge: A2DP receiver not requested: no trusted speaker
+2026-06-10 02:58:57,163 INFO a2dp_bridge: AVRCP source playback-status=1
+2026-06-10 02:58:57,182 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1 bytes=54 sent_to_speaker=False
+2026-06-10 02:58:57,183 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2 bytes=54 sent_to_speaker=False
+2026-06-10 02:58:57,220 INFO ams_client: AMS raw notification: 000100312c312e302c3135312e373834
+2026-06-10 02:58:57,220 INFO ams_client: State: ▶ русский Drum and Bass — ДРЕВНИY [152/304s] vol=5%
+2026-06-10 02:58:57,222 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=3 bytes=54 sent_to_speaker=False
+2026-06-10 02:58:57,263 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=4 bytes=705 sent_to_speaker=False
+2026-06-10 02:58:57,280 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=5 bytes=743 sent_to_speaker=False
+2026-06-10 02:58:57,291 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=6 bytes=699 sent_to_speaker=False
+2026-06-10 02:58:57,331 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=7 bytes=724 sent_to_speaker=False
+2026-06-10 02:58:57,335 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=8 bytes=740 sent_to_speaker=False
+2026-06-10 02:58:57,359 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=9 bytes=734 sent_to_speaker=False
+2026-06-10 02:59:02,948 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=250 bytes=721 sent_to_speaker=False
+2026-06-10 02:59:08,756 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=500 bytes=694 sent_to_speaker=False
+2026-06-10 02:59:14,552 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=750 bytes=674 sent_to_speaker=False
+2026-06-10 02:59:20,356 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1000 bytes=706 sent_to_speaker=False
+2026-06-10 02:59:26,163 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1250 bytes=675 sent_to_speaker=False
+2026-06-10 02:59:32,002 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1500 bytes=675 sent_to_speaker=False
+2026-06-10 02:59:37,776 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=1750 bytes=685 sent_to_speaker=False
+2026-06-10 02:59:43,583 INFO a2dp_bridge: A2DP_BRIDGE_RTP forwarded=0 dropped=2000 bytes=678 sent_to_speaker=False
