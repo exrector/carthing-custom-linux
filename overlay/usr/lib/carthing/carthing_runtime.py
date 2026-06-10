@@ -756,6 +756,56 @@ async def _complete_classic_first_ctkd(connection):
         logger.warning("classic-first CTKD failed for %s: %s", peer, e)
 
 
+async def _route_command_watcher():
+    """Тумблер маршрута: `echo connect|disconnect > /run/carthing/route-cmd`.
+
+    Реализация модели владельца: Play Now — дефолт (BLE всегда), выход
+    Car Thing появляется в Control Center ТОЛЬКО по явной активации classic
+    с устройства. Файл — транспорт команды; физическая кнопка/GUI вешаются
+    на этот же механизм.
+    """
+    path = "/run/carthing/route-cmd"
+    while True:
+        await asyncio.sleep(1.0)
+        try:
+            with open(path) as f:
+                cmd = f.read().strip().lower()
+            os.unlink(path)
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+        if transfer is None or getattr(transfer, "bridge", None) is None:
+            continue
+        try:
+            if cmd in ("connect", "on", "1"):
+                address = _best_bonded_source_address()
+                if not address:
+                    for candidate, keys in reversed(
+                        await transfer.bridge.device.keystore.get_all()
+                    ):
+                        if (
+                            getattr(keys, "link_key", None) is not None
+                            and getattr(keys, "ltk", None) is not None
+                        ):
+                            address = candidate
+                            break
+                if not address:
+                    logger.warning("route toggle: no dual-mode bond to connect")
+                    continue
+                logger.info("route toggle: connect_source %s", address)
+                await transfer.bridge.connect_source(address)
+                logger.info("route toggle: classic audio up %s", address)
+            elif cmd in ("disconnect", "off", "0"):
+                logger.info("route toggle: disconnect_source")
+                await transfer.bridge.disconnect_source()
+                logger.info("route toggle: classic audio down")
+            else:
+                logger.warning("route toggle: unknown command %r", cmd)
+        except Exception as e:
+            logger.warning("route toggle %r failed: %s", cmd, e)
+
+
 _speaker_enroll_done = None
 
 
@@ -1012,6 +1062,7 @@ async def main():
     logger.info("apply_visibility done")
     asyncio.create_task(_resume_bonded_classic_audio())
     asyncio.create_task(_pair_speaker_once())
+    asyncio.create_task(_route_command_watcher())
     if os.environ.get("CAR_THING_AUTO_PAIRING") == "1":
         if gui is not None:
             gui.set_pairing_mode(True, role="source")
