@@ -576,10 +576,37 @@ class A2DPBridge:
             raise RuntimeError(f"receiver is not trusted as speaker: {address}")
 
         target_address = normalize_address(address)
+
+        # [CLAUDE 2026-06-11] RESUME held-сессии (пара к suspend-стопу выше): если
+        # AVDTP-сессия к этой колонке уже стоит — НЕ пересоздаём Protocol (Fosi
+        # ответит 0x4), а просто стартуем существующий stream.
+        if (self.receiver_protocol is not None and self.receiver_stream is not None
+                and normalize_address(self.receiver_address or "") == target_address):
+            try:
+                try:
+                    await asyncio.wait_for(self.receiver_stream.start(), timeout=self.connect_timeout)
+                except Exception as exc:
+                    # уже в STREAMING (двойной тап) — не ошибка
+                    self.logger.info("A2DP receiver resume start note: %s", error_text(exc))
+                self.receiver_rtp_channel = self.receiver_stream.rtp_channel
+                self.state.transfer_status = "connected"
+                self.state.set_connected_speaker(target_address)
+                self.on_state_change()
+                self.logger.info("A2DP_SPEAKER_STREAM_RESUMED address=%s", target_address)
+                return
+            except Exception as exc:
+                # held-сессия мертва — закрываем её сигнальный канал и идём полным путём
+                self.logger.warning("A2DP receiver resume failed (%s); full reconnect", error_text(exc))
+                await self._close_receiver_protocol()
+
         self.receiver_connecting_address = target_address
         self.receiver_last_error = ""
         self.state.transfer_status = "connecting"
         self.on_state_change()
+
+        if self.receiver_protocol is not None:
+            # смена колонки или полуживая сессия — освободить слот у пира
+            await self._close_receiver_protocol()
 
         connection = connection or await self.ensure_speaker_connection(target_address)
         self.logger.info("A2DP receiver ACL ready: %s", target_address)
@@ -1536,6 +1563,23 @@ class A2DPBridge:
             except Exception:
                 pass
 
+    async def _close_receiver_protocol(self):
+        """[CLAUDE 2026-06-11] Закрыть AVDTP-сигнальный канал ЯВНО перед пересозданием —
+        иначе у колонки остаётся занятый слот и новый connect ловит 0x4."""
+        proto = self.receiver_protocol
+        self.receiver_protocol = None
+        self.receiver_source = None
+        self.receiver_stream = None
+        self.receiver_rtp_channel = None
+        self.receiver_address = None
+        if proto is not None:
+            try:
+                channel = getattr(proto, "l2cap_channel", None)
+                if channel is not None:
+                    await channel.disconnect()
+            except Exception as exc:
+                self.logger.info("A2DP receiver signaling close ignored: %s", error_text(exc))
+
     async def on_receiver_disconnected(self, reason):
         self.logger.warning("A2DP receiver disconnected: reason=0x%02x", reason)
         self.receiver_connection = None
@@ -1552,22 +1596,22 @@ class A2DPBridge:
         self.schedule_receiver_retry(delay=1.5)
 
     async def stop_receiver_stream(self):
+        """[CLAUDE 2026-06-11] SUSPEND, НЕ teardown (INVARIANTS п.3). Раньше здесь
+        закрывался stream и обнулялся receiver_protocol БЕЗ закрытия сигнального
+        L2CAP-канала AVDTP -> у Fosi оставалась висящая сессия, повторный
+        Protocol.connect получал L2CAP 0x4 (no resources) ШТОРМОМ (ретрай 0.2с),
+        труба «включалась», но RTP к колонке не шёл. Теперь: глушим только
+        пересылку (rtp_channel=None -> гейт forward_packet) + AVDTP SUSPEND;
+        сессия остаётся held, возврат маршрута = stream.start() (resume).
+        Полный teardown — ТОЛЬКО при разрыве ACL (on_receiver_disconnected)."""
         stream = self.receiver_stream
+        self.receiver_rtp_channel = None      # гейт пересылки выключен
+        self.receiver_connecting_address = None
         if stream is not None:
             try:
-                await stream.stop()
+                await stream.stop()           # AVDTP SUSPEND — Fosi умеет resume
             except Exception as exc:
-                self.logger.info("A2DP receiver stream stop ignored: %s", error_text(exc))
-            try:
-                await stream.close()
-            except Exception as exc:
-                self.logger.info("A2DP receiver stream close ignored: %s", error_text(exc))
-        self.receiver_protocol = None
-        self.receiver_source = None
-        self.receiver_stream = None
-        self.receiver_rtp_channel = None
-        self.receiver_address = None
-        self.receiver_connecting_address = None
+                self.logger.info("A2DP receiver stream suspend ignored: %s", error_text(exc))
         self.state.transfer_status = "standby"
         self.on_state_change()
 
