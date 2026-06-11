@@ -1155,7 +1155,13 @@ async def main():
                 if gui is not None and not shade:
                     gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
                     if power is None or power.display_awake:
+                        _t0 = time.monotonic()
                         gui.render()
+                        _dt = (time.monotonic() - _t0) * 1000.0
+                        # [CLAUDE 2026-06-11] рендер живёт в ТОМ ЖЕ event-loop, что и
+                        # RTP-пересылка: кадр дольше ~60 мс = слышимая дыра в потоке
+                        if _dt > 60:
+                            logger.warning("render blocked loop for %.0f ms", _dt)
                 publish_due = (tick % PUBLISH_EVERY == 0) if power is None else power.should_publish()
                 if not shade and publish_due:
                     _on_publish()         # runtime-bt.json для дирижёра/sync
