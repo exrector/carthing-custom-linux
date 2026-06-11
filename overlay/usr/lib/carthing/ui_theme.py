@@ -198,6 +198,17 @@ def icon_dot(draw, cx, cy, r, color=FG):
     draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=color)
 
 
+def icon_route(draw, cx, cy, r, color=FG, width=3):
+    """[CLAUDE 2026-06-11] Маршрут/коннект: два узла, соединённые линией (patchbay).
+    Заменяет ▶ на кнопке активации маршрута (решение владельца: play там неуместен)."""
+    nr = max(3, int(r * 0.30))                      # радиус узлов
+    x0, y0 = cx - r * 0.62, cy + r * 0.55           # вход (низ-лево)
+    x1, y1 = cx + r * 0.62, cy - r * 0.55           # выход (верх-право)
+    draw.line([(x0, y0), (x1, y1)], fill=color, width=width)
+    draw.ellipse([x0 - nr, y0 - nr, x0 + nr, y0 + nr], fill=color)
+    draw.ellipse([x1 - nr, y1 - nr, x1 + nr, y1 + nr], fill=color)
+
+
 def icon_plus(draw, cx, cy, r, color=FG, width=3):
     """[CLAUDE 2026-06-03] Плюс (добавить/сопряжение)."""
     draw.line([(cx - r, cy), (cx + r, cy)], fill=color, width=width)

@@ -100,8 +100,10 @@ class GuiController:
             self.compositor.render()
             return
         if intent == "open_settings":               # [CLAUDE 2026-06-03] круглая кнопка в Routes -> Настройки
-            if self.compositor.active != SETTINGS:
-                self._push_view(self.compositor.active)
+            if self.compositor.active == SETTINGS:      # [CLAUDE 2026-06-11] повторно = закрыть
+                self._handle_back()
+                return
+            self._push_view(self.compositor.active)
             self.compositor.active = SETTINGS
             self.compositor.render()
             return
@@ -123,7 +125,7 @@ class GuiController:
                 self._push_view(SETTINGS)
             self.compositor.render()
             return
-        if intent == "screen_off_adjust":           # [CLAUDE] ± тайм-аут гашения -> применить + перерисовать
+        if intent in ("screen_off_adjust", "display_adjust"):   # [CLAUDE 2026-06-11] единые −/+
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
@@ -322,8 +324,11 @@ class GuiController:
             return
         if event == Input.SETTINGS:
             self._cancel_scroll_inertia()
-            if self.compositor.active != SETTINGS:
-                self._push_view(self.compositor.active)
+            if self.compositor.active == SETTINGS:
+                # [CLAUDE 2026-06-11] повторное нажатие кнопки настроек = закрыть их
+                self._handle_back()
+                return
+            self._push_view(self.compositor.active)
             self.compositor.active = SETTINGS
             self.compositor.render()
             return

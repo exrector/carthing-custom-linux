@@ -83,8 +83,11 @@ class Dispatcher:
             self._route_output_select(payload)
         elif intent == "route_activate":
             self.on_route_activate()
-        elif intent == "screen_off_adjust":      # [CLAUDE] ±тайм-аут гашения экрана
+        elif intent == "screen_off_adjust":      # [CLAUDE] ±тайм-аут гашения экрана (legacy)
             self._adjust_off_timeout(payload)
+        elif intent == "display_adjust":         # [CLAUDE 2026-06-11] единый −/+ под-настроек
+            key, direction = payload
+            self._display_adjust(key, direction)
 
     # ── media ────────────────────────────────────────────────────────────────
     def _media(self, command):
@@ -131,21 +134,9 @@ class Dispatcher:
         elif key in ("sessions", "modes", "routes"):
             # [CLAUDE 2026-06-02] режимы удалены — пункт ведёт на маршрутный экран (ВХОД/ВЫХОД)
             self.state.active_desktop = self.state.ROUTER
-        elif key == "toggle_sleep":            # [CLAUDE] тумблер сна экрана
-            new = not bool(getattr(self.state, "sleep_on_idle", True))
-            self.state.sleep_on_idle = new     # оптимистично для UI
-            self.on_toggle_sleep(new)          # runtime: power.set_idle_sleep + settings.set
-        elif key == "brightness":              # [CLAUDE 2026-06-10] цикл яркости 25→50→75→100
-            self._cycle_brightness()
-        elif key == "toggle_theme":           # [CLAUDE 2026-06-11] dark <-> terminal (рестарт runtime)
-            cur = getattr(self.state, "ui_theme", "dark")
-            new = "terminal" if cur != "terminal" else "dark"
-            self.state.ui_theme = new          # оптимистично для UI
-            self.on_set_theme(new)             # runtime: settings.set + перезапуск
-        elif key == "toggle_notif_blink":      # [CLAUDE] тумблер моргания уведомлений
-            new = not bool(getattr(self.state, "notif_blink", True))
-            self.state.notif_blink = new       # оптимистично для UI (render читает сразу)
-            self.on_toggle_notif_blink(new)    # runtime: settings.set (персист)
+        elif key in ("brightness", "theme", "sleep", "off_timeout", "notif_blink"):
+            # [CLAUDE 2026-06-11] press энкодера по строке = шаг "+" (единый паттерн −/+)
+            self._display_adjust(key, "+")
         # trusted / display / about: handled by UI navigation later
 
     def _speaker_pair_select(self, address):
@@ -204,12 +195,32 @@ class Dispatcher:
 
     BRIGHTNESS_PRESETS = (25, 50, 75, 100)
 
-    def _cycle_brightness(self):
-        cur = int(getattr(self.state, "screen_brightness", 100))
-        presets = list(self.BRIGHTNESS_PRESETS)
-        nxt = presets[(presets.index(cur) + 1) % len(presets)] if cur in presets else 100
-        self.state.screen_brightness = nxt   # оптимистично для UI
-        self.on_set_brightness(nxt)          # runtime: power + settings.set
+    def _display_adjust(self, key, direction):
+        """[CLAUDE 2026-06-11] ЕДИНЫЙ паттерн −/+ для всех под-настроек дисплея
+        (решение владельца: «визуально должен понимать, что есть выбор»).
+        Двухпозиционные (тема/сон/моргание) листаются в обе стороны одинаково."""
+        if key == "off_timeout":
+            self._adjust_off_timeout(direction)
+        elif key == "brightness":
+            cur = int(getattr(self.state, "screen_brightness", 100))
+            presets = list(self.BRIGHTNESS_PRESETS)
+            i = presets.index(cur) if cur in presets else len(presets) - 1
+            i = (i + (1 if direction == "+" else -1)) % len(presets)
+            self.state.screen_brightness = presets[i]   # оптимистично для UI
+            self.on_set_brightness(presets[i])          # runtime: power + персист
+        elif key == "theme":
+            cur = getattr(self.state, "ui_theme", "dark")
+            new = "terminal" if cur != "terminal" else "dark"
+            self.state.ui_theme = new
+            self.on_set_theme(new)                      # runtime: персист + рестарт
+        elif key == "sleep":
+            new = not bool(getattr(self.state, "sleep_on_idle", True))
+            self.state.sleep_on_idle = new
+            self.on_toggle_sleep(new)
+        elif key == "notif_blink":
+            new = not bool(getattr(self.state, "notif_blink", True))
+            self.state.notif_blink = new
+            self.on_toggle_notif_blink(new)
 
     def _adjust_off_timeout(self, direction):
         cur = int(getattr(self.state, "screen_off_sec", 150))

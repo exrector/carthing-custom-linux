@@ -471,17 +471,19 @@ def _on_route_output_select(key):
 
 
 def _on_route_activate():
-    # [CLAUDE 2026-06-04] ТРУБА. Кнопка НЕ делает teardown/режимы — только выбирает КУДА лить:
-    #  • выбран внешний динамик (Fosi) → держим его, A2DP-поток iPhone льётся туда (forward сам)
-    #  • выход = Play Now (сам Car Thing) или не выбран → закрываем канал к динамику, поток
-    #    никуда не идёт, остаётся Play Now (метаданные по BLE)
-    # iPhone connectable всегда; что iPhone отдаёт — то Car Thing и ретранслирует.
+    # [CLAUDE 2026-06-11] Экранная кнопка маршрута = ЕДИНЫЙ тумблер (бывшая кнопка 1,
+    # решение владельца): сначала применяем выбранный выход, затем flip
+    # connect/disconnect источника (classic-тумблер из INVARIANTS).
     if power is not None:
         power.note_activity("route_activate")
-    if gui is None:
-        return
-    ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
-    asyncio.ensure_future(_apply_route_output(ro))
+
+    async def _activate():
+        if gui is not None:
+            ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
+            await _apply_route_output(ro)
+        await _route_toggle_flip()
+
+    asyncio.ensure_future(_activate())
 
 
 def _on_toggle_sleep(on):
@@ -1145,12 +1147,9 @@ async def main():
             def _on_input(event):
                 if power is not None:
                     power.note_activity("input")
-                if event == "btn_1":
-                    # ВРЕМЕННО (до RouteBuilder): кнопка 1 = тумблер маршрута и в
-                    # GUI-режиме (gui_controller btn_* не обрабатывает — пустота).
-                    logger.info("route toggle: button 1 pressed (gui mode)")
-                    asyncio.create_task(_route_toggle_flip())
-                    return
+                # [CLAUDE 2026-06-11] кнопка 1 ОСВОБОЖДЕНА: тумблер маршрута переехал
+                # на экранную кнопку (route_activate в нижнем баре Routes).
+                # Headless-режим ниже сохраняет btn_1 (там экрана нет).
                 gui.handle_input(event)
             asyncio.ensure_future(input_handler.start(on_event=_on_input))
         except Exception as e:

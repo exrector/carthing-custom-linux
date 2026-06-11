@@ -295,10 +295,10 @@ class RouteBuilderScreen(Screen):
         else:
             act_col, act_intent = T.STATUS_OK, "route_activate"
 
-        # [настройки(шестерёнка) · активировать(▶) · сопряжение(+) · ассистент(○)] — по центру
+        # [настройки(шестерёнка) · маршрут(узлы-связь) · сопряжение(+) · ассистент(○)] — по центру
         btns = [
             ("gear", T.MUTED, "open_settings", None),
-            ("play", act_col, act_intent, None),
+            ("route", act_col, act_intent, None),
             ("plus", T.MUTED, "settings_select", "pairing_device"),
             ("orb",  T.MUTED, "assistant", None),
         ]
@@ -310,8 +310,8 @@ class RouteBuilderScreen(Screen):
             draw.ellipse([x - R, cy - R, x + R, cy + R], outline=col, width=3)
             if kind == "gear":
                 T.icon_gear(draw, x, cy, R - 12, color=col, width=2)
-            elif kind == "play":
-                T.icon_play(draw, x, cy, R - 12, color=col)
+            elif kind == "route":
+                T.icon_route(draw, x, cy, R - 10, color=col, width=3)
             elif kind == "plus":
                 T.icon_plus(draw, x, cy, R - 14, color=col, width=3)
             elif kind == "orb":
@@ -342,11 +342,9 @@ class SettingsScreen(Screen):
             # отдельной кнопкой [Сопряжение] в баре Routes, дублировать в настройках не нужно.
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
-                # статическая заглушка: живые подписи (Яркость: N% и т.д.) строит
-                # динамический render-путь display ниже
+                # статическая заглушка: живой render-путь display строит единые
+                # строки «− значение +» (DISPLAY_ADJUST ниже)
                 ("brightness", "Яркость"),
-                ("theme", "Тема"),
-                ("sleep", "Тайм-аут сна"),
             ]},
             {"key": "about", "label": "О системе"},
         ]
@@ -359,6 +357,19 @@ class SettingsScreen(Screen):
         self.state = None
 
     CARD_LINE_H = 30          # [CLAUDE 2026-06-03] компактный шаг для строк карточки устройства
+
+    # [CLAUDE 2026-06-11] ЕДИНЫЙ паттерн под-настроек: «Имя   −  значение  +».
+    # Решение владельца: у каждой регулируемой настройки видимые −/+, чтобы выбор
+    # был очевиден. value-функции читают state при каждом рендере.
+    # Подписи КОРОТКИЕ: моноширинный IBM Plex Mono шире прежнего шрифта,
+    # длинные лезут под кнопку «−» (следить при добавлении новых).
+    DISPLAY_ADJUST = {
+        "brightness":  ("Яркость",  lambda st: f"{int(getattr(st, 'screen_brightness', 100)) if st else 100}%"),
+        "theme":       ("Тема",     lambda st: "Терминал" if (getattr(st, 'ui_theme', 'dark') if st else 'dark') == 'terminal' else "Тёмная"),
+        "sleep":       ("Сон",      lambda st: "Вкл" if (bool(getattr(st, 'sleep_on_idle', True)) if st else True) else "Выкл"),
+        "off_timeout": ("Гашение",  lambda st: _fmt_off(getattr(st, 'screen_off_sec', 150) if st else 150)),
+        "notif_blink": ("Моргание", lambda st: "Вкл" if (bool(getattr(st, 'notif_blink', True)) if st else True) else "Выкл"),
+    }
 
     def _viewport(self):
         start_y = CONTENT_TOP + 52
@@ -432,16 +443,8 @@ class SettingsScreen(Screen):
                 # имя + MAC; цветную статус-точку рисует render (3-й элемент = цвет)
                 rows.append(("trusted:" + d["key"], f"{d['label']}   {addr}", color))
             return rows
-        if it["key"] == "display":      # [CLAUDE] тумблер сна + ±тайм-аут гашения (кастомный рендер)
-            on = bool(getattr(self.state, "sleep_on_idle", True)) if self.state else True
-            blink = bool(getattr(self.state, "notif_blink", True)) if self.state else True
-            return [
-                ("brightness", f"Яркость: {int(getattr(self.state, 'screen_brightness', 100)) if self.state else 100}%"),
-                ("toggle_theme", f"Тема: {'Терминал' if (getattr(self.state, 'ui_theme', 'dark') if self.state else 'dark') == 'terminal' else 'Тёмная'}"),
-                ("toggle_sleep", f"Сон экрана: {'Вкл' if on else 'Выкл'}"),
-                ("off_timeout", "Гашение экрана"),   # рисуется спец-строкой с −/+
-                ("toggle_notif_blink", f"Моргание уведомлений: {'Вкл' if blink else 'Выкл'}"),
-            ]
+        if it["key"] == "display":      # [CLAUDE 2026-06-11] ВСЕ под-настройки = единый «− значение +»
+            return [(k, spec[0]) for k, spec in self.DISPLAY_ADJUST.items()]
         return it.get("children", [])
 
     def _visible(self):
@@ -589,20 +592,20 @@ class SettingsScreen(Screen):
             if level >= 2 or key.endswith("|cap"):
                 draw.text((56, y + 4), label, font=T.font(T.SZ_SMALL), fill=T.MUTED)
                 continue
-            # [CLAUDE 2026-06-01] спец-строка тайм-аута гашения: «Гашение  −  N мин  +»
-            if key == "off_timeout":
-                rect = C.list_row(draw, y, "Гашение экрана", selected=(i == self.sel),
+            # [CLAUDE 2026-06-11] единая строка под-настройки: «Имя  −  значение  +»
+            if key in self.DISPLAY_ADJUST:
+                name, value_fn = self.DISPLAY_ADJUST[key]
+                rect = C.list_row(draw, y, name, selected=(i == self.sel),
                                   indent=24 if level else 0)
                 rx0, ry0, rx1, ry1 = rect
-                sec = int(getattr(self.state, "screen_off_sec", 150)) if self.state else 150
                 fbig = T.font(T.SZ_TITLE)
-                draw.text((455, y - 6), "−", font=fbig, fill=T.FG)
-                C.text_centered(draw, _fmt_off(sec), T.font(T.SZ_BODY), T.ACCENT, y, cx=560)
-                draw.text((628, y - 6), "+", font=fbig, fill=T.FG)
+                draw.text((430, y - 6), "−", font=fbig, fill=T.FG)
+                C.text_centered(draw, value_fn(self.state), T.font(T.SZ_META), T.ACCENT, y + 2, cx=545)
+                draw.text((645, y - 6), "+", font=fbig, fill=T.FG)
                 if regions is not None:
                     ra, rb = max(start_y, ry0), min(bottom_y, ry1)
-                    regions.add((435, ra, 500, rb), "screen_off_adjust", payload="-")
-                    regions.add((600, ra, 668, rb), "screen_off_adjust", payload="+")
+                    regions.add((405, ra, 510, rb), "display_adjust", payload=(key, "-"))
+                    regions.add((610, ra, 700, rb), "display_adjust", payload=(key, "+"))
                 continue
             if key.startswith("trusted:"):
                 remove_rect = (T.LIST_X1 - 46, y + 3, T.LIST_X1 - 8, y + 41)
