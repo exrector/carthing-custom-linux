@@ -1140,6 +1140,20 @@ async def main():
     logger.info("kick_reconnect scheduled")
 
     # Рендер-цикл — ОТДЕЛЬНАЯ задача (не зависит от input.start, который блокирует loop).
+    _render_inflight = [False]
+
+    def _render_in_thread():
+        try:
+            _t0 = time.monotonic()
+            gui.render()
+            _dt = (time.monotonic() - _t0) * 1000.0
+            if _dt > 250:
+                logger.warning("render slow (thread): %.0f ms", _dt)
+        except Exception as e:
+            logger.error("render thread error: %s", e)
+        finally:
+            _render_inflight[0] = False
+
     async def _render_loop():
         tick = 0
         logger.info("_render_loop started, gui=%s power=%s", gui, power)
@@ -1155,13 +1169,16 @@ async def main():
                 if gui is not None and not shade:
                     gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
                     if power is None or power.display_awake:
-                        _t0 = time.monotonic()
-                        gui.render()
-                        _dt = (time.monotonic() - _t0) * 1000.0
-                        # [CLAUDE 2026-06-11] рендер живёт в ТОМ ЖЕ event-loop, что и
-                        # RTP-пересылка: кадр дольше ~60 мс = слышимая дыра в потоке
-                        if _dt > 60:
-                            logger.warning("render blocked loop for %.0f ms", _dt)
+                        # [CLAUDE 2026-06-11] ДОКАЗАНО зондами: кадр = 77 мс × 4-5/с в
+                        # ТОМ ЖЕ event-loop, что RTP-пересылка -> дыры 130-180 мс во
+                        # входе -> заикание (буфер Fosi 150 мс). Периодический рендер
+                        # уходит в поток (executor); цикл BT кадров больше НЕ ждёт.
+                        # Кадр ещё рисуется -> тик пропускаем (коалесинг), очередь
+                        # кадров не копим. Торн-рид AppState из потока = максимум
+                        # косметика на один кадр (read-only отрисовка).
+                        if not _render_inflight[0]:
+                            _render_inflight[0] = True
+                            asyncio.get_event_loop().run_in_executor(None, _render_in_thread)
                 publish_due = (tick % PUBLISH_EVERY == 0) if power is None else power.should_publish()
                 if not shade and publish_due:
                     _on_publish()         # runtime-bt.json для дирижёра/sync
