@@ -583,3 +583,32 @@ Hardware note from this turn:
 - The current Bluetooth-to-Bluetooth relay path does not use T9015/ALSA; it forwards encoded RTP
   between A2DP sessions. T9015 would matter for local Play Now / analog playback / a future
   decode-transcode-mix pipeline.
+
+---
+
+## Дополнение 2026-06-12: аудио-заикание — диагноз, фиксы, остаток
+
+**Доказанный механизм** (зонды max_gap_ms + render-таймер, корреляция в логе):
+кадр GUI держал event-loop 77–92 мс × 4-5/с → дыры 130–180 мс во входе RTP →
+буфер Fosi (150 мс) опустошался → заикание. Прямая пара iPhone↔колонка чистая,
+потому что там нет нашего цикла.
+
+**Сделано** (`480ea0f`, `d6aad82`, `492af14`, page-сериализация в `_on_route_activate`):
+- периодический рендер → executor-поток (коалесинг кадров);
+- GC freeze + пороги (паузы gen2 по PIL-куче);
+- кадры ≤2/с пока течёт стрим (GIL-укусы реже);
+- standby не пейджит посторонних при активном стриме; receiver_loop чтит бэкофф;
+- [LNK]: только выбранная колонка + ожидание её коннекта перед connect_source
+  (page-коллизия давала HCI 0x12 «маршрут не переключается»).
+
+**Остаток/идеи дожать до идеала:**
+- GIL: стоковый CPython 3.14 (GIL=True). Радикально: GUI в ОТДЕЛЬНЫЙ ПРОЦЕСС
+  (compositor-process, состояние через сокет/shared) — рендер вообще не трогает
+  интерпретатор BT. Или free-threaded 3.14t в buildroot (проверить пакет).
+- `/dev/audiodsp0` (CONFIG_AMLOGIC_AUDIO_DSP, major 257) — аппаратный DSP:
+  ресёрч ioctl (kernel 4.9 amlogic, driver audio_dsp); кандидат на транскод
+  AAC→SBC для SBC-only приёмников (Maedhawk) вместо CPU.
+- Роли piconet (Gemini-ресёрч 2026-06-11): стать master обоих линков
+  (HCI_Switch_Role), sniff off при стриме, 3-DH5; delay reporting суммарной
+  задержки. Файлы ресёрча: /tmp/gemini*-bt-research.txt (скопировать в docs!).
+- Зонды (max_gap_ms в RTP-строке, render slow) оставлены — дешёвые, полезные.
