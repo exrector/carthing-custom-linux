@@ -1,0 +1,108 @@
+2026-06-05 16:04:02,575 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-05 16:04:02,623 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-05 16:04:02,624 INFO ble_transport: Opening transport hci-socket:0
+2026-06-05 16:04:03,391 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-05 16:04:03,397 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-05 16:04:03,397 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-05 16:04:03,401 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-05 16:04:03,412 INFO a2dp_bridge: A2DP SDP records installed: AudioSink + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-05 16:04:03,412 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-05 16:04:03,416 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-05 16:04:03,417 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-05 16:04:03,418 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-05 16:04:03,419 INFO carthing_runtime: phase=ready
+2026-06-05 16:04:03,441 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:04:03,442 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:04:03,442 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-05 16:04:03,451 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-05 16:04:03,451 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:04:03,452 WARNING accessory_orchestrator: bonded-only advertising failed: HCI_Error(hci/COMMAND_DISALLOWED_ERROR [0xC])
+2026-06-05 16:04:03,452 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:04:03,456 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:04:03,457 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-05 16:04:03,464 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:04:03,464 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:04:03,465 INFO carthing_runtime: apply_visibility done
+2026-06-05 16:04:03,465 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-05 16:04:03,466 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-05 16:04:03,467 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-05 16:04:03,476 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:04:03,476 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:04:04,008 INFO carthing_runtime: AMS start (encryption)
+2026-06-05 16:04:04,008 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:04:04,458 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-05 16:04:04,578 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-05 16:04:04,607 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-05 16:04:04,638 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'Repeat', 'Shuffle', 'SkipFwd', 'SkipBack', 'Like', 'Dislike']
+2026-06-05 16:04:04,728 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-05 16:04:04,787 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-05 16:04:04,817 INFO ams_client: AMS raw notification: 020000546865205365656473
+2026-06-05 16:04:04,818 INFO ams_client: State: ⏸  — The Seeds [0/0s] vol=0%
+2026-06-05 16:04:04,848 INFO ams_client: AMS raw notification: 0203003135382e373636
+2026-06-05 16:04:04,848 INFO ams_client: State: ⏸  — The Seeds [0/159s] vol=0%
+2026-06-05 16:04:04,877 INFO ams_client: AMS raw notification: 02020050757368696e2720546f6f2048617264
+2026-06-05 16:04:04,878 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=0%
+2026-06-05 16:04:04,907 INFO ams_client: AMS raw notification: 020100
+2026-06-05 16:04:04,908 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=0%
+2026-06-05 16:04:04,937 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-05 16:04:04,937 INFO ams_client: AMS: ready
+2026-06-05 16:04:04,938 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:04:04,967 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-05 16:04:04,968 INFO ams_client: AMS player: Музыка
+2026-06-05 16:04:04,968 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=0%
+2026-06-05 16:04:04,998 INFO ams_client: AMS raw notification: 000100302c302e302c32362e373031
+2026-06-05 16:04:04,998 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [27/159s] vol=0%
+2026-06-05 16:04:05,027 INFO ams_client: AMS raw notification: 000200302e34303130323031
+2026-06-05 16:04:05,028 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [27/159s] vol=40%
+2026-06-05 16:04:05,268 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-05 16:04:05,388 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-05 16:04:05,508 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-05 16:04:05,508 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-05 16:04:05,537 INFO ancs_client: ANCS: +#11 [Other]
+2026-06-05 16:04:05,568 INFO ancs_client: ANCS: +#12 [Other]
+2026-06-05 16:04:05,597 INFO ancs_client: ANCS: +#13 [Other]
+2026-06-05 16:04:05,627 INFO ancs_client: ANCS: +#28 [Email]
+2026-06-05 16:04:05,718 INFO ancs_client: ANCS: requested attrs for #11 (16 bytes)
+2026-06-05 16:04:05,749 INFO ancs_client: ANCS detail: +#11 [Other] com.google.NotebookLM: 🎧 Привычки включаются мгновенно за три попытки — Your Audio Overview is ready!
+2026-06-05 16:04:05,838 INFO ancs_client: ANCS: requested attrs for #12 (16 bytes)
+2026-06-05 16:04:05,869 INFO ancs_client: ANCS detail: +#12 [Other] com.google.NotebookLM: 🎧 Вселенная как запущенный программный код — Your Audio Overview is ready!
+2026-06-05 16:04:05,958 INFO ancs_client: ANCS: requested attrs for #13 (16 bytes)
+2026-06-05 16:04:05,989 INFO ancs_client: ANCS detail: +#13 [Other] com.google.NotebookLM: 🎧 Как информация создает материю и пространство — Your Audio Overview is ready!
+2026-06-05 16:04:06,018 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-05 16:04:06,078 INFO ancs_client: ANCS: requested attrs for #28 (16 bytes)
+2026-06-05 16:04:06,169 INFO ancs_client: ANCS detail: +#28 [Email] com.apple.mobilemail: eBay — Your latest financial statement is ready to view or download Hi Andrei, Your financial statement for May-01-26 through May-31-26 has been generated. See statement Email Reference ID: [#05230958f4cd490c88b06918bfcae60c] Please see our Payments Terms of Use.
+2026-06-05 16:04:06,288 INFO cts_client: CTS: 2026-06-05 16:04:06 (adjust=0x02)
+2026-06-05 16:04:06,265 INFO cts_client: CTS: system clock set to Fri Jun  5 16:04:06 2026
+2026-06-05 16:04:06,404 INFO cts_client: CTS: subscribed for time updates
+2026-06-05 16:04:06,414 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:04:06,414 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:04:07,421 INFO carthing_runtime: post-pair classic probe: dialing 10:A2:D3:83:82:50 (encryption)
+2026-06-05 16:04:07,422 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-05 16:04:07,780 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-05 16:04:07,780 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-05 16:04:07,786 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-05 16:04:07,856 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-05 16:04:07,858 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:04:07,858 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:04:08,083 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-05 16:04:08,113 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-05 16:04:08,113 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-05 16:04:08,113 INFO carthing_runtime: post-pair classic probe OK: 10:A2:D3:83:82:50
+2026-06-05 16:04:15,498 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-05 16:04:15,596 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000))]
+2026-06-05 16:04:15,606 INFO a2dp_bridge: A2DP_SOURCE_OPEN
+2026-06-05 16:04:25,605 WARNING bumble.avdtp: unexpected channel close while not CLOSING or ABORTING
+2026-06-05 16:05:17,191 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-05 16:05:17,221 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-05 16:05:17,221 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=40%
+2026-06-05 16:05:17,251 INFO ams_client: AMS raw notification: 020000
+2026-06-05 16:05:17,251 INFO ams_client: State: ⏸ Pushin' Too Hard —  [0/159s] vol=40%
+2026-06-05 16:05:17,281 INFO ams_client: AMS raw notification: 020300
+2026-06-05 16:05:17,281 INFO ams_client: State: ⏸ Pushin' Too Hard —  [0/159s] vol=40%
+2026-06-05 16:05:17,311 INFO ams_client: AMS raw notification: 020200
+2026-06-05 16:05:17,311 INFO ams_client: State: ⏸  —  [0/159s] vol=40%
+2026-06-05 16:05:17,341 INFO ams_client: AMS raw notification: 020100
+2026-06-05 16:05:17,341 INFO ams_client: State: ⏸  —  [0/159s] vol=40%
+2026-06-05 16:06:21,511 INFO ancs_client: ANCS: +#29 [Other]
+2026-06-05 16:06:21,571 INFO ancs_client: ANCS: requested attrs for #29 (16 bytes)
+2026-06-05 16:06:21,633 INFO ancs_client: ANCS detail: +#29 [Other] com.google.Gmail: Superhuman – Zain Kahn — ALSO: How to automate your job search with Claude ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌ ‌

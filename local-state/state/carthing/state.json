@@ -1,0 +1,81 @@
+{
+  "devices": [
+    {
+      "address": "C4:A9:B8:70:2F:E5",
+      "capabilities": [
+        "audio_output",
+        "control_input",
+        "transport_control",
+        "volume_control"
+      ],
+      "constraints": [
+        "active_media_requires_route",
+        "control_backchannel_only",
+        "idle_link_allowed"
+      ],
+      "default": true,
+      "endpoints": [
+        {
+          "capabilities": [
+            "audio_output"
+          ],
+          "direction": "output",
+          "id": "audio-output",
+          "label": "Bluetooth audio output",
+          "metadata": {},
+          "protocols": [
+            "classic_a2dp_source"
+          ]
+        },
+        {
+          "capabilities": [
+            "control_input",
+            "transport_control",
+            "volume_control"
+          ],
+          "direction": "control",
+          "id": "remote-control",
+          "label": "Remote control backchannel",
+          "metadata": {},
+          "protocols": [
+            "classic_avrcp"
+          ]
+        }
+      ],
+      "id": "C4:A9:B8:70:2F:E5",
+      "metadata": {
+        "enrollment_evidence": {
+          "ble_services": [],
+          "class_of_device": 2360340,
+          "enrollment_state": "ready",
+          "missing_capabilities": [],
+          "service_uuids": []
+        }
+      },
+      "name": "Fosi Audio ZD3",
+      "role": "speaker",
+      "trusted": true,
+      "type": "Динамик"
+    }
+  ],
+  "schema": 2,
+  "settings": {
+    "active_session": "remote",
+    "default_speaker": null,
+    "notif_blink": false,
+    "preferred_view": "now_playing",
+    "publish_interval_active_sec": 1.0,
+    "publish_interval_off_sec": 30.0,
+    "publish_interval_quiet_sec": 10.0,
+    "render_interval_active_sec": 0.2,
+    "render_interval_off_sec": 2.0,
+    "render_interval_quiet_sec": 1.0,
+    "runtime_quiet_after_sec": 20,
+    "screen_active_brightness": 100,
+    "screen_dim_after_sec": 45,
+    "screen_dim_brightness": 12,
+    "screen_off_after_sec": 150,
+    "sleep_on_idle": true,
+    "volume": 0.5
+  }
+}

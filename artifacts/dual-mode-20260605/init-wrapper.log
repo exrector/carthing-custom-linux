@@ -1,0 +1,32 @@
+[init-wrapper] stage-2 entry
+[init-wrapper] running early S02-runtime-tmp
+[S02-runtime-tmp] writable /tmp backed by /run/tmp
+[init-wrapper] running early S03-runtime-state
+[S03-runtime-state] state mounted on /run/carthing-state, keys at /run/carthing-state/carthing/keys.json
+[init-wrapper] running early S04-hostname
+/etc/init.d/S04-hostname: line 34: can't create /etc/hostname: Read-only file system
+[S04-hostname] hostname=Car Thing (SN: QN19)
+[init-wrapper] running early S04-usbgadget
+[init-wrapper] running early S05-usbnet
+[S05-usbnet] configured usb0 -> 172.16.42.77/24
+[init-wrapper] running early S06-ssh
+[S06-ssh] dropbear started
+[init-wrapper] running early S07-debug-http
+[S07-debug-http] started pid=272 port=8080
+[init-wrapper] running early S08-debug-telnet
+[S08-debug-telnet] started pid=276 port=2323
+[init-wrapper] running early S09-reverse-agent
+[S09-reverse-agent] started pid=281
+[init-wrapper] running early S10-firmware-stage
+[S10-firmware-stage] firmware staged into /run/carthing/firmware/brcm and bind-mounted on /lib/firmware/brcm
+[init-wrapper] running early S12-mfi-auth
+[S12-mfi-auth] MFi auth available at /dev/apple_mfi
+[init-wrapper] running early S20-bt-init
+[S20-bt-init] resetting Bluetooth chip on GPIO 493
+[S20-bt-init] initializing Bluetooth backend=attach on /dev/ttyS1
+[S20-bt-init] attach helper started pid=306
+[S20-bt-init] done
+[init-wrapper] running early S45-input-links
+[S45-input-links] buttons=/dev/input/event0 rotary=/dev/input/event1
+[init-wrapper] Bumble runtime quarantined; skipping /etc/init.d/disabled-S50-carthing-remote
+[init-wrapper] execing busybox init

@@ -1,0 +1,76 @@
+2026-06-05 16:24:45,200 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-05 16:24:45,249 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-05 16:24:45,249 INFO ble_transport: Opening transport hci-socket:0
+2026-06-05 16:24:45,975 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-05 16:24:45,981 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-05 16:24:45,981 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-05 16:24:45,985 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-05 16:24:45,997 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-05 16:24:45,997 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-05 16:24:46,001 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-05 16:24:46,002 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-05 16:24:46,003 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-05 16:24:46,004 INFO carthing_runtime: phase=ready
+2026-06-05 16:24:46,026 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:24:46,026 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:24:46,026 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-05 16:24:46,039 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:24:46,039 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:24:46,051 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-05 16:24:46,055 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:24:46,056 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-05 16:24:46,059 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:24:46,059 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:24:46,060 INFO carthing_runtime: apply_visibility done
+2026-06-05 16:24:46,060 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-05 16:24:46,061 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-05 16:24:46,062 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-05 16:24:46,070 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:24:46,071 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:24:46,584 INFO carthing_runtime: AMS start (encryption)
+2026-06-05 16:24:46,584 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:24:47,064 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-05 16:24:47,184 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-05 16:24:47,213 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-05 16:24:47,813 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-05 16:24:47,873 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-05 16:24:47,934 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-05 16:24:47,934 INFO ams_client: AMS: ready
+2026-06-05 16:24:47,935 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:24:47,963 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-05 16:24:47,964 INFO ams_client: AMS player: Музыка
+2026-06-05 16:24:47,964 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-05 16:24:47,994 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-05 16:24:47,994 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-05 16:24:48,023 INFO ams_client: AMS raw notification: 000200302e34303130323031
+2026-06-05 16:24:48,024 INFO ams_client: State: ⏸  —  [0/0s] vol=40%
+2026-06-05 16:24:48,234 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-05 16:24:48,354 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-05 16:24:48,474 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-05 16:24:48,474 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-05 16:24:48,804 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-05 16:24:48,981 INFO cts_client: CTS: 2026-06-05 16:24:48 (adjust=0x02)
+2026-06-05 16:24:48,953 INFO cts_client: CTS: system clock set to Fri Jun  5 16:24:48 2026
+2026-06-05 16:24:49,062 INFO cts_client: CTS: subscribed for time updates
+2026-06-05 16:24:49,072 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:24:49,072 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:24:50,079 INFO carthing_runtime: post-pair classic probe: dialing 10:A2:D3:83:82:50 (encryption)
+2026-06-05 16:24:50,079 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-05 16:24:50,586 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-05 16:24:50,586 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-05 16:24:50,593 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-05 16:24:50,936 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-05 16:24:50,938 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:24:50,938 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:24:52,445 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-05 16:24:52,772 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-05 16:24:52,772 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-05 16:24:52,772 INFO carthing_runtime: post-pair classic probe OK: 10:A2:D3:83:82:50
+2026-06-05 16:25:00,442 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-05 16:25:00,443 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-05 16:25:00,444 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-05 16:25:00,535 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000))]
+2026-06-05 16:25:00,566 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-05 16:25:10,639 WARNING bumble.avdtp: unexpected channel close while not CLOSING or ABORTING
+2026-06-05 16:25:12,439 INFO cts_client: CTS: 2026-06-05 16:25:12 (adjust=0x02)
+2026-06-05 16:25:12,640 INFO cts_client: CTS: system clock set to Fri Jun  5 16:25:12 2026

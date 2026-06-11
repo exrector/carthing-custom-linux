@@ -1,0 +1,57 @@
+2026-06-05 16:11:23,140 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-05 16:11:23,189 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-05 16:11:23,190 INFO ble_transport: Opening transport hci-socket:0
+2026-06-05 16:11:23,898 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-05 16:11:23,903 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-05 16:11:23,904 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-05 16:11:23,907 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-05 16:11:23,918 INFO a2dp_bridge: A2DP SDP records installed: AudioSink + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-05 16:11:23,919 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-05 16:11:23,922 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-05 16:11:23,923 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-05 16:11:23,924 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-05 16:11:23,925 INFO carthing_runtime: phase=ready
+2026-06-05 16:11:23,947 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:11:23,947 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:11:23,947 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-05 16:11:23,956 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-05 16:11:23,957 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:11:23,957 WARNING accessory_orchestrator: bonded-only advertising failed: HCI_Error(hci/COMMAND_DISALLOWED_ERROR [0xC])
+2026-06-05 16:11:23,958 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:11:23,961 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:11:23,962 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-05 16:11:23,969 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:11:23,970 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:11:23,970 INFO carthing_runtime: apply_visibility done
+2026-06-05 16:11:23,970 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-05 16:11:23,971 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-05 16:11:23,973 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-05 16:11:23,981 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:11:23,982 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:11:24,476 INFO carthing_runtime: AMS start (encryption)
+2026-06-05 16:11:24,476 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:11:24,837 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-05 16:11:24,956 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-05 16:11:24,985 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-05 16:11:25,076 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-05 16:11:25,135 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-05 16:11:25,196 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-05 16:11:25,196 INFO ams_client: AMS: ready
+2026-06-05 16:11:25,197 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:11:25,226 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-05 16:11:25,226 INFO ams_client: AMS player: Музыка
+2026-06-05 16:11:25,226 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-05 16:11:25,256 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-05 16:11:25,257 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-05 16:11:25,285 INFO ams_client: AMS raw notification: 000200302e34303130323031
+2026-06-05 16:11:25,286 INFO ams_client: State: ⏸  —  [0/0s] vol=40%
+2026-06-05 16:11:25,557 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-05 16:11:25,676 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-05 16:11:25,796 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-05 16:11:25,796 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-05 16:11:26,037 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-05 16:11:26,156 INFO cts_client: CTS: 2026-06-05 16:11:26 (adjust=0x02)
+2026-06-05 16:11:26,160 INFO cts_client: CTS: system clock set to Fri Jun  5 16:11:26 2026
+2026-06-05 16:11:26,269 INFO cts_client: CTS: subscribed for time updates
+2026-06-05 16:11:26,279 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:11:26,279 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True

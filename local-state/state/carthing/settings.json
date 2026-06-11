@@ -1,0 +1,19 @@
+{
+ "active_session": "remote",
+ "default_speaker": null,
+ "notif_blink": false,
+ "preferred_view": "now_playing",
+ "publish_interval_active_sec": 1.0,
+ "publish_interval_off_sec": 30.0,
+ "publish_interval_quiet_sec": 10.0,
+ "render_interval_active_sec": 0.2,
+ "render_interval_off_sec": 2.0,
+ "render_interval_quiet_sec": 1.0,
+ "runtime_quiet_after_sec": 20,
+ "screen_active_brightness": 100,
+ "screen_dim_after_sec": 45,
+ "screen_dim_brightness": 12,
+ "screen_off_after_sec": 150,
+ "sleep_on_idle": true,
+ "volume": 0.5
+}

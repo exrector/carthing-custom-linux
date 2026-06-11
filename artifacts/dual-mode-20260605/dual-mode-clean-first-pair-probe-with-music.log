@@ -1,0 +1,353 @@
+2026-06-05 16:37:21,319 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-05 16:37:21,369 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-05 16:37:21,370 INFO ble_transport: Opening transport hci-socket:0
+2026-06-05 16:37:22,083 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-05 16:37:22,088 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-05 16:37:22,089 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-05 16:37:22,093 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-05 16:37:22,104 INFO a2dp_bridge: A2DP SDP records installed: AudioSink(Speaker) + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-05 16:37:22,104 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-05 16:37:22,108 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-05 16:37:22,109 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-05 16:37:22,109 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-05 16:37:22,110 INFO carthing_runtime: phase=ready
+2026-06-05 16:37:22,133 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:37:22,133 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:37:22,133 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-05 16:37:22,146 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:37:22,146 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:37:22,162 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:37:22,162 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:37:22,163 INFO carthing_runtime: apply_visibility done
+2026-06-05 16:37:22,163 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-05 16:37:22,164 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-05 16:37:22,165 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-05 16:37:22,182 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:37:22,182 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:37:23,115 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-05 16:37:23,118 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:37:23,119 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-05 16:37:23,415 INFO carthing_runtime: AMS start (encryption)
+2026-06-05 16:37:23,416 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:37:23,865 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-05 16:37:23,984 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-05 16:37:24,014 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-05 16:37:24,104 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-05 16:37:24,165 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-05 16:37:24,225 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-05 16:37:24,225 INFO ams_client: AMS: ready
+2026-06-05 16:37:24,225 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:37:24,255 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-05 16:37:24,255 INFO ams_client: AMS player: Музыка
+2026-06-05 16:37:24,255 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-05 16:37:24,315 INFO ams_client: AMS raw notification: 000100302c2c
+2026-06-05 16:37:24,315 INFO ams_client: State: ⏸  —  [0/0s] vol=0%
+2026-06-05 16:37:24,344 INFO ams_client: AMS raw notification: 000200302e34303130323031
+2026-06-05 16:37:24,345 INFO ams_client: State: ⏸  —  [0/0s] vol=40%
+2026-06-05 16:37:24,556 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-05 16:37:24,674 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-05 16:37:24,794 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-05 16:37:24,795 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-05 16:37:24,824 INFO ancs_client: ANCS: +#0 [Other]
+2026-06-05 16:37:24,914 INFO ancs_client: ANCS: requested attrs for #0 (16 bytes)
+2026-06-05 16:37:25,005 INFO ancs_client: ANCS detail: +#0 [Other] com.google.Gmail: Gloria Jeans — Электронная копия чека Вы получили письмо, так как сообщили адрес электронной почты продавцу или указали его при покупке в интернете. Вопросы о чеке можете задать продавцу — реквизиты указаны в чеке.
+2026-06-05 16:37:25,155 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-05 16:37:25,275 INFO cts_client: CTS: 2026-06-05 16:37:25 (adjust=0x02)
+2026-06-05 16:37:25,289 INFO cts_client: CTS: system clock set to Fri Jun  5 16:37:25 2026
+2026-06-05 16:37:25,398 INFO cts_client: CTS: subscribed for time updates
+2026-06-05 16:37:25,408 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:37:25,409 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:37:26,415 INFO carthing_runtime: post-pair classic probe: dialing 10:A2:D3:83:82:50 (encryption)
+2026-06-05 16:37:26,416 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-05 16:37:29,953 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-05 16:37:29,954 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-05 16:37:29,960 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-05 16:37:30,133 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-05 16:37:30,135 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:37:30,136 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:37:30,961 INFO a2dp_bridge: A2DP source peer SDP UUIDs: ['00000000decafadedecadeafdecacafe', '0003', '0007', '0008', '000f', '0017', '0019', '0100', '020303021d19415f86f222a2106a0a77', '1002', '1101', '110a', '110c', '110d', '110e', '110f', '1116', '111e', '111f', '112f', '1130', '1132', '1134', '1200', '1203', '1801', '1ff31936572e4b36a2bfb2409b1aa6f4', '4b6f7c7407f449deb0b9ab4304728f29']
+2026-06-05 16:37:31,055 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-05 16:37:31,056 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-05 16:37:31,056 INFO carthing_runtime: post-pair classic probe OK: 10:A2:D3:83:82:50
+2026-06-05 16:37:39,353 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-05 16:37:39,354 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=AAC seid=1
+2026-06-05 16:37:39,355 INFO a2dp_bridge: A2DP source sink endpoint installed: codec=SBC seid=2
+2026-06-05 16:37:39,540 INFO a2dp_bridge: A2DP_SOURCE_SET_CONFIGURATION codec=AAC [ServiceCapabilities(service_category=1, service_capabilities_bytes=b''), MediaCodecCapabilities(service_category=<ServiceCategory.MEDIA_CODEC: 7>, service_capabilities_bytes=b'\x00\x02\x80\x01\x04\x83\xe8\x00', media_type=<MediaType.AUDIO: 0>, media_codec_type=<CodecType.MPEG_2_4_AAC: 2>, media_codec_information=AacMediaCodecInformation(object_type=<ObjectType.MPEG_2_AAC_LC: 128>, sampling_frequency=<SamplingFrequency.SF_44100: 16>, channels=<Channels.STEREO: 1>, vbr=1, bitrate=256000)), ServiceCapabilities(service_category=8, service_capabilities_bytes=b'')]
+2026-06-05 16:37:39,643 INFO a2dp_bridge: A2DP_SOURCE_OPEN codec=AAC
+2026-06-05 16:37:39,907 INFO a2dp_bridge: A2DP delay report accepted: codec=AAC delay=1500
+2026-06-05 16:37:49,833 WARNING bumble.avdtp: unexpected channel close while not CLOSING or ABORTING
+2026-06-05 16:40:06,048 INFO ams_client: AMS raw notification: 000100312c2c
+2026-06-05 16:40:06,049 INFO ams_client: State: ▶  —  [0/0s] vol=40%
+2026-06-05 16:40:06,078 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'Repeat', 'Shuffle', 'SkipFwd', 'SkipBack', 'Like', 'Dislike']
+2026-06-05 16:40:06,108 INFO ams_client: AMS raw notification: 000100302c302e302c32362e373032
+2026-06-05 16:40:06,109 INFO ams_client: State: ⏸  —  [27/0s] vol=40%
+2026-06-05 16:40:06,138 INFO ams_client: AMS raw notification: 0200004176656e74757261
+2026-06-05 16:40:06,139 INFO ams_client: State: ⏸  — Aventura [27/0s] vol=40%
+2026-06-05 16:40:06,168 INFO ams_client: AMS raw notification: 0203003231302e373732
+2026-06-05 16:40:06,169 INFO ams_client: State: ⏸  — Aventura [27/211s] vol=40%
+2026-06-05 16:40:06,228 INFO ams_client: AMS raw notification: 0202004375616e646f20566f6c7665726173
+2026-06-05 16:40:06,229 INFO ams_client: State: ⏸ Cuando Volveras — Aventura [27/211s] vol=40%
+2026-06-05 16:40:06,258 INFO ams_client: AMS raw notification: 020100
+2026-06-05 16:40:06,258 INFO ams_client: State: ⏸ Cuando Volveras — Aventura [27/211s] vol=40%
+2026-06-05 16:40:06,288 INFO ams_client: AMS raw notification: 000100312c312e302c32362e373337
+2026-06-05 16:40:06,289 INFO ams_client: State: ▶ Cuando Volveras — Aventura [27/211s] vol=40%
+2026-06-05 16:40:06,318 INFO ams_client: AMS raw notification: 0203003231302e373631
+2026-06-05 16:40:06,319 INFO ams_client: State: ▶ Cuando Volveras — Aventura [27/211s] vol=40%
+2026-06-05 16:40:07,818 INFO ams_client: AMS raw notification: 000200302e33383132363535
+2026-06-05 16:40:07,819 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=38%
+2026-06-05 16:40:07,848 INFO ams_client: AMS raw notification: 000200302e33363938323836
+2026-06-05 16:40:07,849 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=37%
+2026-06-05 16:40:07,878 INFO ams_client: AMS raw notification: 000200302e33353833393137
+2026-06-05 16:40:07,879 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=36%
+2026-06-05 16:40:07,908 INFO ams_client: AMS raw notification: 000200302e33343539313531
+2026-06-05 16:40:07,909 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=35%
+2026-06-05 16:40:07,938 INFO ams_client: AMS raw notification: 000200302e33333434373832
+2026-06-05 16:40:07,939 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=33%
+2026-06-05 16:40:07,968 INFO ams_client: AMS raw notification: 000200302e33323230303136
+2026-06-05 16:40:07,969 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=32%
+2026-06-05 16:40:07,998 INFO ams_client: AMS raw notification: 000200302e33313236343432
+2026-06-05 16:40:07,999 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=31%
+2026-06-05 16:40:08,028 INFO ams_client: AMS raw notification: 000200302e33303132303732
+2026-06-05 16:40:08,029 INFO ams_client: State: ▶ Cuando Volveras — Aventura [28/211s] vol=30%
+2026-06-05 16:40:08,058 INFO ams_client: AMS raw notification: 000200302e32393138343938
+2026-06-05 16:40:08,059 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=29%
+2026-06-05 16:40:08,088 INFO ams_client: AMS raw notification: 000200302e32383234393233
+2026-06-05 16:40:08,089 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=28%
+2026-06-05 16:40:08,118 INFO ams_client: AMS raw notification: 000200302e32373431373436
+2026-06-05 16:40:08,119 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=27%
+2026-06-05 16:40:08,148 INFO ams_client: AMS raw notification: 000200302e32363638393636
+2026-06-05 16:40:08,149 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=27%
+2026-06-05 16:40:08,178 INFO ams_client: AMS raw notification: 000200302e32353835373839
+2026-06-05 16:40:08,179 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=26%
+2026-06-05 16:40:08,208 INFO ams_client: AMS raw notification: 000200302e32353133303038
+2026-06-05 16:40:08,209 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=25%
+2026-06-05 16:40:08,238 INFO ams_client: AMS raw notification: 000200302e32343530363235
+2026-06-05 16:40:08,239 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=25%
+2026-06-05 16:40:08,268 INFO ams_client: AMS raw notification: 000200302e32333938363339
+2026-06-05 16:40:08,269 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=24%
+2026-06-05 16:40:08,328 INFO ams_client: AMS raw notification: 000200302e32333336323536
+2026-06-05 16:40:08,329 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=23%
+2026-06-05 16:40:08,358 INFO ams_client: AMS raw notification: 000200302e32323834323731
+2026-06-05 16:40:08,359 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=23%
+2026-06-05 16:40:08,388 INFO ams_client: AMS raw notification: 000200302e32323332323835
+2026-06-05 16:40:08,389 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=22%
+2026-06-05 16:40:08,418 INFO ams_client: AMS raw notification: 000200302e32323031303933
+2026-06-05 16:40:08,418 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=22%
+2026-06-05 16:40:08,448 INFO ams_client: AMS raw notification: 000200302e32313539353034
+2026-06-05 16:40:08,449 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=22%
+2026-06-05 16:40:08,478 INFO ams_client: AMS raw notification: 000200302e32313137393136
+2026-06-05 16:40:08,479 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=21%
+2026-06-05 16:40:08,508 INFO ams_client: AMS raw notification: 000200302e32303836373234
+2026-06-05 16:40:08,509 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=21%
+2026-06-05 16:40:08,538 INFO ams_client: AMS raw notification: 000200302e32303435313336
+2026-06-05 16:40:08,539 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=20%
+2026-06-05 16:40:08,568 INFO ams_client: AMS raw notification: 000200302e32303033353437
+2026-06-05 16:40:08,569 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=20%
+2026-06-05 16:40:08,598 INFO ams_client: AMS raw notification: 000200302e31393732333535
+2026-06-05 16:40:08,599 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=20%
+2026-06-05 16:40:08,628 INFO ams_client: AMS raw notification: 000200302e31393431313634
+2026-06-05 16:40:08,629 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=19%
+2026-06-05 16:40:08,658 INFO ams_client: AMS raw notification: 000200302e31383939353735
+2026-06-05 16:40:08,659 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=19%
+2026-06-05 16:40:08,688 INFO ams_client: AMS raw notification: 000200302e31383638333834
+2026-06-05 16:40:08,689 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=19%
+2026-06-05 16:40:08,718 INFO ams_client: AMS raw notification: 000200302e31383337313932
+2026-06-05 16:40:08,719 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=18%
+2026-06-05 16:40:08,748 INFO ams_client: AMS raw notification: 000200302e31383036303031
+2026-06-05 16:40:08,749 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=18%
+2026-06-05 16:40:08,778 INFO ams_client: AMS raw notification: 000200302e31373734383039
+2026-06-05 16:40:08,779 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=18%
+2026-06-05 16:40:08,808 INFO ams_client: AMS raw notification: 000200302e31373534303135
+2026-06-05 16:40:08,809 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=18%
+2026-06-05 16:40:08,838 INFO ams_client: AMS raw notification: 000200302e31373232383233
+2026-06-05 16:40:08,839 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=17%
+2026-06-05 16:40:08,868 INFO ams_client: AMS raw notification: 000200302e31373132343236
+2026-06-05 16:40:08,869 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=17%
+2026-06-05 16:40:08,898 INFO ams_client: AMS raw notification: 000200302e31363831323335
+2026-06-05 16:40:08,899 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=17%
+2026-06-05 16:40:08,928 INFO ams_client: AMS raw notification: 000200302e313636303434
+2026-06-05 16:40:08,929 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=17%
+2026-06-05 16:40:08,958 INFO ams_client: AMS raw notification: 000200302e31363239323439
+2026-06-05 16:40:08,959 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=16%
+2026-06-05 16:40:08,988 INFO ams_client: AMS raw notification: 000200302e31353938303537
+2026-06-05 16:40:08,989 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=16%
+2026-06-05 16:40:09,018 INFO ams_client: AMS raw notification: 000200302e31353636383636
+2026-06-05 16:40:09,019 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=16%
+2026-06-05 16:40:09,048 INFO ams_client: AMS raw notification: 000200302e31353335363734
+2026-06-05 16:40:09,049 INFO ams_client: State: ▶ Cuando Volveras — Aventura [29/211s] vol=15%
+2026-06-05 16:40:09,078 INFO ams_client: AMS raw notification: 000200302e31353034343833
+2026-06-05 16:40:09,079 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=15%
+2026-06-05 16:40:09,108 INFO ams_client: AMS raw notification: 000200302e31343833363838
+2026-06-05 16:40:09,109 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=15%
+2026-06-05 16:40:09,138 INFO ams_client: AMS raw notification: 000200302e31343632383934
+2026-06-05 16:40:09,139 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=15%
+2026-06-05 16:40:09,168 INFO ams_client: AMS raw notification: 000200302e3134343231
+2026-06-05 16:40:09,169 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,198 INFO ams_client: AMS raw notification: 000200302e31343331373032
+2026-06-05 16:40:09,199 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,228 INFO ams_client: AMS raw notification: 000200302e31343231333035
+2026-06-05 16:40:09,229 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,258 INFO ams_client: AMS raw notification: 000200302e31343030353131
+2026-06-05 16:40:09,259 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,288 INFO ams_client: AMS raw notification: 000200302e31333930313134
+2026-06-05 16:40:09,289 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,318 INFO ams_client: AMS raw notification: 000200302e31333739373137
+2026-06-05 16:40:09,319 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,378 INFO ams_client: AMS raw notification: 000200302e31333639333139
+2026-06-05 16:40:09,379 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,408 INFO ams_client: AMS raw notification: 000200302e31333538393232
+2026-06-05 16:40:09,409 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=14%
+2026-06-05 16:40:09,438 INFO ams_client: AMS raw notification: 000200302e31333438353235
+2026-06-05 16:40:09,439 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,468 INFO ams_client: AMS raw notification: 000200302e31333338313238
+2026-06-05 16:40:09,469 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,498 INFO ams_client: AMS raw notification: 000200302e31333237373331
+2026-06-05 16:40:09,499 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,528 INFO ams_client: AMS raw notification: 000200302e31333137333334
+2026-06-05 16:40:09,529 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,558 INFO ams_client: AMS raw notification: 000200302e31333036393336
+2026-06-05 16:40:09,559 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,588 INFO ams_client: AMS raw notification: 000200302e31323936353339
+2026-06-05 16:40:09,589 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,618 INFO ams_client: AMS raw notification: 000200302e31323836313432
+2026-06-05 16:40:09,619 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,648 INFO ams_client: AMS raw notification: 000200302e31323735373435
+2026-06-05 16:40:09,649 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,678 INFO ams_client: AMS raw notification: 000200302e31323635333438
+2026-06-05 16:40:09,679 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,708 INFO ams_client: AMS raw notification: 000200302e313235343935
+2026-06-05 16:40:09,709 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=13%
+2026-06-05 16:40:09,738 INFO ams_client: AMS raw notification: 000200302e31323434353533
+2026-06-05 16:40:09,739 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=12%
+2026-06-05 16:40:09,768 INFO ams_client: AMS raw notification: 000200302e31323334313536
+2026-06-05 16:40:09,769 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=12%
+2026-06-05 16:40:09,798 INFO ams_client: AMS raw notification: 000200302e31323233373539
+2026-06-05 16:40:09,798 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=12%
+2026-06-05 16:40:09,828 INFO ams_client: AMS raw notification: 000200302e31313932353637
+2026-06-05 16:40:09,829 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=12%
+2026-06-05 16:40:09,858 INFO ams_client: AMS raw notification: 000200302e31313731373733
+2026-06-05 16:40:09,859 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=12%
+2026-06-05 16:40:09,888 INFO ams_client: AMS raw notification: 000200302e31313530393739
+2026-06-05 16:40:09,889 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=12%
+2026-06-05 16:40:09,918 INFO ams_client: AMS raw notification: 000200302e31313330313834
+2026-06-05 16:40:09,919 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=11%
+2026-06-05 16:40:09,948 INFO ams_client: AMS raw notification: 000200302e313130393339
+2026-06-05 16:40:09,949 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=11%
+2026-06-05 16:40:09,978 INFO ams_client: AMS raw notification: 000200302e31303938393933
+2026-06-05 16:40:09,979 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=11%
+2026-06-05 16:40:10,008 INFO ams_client: AMS raw notification: 000200302e31303738313939
+2026-06-05 16:40:10,009 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=11%
+2026-06-05 16:40:10,038 INFO ams_client: AMS raw notification: 000200302e31303537343034
+2026-06-05 16:40:10,039 INFO ams_client: State: ▶ Cuando Volveras — Aventura [30/211s] vol=11%
+2026-06-05 16:40:10,068 INFO ams_client: AMS raw notification: 000200302e31303437303037
+2026-06-05 16:40:10,069 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,098 INFO ams_client: AMS raw notification: 000200302e313033363631
+2026-06-05 16:40:10,098 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,128 INFO ams_client: AMS raw notification: 000200302e31303236323133
+2026-06-05 16:40:10,129 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,158 INFO ams_client: AMS raw notification: 000200302e31303135383136
+2026-06-05 16:40:10,159 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,188 INFO ams_client: AMS raw notification: 000200302e31303035343138
+2026-06-05 16:40:10,189 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,218 INFO ams_client: AMS raw notification: 000200302e3039393530323132
+2026-06-05 16:40:10,219 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,248 INFO ams_client: AMS raw notification: 000200302e3039383133343439
+2026-06-05 16:40:10,249 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,278 INFO ams_client: AMS raw notification: 000200302e3039373730363736
+2026-06-05 16:40:10,279 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,308 INFO ams_client: AMS raw notification: 000200302e30393734303436
+2026-06-05 16:40:10,309 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,338 INFO ams_client: AMS raw notification: 000200302e3039373230333635
+2026-06-05 16:40:10,339 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,368 INFO ams_client: AMS raw notification: 000200302e3039373038333631
+2026-06-05 16:40:10,369 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,398 INFO ams_client: AMS raw notification: 000200302e3039373032373634
+2026-06-05 16:40:10,399 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,428 INFO ams_client: AMS raw notification: 000200302e3039373032313834
+2026-06-05 16:40:10,429 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,458 INFO ams_client: AMS raw notification: 000200302e3039373035343733
+2026-06-05 16:40:10,459 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,488 INFO ams_client: AMS raw notification: 000200302e30393731313639
+2026-06-05 16:40:10,489 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,548 INFO ams_client: AMS raw notification: 000200302e3039373230303636
+2026-06-05 16:40:10,549 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,578 INFO ams_client: AMS raw notification: 000200302e3039373239393739
+2026-06-05 16:40:10,579 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,608 INFO ams_client: AMS raw notification: 000200302e3039373430393236
+2026-06-05 16:40:10,609 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,638 INFO ams_client: AMS raw notification: 000200302e3039373532353032
+2026-06-05 16:40:10,639 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,668 INFO ams_client: AMS raw notification: 000200302e3039373634333839
+2026-06-05 16:40:10,669 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,698 INFO ams_client: AMS raw notification: 000200302e3039373736333336
+2026-06-05 16:40:10,699 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,728 INFO ams_client: AMS raw notification: 000200302e3039373838313439
+2026-06-05 16:40:10,729 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,788 INFO ams_client: AMS raw notification: 000200302e3039373939363832
+2026-06-05 16:40:10,789 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,818 INFO ams_client: AMS raw notification: 000200302e3039383130383234
+2026-06-05 16:40:10,819 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,848 INFO ams_client: AMS raw notification: 000200302e3039383231343939
+2026-06-05 16:40:10,849 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,878 INFO ams_client: AMS raw notification: 000200302e3039383331363533
+2026-06-05 16:40:10,879 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,908 INFO ams_client: AMS raw notification: 000200302e3039383431323533
+2026-06-05 16:40:10,909 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,938 INFO ams_client: AMS raw notification: 000200302e3039383530323833
+2026-06-05 16:40:10,939 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,968 INFO ams_client: AMS raw notification: 000200302e3039383538373337
+2026-06-05 16:40:10,969 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:10,998 INFO ams_client: AMS raw notification: 000200302e3039383636363231
+2026-06-05 16:40:10,999 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:11,028 INFO ams_client: AMS raw notification: 000200302e3039383733393438
+2026-06-05 16:40:11,029 INFO ams_client: State: ▶ Cuando Volveras — Aventura [31/211s] vol=10%
+2026-06-05 16:40:11,058 INFO ams_client: AMS raw notification: 000200302e3039383830373335
+2026-06-05 16:40:11,059 INFO ams_client: State: ▶ Cuando Volveras — Aventura [32/211s] vol=10%
+2026-06-05 16:40:11,088 INFO ams_client: AMS raw notification: 000200302e3039383837303035
+2026-06-05 16:40:11,089 INFO ams_client: State: ▶ Cuando Volveras — Aventura [32/211s] vol=10%
+2026-06-05 16:40:11,118 INFO ams_client: AMS raw notification: 000200302e3039383932373833
+2026-06-05 16:40:11,119 INFO ams_client: State: ▶ Cuando Volveras — Aventura [32/211s] vol=10%
+2026-06-05 16:40:11,148 INFO ams_client: AMS raw notification: 000200302e3039393530323132
+2026-06-05 16:40:11,149 INFO ams_client: State: ▶ Cuando Volveras — Aventura [32/211s] vol=10%
+2026-06-05 16:41:12,619 INFO cts_client: CTS: 2026-06-05 16:41:12 (adjust=0x02)
+2026-06-05 16:41:12,828 INFO cts_client: CTS: system clock set to Fri Jun  5 16:41:12 2026
+2026-06-05 16:43:10,427 INFO ams_client: AMS raw notification: 000100302c302e302c3231302e373635
+2026-06-05 16:43:10,427 INFO ams_client: State: ⏸ Cuando Volveras — Aventura [211/211s] vol=10%
+2026-06-05 16:43:10,457 INFO ams_client: AMS raw notification: 000100312c312e302c302e313430
+2026-06-05 16:43:10,457 INFO ams_client: State: ▶ Cuando Volveras — Aventura [0/211s] vol=10%
+2026-06-05 16:43:10,487 INFO ams_client: AMS raw notification: 020000d081d0bbd0bad0b0
+2026-06-05 16:43:10,487 INFO ams_client: State: ▶ Cuando Volveras — Ёлка [0/211s] vol=10%
+2026-06-05 16:43:10,517 INFO ams_client: AMS raw notification: 0203003139322e343230
+2026-06-05 16:43:10,517 INFO ams_client: State: ▶ Cuando Volveras — Ёлка [0/192s] vol=10%
+2026-06-05 16:43:10,547 INFO ams_client: AMS raw notification: 020200d09dd0b020d0b1d0bed0bbd18cd188d0bed0bc20d0b2d0bed0b7d0b4d183d188d0bdd0bed0bc20d188d0b0d180d0b5
+2026-06-05 16:43:10,547 INFO ams_client: State: ▶ На большом воздушном шаре — Ёлка [0/192s] vol=10%
+2026-06-05 16:43:31,847 INFO ams_client: AMS raw notification: 000100302c302e302c302e303030
+2026-06-05 16:43:31,847 INFO ams_client: State: ⏸ На большом воздушном шаре — Ёлка [0/192s] vol=10%
+2026-06-05 16:43:31,877 INFO ams_client: AMS raw notification: 02000048756d616e20546574726973
+2026-06-05 16:43:31,877 INFO ams_client: State: ⏸ На большом воздушном шаре — Human Tetris [0/192s] vol=10%
+2026-06-05 16:43:31,907 INFO ams_client: AMS raw notification: 0203003234342e303531
+2026-06-05 16:43:31,907 INFO ams_client: State: ⏸ На большом воздушном шаре — Human Tetris [0/244s] vol=10%
+2026-06-05 16:43:31,937 INFO ams_client: AMS raw notification: 0202005468696e6773204920446f6e2774204e656564
+2026-06-05 16:43:31,937 INFO ams_client: State: ⏸ Things I Don't Need — Human Tetris [0/244s] vol=10%
+2026-06-05 16:43:31,967 INFO ams_client: AMS raw notification: 0203003234342e303430
+2026-06-05 16:43:31,967 INFO ams_client: State: ⏸ Things I Don't Need — Human Tetris [0/244s] vol=10%
+2026-06-05 16:43:31,997 INFO ams_client: AMS raw notification: 000100312c312e302c302e303139
+2026-06-05 16:43:31,997 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [0/244s] vol=10%
+2026-06-05 16:43:33,407 INFO ams_client: AMS raw notification: 000200302e3038323836363635
+2026-06-05 16:43:33,407 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [1/244s] vol=8%
+2026-06-05 16:43:33,437 INFO ams_client: AMS raw notification: 000200302e3037313432393736
+2026-06-05 16:43:33,437 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [1/244s] vol=7%
+2026-06-05 16:43:33,467 INFO ams_client: AMS raw notification: 000200302e3035383935333135
+2026-06-05 16:43:33,467 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [1/244s] vol=6%
+2026-06-05 16:43:33,497 INFO ams_client: AMS raw notification: 000200302e3034343339373131
+2026-06-05 16:43:33,497 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [2/244s] vol=4%
+2026-06-05 16:43:33,527 INFO ams_client: AMS raw notification: 000200302e3032373736313634
+2026-06-05 16:43:33,527 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [2/244s] vol=3%
+2026-06-05 16:43:33,557 INFO ams_client: AMS raw notification: 000200302e3031313132363136
+2026-06-05 16:43:33,557 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [2/244s] vol=1%
+2026-06-05 16:43:33,587 INFO ams_client: AMS raw notification: 00020030
+2026-06-05 16:43:33,587 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [2/244s] vol=0%
+2026-06-05 16:43:34,007 INFO ams_client: AMS raw notification: 000100312c312e302c322e303231
+2026-06-05 16:43:34,007 INFO ams_client: State: ▶ Things I Don't Need — Human Tetris [2/244s] vol=0%
+2026-06-05 16:43:34,097 INFO ams_client: AMS raw notification: 000100302c302e302c312e393639
+2026-06-05 16:43:34,097 INFO ams_client: State: ⏸ Things I Don't Need — Human Tetris [2/244s] vol=0%

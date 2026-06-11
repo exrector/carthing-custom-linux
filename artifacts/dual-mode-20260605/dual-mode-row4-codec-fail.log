@@ -1,0 +1,275 @@
+2026-06-05 16:01:49,558 INFO carthing_runtime: persistent state OK (/run/carthing-state/carthing)
+2026-06-05 16:01:49,605 INFO carthing_runtime: hw capabilities: {'display_drm': True, 'backlight': True, 'touch': True, 'encoder': True, 'buttons': True, 'als_prox_tmd2772': True, 'audio_playback_t9015': True, 'audio_capture_pdm': True, 'thermal_zones': 5, 'zram': True, 'hwrng': True, 'usb_host': True, 'efuse_usid': True, 'mfi_i2c_node': True, 'mfi_i2c_name': 'apple_mfi_auth', 'mfi_auth_driver': True, 'mfi_auth_major': 509, 'mfi_auth_device': True, 'mfi_auth_open': True, 'mfi_auth_version': 7, 'mfi_auth_cert_len': 608, 'mfi_chip': True}
+2026-06-05 16:01:49,606 INFO ble_transport: Opening transport hci-socket:0
+2026-06-05 16:01:50,320 INFO ble_transport: Controller public address: 30:E3:D6:00:5F:A4  -> name=Car Thing (SN: QN19)
+2026-06-05 16:01:50,325 INFO ble_transport: Read_Local_Name (что реально на чипе по классике): 'Car Thing (SN: QN19)'
+2026-06-05 16:01:50,326 INFO ble_transport: BLE device ON — address: 30:E3:D6:00:5F:A4/P  name: Car Thing (SN: QN19)
+2026-06-05 16:01:50,330 INFO carthing_runtime: GUI disabled by CARTHING_GUI_ENABLE=0
+2026-06-05 16:01:50,340 INFO a2dp_bridge: A2DP SDP records installed: AudioSink + AVRCP Controller/Target (CoD loudspeaker)
+2026-06-05 16:01:50,341 INFO a2dp_bridge: A2DP safe classic link-key provider installed
+2026-06-05 16:01:50,344 INFO a2dp_bridge: A2DP classic CoD active: 0x240414
+2026-06-05 16:01:50,345 INFO a2dp_bridge: A2DP classic connectable (not discoverable) enabled
+2026-06-05 16:01:50,346 INFO a2dp_bridge: A2DP bridge started: local=30:E3:D6:00:5F:A4/P name=Car Thing (SN: QN19) trusted_sources=1 trusted_speakers=0; AVCTP listening
+2026-06-05 16:01:50,347 INFO carthing_runtime: phase=ready
+2026-06-05 16:01:50,369 INFO accessory_orchestrator: Sticky: continuous bonded reconnect advertising (public, NO-name, 60ms)
+2026-06-05 16:01:50,370 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:01:50,370 INFO carthing_runtime: iAP2 disabled by default for clean dual-mode audio pairing
+2026-06-05 16:01:50,378 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=False encrypted=False
+2026-06-05 16:01:50,379 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:01:50,379 WARNING accessory_orchestrator: bonded-only advertising failed: HCI_Error(hci/COMMAND_DISALLOWED_ERROR [0xC])
+2026-06-05 16:01:50,380 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:01:50,383 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:01:50,384 INFO carthing_runtime: requesting pairing (link not encrypted yet)
+2026-06-05 16:01:50,392 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:01:50,392 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:01:50,392 INFO carthing_runtime: apply_visibility done
+2026-06-05 16:01:50,393 INFO carthing_runtime: kick_reconnect scheduled
+2026-06-05 16:01:50,393 INFO carthing_runtime: runtime up — name=Car Thing (SN: QN19)
+2026-06-05 16:01:50,395 INFO carthing_runtime: _render_loop started, gui=None power=None
+2026-06-05 16:01:50,403 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:01:50,403 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:01:50,896 INFO carthing_runtime: AMS start (encryption)
+2026-06-05 16:01:50,897 INFO ams_client: AMS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:01:51,287 INFO ams_client: AMS: found characteristics: ['9B3C81D8-57B1-4A8A-B8DF-0E56F7CA51C2', '2F7CABCE-808D-411F-9A0C-BB92BA96C102', 'C6B2F38C-23AB-46D8-A6AB-A3A870BBD5D7']
+2026-06-05 16:01:51,407 INFO ams_client: AMS: subscribed to RemoteCommand (supported-commands list)
+2026-06-05 16:01:51,436 INFO ams_client: AMS: supported commands -> ['VolUp', 'VolDown']
+2026-06-05 16:01:51,467 INFO ams_client: AMS: supported commands -> ['Play', 'Pause', 'Toggle', 'Next', 'Prev', 'VolUp', 'VolDown', 'Repeat', 'Shuffle', 'SkipFwd', 'SkipBack', 'Like', 'Dislike']
+2026-06-05 16:01:51,556 INFO ams_client: AMS: subscribed to EntityUpdate notifications
+2026-06-05 16:01:51,616 INFO ams_client: AMS: entity subscription write OK: 0200010203
+2026-06-05 16:01:51,646 INFO ams_client: AMS raw notification: 020000546865205365656473
+2026-06-05 16:01:51,646 INFO ams_client: State: ⏸  — The Seeds [0/0s] vol=0%
+2026-06-05 16:01:51,676 INFO ams_client: AMS raw notification: 0203003135382e373636
+2026-06-05 16:01:51,677 INFO ams_client: State: ⏸  — The Seeds [0/159s] vol=0%
+2026-06-05 16:01:51,706 INFO ams_client: AMS raw notification: 02020050757368696e2720546f6f2048617264
+2026-06-05 16:01:51,706 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=0%
+2026-06-05 16:01:51,736 INFO ams_client: AMS raw notification: 020100
+2026-06-05 16:01:51,736 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=0%
+2026-06-05 16:01:51,766 INFO ams_client: AMS: entity subscription write OK: 00000102
+2026-06-05 16:01:51,766 INFO ams_client: AMS: ready
+2026-06-05 16:01:51,766 INFO ancs_client: ANCS: discovering services on 10:A2:D3:83:82:50/P
+2026-06-05 16:01:51,796 INFO ams_client: AMS raw notification: 000000d09cd183d0b7d18bd0bad0b0
+2026-06-05 16:01:51,796 INFO ams_client: AMS player: Музыка
+2026-06-05 16:01:51,797 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [0/159s] vol=0%
+2026-06-05 16:01:51,826 INFO ams_client: AMS raw notification: 000100302c302e302c32362e373031
+2026-06-05 16:01:51,826 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [27/159s] vol=0%
+2026-06-05 16:01:51,856 INFO ams_client: AMS raw notification: 000200302e34303130323031
+2026-06-05 16:01:51,856 INFO ams_client: State: ⏸ Pushin' Too Hard — The Seeds [27/159s] vol=40%
+2026-06-05 16:01:52,097 INFO ancs_client: ANCS: found characteristics: ['69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9', '9FBF120D-6301-42D9-8C58-25E699A21DBD', '22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB']
+2026-06-05 16:01:52,217 INFO ancs_client: ANCS: subscribed to Data Source
+2026-06-05 16:01:52,337 INFO ancs_client: ANCS: subscribed to Notification Source — ready
+2026-06-05 16:01:52,337 INFO cts_client: CTS: discovering service on 10:A2:D3:83:82:50/P
+2026-06-05 16:01:52,366 INFO ancs_client: ANCS: +#11 [Other]
+2026-06-05 16:01:52,397 INFO ancs_client: ANCS: +#12 [Other]
+2026-06-05 16:01:52,426 INFO ancs_client: ANCS: +#13 [Other]
+2026-06-05 16:01:52,456 INFO ancs_client: ANCS: +#28 [Email]
+2026-06-05 16:01:52,546 INFO ancs_client: ANCS: requested attrs for #11 (16 bytes)
+2026-06-05 16:01:52,578 INFO ancs_client: ANCS detail: +#11 [Other] com.google.NotebookLM: 🎧 Привычки включаются мгновенно за три попытки — Your Audio Overview is ready!
+2026-06-05 16:01:52,666 INFO ancs_client: ANCS: requested attrs for #12 (16 bytes)
+2026-06-05 16:01:52,698 INFO ancs_client: ANCS detail: +#12 [Other] com.google.NotebookLM: 🎧 Вселенная как запущенный программный код — Your Audio Overview is ready!
+2026-06-05 16:01:52,786 INFO ancs_client: ANCS: requested attrs for #13 (16 bytes)
+2026-06-05 16:01:52,818 INFO ancs_client: ANCS detail: +#13 [Other] com.google.NotebookLM: 🎧 Как информация создает материю и пространство — Your Audio Overview is ready!
+2026-06-05 16:01:52,847 INFO cts_client: CTS: characteristics: ['UUID-16:2A2B (Current Time)', 'UUID-16:2A0F']
+2026-06-05 16:01:52,906 INFO ancs_client: ANCS: requested attrs for #28 (16 bytes)
+2026-06-05 16:01:52,967 INFO ancs_client: ANCS detail: +#28 [Email] com.apple.mobilemail: eBay — Your latest financial statement is ready to view or download Hi Andrei, Your financial statement for May-01-26 through May-31-26 has been generated. See statement Email Reference ID: [#05230958f4cd490c88b06918bfcae60c] Please see our Payments Terms of Use.
+2026-06-05 16:01:53,087 INFO cts_client: CTS: 2026-06-05 16:01:53 (adjust=0x02)
+2026-06-05 16:01:53,035 INFO cts_client: CTS: system clock set to Fri Jun  5 16:01:53 2026
+2026-06-05 16:01:53,144 INFO cts_client: CTS: subscribed for time updates
+2026-06-05 16:01:53,154 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:01:53,154 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:01:54,161 INFO carthing_runtime: post-pair classic probe: dialing 10:A2:D3:83:82:50 (encryption)
+2026-06-05 16:01:54,161 INFO a2dp_bridge: A2DP source classic dial (CarThing-initiated): 10:A2:D3:83:82:50
+2026-06-05 16:01:54,657 INFO carthing_runtime: connected: 10:A2:D3:83:82:50/P classic=True encrypted=False
+2026-06-05 16:01:54,657 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=False
+2026-06-05 16:01:54,664 INFO a2dp_bridge: A2DP classic link-key found for 10:A2:D3:83:82:50/P
+2026-06-05 16:01:54,731 INFO a2dp_bridge: Classic BT connection: 10:A2:D3:83:82:50/P handle=13 encrypted=True
+2026-06-05 16:01:54,734 WARNING bumble.host: HCI_LE_SET_ADVERTISING_ENABLE_COMMAND failed (COMMAND_DISALLOWED_ERROR)
+2026-06-05 16:01:54,735 INFO accessory_orchestrator: Visibility: phase=ready pairing_armed=False transfer_conn=True
+2026-06-05 16:01:54,736 INFO a2dp_bridge: A2DP source peer SDP scan ignored: Client.connect() takes 1 positional argument but 2 were given
+2026-06-05 16:01:54,775 INFO a2dp_bridge: A2DP source AVCTP/AVRCP connected
+2026-06-05 16:01:54,776 INFO a2dp_bridge: A2DP_SOURCE_CLASSIC_DIALED 10:A2:D3:83:82:50
+2026-06-05 16:01:54,776 INFO carthing_runtime: post-pair classic probe OK: 10:A2:D3:83:82:50
+2026-06-05 16:02:02,569 INFO a2dp_bridge: A2DP incoming trusted source: 10:A2:D3:83:82:50/P
+2026-06-05 16:02:02,569 ERROR bumble.l2cap: [31m!!! Exception in handler:[0m
+Traceback (most recent call last):
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 2300, in on_control_frame
+    handler(connection, cid, control_frame)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 2439, in on_l2cap_configure_response
+    channel.on_configure_response(response)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 1522, in on_configure_response
+    self.emit(self.EVENT_OPEN)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 220, in emit
+    handled = self._call_handlers(event, args, kwargs)
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 196, in _call_handlers
+    self._emit_run(f, args, kwargs)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 81, in _emit_run
+    self.emit("error", exc)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 223, in emit
+    self._emit_handle_potential_error(event, args[0] if args else None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 181, in _emit_handle_potential_error
+    raise error
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 79, in _emit_run
+    coro: Any = f(*args, **kwargs)
+                ~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/avdtp.py", line 1852, in on_channel_open
+    self.emit(self.EVENT_CONNECTION, server)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 220, in emit
+    handled = self._call_handlers(event, args, kwargs)
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 196, in _call_handlers
+    self._emit_run(f, args, kwargs)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 81, in _emit_run
+    self.emit("error", exc)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 223, in emit
+    self._emit_handle_potential_error(event, args[0] if args else None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 181, in _emit_handle_potential_error
+    raise error
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 79, in _emit_run
+    coro: Any = f(*args, **kwargs)
+                ~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/a2dp_bridge.py", line 1117, in on_avdtp_connection
+    sink = protocol.add_sink(make_aac_capabilities())
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/run/carthing-dual-mode-lab/a2dp_bridge.py", line 45, in make_aac_capabilities
+    a2dp.AacMediaCodecInformation.from_lists(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'AacMediaCodecInformation' has no attribute 'from_lists'
+2026-06-05 16:02:02,599 ERROR bumble.transport.common: [31m!!! Exception in on_packet[0m
+Traceback (most recent call last):
+  File "/run/carthing-dual-mode-lab/vendor/bumble/transport/common.py", line 160, in feed_data
+    self.sink.on_packet(bytes(self.packet))
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/host.py", line 983, in on_packet
+    self.on_hci_packet(hci_packet)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/host.py", line 1009, in on_hci_packet
+    self.on_hci_acl_data_packet(packet)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/host.py", line 1028, in on_hci_acl_data_packet
+    connection.on_hci_acl_data_packet(packet)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/host.py", line 213, in on_hci_acl_data_packet
+    self.assembler.feed_packet(packet)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/hci.py", line 8189, in feed_packet
+    self.callback(self.current_data)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/host.py", line 217, in on_acl_pdu
+    self.host.on_l2cap_pdu(self, l2cap_pdu.cid, l2cap_pdu.payload)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/host.py", line 1039, in on_l2cap_pdu
+    self.emit('l2cap_pdu', connection.handle, cid, pdu)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 220, in emit
+    handled = self._call_handlers(event, args, kwargs)
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 196, in _call_handlers
+    self._emit_run(f, args, kwargs)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 81, in _emit_run
+    self.emit("error", exc)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 223, in emit
+    self._emit_handle_potential_error(event, args[0] if args else None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 181, in _emit_handle_potential_error
+    raise error
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 79, in _emit_run
+    coro: Any = f(*args, **kwargs)
+                ~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/device.py", line 2253, in wrapper
+    return function(self, connection, *args, **kwargs)
+  File "/run/carthing-dual-mode-lab/vendor/bumble/device.py", line 6987, in on_l2cap_pdu
+    self.l2cap_channel_manager.on_pdu(connection, cid, pdu)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 2260, in on_pdu
+    self.on_control_frame(connection, cid, control_frame)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 2300, in on_control_frame
+    handler(connection, cid, control_frame)
+    ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 2439, in on_l2cap_configure_response
+    channel.on_configure_response(response)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/l2cap.py", line 1522, in on_configure_response
+    self.emit(self.EVENT_OPEN)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 220, in emit
+    handled = self._call_handlers(event, args, kwargs)
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 196, in _call_handlers
+    self._emit_run(f, args, kwargs)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 81, in _emit_run
+    self.emit("error", exc)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 223, in emit
+    self._emit_handle_potential_error(event, args[0] if args else None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 181, in _emit_handle_potential_error
+    raise error
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 79, in _emit_run
+    coro: Any = f(*args, **kwargs)
+                ~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/bumble/avdtp.py", line 1852, in on_channel_open
+    self.emit(self.EVENT_CONNECTION, server)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 220, in emit
+    handled = self._call_handlers(event, args, kwargs)
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 196, in _call_handlers
+    self._emit_run(f, args, kwargs)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 81, in _emit_run
+    self.emit("error", exc)
+    ~~~~~~~~~^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 70, in emit
+    return super().emit(event, *args, **kwargs)
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 223, in emit
+    self._emit_handle_potential_error(event, args[0] if args else None)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/vendor/pyee/base.py", line 181, in _emit_handle_potential_error
+    raise error
+  File "/run/carthing-dual-mode-lab/vendor/pyee/asyncio.py", line 79, in _emit_run
+    coro: Any = f(*args, **kwargs)
+                ~^^^^^^^^^^^^^^^^^
+  File "/run/carthing-dual-mode-lab/a2dp_bridge.py", line 1117, in on_avdtp_connection
+    sink = protocol.add_sink(make_aac_capabilities())
+                             ~~~~~~~~~~~~~~~~~~~~~^^
+  File "/run/carthing-dual-mode-lab/a2dp_bridge.py", line 45, in make_aac_capabilities
+    a2dp.AacMediaCodecInformation.from_lists(
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'AacMediaCodecInformation' has no attribute 'from_lists'

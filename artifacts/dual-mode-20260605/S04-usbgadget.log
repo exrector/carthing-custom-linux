@@ -1,0 +1,5 @@
+[S04-usbgadget] start
+[S04-usbgadget] existing USB network candidate: usb0
+[S04-usbgadget] plain NCM already active; leaving legacy/rescue gadget untouched
+[S04-usbgadget] done: gadget active
+[S04-usbgadget] end
