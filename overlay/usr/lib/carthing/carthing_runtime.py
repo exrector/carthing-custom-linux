@@ -1140,6 +1140,14 @@ async def main():
     logger.info("kick_reconnect scheduled")
 
     # Рендер-цикл — ОТДЕЛЬНАЯ задача (не зависит от input.start, который блокирует loop).
+    # [CLAUDE 2026-06-12] GC-тюнинг: рендер порождает горы PIL-объектов; авто-gen2
+    # коллекции дают непредсказуемые паузы цикла. Замораживаем стартовую кучу
+    # (бессмертные объекты вне обхода) и поднимаем пороги — коллекции реже.
+    import gc as _gc
+    _gc.collect()
+    _gc.freeze()
+    _gc.set_threshold(50000, 50, 50)
+
     _render_inflight = [False]
 
     def _render_in_thread():
@@ -1184,6 +1192,11 @@ async def main():
                     _on_publish()         # runtime-bt.json для дирижёра/sync
                 tick += 1
                 interval = RENDER_INTERVAL if power is None else power.render_interval
+                # [CLAUDE 2026-06-12] GIL: рендер-поток всё равно держит интерпретатор
+                # на Python-участках кадра. Пока труба льёт звук — кадры не чаще 2/с
+                # (прогресс-бар не страдает, зато GIL-укусы вдвое реже).
+                if transfer is not None and getattr(transfer, "bridge", None) is not None                         and getattr(transfer.bridge, "source_stream_active", False):
+                    interval = max(interval, 0.5)
                 await asyncio.sleep(interval)
             except asyncio.CancelledError:
                 raise
