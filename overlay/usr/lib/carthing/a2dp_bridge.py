@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import time
 import logging
 import os
 from dataclasses import dataclass
@@ -1935,6 +1936,17 @@ class A2DPBridge:
             self.logger.info("A2DP delay report ignored by source: %s", error_text(exc))
 
     def forward_packet(self, packet):
+        # [CLAUDE 2026-06-11] джиттер-зонд: максимальный разрыв между ВХОДЯЩИМИ
+        # пакетами в окне 250 шт. Вход ровный (43 pps от iPhone) -> gap >150 мс
+        # означает блокировку нашего event-loop (рендер/файловая запись/GC),
+        # а ровный вход при слышимом заикании -> дыры в эфире НИЖЕ нас.
+        now = time.monotonic()
+        last = getattr(self, "_rtp_last_ts", None)
+        if last is not None:
+            gap = (now - last) * 1000.0
+            if gap > getattr(self, "_rtp_max_gap_ms", 0.0):
+                self._rtp_max_gap_ms = gap
+        self._rtp_last_ts = now
         payload = bytes(packet)
         sent = False
         selected_address = normalize_address(self.state.default_speaker_address())
@@ -2000,12 +2012,14 @@ class A2DPBridge:
         count = self.packets_forwarded if sent else self.packets_dropped
         if count < 10 or count % 250 == 0:
             self.logger.info(
-                "A2DP_BRIDGE_RTP forwarded=%d dropped=%d bytes=%d sent_to_speaker=%s",
+                "A2DP_BRIDGE_RTP forwarded=%d dropped=%d bytes=%d sent_to_speaker=%s max_gap_ms=%.0f",
                 self.packets_forwarded,
                 self.packets_dropped,
                 len(payload),
                 sent,
+                getattr(self, "_rtp_max_gap_ms", 0.0),
             )
+            self._rtp_max_gap_ms = 0.0
 
     async def handle_classic_connection(self, connection):
         self.logger.info(
