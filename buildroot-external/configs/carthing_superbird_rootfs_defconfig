@@ -40,3 +40,6 @@ BR2_PACKAGE_PYTHON_CFFI=y
 BR2_PACKAGE_PYTHON_CRYPTOGRAPHY=y
 BR2_PACKAGE_PYTHON_PILLOW=y
 BR2_PACKAGE_PYTHON_SERIAL=y
+# sftp-server для dropbear: чинит современный scp (SFTP-протокол) и открывает
+# sshfs dev-mount с Mac. Вступит в силу со следующим bake.
+BR2_PACKAGE_GESFTPSERVER=y

@@ -1,0 +1,89 @@
+#!/bin/sh
+# Канонический канал доставки файлов на Car Thing. ЕДИНСТВЕННЫЙ поддерживаемый.
+#
+# Почему не scp/sftp (история граблей, не повторять):
+#   - macOS scp с OpenSSH 9+ по умолчанию ходит по SFTP-протоколу, а в образе
+#     нет sftp-server -> МОЛЧАЛИВЫЙ фейл (файла нет, ошибки нет).
+#   - scp -O (legacy) работает, но не умеет remount rw/ro, чистку AppleDouble,
+#     компиляционную проверку и рестарт — всё это руками каждый раз забывают.
+#   - голый macOS tar гадит AppleDouble (._*) в /usr/lib/carthing.
+#
+# Использование (из корня репо carthing-release-integration):
+#   tools/deploy usr/lib/carthing/screens.py [ещё пути...] [--restart]
+#   tools/deploy --pull /usr/lib/carthing/screens.py /tmp/screens.py
+#
+# Пути для деплоя — ОТНОСИТЕЛЬНО overlay/ (т.е. как они лягут в корень rootfs).
+# Каталоги можно целиком: tools/deploy usr/lib/carthing/vendor/PIL
+
+set -eu
+
+HOST="${CARTHING_SSH_HOST:-carthing}"
+SSH="ssh -o BatchMode=yes -o ConnectTimeout=8 $HOST"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OVERLAY="$REPO_ROOT/overlay"
+
+die() { echo "deploy: $*" >&2; exit 1; }
+
+# --- режим pull: забрать файл с устройства (ssh cat, без scp) ---
+if [ "${1:-}" = "--pull" ]; then
+    [ $# -eq 3 ] || die "--pull <путь-на-устройстве> <локальный-путь>"
+    $SSH "cat '$2'" > "$3"
+    echo "pulled: $2 -> $3"
+    exit 0
+fi
+
+restart=0
+paths=""
+for a in "$@"; do
+    case "$a" in
+        --restart) restart=1 ;;
+        --*) die "неизвестный флаг: $a" ;;
+        *) [ -e "$OVERLAY/$a" ] || die "нет в overlay/: $a"
+           paths="$paths $a" ;;
+    esac
+done
+[ -n "$paths" ] || die "нечего деплоить (пути относительно overlay/)"
+
+# список .py для компиляционной проверки (внутри окна rw — py_compile пишет .pyc)
+pyfiles=""
+for p in $paths; do
+    case "$p" in *.py) pyfiles="$pyfiles /$p" ;; esac
+done
+
+# COPYFILE_DISABLE=1 — не даём macOS tar упаковать AppleDouble/xattr.
+# shellcheck disable=SC2086
+COPYFILE_DISABLE=1 tar -C "$OVERLAY" -cf - \
+    --exclude='._*' --exclude='.DS_Store' --exclude='__pycache__' \
+    $paths | $SSH "
+set -eu
+mount -o remount,rw /
+cd /
+tar -xf -
+# страховка от AppleDouble, даже если просочились
+find /usr/lib/carthing -maxdepth 1 -name '._*' -delete 2>/dev/null || true
+rc=0
+for f in $pyfiles; do
+    python3 -m py_compile \"\$f\" || { echo \"НЕ КОМПИЛИРУЕТСЯ: \$f\" >&2; rc=1; }
+done
+sync
+mount -o remount,ro /
+exit \$rc
+" || die "деплой/компиляция провалились"
+
+echo "deploy OK:$paths"
+
+if [ "$restart" = 1 ]; then
+    # kill PID runtime валит и супервизор-петлю -> поднимаем штатным стартером
+    # (он идемпотентен: сам проверяет pid-файл). pkill на busybox НЕТ.
+    $SSH '
+SUP=$(cat /run/carthing/media-remote-supervisor.pid 2>/dev/null || true)
+[ -n "$SUP" ] && kill "$SUP" 2>/dev/null || true
+PID=$(ps | grep carthing_runtime.py | grep -v grep | awk "{print \$1}")
+[ -n "$PID" ] && kill $PID 2>/dev/null || true
+sleep 3
+/etc/init.d/disabled-S50-carthing-remote
+'
+    echo "runtime перезапущен; проверка лога:"
+    sleep 12
+    $SSH 'tail -5 /var/run/carthing/carthing-remote.log'
+fi
