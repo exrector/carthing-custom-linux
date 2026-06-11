@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 import os
+from dataclasses import dataclass
 
 from bumble import a2dp, avc, avctp, avdtp, avrcp, l2cap
 from bumble.core import (
@@ -59,6 +60,26 @@ A2DP_SINK_DELAY_REPORT = 1500
 
 def error_text(error: Exception) -> str:
     return str(error) or type(error).__name__
+
+
+@dataclass
+class SpeakerConnector:
+    """Per-speaker A2DP connector state.
+
+    The legacy receiver_* fields below stay as a compatibility view of whichever
+    connector is currently active, but each trusted output keeps its own AVDTP
+    standby/session state here.
+    """
+
+    address: str
+    connection: object | None = None
+    protocol: avdtp.Protocol | None = None
+    source: object | None = None
+    stream: object | None = None
+    rtp_channel: object | None = None
+    connecting: bool = False
+    last_error: str = ""
+    codec_name: str = ""
 
 
 class AudioSinkAvrcpDelegate(avrcp.Delegate):
@@ -301,6 +322,8 @@ class A2DPBridge:
         self.receiver_connecting_address = None
         self.receiver_last_error = ""
         self.source_stream_active = False
+        self.source_codec_name = ""
+        self._source_codec_reconnect_task: asyncio.Task | None = None
         self._source_connection = None      # [CLAUDE 2026-06-02] classic-ACL источника (iPhone) для CarThing-инициируемого teardown
         self.started = False
         self.packets_forwarded = 0
@@ -314,10 +337,79 @@ class A2DPBridge:
         self._receiver_retry_task: asyncio.Task | None = None
         self._standby_connecting = set()
         self._speaker_connections = {}
+        self._speaker_connectors: dict[str, SpeakerConnector] = {}
         self._stale_link_key_addresses = set()
         # Backoff дозвона к недоступной колонке: каждый page = ~5 c радио;
         # без backoff выключенная колонка съедала эфир каждые 12 c (run10).
         self._speaker_backoff: dict[str, tuple[int, float]] = {}
+
+    def _speaker_connector(self, address) -> SpeakerConnector:
+        address = normalize_address(address)
+        connector = self._speaker_connectors.get(address)
+        if connector is None:
+            connector = SpeakerConnector(address=address)
+            self._speaker_connectors[address] = connector
+        return connector
+
+    def _selected_speaker_connector(self) -> SpeakerConnector | None:
+        address = normalize_address(self.state.default_speaker_address())
+        return self._speaker_connectors.get(address) if address else None
+
+    def _current_receiver_connector(self) -> SpeakerConnector | None:
+        selected = self._selected_speaker_connector()
+        if selected is not None:
+            return selected
+        address = normalize_address(self.receiver_address)
+        return self._speaker_connectors.get(address) if address else None
+
+    def _sync_receiver_fields(self, connector: SpeakerConnector | None):
+        if connector is None:
+            self.receiver_connection = None
+            self.receiver_protocol = None
+            self.receiver_source = None
+            self.receiver_stream = None
+            self.receiver_rtp_channel = None
+            self.receiver_address = None
+            self.receiver_last_error = ""
+            return
+        self.receiver_connection = connector.connection
+        self.receiver_protocol = connector.protocol
+        self.receiver_source = connector.source
+        self.receiver_stream = connector.stream
+        self.receiver_rtp_channel = connector.rtp_channel
+        self.receiver_address = connector.address
+        self.receiver_last_error = connector.last_error
+
+    def _selected_receiver_codec(self) -> str:
+        connector = self._selected_speaker_connector()
+        return (connector.codec_name if connector is not None else "") or ""
+
+    def _source_should_offer_aac(self) -> bool:
+        if os.environ.get("CARTHING_A2DP_SINK_BASELINE") == "1":
+            return False
+        selected_codec = self._selected_receiver_codec()
+        # We forward RTP packets; there is no transcoder. If the selected output
+        # is SBC-only, do not let iOS choose AAC for the Car Thing sink endpoint.
+        return selected_codec != "SBC"
+
+    def _source_receiver_codec_mismatch(self, connector: SpeakerConnector | None = None) -> tuple[str, str] | None:
+        source_codec = self.source_codec_name or ""
+        receiver_codec = (connector.codec_name if connector is not None else self._selected_receiver_codec()) or ""
+        if source_codec and receiver_codec and source_codec != receiver_codec:
+            return source_codec, receiver_codec
+        return None
+
+    async def ensure_source_codec_matches_route(self):
+        mismatch = self._source_receiver_codec_mismatch()
+        if mismatch is None:
+            return
+        source_codec, receiver_codec = mismatch
+        self.logger.warning(
+            "A2DP source codec mismatch: source=%s receiver=%s; closing source for renegotiation",
+            source_codec,
+            receiver_codec,
+        )
+        await self.disconnect_source()
 
     async def _gate(self, label, operation):
         if self.hci_gate is None:
@@ -558,13 +650,19 @@ class A2DPBridge:
     async def receiver_loop(self):
         while True:
             try:
-                if self.receiver_rtp_channel is None:
+                connector = self._selected_speaker_connector()
+                if connector is None or connector.rtp_channel is None:
                     await self.setup_receiver()
                 await asyncio.sleep(self.reconnect_interval)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self.receiver_rtp_channel = None
+                connector = self._current_receiver_connector()
+                if connector is not None:
+                    connector.rtp_channel = None
+                    self._sync_receiver_fields(connector)
+                else:
+                    self.receiver_rtp_channel = None
                 self.logger.warning("A2DP receiver setup failed: %s", error_text(exc))
                 await asyncio.sleep(self.reconnect_interval)
 
@@ -576,44 +674,50 @@ class A2DPBridge:
             raise RuntimeError(f"receiver is not trusted as speaker: {address}")
 
         target_address = normalize_address(address)
+        connector = self._speaker_connector(target_address)
 
         # [CLAUDE 2026-06-11] RESUME held-сессии (пара к suspend-стопу выше): если
         # AVDTP-сессия к этой колонке уже стоит — НЕ пересоздаём Protocol (Fosi
         # ответит 0x4), а просто стартуем существующий stream.
-        if (self.receiver_protocol is not None and self.receiver_stream is not None
-                and normalize_address(self.receiver_address or "") == target_address):
+        if connector.protocol is not None and connector.stream is not None:
             try:
                 try:
-                    await asyncio.wait_for(self.receiver_stream.start(), timeout=self.connect_timeout)
+                    await asyncio.wait_for(connector.stream.start(), timeout=self.connect_timeout)
                 except Exception as exc:
                     # уже в STREAMING (двойной тап) — не ошибка
                     self.logger.info("A2DP receiver resume start note: %s", error_text(exc))
-                self.receiver_rtp_channel = self.receiver_stream.rtp_channel
+                connector.rtp_channel = connector.stream.rtp_channel
+                connector.last_error = ""
+                self._sync_receiver_fields(connector)
                 self.state.transfer_status = "connected"
-                self.state.set_connected_speaker(target_address)
+                self.state.set_speaker_connected(target_address, True)
                 self.on_state_change()
                 self.logger.info("A2DP_SPEAKER_STREAM_RESUMED address=%s", target_address)
                 return
             except Exception as exc:
                 # held-сессия мертва — закрываем её сигнальный канал и идём полным путём
                 self.logger.warning("A2DP receiver resume failed (%s); full reconnect", error_text(exc))
-                await self._close_receiver_protocol()
+                await self._close_receiver_protocol(target_address)
 
+        connector.connecting = True
         self.receiver_connecting_address = target_address
         self.receiver_last_error = ""
         self.state.transfer_status = "connecting"
         self.on_state_change()
 
-        if self.receiver_protocol is not None:
-            # смена колонки или полуживая сессия — освободить слот у пира
-            await self._close_receiver_protocol()
+        if connector.protocol is not None:
+            # полуживая сессия этой же колонки — освободить слот у пира
+            await self._close_receiver_protocol(target_address)
 
         connection = connection or await self.ensure_speaker_connection(target_address)
         self.logger.info("A2DP receiver ACL ready: %s", target_address)
-        self.receiver_connection = connection
+        connector.connection = connection
+        self._sync_receiver_fields(connector)
         connection.on(
             "disconnection",
-            lambda reason: asyncio.ensure_future(self.on_receiver_disconnected(reason)),
+            lambda reason, address=target_address: asyncio.ensure_future(
+                self.on_receiver_disconnected(reason, address)
+            ),
         )
         try:
             await self._gate(
@@ -657,7 +761,8 @@ class A2DPBridge:
                 timeout=self.connect_timeout,
             ),
         )
-        self.receiver_protocol = protocol
+        connector.protocol = protocol
+        self._sync_receiver_fields(connector)
         self.logger.info("A2DP receiver discover endpoints: %s", target_address)
         await self._gate(
             "a2dp-receiver-discover",
@@ -695,13 +800,16 @@ class A2DPBridge:
         await self._gate("a2dp-receiver-open", stream.open)
         await self._gate("a2dp-receiver-start", stream.start)
 
-        self.receiver_source = source
-        self.receiver_stream = stream
-        self.receiver_rtp_channel = stream.rtp_channel
-        self.receiver_address = target_address
+        connector.source = source
+        connector.stream = stream
+        connector.rtp_channel = stream.rtp_channel
+        connector.connecting = False
+        connector.last_error = ""
+        connector.codec_name = codec_name
+        self._sync_receiver_fields(connector)
         self.receiver_connecting_address = None
         self.state.transfer_status = "connected"
-        self.state.set_connected_speaker(target_address)
+        self.state.set_speaker_connected(target_address, True)
         self.on_state_change()
         self.logger.info("A2DP_SPEAKER_STREAM_STARTED codec=%s seid=%s", codec_name, getattr(sink, "seid", "?"))
         # Коммутатор сам поднимает AVRCP к колонке (backchannel-кнопки, volume),
@@ -829,18 +937,25 @@ class A2DPBridge:
         finally:
             self._standby_connecting.discard(address)
 
-    async def request_receiver_connection(self, address=None, require_online=False):
+    async def request_receiver_connection(self, address=None, require_online=False, force=False):
         address = normalize_address(address or self.state.default_speaker_address())
         if not address:
             self.logger.info("A2DP receiver not requested: no trusted speaker")
             return
+        if not force:
+            _, not_before = self._speaker_backoff.get(address, (0, 0.0))
+            if asyncio.get_running_loop().time() < not_before:
+                self.logger.info("A2DP receiver connect deferred by backoff: %s", address)
+                return
         if require_online:
             speakers = [speaker for speaker in self.state.trusted_speakers if speaker.get("address") == address]
             if not speakers or not (speakers[0].get("online") or speakers[0].get("connected")):
                 self.logger.info("A2DP receiver wait: default speaker not seen online: %s", address)
                 return
-        if self.receiver_rtp_channel is not None and self.receiver_address == address:
+        connector = self._speaker_connector(address)
+        if connector.rtp_channel is not None:
             self.logger.info("A2DP receiver already ready: %s", address)
+            self._sync_receiver_fields(connector)
             return
         if self._connect_task is not None and not self._connect_task.done():
             self.logger.info("A2DP receiver connect already in progress")
@@ -863,7 +978,8 @@ class A2DPBridge:
         # смысл (например, classic-link дропнул и надо переподнять).
         if not normalize_address(self.state.default_speaker_address()):
             return
-        if self.receiver_rtp_channel is not None:
+        connector = self._selected_speaker_connector()
+        if connector is not None and connector.rtp_channel is not None:
             return
         if self._connect_task is not None and not self._connect_task.done():
             return
@@ -882,18 +998,24 @@ class A2DPBridge:
         self._receiver_retry_task = asyncio.create_task(_retry())
 
     async def _connect_receiver(self, address):
+        address = normalize_address(address)
+        connector = self._speaker_connector(address)
         try:
             await self.setup_receiver(address=address)
             self._speaker_backoff.pop(address, None)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            self.receiver_address = None
+            connector.connecting = False
+            connector.rtp_channel = None
+            connector.last_error = error_text(exc)
+            if self.receiver_address == address:
+                self.receiver_address = None
+                self.receiver_rtp_channel = None
+                self.receiver_last_error = connector.last_error
             self.receiver_connecting_address = None
-            self.receiver_rtp_channel = None
-            self.receiver_last_error = error_text(exc)
             self.state.transfer_status = "failed"
-            self.state.transfer_error = self.receiver_last_error
+            self.state.transfer_error = connector.last_error
             if address in self._speaker_connections:
                 self.state.set_speaker_connected(address, True)
             self.on_state_change()
@@ -1105,6 +1227,12 @@ class A2DPBridge:
                 # enrollment даёт role="device" → standby-цикл колонку НЕ звонит →
                 # Fosi после рестарта виснет в режиме пары.
                 uuids = {"audio_sink"}
+            else:
+                # Discovery CoD already proved this candidate is an audio output.
+                # Some receivers advertise AVRCP/HFP SDP but omit the A2DP Sink UUID;
+                # do not let enrichment erase the speaker role established above.
+                uuids = set(uuids or ())
+                uuids.update({"audio_sink", "110b"})
             self.state.enroll_trusted_device(address, name=label,
                                              class_of_device=cod, service_uuids=uuids)
             self.logger.info("device card enriched: %s -> %s", address, sorted(uuids))
@@ -1563,15 +1691,23 @@ class A2DPBridge:
             except Exception:
                 pass
 
-    async def _close_receiver_protocol(self):
+    async def _close_receiver_protocol(self, address=None):
         """[CLAUDE 2026-06-11] Закрыть AVDTP-сигнальный канал ЯВНО перед пересозданием —
         иначе у колонки остаётся занятый слот и новый connect ловит 0x4."""
-        proto = self.receiver_protocol
-        self.receiver_protocol = None
-        self.receiver_source = None
-        self.receiver_stream = None
-        self.receiver_rtp_channel = None
-        self.receiver_address = None
+        address = normalize_address(address or self.receiver_address)
+        connector = self._speaker_connectors.get(address) if address else self._current_receiver_connector()
+        proto = connector.protocol if connector is not None else self.receiver_protocol
+        if connector is not None:
+            connector.protocol = None
+            connector.source = None
+            connector.stream = None
+            connector.rtp_channel = None
+            connector.connecting = False
+            connector.last_error = ""
+            if self.receiver_address == connector.address:
+                self._sync_receiver_fields(None)
+        else:
+            self._sync_receiver_fields(None)
         if proto is not None:
             try:
                 channel = getattr(proto, "l2cap_channel", None)
@@ -1579,23 +1715,42 @@ class A2DPBridge:
                     await channel.disconnect()
             except Exception as exc:
                 self.logger.info("A2DP receiver signaling close ignored: %s", error_text(exc))
+        selected = self._selected_speaker_connector()
+        if selected is not None:
+            self._sync_receiver_fields(selected)
 
-    async def on_receiver_disconnected(self, reason):
-        self.logger.warning("A2DP receiver disconnected: reason=0x%02x", reason)
-        self.receiver_connection = None
-        self.receiver_protocol = None
-        self.receiver_source = None
-        self.receiver_stream = None
-        self.receiver_rtp_channel = None
-        self.receiver_address = None
+    async def on_receiver_disconnected(self, reason, address=None):
+        address = normalize_address(address or self.receiver_address)
+        self.logger.warning("A2DP receiver disconnected: address=%s reason=0x%02x", address or "?", reason)
+        connector = self._speaker_connectors.get(address)
+        error = f"disconnected 0x{reason:02x}"
+        if connector is not None:
+            connector.connection = None
+            connector.protocol = None
+            connector.source = None
+            connector.stream = None
+            connector.rtp_channel = None
+            connector.connecting = False
+            connector.last_error = error
         self.receiver_connecting_address = None
-        self.receiver_last_error = f"disconnected 0x{reason:02x}"
-        self.state.transfer_status = "failed"
-        self.state.transfer_error = self.receiver_last_error
+        if self.receiver_address == address:
+            self._sync_receiver_fields(None)
+        selected = self._selected_speaker_connector()
+        if selected is not None and selected.address != address:
+            self._sync_receiver_fields(selected)
+        else:
+            self.receiver_last_error = error
+        if (
+            address == normalize_address(self.state.default_speaker_address())
+            and self.source_stream_active
+            and getattr(self.state, "transfer_active", False)
+        ):
+            self.state.transfer_status = "failed"
+            self.state.transfer_error = error
         self.on_state_change()
         self.schedule_receiver_retry(delay=1.5)
 
-    async def stop_receiver_stream(self):
+    async def stop_receiver_stream(self, address=None):
         """[CLAUDE 2026-06-11] SUSPEND, НЕ teardown (INVARIANTS п.3). Раньше здесь
         закрывался stream и обнулялся receiver_protocol БЕЗ закрытия сигнального
         L2CAP-канала AVDTP -> у Fosi оставалась висящая сессия, повторный
@@ -1604,14 +1759,32 @@ class A2DPBridge:
         пересылку (rtp_channel=None -> гейт forward_packet) + AVDTP SUSPEND;
         сессия остаётся held, возврат маршрута = stream.start() (resume).
         Полный teardown — ТОЛЬКО при разрыве ACL (on_receiver_disconnected)."""
-        stream = self.receiver_stream
-        self.receiver_rtp_channel = None      # гейт пересылки выключен
+        target_address = normalize_address(address)
+        if target_address:
+            connectors = [self._speaker_connector(target_address)]
+        else:
+            connectors = [
+                connector for connector in self._speaker_connectors.values()
+                if connector.stream is not None or connector.rtp_channel is not None
+            ]
+            if not connectors and self.receiver_stream is not None and normalize_address(self.receiver_address):
+                connectors = [self._current_receiver_connector() or self._speaker_connector(self.receiver_address)]
         self.receiver_connecting_address = None
-        if stream is not None:
+        for connector in [connector for connector in connectors if connector is not None]:
+            stream = connector.stream
+            connector.rtp_channel = None      # гейт пересылки выключен
+            connector.connecting = False
             try:
-                await stream.stop()           # AVDTP SUSPEND — Fosi умеет resume
+                if stream is not None:
+                    await stream.stop()       # AVDTP SUSPEND — Fosi умеет resume
             except Exception as exc:
-                self.logger.info("A2DP receiver stream suspend ignored: %s", error_text(exc))
+                self.logger.info(
+                    "A2DP receiver stream suspend ignored: %s: %s",
+                    connector.address,
+                    error_text(exc),
+                )
+        current = self._current_receiver_connector()
+        self._sync_receiver_fields(current)
         self.state.transfer_status = "standby"
         self.on_state_change()
 
@@ -1633,15 +1806,16 @@ class A2DPBridge:
         protocol.l2cap_channel.on(
             protocol.l2cap_channel.EVENT_CLOSE, _clear_source_avdtp
         )
-        # SBC-only is the mandatory A2DP interoperability baseline. Keep it as
-        # an isolated lab switch so optional AAC cannot obscure route failures.
-        baseline = os.environ.get("CARTHING_A2DP_SINK_BASELINE") == "1"
-        if not baseline:
+        # We forward encoded RTP without transcoding. Offer AAC only when the
+        # selected output route can accept the AAC stream too; otherwise force
+        # the iPhone to negotiate the mandatory SBC baseline.
+        offer_aac = self._source_should_offer_aac()
+        if offer_aac:
             self._install_source_sink(protocol, peer_address, "AAC", make_aac_capabilities())
         self._install_source_sink(protocol, peer_address, "SBC", make_sbc_capabilities())
         self.logger.info(
             "A2DP source endpoint profile=%s",
-            "SBC-only baseline" if baseline else "AAC+SBC",
+            "AAC+SBC" if offer_aac else "SBC-only route-compatible",
         )
 
     def _install_source_sink(self, protocol, peer_address, codec_name, capabilities):
@@ -1658,6 +1832,7 @@ class A2DPBridge:
 
         def on_set_configuration(configuration):
             self.logger.info("A2DP_SOURCE_SET_CONFIGURATION codec=%s %s", codec_name, configuration)
+            self.source_codec_name = codec_name
             return original_set_configuration(configuration)
 
         def on_open():
@@ -1667,6 +1842,7 @@ class A2DPBridge:
 
         def on_start():
             self.logger.info("A2DP_SOURCE_START codec=%s", codec_name)
+            self.source_codec_name = codec_name
             self.source_stream_active = True
             self.state.transfer_active = True
             self.state.transfer_source = normalize_address(peer_address)
@@ -1687,6 +1863,7 @@ class A2DPBridge:
         def on_close():
             self.logger.info("A2DP_SOURCE_CLOSE codec=%s", codec_name)
             self.source_stream_active = False
+            self.source_codec_name = ""
             # Поток источника закрыт -> маршрут больше не активен.
             self.state.transfer_active = False
             self.state.transfer_source = ""
@@ -1696,6 +1873,7 @@ class A2DPBridge:
         def on_abort():
             self.logger.info("A2DP_SOURCE_ABORT codec=%s", codec_name)
             self.source_stream_active = False
+            self.source_codec_name = ""
             self.state.transfer_active = False
             self.state.transfer_source = ""
             asyncio.create_task(self.stop_receiver_stream())
@@ -1748,11 +1926,62 @@ class A2DPBridge:
     def forward_packet(self, packet):
         payload = bytes(packet)
         sent = False
-        if self.receiver_rtp_channel is not None:
-            self.receiver_rtp_channel.send_pdu(payload)
-            sent = True
-            self.packets_forwarded += 1
-            self.bytes_forwarded += len(payload)
+        selected_address = normalize_address(self.state.default_speaker_address())
+        connector = self._speaker_connectors.get(selected_address) if selected_address else None
+        mismatch = self._source_receiver_codec_mismatch(connector)
+        if mismatch is not None:
+            source_codec, receiver_codec = mismatch
+            self.packets_dropped += 1
+            if self.packets_dropped < 10 or self.packets_dropped % 250 == 0:
+                self.logger.warning(
+                    "A2DP RTP codec mismatch dropped: speaker=%s source=%s receiver=%s",
+                    selected_address,
+                    source_codec,
+                    receiver_codec,
+                )
+            if self._source_codec_reconnect_task is None or self._source_codec_reconnect_task.done():
+                self._source_codec_reconnect_task = asyncio.create_task(
+                    self.ensure_source_codec_matches_route()
+                )
+            sent = False
+            count = self.packets_dropped
+            if count < 10 or count % 250 == 0:
+                self.logger.info(
+                    "A2DP_BRIDGE_RTP forwarded=%d dropped=%d bytes=%d sent_to_speaker=%s",
+                    self.packets_forwarded,
+                    self.packets_dropped,
+                    len(payload),
+                    sent,
+                )
+            return
+        channel = connector.rtp_channel if connector is not None else None
+        if channel is None and self.receiver_address == selected_address:
+            channel = self.receiver_rtp_channel
+        if channel is not None:
+            try:
+                channel.send_pdu(payload)
+                sent = True
+                self.packets_forwarded += 1
+                self.bytes_forwarded += len(payload)
+            except Exception as exc:
+                # RTP callbacks run inside Bumble's packet path. Never let a closed
+                # media channel raise back into that path; it floods Tracebacks and
+                # starves the GUI/render loop.
+                error = error_text(exc)
+                if connector is not None:
+                    connector.source = None
+                    connector.stream = None
+                    connector.rtp_channel = None
+                    connector.last_error = error
+                if self.receiver_address == selected_address:
+                    self.receiver_source = None
+                    self.receiver_stream = None
+                    self.receiver_rtp_channel = None
+                    self.receiver_last_error = error
+                self.packets_dropped += 1
+                self.logger.warning("A2DP RTP send dropped: speaker=%s error=%s", selected_address, error)
+                if self.source_stream_active and getattr(self.state, "transfer_active", False):
+                    self.schedule_receiver_retry(delay=0.2)
         elif self.source_stream_active and getattr(self.state, "transfer_active", False):
             self.packets_dropped += 1
             self.schedule_receiver_retry(delay=0.2)
@@ -1788,7 +2017,15 @@ class A2DPBridge:
                 lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(peer_address, reason)),
             )
             if self.state.transfer_active and self.source_stream_active:
-                await self.request_receiver_for_active_source(peer_address)
+                selected = normalize_address(self.state.default_speaker_address())
+                if peer_address == selected:
+                    await self.request_receiver_for_active_source(peer_address)
+                else:
+                    self.logger.info(
+                        "A2DP speaker classic ignored for active route: peer=%s selected=%s",
+                        peer_address,
+                        selected,
+                    )
         elif self.state.is_trusted_source(peer_address):
             # [CLAUDE 2026-06-02] Входящий classic от доверенного источника (айфон сам
             # подключился). Храним ACL, чтобы CarThing мог инициировать teardown (disconnect_source).
@@ -1810,7 +2047,10 @@ class A2DPBridge:
         self._speaker_backoff.pop(address, None)
         self.state.set_speaker_online(address, False)
         self.state.set_speaker_connected(address, False)
-        if self.receiver_address == address:
-            await self.on_receiver_disconnected(reason)
+        connector = self._speaker_connectors.get(address)
+        if connector is not None:
+            connector.connection = None
+        if self.receiver_address == address or connector is not None:
+            await self.on_receiver_disconnected(reason, address)
         else:
             self.on_state_change()

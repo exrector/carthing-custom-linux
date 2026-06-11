@@ -183,3 +183,403 @@ boot-честность (принудительный Play Now после реб
 всегда показывает правду, а роутер сам восстанавливает маршрут.
 
 Порядок внедрения: шаг 1 → шаг 2 → прогнать тест-серию §2 заново → только потом шаг 3.
+
+---
+
+## Дополнение 2026-06-11: Codex continuation — Cable/Fosi route tests and guardrails
+
+Контекст: владелец начал новую Codex-сессию от этого runbook. Работа шла по задаче
+№1 — серия маршрутных тестов, сначала Fosi как контроль, затем добавление второго
+выхода `Maedhawk BT Cable`.
+
+Файлы, изменённые Codex на момент записи:
+- `overlay/usr/lib/carthing/a2dp_bridge.py`
+- `overlay/usr/lib/carthing/carthing_runtime.py`
+- новый append-only лог `docs/route-test-series-results.md`
+
+Важно: изменения горячо задеплоены через `tools/deploy`, но на момент записи НЕ
+закоммичены. Git status был:
+
+```text
+ M overlay/usr/lib/carthing/a2dp_bridge.py
+ M overlay/usr/lib/carthing/carthing_runtime.py
+?? docs/route-test-series-results.md
+```
+
+### 1. Maedhawk добавлялся, но GUI его не показывал
+
+Живой симптом:
+- `[ADD]` находил `Maedhawk BT Cable`, адрес `41:42:9C:A0:BD:14`, `audio=True`.
+- Classic bond/link key записывался в `keys.json`.
+- A2DP endpoint discovery и `A2DP stream opened+held after pairing` были в логе.
+- Но в `state.json` не появлялась speaker-карточка, поэтому GUI не показывал Cable как output.
+
+Диагноз:
+- SDP enrichment для Cable вернул UUID вроде `111e`, но не вернул `110b/audio_sink`.
+- Enrollment мог потерять уже доказанную роль `speaker`, хотя discovery CoD и pairing flow
+  уже доказали `audio=True`.
+
+Правка:
+- В `a2dp_bridge.py`, в `pair_speaker()`, если candidate уже audio-output, enrichment
+  теперь добавляет `audio_sink` и `110b` к UUID-набору, а не даёт неполному SDP стереть
+  speaker-role.
+
+Проверено:
+- `py_compile` OK.
+- smoke import с `PYTHONPATH=overlay/usr/lib/carthing:overlay/usr/lib/carthing/vendor` OK.
+- После деплоя повторный `[ADD]` дал:
+  `device card enriched: 41:42:9C:A0:BD:14 -> ['0003', '0100', '1002', '110b', '111e', '1203', 'audio_sink']`.
+- `state.json` теперь содержит:
+  `speaker Maedhawk BT Cable 41:42:9C:A0:BD:14 ['audio_output', 'control_input', 'transport_control', 'volume_control']`.
+
+### 2. Maedhawk selected, но звук позже уходил в Fosi
+
+Живой симптом владельца:
+- Maedhawk выбран как выход, маршрут выглядит активным, но звука нет.
+- Через некоторое время звук сам появляется на Fosi.
+
+Лог подтвердил:
+- Maedhawk receiver попытки сыпались `L2CAP/CONNECTION_REFUSED_NO_RESOURCES_AVAILABLE [0x4]`.
+- В этот период RTP: `sent_to_speaker=False`, dropped рос.
+- Потом standby подключал Fosi, открывал его receiver, и RTP менялся на `sent_to_speaker=True`.
+
+Диагноз:
+- `handle_classic_connection()` разрешал любой доверенной колонке при входящем classic
+  connection вызвать `request_receiver_for_active_source(peer_address)`.
+- То есть standby reconnect Fosi мог украсть receiver у выбранного Maedhawk.
+- Плюс receiver request entrypoint не уважал `_speaker_backoff`, из-за чего `0x4`
+  мог давать частые повторные попытки вместо реальной паузы.
+
+Правка:
+- `handle_classic_connection()` теперь открывает receiver для активного source только если
+  peer address совпадает с выбранным/default speaker. Иначе пишет:
+  `A2DP speaker classic ignored for active route: peer=... selected=...`.
+- `ensure_trusted_speakers_connected()` при активном source/transfer не открывает standby
+  receiver на невыбранную колонку.
+- `request_receiver_connection(..., force=False)` теперь уважает `_speaker_backoff`.
+- Явный route selection в `carthing_runtime._apply_route_output()` вызывает
+  `request_receiver_connection(key, force=True)`, чтобы ручной `[LNK]` оставался осознанной
+  попыткой, даже если был backoff.
+
+Проверено после деплоя:
+- `GUI active`
+- `AMS: ready`
+- `grep -c Traceback` → `0`
+
+Нужно ещё проверить руками:
+- Выбрать `Maedhawk BT Cable` → `[LNK]`.
+- Если Maedhawk всё ещё даёт `0x4`, звук НЕ должен сам уходить на Fosi.
+- Тогда отдельная проблема остаётся именно в Maedhawk AVDTP/resources, а route-steal
+  должен быть закрыт.
+
+### 3. Архитектурная договорённость с владельцем
+
+Владелец уточнил ожидаемую модель:
+- Play Now — дефолтная и самая безопасная поверхность. После старта и между маршрутами
+  система должна стремиться к Play Now/нейтральному состоянию, чтобы не было путаницы и
+  самопроизвольного переключения output.
+- Возможно, Play Now стоит использовать как промежуточную фазу при смене маршрутов:
+  старый route suspend/settle → Play Now/тишина → deliberate activation нового route.
+- Каждое устройство должно иметь одну карточку и собственный connector/adapter-state.
+  Одна физическая BT-персона может иметь несколько endpoints и попадать одновременно
+  в `Inputs` и `Outputs`, но это НЕ должно плодить две независимые device rows.
+- Fosi path уже доказан рабочим и должен считаться golden path. При переходе к per-device
+  connectors нельзя ломать существующую Fosi-карточку/standby/AVDTP поведение; миграция
+  должна быть совместимой и поэтапной.
+
+Текущий код ещё не полностью соответствует этой модели: `a2dp_bridge` всё ещё хранит
+один глобальный active receiver (`receiver_protocol`, `receiver_stream`, `receiver_rtp_channel`,
+`receiver_address`). Последние правки — guardrails от route-steal, НЕ полная реализация
+per-device connector architecture.
+
+### 4. Play Now metadata UI
+
+Владелец заметил, что на Play Now длинные title/artist не помещаются. Решение, которое
+сейчас обсуждается:
+- НЕ трогать title: оставить крупным как сейчас.
+- Сделать бегущей строкой только artist, если он не помещается в одну строку.
+
+Пока НЕ реализовано.
+
+---
+
+## Дополнение 2026-06-11: Codex implemented Play Now artist marquee
+
+Контекст: владелец уточнил UI-решение для длинных метаданных Play Now:
+- title НЕ трогать, оставить крупным как сейчас;
+- сделать бегущей строкой только artist, если artist не помещается в одну строку.
+
+Изменение:
+- `overlay/usr/lib/carthing/screens.py`
+- `NowPlayingScreen` получил `_draw_artist_line()`.
+- Короткий artist центрируется как раньше.
+- Длинный artist рисуется в clipped viewport шириной `T.CONTENT_W` и медленно скроллится.
+- Title rendering оставлен прежним: крупный текст, максимум 4 строки с truncate на последней.
+
+Проверка до деплоя:
+- `python3 -m py_compile overlay/usr/lib/carthing/screens.py`
+- `PYTHONPATH=overlay/usr/lib/carthing CARTHING_UI_THEME=terminal python3 -c "import screens"`
+- `PYTHONPATH=overlay/usr/lib/carthing CARTHING_UI_THEME=dark python3 -c "import screens"`
+- Сгенерированы dev-preview PNG для terminal/dark с длинным artist; визуально artist
+  остаётся одной строкой и не лезет в bottom bar/encoder zone.
+
+Деплой:
+- `tools/deploy usr/lib/carthing/screens.py --restart`
+
+Live-проверка после деплоя:
+- `GUI active`
+- `AMS: ready`
+- `grep -c Traceback` → `0`
+- В логе сразу появился реальный длинный artist:
+  `Murray Perahia, Wolfgang Amadeus Mozart, English Chamber Orchestra`, что подходит
+  для live-проверки на устройстве.
+
+---
+
+## Дополнение 2026-06-11: Codex follow-up — global receiver guardrail tightened
+
+После первого route-steal guardrail владелец попросил вернуться к устройствам. Повторный
+лог показал, что Fosi всё ещё мог стать фактическим receiver не через active-source branch,
+а раньше: standby открывал AVDTP к Fosi до того, как `source_stream_active=True`. Когда
+iPhone начинал лить RTP, уже открытый Fosi receiver принимал поток.
+
+Дополнительная правка:
+- `overlay/usr/lib/carthing/a2dp_bridge.py`
+- `ensure_trusted_speakers_connected()` теперь вычисляет `receiver_target =
+  default_speaker_address()` и открывает AVDTP standby receiver только для этого адреса.
+- Остальные trusted speakers не получают media receiver standby, пока `a2dp_bridge`
+  имеет один глобальный `receiver_protocol/receiver_stream/receiver_rtp_channel`.
+
+Смысл:
+- Это НЕ финальная per-device connector architecture.
+- Это guardrail для текущей single-receiver реализации: невыбранная Fosi больше не должна
+  занимать единственный receiver-slot, когда default/selected output — Maedhawk.
+- Fosi остаётся trusted и golden path, но не должен становиться фактическим output без
+  явного выбора/default.
+
+Проверка:
+- `python3 -m py_compile overlay/usr/lib/carthing/a2dp_bridge.py`
+- `PYTHONPATH=overlay/usr/lib/carthing:overlay/usr/lib/carthing/vendor python3 -c "import a2dp_bridge"`
+- `tools/deploy usr/lib/carthing/a2dp_bridge.py --restart`
+- после рестарта: `GUI active`, `AMS: ready`, `Traceback=0`
+- `state.json`: Maedhawk default speaker, Fosi trusted but not default.
+- 30-секундный live-tail после рестарта не показал новых Fosi standby/receiver событий.
+
+Следующая ручная проверка:
+- Play Now → выбрать `Maedhawk BT Cable` → `[LNK]` → включить iPhone audio.
+- Если Maedhawk снова даёт `0x4`/тишину, Fosi НЕ должен сам стать `sent_to_speaker=True`.
+
+### Correction: этот guardrail отменён
+
+Владелец сразу поймал регрессию: запрет non-default AVDTP standby ломает Fosi.
+Fosi требует held AVDTP standby, иначе уходит обратно в pairing/discoverable состояние.
+
+Что сделано после замечания владельца:
+- Из `ensure_trusted_speakers_connected()` удалён фильтр `address != default_speaker_address()`.
+- `a2dp_bridge.py` снова задеплоен через `tools/deploy usr/lib/carthing/a2dp_bridge.py --restart`.
+- После рестарта:
+  - `GUI active`
+  - `AMS: ready`
+  - `Traceback=0`
+  - Fosi снова поднял receiver:
+    `A2DP receiver sink selected: address=C4:A9:B8:70:2F:E5 codec=AAC seid=3`
+    и `A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3`.
+
+Текущая позиция:
+- Fosi golden path восстановлен.
+- Нельзя решать route-steal простым отключением standby для невыбранных колонок.
+- Оставшиеся guardrails допустимы: backoff на receiver retry и запрет active-source
+  classic connection от невыбранного speaker вызывать receiver.
+- Настоящее решение — per-device connector state или аккуратная transition-state между
+  Play Now и выбранным output, но без потери Fosi standby-инварианта.
+
+---
+
+## Дополнение 2026-06-11: Codex implementation — per-speaker connector state
+
+Владелец сформулировал правильную архитектурную границу: мы не знаем, какое следующее
+Bluetooth-устройство появится и какие standby/AVDTP/AVRCP условия оно потребует.
+Ручные исключения под Fosi или Maedhawk не масштабируются. Нужен слой, где каждое
+trusted output-устройство получает собственное состояние коннектора.
+
+Что реализовано:
+- `overlay/usr/lib/carthing/a2dp_bridge.py`
+- Добавлен `SpeakerConnector` и карта `_speaker_connectors[address]`.
+- Старые поля `receiver_connection/receiver_protocol/receiver_stream/receiver_rtp_channel/...`
+  оставлены как compatibility view текущего выбранного коннектора, чтобы не ломать
+  остальной runtime одним большим рефактором.
+- `setup_receiver()` теперь пишет AVDTP protocol/source/stream/rtp_channel/error в connector
+  конкретного speaker address.
+- `_close_receiver_protocol()`, `on_receiver_disconnected()`, `stop_receiver_stream()`,
+  `receiver_loop()`, `request_receiver_connection()` и retry path переведены на connector-aware
+  поведение.
+- `forward_packet()` больше не отправляет RTP в "последний открытый receiver". Он берёт
+  `default_speaker_address()` и шлёт только в `rtp_channel` выбранного speaker connector.
+  Это ключевой guardrail против Fosi route-steal при выбранном Maedhawk.
+- `setup_receiver()` заменил `set_connected_speaker()` на `set_speaker_connected(address, True)`.
+  Это важно для новой модели: несколько standby output-коннекторов могут быть живы одновременно;
+  выбор маршрута не должен стирать connected state других устройств.
+
+Что намеренно НЕ сделано этим шагом:
+- Не введены параллельные connect task per speaker. Пока `_connect_task` остаётся глобальным
+  сериализатором HCI/AVDTP операций.
+- Не переписан весь registry/GUI contract; device cards остаются на существующей модели.
+- Не удалён Fosi held standby. Напротив, per-device connector state нужен именно потому, что
+  Fosi требует standby, а Maedhawk должен иметь независимый connector.
+
+Проверка до деплоя:
+- `python3 -m py_compile overlay/usr/lib/carthing/a2dp_bridge.py`
+- `PYTHONPATH=overlay/usr/lib/carthing:overlay/usr/lib/carthing/vendor python3 -c "import a2dp_bridge; print('import ok')"`
+
+Деплой:
+- `tools/deploy usr/lib/carthing/a2dp_bridge.py --restart`
+- После первой проверки добавлена correction: `set_connected_speaker()` заменён на
+  `set_speaker_connected(address, True)`, затем выполнен второй deploy того же файла.
+
+Live-проверка после второго деплоя:
+- `GUI active`
+- `AMS: ready`
+- `Traceback=0`
+- Свежий log window после `2026-06-11 20:27:03`:
+  - `A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3` для Fosi (`C4:A9:B8:70:2F:E5`)
+  - `A2DP_SPEAKER_STREAM_STARTED codec=SBC seid=1` для Maedhawk (`41:42:9C:A0:BD:14`)
+  - нет новых `A2DP receiver disconnected`
+  - нет новых `A2DP receiver connect failed`
+
+Следующая ручная проверка:
+- В GUI выбрать `Maedhawk BT Cable` как output, включить iPhone audio.
+- Ожидаемое поведение после этой реализации: если Maedhawk способен принять RTP, звук идёт
+  на Maedhawk; если Maedhawk молчит/ломается, Fosi не должен становиться фактическим
+  `sent_to_speaker=True` только потому, что его standby connector жив.
+- Если звук на Maedhawk всё ещё не слышен, следующий слой диагностики — сам Maedhawk
+  receiver path: codec SBC, endpoint seid=1, AVRCP volume=120, возможная mute/line-output/
+  analog-side проблема или AVDTP stream state, а не route stealing.
+
+### Hotfix after live route test: RTP callback must not raise
+
+Live test immediately after per-speaker connector deployment:
+- Owner started music and switched route to Maedhawk.
+- GUI appeared frozen and no audio was heard.
+
+Evidence:
+- Log flooded with thousands of Tracebacks from Bumble packet path.
+- Root exception:
+  `bumble.core.InvalidStateError: channel not open`
+- Stack pointed to `a2dp_bridge.py forward_packet()` calling `channel.send_pdu(payload)`.
+- This happened after Maedhawk initially accepted RTP:
+  `A2DP_BRIDGE_RTP forwarded=1..9 sent_to_speaker=True`, then its RTP channel closed.
+
+Fix applied:
+- `forward_packet()` now wraps `channel.send_pdu(payload)` in `try/except`.
+- On send failure it:
+  - does not let the exception escape Bumble's packet callback;
+  - clears selected connector `source/stream/rtp_channel`;
+  - clears legacy `receiver_source/receiver_stream/receiver_rtp_channel` if it is the selected route;
+  - increments dropped packet count;
+  - logs one `A2DP RTP send dropped: speaker=... error=...`;
+  - schedules receiver retry, which now forces a full stream rebuild instead of resuming a dead media channel.
+
+Verification after final hotfix deploy:
+- `python3 -m py_compile overlay/usr/lib/carthing/a2dp_bridge.py`
+- `PYTHONPATH=overlay/usr/lib/carthing:overlay/usr/lib/carthing/vendor python3 -c "import a2dp_bridge; print('import ok')"`
+- `tools/deploy usr/lib/carthing/a2dp_bridge.py --restart`
+- Fresh window after `2026-06-11 20:36:00`:
+  - `GUI active`
+  - `AMS: ready`
+  - Fosi: `A2DP_SPEAKER_STREAM_STARTED codec=AAC seid=3`
+  - Maedhawk: `A2DP_SPEAKER_STREAM_STARTED codec=SBC seid=1`
+  - no fresh `Traceback`
+  - no fresh `Exception in on_packet`
+
+Current interpretation:
+- GUI freeze was not a renderer bug. It was log/event-loop starvation from unhandled RTP send
+  exceptions in the Bumble packet callback.
+- Maedhawk can accept an AVDTP stream and initially receives RTP, but its media channel closed
+  shortly after playback. The next diagnostic target is why Maedhawk closes its RTP channel or
+  why its analog side remains silent, not Fosi stealing the route.
+
+### Codec compatibility finding: AAC source into SBC-only Maedhawk
+
+Owner clarified after the hotfix:
+- Maedhawk is selected and iPhone sees Car Thing as the audio output.
+- iPhone keeps sending music, but no sound is heard on Maedhawk.
+
+Log evidence:
+- iPhone repeatedly configured Car Thing input as AAC:
+  `A2DP_SOURCE_SET_CONFIGURATION codec=AAC`
+- Maedhawk receiver is SBC-only in this run:
+  `A2DP receiver sink selected: address=41:42:9C:A0:BD:14 codec=SBC seid=1`
+- The bridge forwards encoded RTP; it does not transcode AAC to SBC.
+
+Conclusion:
+- This is a codec mismatch, not a route-selection bug.
+- Fosi works with AAC because its receiver accepts AAC.
+- Maedhawk accepts only SBC, so AAC RTP delivered into the Maedhawk SBC stream produces
+  silence and/or closes the media channel.
+
+Fix applied:
+- `a2dp_bridge.py` now tracks `source_codec_name`.
+- Source endpoint advertisement is route-aware:
+  - if selected receiver codec is SBC, Car Thing offers iPhone `SBC-only route-compatible`;
+  - otherwise it can still offer `AAC+SBC`.
+- `forward_packet()` now drops codec-mismatched RTP instead of sending it into the wrong
+  decoder, and schedules source renegotiation.
+- `carthing_runtime._apply_route_output()` now calls
+  `bridge.ensure_source_codec_matches_route()` after selecting/preparing a speaker route.
+
+Verification:
+- Local `py_compile` and import passed.
+- Deployed `a2dp_bridge.py` and `carthing_runtime.py` with restart.
+- Fresh window after `2026-06-11 20:41:00`:
+  - `GUI active`
+  - `AMS: ready`
+  - Fosi receiver: AAC
+  - Maedhawk receiver: SBC
+  - no fresh `Traceback`
+
+Next manual test:
+- Select Maedhawk.
+- Re-select Car Thing as iPhone audio output if iOS stays on the old AAC source session.
+- Expected log for Maedhawk success path:
+  - `A2DP source endpoint profile=SBC-only route-compatible`
+  - `A2DP_SOURCE_SET_CONFIGURATION codec=SBC`
+  - `A2DP_SOURCE_START codec=SBC`
+  - `A2DP_BRIDGE_RTP ... sent_to_speaker=True`
+
+### Correction after owner report: GUI output and bridge default diverged
+
+Owner reported:
+- Fosi stopped behaving as an output.
+- Selecting Fosi in GUI still resulted in Maedhawk being used.
+
+Evidence:
+- `state.json` showed:
+  - Fosi: `route_output=True`
+  - Maedhawk: `default=True`
+- `forward_packet()` and source codec negotiation use `bridge.state.default_speaker_address()`.
+- Runtime route selection updated `gui.app_state.select_default_speaker(key)`, but did not update
+  `transfer.bridge.state.select_default_speaker(key)`.
+- `_on_route_output_select()` also saved trusted state before `_apply_route_output()` changed
+  the default speaker, so default speaker changes were not persisted reliably.
+
+Fix applied:
+- `carthing_runtime._apply_route_output()` now updates both:
+  - `gui.app_state.select_default_speaker(key)`
+  - `transfer.bridge.state.select_default_speaker(key)`
+- It then calls `gui.app_state.save_trusted()` after the default speaker mutation.
+
+Verification:
+- `python3 -m py_compile overlay/usr/lib/carthing/carthing_runtime.py`
+- `PYTHONPATH=overlay/usr/lib/carthing:overlay/usr/lib/carthing/vendor python3 -c "import carthing_runtime; print('import ok')"`
+- Deployed `usr/lib/carthing/carthing_runtime.py --restart`.
+
+Important:
+- This was the cause of "Fosi selected but Maedhawk still used".
+- After this fix, selecting Fosi again should update the transport default, not only the GUI row.
+
+Hardware note from this turn:
+- Car Thing has live ALSA card `AML-AUGESOUND`.
+- PCM `00-00` is `TDM-A-T9015-audio-hifi-alsaPORT-i2s ... playback 1 : capture 1`.
+- The current Bluetooth-to-Bluetooth relay path does not use T9015/ALSA; it forwards encoded RTP
+  between A2DP sessions. T9015 would matter for local Play Now / analog playback / a future
+  decode-transcode-mix pipeline.

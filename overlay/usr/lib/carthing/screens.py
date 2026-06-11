@@ -58,6 +58,34 @@ class NowPlayingScreen(Screen):
             self.emit("media_prev"); return True
         return False
 
+    def _draw_artist_line(self, img, draw, text, y):
+        fnt = T.font(T.SZ_BODY)
+        color = T.MUTED
+        max_w = T.CONTENT_W
+        text = str(text or "").strip()
+        if not text:
+            return
+        if C.text_w(draw, text, fnt) <= max_w:
+            C.text_centered(draw, text, fnt, color, y, cx=T.CONTENT_CX)
+            return
+
+        x = T.CONTENT_CX - max_w // 2
+        text_w = C.text_w(draw, text, fnt)
+        gap = 96
+        speed = 28.0
+        pause = 1.4
+        cycle = pause + (text_w + gap) / speed
+        t = time.monotonic() % cycle
+        offset = 0 if t < pause else int((t - pause) * speed)
+
+        layer_h = 44
+        layer = Image.new("RGBA", (max_w, layer_h), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(layer)
+        fill = color + (255,) if len(color) == 3 else color
+        ld.text((-offset, 0), text, font=fnt, fill=fill)
+        ld.text((text_w + gap - offset, 0), text, font=fnt, fill=fill)
+        img.paste(layer.convert("RGB"), (x, y), layer)
+
     def render(self, regions=None):
         img, draw = self.blank()
         sess = self.state.iphone if self.state else None
@@ -74,24 +102,15 @@ class NowPlayingScreen(Screen):
         if len(lines) > MAXL:
             lines = lines[:MAXL]
             lines[-1] = C.truncate(draw, lines[-1] + "…", T.font(T.SZ_TITLE), T.CONTENT_W)
-        # Artist ТОЖЕ переносится в CONTENT_W (иначе длинный исполнитель прёт за границы
-        # MAIN через весь экран). Лимит 2 строки + многоточие.
-        alines = []
-        if sess.artist:
-            alines = C.wrap_lines(draw, sess.artist, T.font(T.SZ_BODY), T.CONTENT_W)
-            MAXA = 2
-            if len(alines) > MAXA:
-                alines = alines[:MAXA]
-                alines[-1] = C.truncate(draw, alines[-1] + "…", T.font(T.SZ_BODY), T.CONTENT_W)
         LH, ALH = 56, 40
-        block_h = len(lines) * LH + (len(alines) * ALH + 10 if alines else 0)
+        artist = (sess.artist or "").strip()
+        block_h = len(lines) * LH + (ALH + 10 if artist else 0)
         y = max(T.CONTENT_TOP, T.MAIN_CY - block_h // 2)
         for line in lines:
             C.text_centered(draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX); y += LH
-        if alines:
+        if artist:
             y += 10
-            for aline in alines:
-                C.text_centered(draw, aline, T.font(T.SZ_BODY), T.MUTED, y, cx=T.CONTENT_CX); y += ALH
+            self._draw_artist_line(img, draw, artist, y)
         return img
 
 

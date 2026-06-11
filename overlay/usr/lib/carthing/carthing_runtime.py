@@ -447,10 +447,13 @@ async def _apply_route_output(key):
     if key and key != self_key:
         try:
             gui.app_state.select_default_speaker(key)
+            transfer.bridge.state.select_default_speaker(key)
+            gui.app_state.save_trusted()
         except Exception as e:
             logger.warning("select speaker %s failed: %s", key, e)
         await transfer.bridge.ensure_trusted_speakers_connected()
-        await transfer.bridge.request_receiver_connection()
+        await transfer.bridge.request_receiver_connection(key, force=True)
+        await transfer.bridge.ensure_source_codec_matches_route()
         model.audio_sink = "speaker"
         logger.info("ТРУБА: выход = %s (динамик) — поток льётся туда", key)
     else:
