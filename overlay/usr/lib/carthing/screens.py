@@ -178,7 +178,7 @@ class RouteBuilderScreen(Screen):
     COL_TOP = 70                # верх области скролла строк
     COL_BOTTOM = T.STATUSBAR_TOP - 6   # низ области скролла (над баром)
     ROW_H2 = 56                 # высота двухстрочной строки
-    MAC_FONT = 18               # мелкий шрифт MAC-адреса
+    MAC_FONT = 16               # мелкий шрифт MAC-адреса (16: вторая строка не выпадает из rect)
 
     def __init__(self, emit=None):
         self.state = None
@@ -259,9 +259,13 @@ class RouteBuilderScreen(Screen):
                                outline=(T.STATUS_OK if connected else T.ACCENT), width=2)
             name = dev.get("label") or dev.get("address") or "Device"
             name = C.truncate(draw, name, T.font(T.SZ_SMALL), (x1 - x0) - 44)
-            draw.text((x0 + 12, int(y) + 5), name, font=T.font(T.SZ_SMALL), fill=name_col)
-            mac = str(dev.get("address") or "—")
-            draw.text((x0 + 12, int(y) + 30), mac, font=T.font(self.MAC_FONT), fill=T.FAINT)
+            draw.text((x0 + 12, int(y) + 4), name, font=T.font(T.SZ_SMALL), fill=name_col)
+            # [CLAUDE 2026-06-11] вторая строка ВНУТРИ рамки (раньше MAC на y+30
+            # шрифтом 18 выпадал за низ rect y+48 — «явно некрасиво»). У self-выхода
+            # (Car Thing) адреса нет — показываем тип (Play Now), а не тире-подчёркивание.
+            sub = str(dev.get("address") or dev.get("type") or "")
+            sub = C.truncate(draw, sub, T.font(self.MAC_FONT), (x1 - x0) - 44)
+            draw.text((x0 + 12, int(y) + 28), sub, font=T.font(self.MAC_FONT), fill=T.FAINT)
             self._dot(draw, x1 - 16, int(y) + self.ROW_H2 // 2 - 4, dev)
             if regions is not None:
                 regions.add(rect, intent, payload=key)

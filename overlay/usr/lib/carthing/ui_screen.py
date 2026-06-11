@@ -228,10 +228,11 @@ class Compositor:
     def _handle_tap(self, x, y):
         hit = self._regions.hit(x, y)
         if hit:
-            # [CLAUDE 2026-06-11 v2] обратная связь = вспышка САМОЙ КНОПКИ (региона),
-            # а не кольцо в точке пальца («возникает рандомно» — отклонено владельцем).
-            # Кнопка кратко вспыхивает ярче — детерминированно, под пальцем.
-            self._tap_flash = (hit.rect, time.monotonic())
+            # [CLAUDE 2026-06-11 v3] обратная связь = большое МЯГКОЕ пятно света под
+            # пальцем, БЕЗ границ (v1-кольцо и v2-прямоугольник отклонены владельцем:
+            # «рандомно» / «разного размера, опять границы»). Радиальный градиент,
+            # вспыхнул и погас — инструментами самого экрана.
+            self._tap_flash = (x, y, time.monotonic())
             self.on_intent(hit.intent, hit.payload)
             try:
                 loop = asyncio.get_event_loop()
@@ -321,24 +322,43 @@ class Compositor:
         img = self._apply_tap_flash(img)
         return self.display.present(T.postprocess(img), name=self.current.name)
 
+    _FLASH_R = 78           # радиус пятна вспышки (большое, как просил владелец)
+    _flash_sprite = None    # кэш радиального градиента (строится один раз)
+
     def _apply_tap_flash(self, img):
-        """[CLAUDE 2026-06-11 v2] Вспышка нажатой кнопки: crop региона осветляется
-        (screen с фосфором) + тонкая кромка. Без рандомных колец в точке пальца."""
+        """[CLAUDE 2026-06-11 v3] Большое мягкое пятно света под пальцем: радиальный
+        градиент (ярко в центре, плавно в ноль к краю), screen-наложение, НИКАКИХ
+        контуров/рамок. Затухает за ~0.22 с (два отложенных рендера)."""
         flash = getattr(self, "_tap_flash", None)
-        if flash is None or time.monotonic() - flash[1] >= 0.22:
+        if flash is None:
             return img
-        x0, y0, x1, y1 = (int(v) for v in flash[0])
-        x0 = max(0, x0); y0 = max(0, y0)
-        x1 = min(img.width, x1); y1 = min(img.height, y1)
-        if x1 - x0 < 4 or y1 - y0 < 4:
+        age = time.monotonic() - flash[2]
+        if age >= 0.22:
             return img
+        if Compositor._flash_sprite is None:
+            from PIL import ImageFilter
+            R = Compositor._FLASH_R
+            mask = Image.new("L", (2 * R, 2 * R), 0)
+            md = ImageDraw.Draw(mask)
+            md.ellipse([R * 0.45, R * 0.45, R * 1.55, R * 1.55], fill=255)
+            Compositor._flash_sprite = mask.filter(ImageFilter.GaussianBlur(R * 0.30))
         from PIL import ImageChops
-        box = (x0, y0, x1, y1)
-        crop = img.crop(box)
-        glow = Image.new("RGB", crop.size, tuple(c // 3 for c in T.ACCENT))
-        img.paste(ImageChops.screen(crop, glow), box)
-        fd = ImageDraw.Draw(img)
-        fd.rectangle([x0, y0, x1 - 1, y1 - 1], outline=T.ACCENT, width=2)
+        R = Compositor._FLASH_R
+        fade = 1.0 - age / 0.22
+        cx, cy = int(flash[0]), int(flash[1])
+        x0, y0 = cx - R, cy - R
+        # crop вспышки, обрезанный краями экрана
+        bx0, by0 = max(0, x0), max(0, y0)
+        bx1, by1 = min(img.width, x0 + 2 * R), min(img.height, y0 + 2 * R)
+        if bx1 <= bx0 or by1 <= by0:
+            return img
+        sprite = Compositor._flash_sprite.crop((bx0 - x0, by0 - y0, bx1 - x0, by1 - y0))
+        if fade < 1.0:
+            sprite = sprite.point(lambda v: int(v * fade))
+        glow = Image.merge("RGB", [sprite.point(lambda v, c=c: v * c // 255)
+                                   for c in T.ACCENT])
+        box = (bx0, by0, bx1, by1)
+        img.paste(ImageChops.screen(img.crop(box), glow), box)
         return img
 
     def _draw_overlays(self, img, full=False):

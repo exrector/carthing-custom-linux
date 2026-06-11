@@ -464,13 +464,16 @@ async def _apply_route_output(key):
 
 
 def _on_route_output_select(key):
+    # [CLAUDE 2026-06-11] Тап по выходу = ТОЛЬКО выбор (пассивный). Раньше выбор
+    # сразу применял маршрут (_apply_route_output) -> «иногда ткнёшь на выход и он
+    # включается, на другой ждёшь [LNK]» (бардак, слова владельца). Применяет
+    # ТОЛЬКО [LNK] (route_activate). Желаемое != фактическое (см. RUNBOOK №5).
     if power is not None:
         power.note_activity("route_output_select")
     if gui is not None:
         gui.app_state.select_route_output(key)
         gui.app_state.save_trusted()
-    logger.info("route output selected: %s", key)
-    asyncio.ensure_future(_apply_route_output(key))
+    logger.info("route output selected (passive): %s", key)
 
 
 def _on_route_activate():
