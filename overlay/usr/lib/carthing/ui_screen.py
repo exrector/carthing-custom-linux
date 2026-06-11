@@ -307,7 +307,7 @@ class Compositor:
                 cs = getattr(self.state, "control_source", None) if self.state else None
                 T.encoder_arc(ImageDraw.Draw(img), level=(cs.volume if cs is not None else None))
 
-        return self.display.present(img, name=self.current.name)
+        return self.display.present(T.postprocess(img), name=self.current.name)
 
     def _draw_overlays(self, img, full=False):
         """[CLAUDE 2026-06-02] Дуга громкости + зона энкодера — ВСЕГДА верхний слой, на любом
@@ -367,7 +367,7 @@ class Compositor:
         if h > 0:
             base.paste(s["panel"].crop((0, 0, T.W, h)), (0, 0))
         self._draw_overlays(base, full=True)
-        return self.display.present(base, name="shade")
+        return self.display.present(T.postprocess(base), name="shade")
 
     def _render_transition(self):
         p = self.anim.transition_progress

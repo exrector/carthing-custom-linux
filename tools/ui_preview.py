@@ -62,9 +62,11 @@ def _compose(comp, guide=True):
     img = comp.current.render(comp._regions)
     draw = ImageDraw.Draw(img)
     T.encoder_arc(draw)
-    comp.status_bar.render(draw, comp._regions, comp.anim, comp.state)
+    comp.status_bar.render(img, comp._regions, comp.anim, comp.state)
     if len(comp.screens) > 1:
         comp._draw_dots(draw)
+    img = T.postprocess(img)
+    draw = ImageDraw.Draw(img)
     if guide:
         draw.line([T.CONTENT_X1, 0, T.CONTENT_X1, T.OCCLUSION_BOTTOM], fill=(60, 30, 30), width=1)
     return img

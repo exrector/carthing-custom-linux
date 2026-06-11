@@ -81,6 +81,87 @@ _FONT_CANDIDATES = [
     "/System/Library/Fonts/Helvetica.ttc",
 ]
 
+# ─── themes ───────────────────────────────────────────────────────────────────
+# Тема выбирается ОДИН РАЗ при импорте (= старте runtime): icon_* захватывают
+# цвета в default-аргументах, живая подмена палитры невозможна. Смена темы в
+# Настройках персистит settings.ui_theme и перезапускает runtime (супервизор).
+#
+# "terminal" — ретро-терминал в палитре exrector.com (--p/--p-dim/--p-faint/--bg):
+# иерархия яркости как на сайте — основной текст dim, полный фосфор только у
+# ключевых элементов. Идея владельца 2026-06-11 (мейнфреймы 60–70-х).
+
+def _settings_theme():
+    name = os.environ.get("CARTHING_UI_THEME", "")
+    if name:
+        return name
+    import json
+    state_file = os.path.join(
+        os.environ.get("CARTHING_STATE_ROOT", "/run/carthing-state"),
+        "carthing", "state.json")
+    try:
+        with open(state_file) as fh:
+            return json.load(fh).get("settings", {}).get("ui_theme", "dark")
+    except Exception:
+        return "dark"
+
+
+THEME = _settings_theme()
+
+_MONO_CANDIDATES = [
+    "/usr/share/fonts/truetype/IBMPlexMono-Regular.ttf",   # device (как на сайте)
+    os.path.join(os.path.dirname(__file__), "..", "..", "share",
+                 "fonts", "truetype", "IBMPlexMono-Regular.ttf"),  # dev Mac (overlay)
+    "/System/Library/Fonts/Menlo.ttc",                      # dev Mac fallback
+]
+
+if THEME == "terminal":
+    BG          = (3, 9, 6)        # --bg: не чёрный, зелёный подтон
+    SURFACE     = (7, 22, 13)
+    SURFACE_SEL = (26, 138, 71)    # inverse-video: выделение заливкой фосфора
+    FG          = (51, 255, 136)   # --p
+    MUTED       = (26, 138, 71)    # --p-dim — ОСНОВНАЯ масса текста
+    FAINT       = (13, 61, 32)     # --p-faint
+    HAIRLINE    = (13, 61, 32)
+    ACCENT      = (51, 255, 136)
+    WARN        = (255, 102, 68)   # .err сайта
+    STATUS_OK   = (51, 255, 136)
+    STATUS_WARN = (255, 170, 0)    # янтарь сайта
+    STATUS_OFF  = (255, 68, 68)
+    _FONT_CANDIDATES[1:1] = _MONO_CANDIDATES
+
+# CRT-постэффекты (сканлайны + виньетка) — только terminal, выключаются env.
+_POSTFX = THEME == "terminal" and os.environ.get("CARTHING_CRT_FX", "1") != "0"
+_fx_mask = None
+
+
+def _build_fx_mask(size):
+    """Маска CRT строится один раз: сканлайны (каждая 4-я строка, как opacity
+    0.22 на сайте) * виньетка по углам. Применение — одна C-операция multiply."""
+    from PIL import ImageFilter
+    w, h = size
+    mask = Image.new("L", size, 255)
+    md = ImageDraw.Draw(mask)
+    for y in range(0, h, 4):
+        md.line([0, y, w, y], fill=200)
+    vig = Image.new("L", size, 0)
+    vd = ImageDraw.Draw(vig)
+    vd.ellipse([-w * 0.35, -h * 0.5, w * 1.35, h * 1.5], fill=255)
+    vig = vig.filter(ImageFilter.GaussianBlur(60)).point(lambda v: 140 + v * 115 // 255)
+    from PIL import ImageChops
+    return ImageChops.multiply(mask.convert("RGB"), vig.convert("RGB"))
+
+
+def postprocess(img):
+    """Финальный кадр через CRT-маску. Для темы dark — no-op."""
+    global _fx_mask
+    if not _POSTFX:
+        return img
+    if _fx_mask is None or _fx_mask.size != img.size:
+        _fx_mask = _build_fx_mask(img.size)
+    from PIL import ImageChops
+    return ImageChops.multiply(img, _fx_mask)
+
+
 _font_cache = {}
 
 

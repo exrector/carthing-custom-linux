@@ -18,7 +18,7 @@ class Dispatcher:
                  on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None,
                  on_set_off_timeout=None, on_toggle_notif_blink=None,
-                 on_set_brightness=None):
+                 on_set_brightness=None, on_set_theme=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
@@ -33,7 +33,8 @@ class Dispatcher:
         self.on_toggle_sleep = on_toggle_sleep or (lambda on: None)   # [CLAUDE] сон экрана
         self.on_set_off_timeout = on_set_off_timeout or (lambda sec: None)  # [CLAUDE] тайм-аут гашения
         self.on_toggle_notif_blink = on_toggle_notif_blink
-        self.on_set_brightness = on_set_brightness or (lambda pct: None) or (lambda on: None)  # [CLAUDE] моргание уведомлений
+        self.on_set_brightness = on_set_brightness or (lambda pct: None)  # [CLAUDE 2026-06-10] яркость
+        self.on_set_theme = on_set_theme or (lambda name: None)  # [CLAUDE 2026-06-11] тема UI
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -136,6 +137,11 @@ class Dispatcher:
             self.on_toggle_sleep(new)          # runtime: power.set_idle_sleep + settings.set
         elif key == "brightness":              # [CLAUDE 2026-06-10] цикл яркости 25→50→75→100
             self._cycle_brightness()
+        elif key == "toggle_theme":           # [CLAUDE 2026-06-11] dark <-> terminal (рестарт runtime)
+            cur = getattr(self.state, "ui_theme", "dark")
+            new = "terminal" if cur != "terminal" else "dark"
+            self.state.ui_theme = new          # оптимистично для UI
+            self.on_set_theme(new)             # runtime: settings.set + перезапуск
         elif key == "toggle_notif_blink":      # [CLAUDE] тумблер моргания уведомлений
             new = not bool(getattr(self.state, "notif_blink", True))
             self.state.notif_blink = new       # оптимистично для UI (render читает сразу)

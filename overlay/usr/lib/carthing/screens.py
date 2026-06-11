@@ -345,6 +345,7 @@ class SettingsScreen(Screen):
                 # статическая заглушка: живые подписи (Яркость: N% и т.д.) строит
                 # динамический render-путь display ниже
                 ("brightness", "Яркость"),
+                ("theme", "Тема"),
                 ("sleep", "Тайм-аут сна"),
             ]},
             {"key": "about", "label": "О системе"},
@@ -436,6 +437,7 @@ class SettingsScreen(Screen):
             blink = bool(getattr(self.state, "notif_blink", True)) if self.state else True
             return [
                 ("brightness", f"Яркость: {int(getattr(self.state, 'screen_brightness', 100)) if self.state else 100}%"),
+                ("toggle_theme", f"Тема: {'Терминал' if (getattr(self.state, 'ui_theme', 'dark') if self.state else 'dark') == 'terminal' else 'Тёмная'}"),
                 ("toggle_sleep", f"Сон экрана: {'Вкл' if on else 'Выкл'}"),
                 ("off_timeout", "Гашение экрана"),   # рисуется спец-строкой с −/+
                 ("toggle_notif_blink", f"Моргание уведомлений: {'Вкл' if blink else 'Выкл'}"),

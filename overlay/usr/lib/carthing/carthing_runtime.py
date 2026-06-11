@@ -499,6 +499,16 @@ def _on_toggle_notif_blink(on):
         settings.set("notif_blink", bool(on))
 
 
+def _on_set_theme(name):
+    # [CLAUDE 2026-06-11] Тема применяется при ИМПОРТЕ ui_theme (icon-defaults
+    # захватывают цвета) -> персист + чистый выход; супервизор поднимет нас с
+    # новой темой через ~4 с. Это осознанный рестарт по команде пользователя.
+    if settings is not None:
+        settings.set("ui_theme", name)
+    logger.info("ui theme -> %s; restarting runtime to apply", name)
+    asyncio.get_event_loop().call_later(0.4, lambda: os._exit(0))
+
+
 def _on_set_brightness(pct):
     # [CLAUDE 2026-06-10] яркость из Settings: применяем к power + персистим (UserDefaults-принцип).
     pct = int(pct)
@@ -987,7 +997,8 @@ async def main():
                                 on_toggle_sleep=_on_toggle_sleep,
                                 on_set_off_timeout=_on_set_off_timeout,
                                 on_toggle_notif_blink=_on_toggle_notif_blink,
-                                on_set_brightness=_on_set_brightness)
+                                on_set_brightness=_on_set_brightness,
+                                on_set_theme=_on_set_theme)
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
             # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма
@@ -1008,6 +1019,8 @@ async def main():
             gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
             gui.app_state.notif_blink = bool(settings.get("notif_blink", True))  # [CLAUDE] персист моргания
             gui.app_state.screen_brightness = int(settings.get("screen_brightness_pct", 100))
+            import ui_theme as _T
+            gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)
