@@ -18,6 +18,13 @@ def _fmt(s):
     return f"{s // 60}:{s % 60:02d}"
 
 
+def _fmt_sleep(st):
+    """[CLAUDE 2026-06-11] значение шкалы «Сон»: Выкл или N мин."""
+    if st is None or not bool(getattr(st, "sleep_on_idle", True)):
+        return "Выкл"
+    return f"{max(1, round(int(getattr(st, 'screen_off_sec', 60)) / 60.0))} мин"
+
+
 def _fmt_off(sec):
     """[CLAUDE] тайм-аут гашения для отображения: '30 с' / '2 мин' / '2.5 мин'."""
     sec = int(sec)
@@ -304,6 +311,21 @@ class RouteBuilderScreen(Screen):
         ]
         n = len(btns)
         gap = 36
+        if T.THEME == "terminal":
+            # [CLAUDE 2026-06-11] терминальная тема: софт-кнопки [XXX] вместо кружков
+            # (идея владельца: сокращения как на старых терминалах, без значков)
+            TERM = {"gear": "SET", "route": "LNK", "plus": "ADD", "orb": "AST"}
+            f = T.font(T.SZ_BODY)
+            labels = ["[" + TERM[k] + "]" for k, _c, _i, _p in btns]
+            widths = [int(draw.textlength(l, font=f)) for l in labels]
+            total = sum(widths) + (n - 1) * gap
+            x = (T.W - total) // 2
+            for (kind, col, intent, payload), label, w in zip(btns, labels, widths):
+                draw.text((x, cy - T.SZ_BODY // 2 - 2), label, font=f, fill=col)
+                if regions is not None and intent is not None:
+                    regions.add((x - 10, cy - R, x + w + 10, cy + R), intent, payload=payload)
+                x += w + gap
+            return img
         total = n * 2 * R + (n - 1) * gap
         x = (T.W - total) // 2 + R
         for kind, col, intent, payload in btns:
@@ -364,11 +386,12 @@ class SettingsScreen(Screen):
     # Подписи КОРОТКИЕ: моноширинный IBM Plex Mono шире прежнего шрифта,
     # длинные лезут под кнопку «−» (следить при добавлении новых).
     DISPLAY_ADJUST = {
-        "brightness":  ("Яркость",  lambda st: f"{int(getattr(st, 'screen_brightness', 100)) if st else 100}%"),
-        "theme":       ("Тема",     lambda st: "Терминал" if (getattr(st, 'ui_theme', 'dark') if st else 'dark') == 'terminal' else "Тёмная"),
-        "sleep":       ("Сон",      lambda st: "Вкл" if (bool(getattr(st, 'sleep_on_idle', True)) if st else True) else "Выкл"),
-        "off_timeout": ("Гашение",  lambda st: _fmt_off(getattr(st, 'screen_off_sec', 150) if st else 150)),
-        "notif_blink": ("Моргание", lambda st: "Вкл" if (bool(getattr(st, 'notif_blink', True)) if st else True) else "Выкл"),
+        "brightness":  ("Яркость",   lambda st: f"{int(getattr(st, 'screen_brightness', 100)) if st else 100}%"),
+        "theme":       ("Тема",      lambda st: "Терминал" if (getattr(st, 'ui_theme', 'dark') if st else 'dark') == 'terminal' else "Тёмная"),
+        # «Сон» = единая шкала: Выкл / 1..10 мин / 20..60 мин (бывшие Сон+Гашение)
+        "sleep":       ("Сон",       lambda st: _fmt_sleep(st)),
+        # «Индикатор» уведомлений (слово «моргание» отклонено владельцем)
+        "notif_blink": ("Индикатор", lambda st: "Вкл" if (bool(getattr(st, 'notif_blink', True)) if st else True) else "Выкл"),
     }
 
     def _viewport(self):
@@ -635,6 +658,13 @@ class SettingsScreen(Screen):
                 rx0, ry0, rx1, ry1 = rect
                 regions.add((rx0, max(start_y, ry0), rx1, min(bottom_y, ry1)),
                             "settings_tap", payload=i)         # тап -> выбрать+активировать строку i
+
+        # [CLAUDE 2026-06-11] индикаторы прокрутки (решение владельца: явно показать,
+        # что выше/ниже есть ещё меню): стрелки слева у краёв вьюпорта.
+        if self.scroll_y > 4:
+            C.scroll_arrow(draw, 12, start_y + 10, up=True)
+        if self.scroll_y < self._max_scroll - 4:
+            C.scroll_arrow(draw, 12, bottom_y - 10, up=False)
         return img
 
 

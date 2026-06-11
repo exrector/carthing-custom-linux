@@ -104,3 +104,13 @@ def list_row(draw, y, label, selected=False, expandable=False, expanded=False,
         T.icon_chevron(draw, T.LIST_X1 - 12, y + T.SZ_BODY // 2, 9,
                        color=(T.FG if selected else T.FAINT), expanded=expanded)
     return rect
+
+
+def scroll_arrow(draw, cx, cy, up=True, color=None, w=9, h=7):
+    """[CLAUDE 2026-06-11] Индикатор «выше/ниже есть ещё»: маленький треугольник
+    у левого края вьюпорта скроллящегося списка."""
+    color = color or T.MUTED
+    if up:
+        draw.polygon([(cx - w, cy + h), (cx + w, cy + h), (cx, cy - h)], fill=color)
+    else:
+        draw.polygon([(cx - w, cy - h), (cx + w, cy - h), (cx, cy + h)], fill=color)

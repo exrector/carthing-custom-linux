@@ -69,9 +69,24 @@ class StatusBar:
         slot = usable / n
         size = int(max(28, min(56, slot * 0.62)))     # пиксельный размер глифа
         half = int(min(slot / 2 - 3, 80))             # тап-зона (с запасом, без нахлёста)
+        # [CLAUDE 2026-06-11] Терминальная тема: ТРЁХБУКВЕННЫЕ подписи вместо глифов
+        # (идея владельца: старые терминалы не знали значков — только сокращения).
+        # Активное действие (play/pause) — полный фосфор, остальные — dim.
+        TERM_LABELS = {"skip_back": "RWD", "prev": "PRV", "next": "NXT",
+                       "skip_fwd": "FWD", "like": "FAV"}
         for i, (kind, intent) in enumerate(order):
             bx = int(T.MARGIN + slot * (i + 0.5))
-            if kind == "play":
+            if T.THEME == "terminal":
+                if kind == "play":
+                    label, col = ("PSE" if playing else "PLY"), T.FG
+                elif kind == "like":
+                    label, col = "FAV", (T.STATUS_OFF if liked else T.MUTED)
+                else:
+                    label, col = TERM_LABELS[kind], T.MUTED
+                f = T.font(T.SZ_BAR)
+                tw = draw.textlength(label, font=f)
+                draw.text((bx - tw / 2, cy - T.SZ_BAR // 2 - 2), label, font=f, fill=col)
+            elif kind == "play":
                 T.paste_glyph(img, T.glyph_pause if playing else T.glyph_play,
                               bx, cy, size + 6, T.FG)
             elif kind == "skip_back":

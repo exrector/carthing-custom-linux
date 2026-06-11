@@ -193,7 +193,9 @@ class Dispatcher:
     SCREEN_OFF_MIN = 30
     SCREEN_OFF_MAX = 600
 
-    BRIGHTNESS_PRESETS = (25, 50, 75, 100)
+    BRIGHTNESS_PRESETS = tuple(range(10, 101, 10))   # [CLAUDE 2026-06-11] шаг 10%, без 0 (чёрный экран бессмыслен)
+    # Сон: Выкл, 1..10 мин по одной, дальше десятками (решение владельца).
+    SLEEP_STEPS_MIN = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60)
 
     def _display_adjust(self, key, direction):
         """[CLAUDE 2026-06-11] ЕДИНЫЙ паттерн −/+ для всех под-настроек дисплея
@@ -204,8 +206,9 @@ class Dispatcher:
         elif key == "brightness":
             cur = int(getattr(self.state, "screen_brightness", 100))
             presets = list(self.BRIGHTNESS_PRESETS)
-            i = presets.index(cur) if cur in presets else len(presets) - 1
-            i = (i + (1 if direction == "+" else -1)) % len(presets)
+            # ближайший пресет + шаг С УПОРАМИ (заворот 100→10 ощущался как поломка)
+            i = min(range(len(presets)), key=lambda j: abs(presets[j] - cur))
+            i = max(0, min(len(presets) - 1, i + (1 if direction == "+" else -1)))
             self.state.screen_brightness = presets[i]   # оптимистично для UI
             self.on_set_brightness(presets[i])          # runtime: power + персист
         elif key == "theme":
@@ -214,9 +217,23 @@ class Dispatcher:
             self.state.ui_theme = new
             self.on_set_theme(new)                      # runtime: персист + рестарт
         elif key == "sleep":
-            new = not bool(getattr(self.state, "sleep_on_idle", True))
-            self.state.sleep_on_idle = new
-            self.on_toggle_sleep(new)
+            # [CLAUDE 2026-06-11] ЕДИНАЯ шкала сна: Выкл → 1..10 мин → 20..60 мин.
+            # Объединяет бывшие «Сон Вкл/Выкл» + «Гашение N с» (слово отклонено владельцем).
+            steps = list(self.SLEEP_STEPS_MIN)
+            on = bool(getattr(self.state, "sleep_on_idle", True))
+            cur_min = max(1, round(int(getattr(self.state, "screen_off_sec", 60)) / 60.0)) if on else 0
+            i = min(range(len(steps)), key=lambda j: abs(steps[j] - cur_min))
+            i = max(0, min(len(steps) - 1, i + (1 if direction == "+" else -1)))
+            minutes = steps[i]
+            if minutes == 0:
+                self.state.sleep_on_idle = False
+                self.on_toggle_sleep(False)
+            else:
+                if not on:
+                    self.state.sleep_on_idle = True
+                    self.on_toggle_sleep(True)
+                self.state.screen_off_sec = minutes * 60
+                self.on_set_off_timeout(minutes * 60)
         elif key == "notif_blink":
             new = not bool(getattr(self.state, "notif_blink", True))
             self.state.notif_blink = new

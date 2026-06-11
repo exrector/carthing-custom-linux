@@ -265,9 +265,11 @@ class GuiController:
 
     def _on_scroll_end(self, velocity):
         """Единая инерция scroll-view после отпускания пальца."""
-        if abs(velocity) < 180:
+        # [CLAUDE 2026-06-11] мягче: порог ниже (инерция чаще подхватывает),
+        # потолок ниже (без «улёта» списка)
+        if abs(velocity) < 120:
             return
-        self._scroll_velocity = max(-2600.0, min(2600.0, float(velocity)))
+        self._scroll_velocity = max(-2000.0, min(2000.0, float(velocity)))
         self._ensure_scroll_task()
 
     async def _scroll_loop(self):
@@ -282,7 +284,7 @@ class GuiController:
                     if not self._apply_scroll_delta(delta):
                         self._scroll_velocity = 0.0
                     else:
-                        self._scroll_velocity *= 0.90 ** (dt / 0.016)
+                        self._scroll_velocity *= 0.94 ** (dt / 0.016)  # [CLAUDE 2026-06-11] плавнее затухание
                 if self._scroll_dirty:
                     self._last_scroll_render = now
                     self._scroll_dirty = False
@@ -459,22 +461,30 @@ class GuiController:
         a.device_name = identity_service.visible_name()
 
     def _sync_trusted_iphone(self, a, connected, peer=None):
-        """iPhone (BLE-bonded источник) -> в список доверенных как role=source.
-        In-memory: переисточается при подключении, BLE-бонд персистентен сам по себе."""
-        entry = next((d for d in a.trusted if d.get("key") == "iphone"), None)
+        """iPhone (BLE-bonded источник) -> статус в СУЩЕСТВУЮЩЕЙ device-записи.
+        [CLAUDE 2026-06-11] БАГ-ФИКС: раньше сюда добавлялся стаб key="iphone" БЕЗ
+        endpoints и БЕЗ сверки по адресу -> в списке входов появлялся ВТОРОЙ iPhone
+        (legacy + source:ADDR), выбор стаба ронял route_planner («no audio input
+        endpoint») и кнопка маршрута мертвела. Теперь: ищем по адресу, стабов не
+        создаём (запись источника создаёт load_trusted из keystore/state.json).
+        Один физический iPhone (BLE+classic) = ОДНА запись для пользователя."""
+        from app_state import normalize_address
+        addr = normalize_address(peer) if peer else ""
+        entry = None
+        if addr:
+            entry = next((d for d in a.trusted
+                          if normalize_address(d.get("address")) == addr), None)
+        if entry is None:   # fallback: единственный source (без peer-адреса в событии)
+            sources = [d for d in a.trusted if d.get("role") == "source"]
+            entry = sources[0] if len(sources) == 1 else                 next((d for d in a.trusted if d.get("key") == "iphone"), None)
         if entry is None:
-            if connected:
-                a.trusted.append({"key": "iphone", "label": "iPhone", "type": "iPhone",
-                                  "role": "source", "online": True, "connected": True,
-                                  "address": peer or ""})
-        else:
-            entry["connected"] = bool(connected)
-            # У источника нет сигнала «онлайн, но не подключён» -> online == connected
-            # (отключён = offline = красный, не залипает жёлтым). Жёлтый — только для динамиков.
-            entry["online"] = bool(connected)
-            if connected and peer:
-                from app_state import normalize_address
-                entry["address"] = normalize_address(peer)
+            return          # бонда ещё нет — появится через load_trusted, стаб не плодим
+        entry["connected"] = bool(connected)
+        # У источника нет сигнала «онлайн, но не подключён» -> online == connected
+        # (отключён = offline = красный, не залипает жёлтым). Жёлтый — только для динамиков.
+        entry["online"] = bool(connected)
+        if connected and addr and not entry.get("address"):
+            entry["address"] = addr
 
     def render(self):
         try:
