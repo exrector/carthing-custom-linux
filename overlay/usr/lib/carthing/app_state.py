@@ -659,10 +659,41 @@ class AppState:
             "route_output": self._route_output == self.SELF_OUTPUT_KEY,
         }
 
+    # [CLAUDE 2026-06-12] этаж 5 «работы над чипом»: endpoint «Car Thing line-out»
+    # (T9015 DAC -> провод). За env-флагом CARTHING_LINEOUT_ENABLE=1 СОЗНАТЕЛЬНО:
+    # правило boot-честности — выход без рабочего декодера (этаж 3, Codex) в GUI
+    # не показываем. Флаг включается для разработки/после декодера — насовсем.
+    LINEOUT_OUTPUT_KEY = "carthing-lineout"
+
+    def _lineout_output_device(self):
+        return {
+            "key": self.LINEOUT_OUTPUT_KEY,
+            "address": "",
+            "label": "Line out",
+            "type": "T9015 DAC",         # вторая строка карточки (адреса нет)
+            "role": "lineout",            # НЕ "speaker": standby-петля не пейджит
+            "online": True,
+            "connected": True,            # ЦАП всегда на месте
+            "default": False,
+            "capabilities": ["audio_output"],
+            "endpoints": [{
+                "id": "lineout",
+                "direction": "output",
+                "capabilities": ["audio_output"],
+                "protocols": ["local_t9015"],
+            }],
+            "constraints": [],
+            "metadata": {"self": True, "local_audio": True},
+            "route_output": self._route_output == self.LINEOUT_OUTPUT_KEY,
+        }
+
     @property
     def route_outputs(self):
         # Car Thing-self первым в списке выходов, затем доверенные колонки.
-        return [self._self_output_device()] + self.trusted_speakers
+        outputs = [self._self_output_device()]
+        if os.environ.get("CARTHING_LINEOUT_ENABLE") == "1":
+            outputs.append(self._lineout_output_device())
+        return outputs + self.trusted_speakers
 
     def select_route_input(self, key_or_address):
         selected = None

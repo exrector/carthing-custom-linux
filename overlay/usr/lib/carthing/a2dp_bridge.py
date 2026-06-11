@@ -29,6 +29,7 @@ from bumble.sdp import (
 )
 
 from app_state import normalize_address
+from local_sink_client import LocalSinkClient
 from runtime_paths import device_name
 
 
@@ -343,6 +344,11 @@ class A2DPBridge:
         # Backoff дозвона к недоступной колонке: каждый page = ~5 c радио;
         # без backoff выключенная колонка съедала эфир каждые 12 c (run10).
         self._speaker_backoff: dict[str, tuple[int, float]] = {}
+        # [CLAUDE 2026-06-12] локальный выход (этаж 4): флаг ставит runtime
+        # (_apply_route_output, ветка carthing-lineout); клиент дешёвый —
+        # демона не трогает до первого send.
+        self.local_sink_enabled = False
+        self.local_sink = LocalSinkClient()
 
     def _speaker_connector(self, address) -> SpeakerConnector:
         address = normalize_address(address)
@@ -2000,6 +2006,19 @@ class A2DPBridge:
         self._rtp_last_ts = now
         payload = bytes(packet)
         sent = False
+        # [CLAUDE 2026-06-12] этаж 4 «работы над чипом»: активен локальный выход
+        # (T9015 line-out) -> кадр уходит в sink-ПРОЦЕСС вместо BT-колонки.
+        # Раньше любых codec-mismatch проверок: у локального выхода свой декодер.
+        if self.local_sink_enabled:
+            codec = (getattr(self, "source_codec_name", "") or "aac").lower()
+            if self.local_sink.send(codec, payload):
+                sent = True
+                self.packets_forwarded += 1
+                self.bytes_forwarded += len(payload)
+            else:
+                self.packets_dropped += 1
+            self._log_rtp_window(payload, sent)
+            return
         selected_address = normalize_address(self.state.default_speaker_address())
         connector = self._speaker_connectors.get(selected_address) if selected_address else None
         mismatch = self._source_receiver_codec_mismatch(connector)
@@ -2060,6 +2079,10 @@ class A2DPBridge:
             self.packets_dropped += 1
             self.schedule_receiver_retry(delay=0.2)
 
+        self._log_rtp_window(payload, sent)
+
+    def _log_rtp_window(self, payload: bytes, sent: bool) -> None:
+        # окно-сводка раз в 250 пакетов (+ первые 10) с max_gap_ms джиттер-зонда
         count = self.packets_forwarded if sent else self.packets_dropped
         if count < 10 or count % 250 == 0:
             self.logger.info(

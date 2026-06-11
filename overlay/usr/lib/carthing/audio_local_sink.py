@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import collections
 import logging
+import os
 import threading
 import time
 
@@ -150,6 +151,50 @@ class AudioLocalSink:
                 self.frames_played += 1
 
 
+# ── процессный режим (этаж 2.5): sink как ОТДЕЛЬНЫЙ процесс ──────────────────
+# Зачем процесс, а не поток: GIL. Декодер (этаж 3) — чистый CPU; в потоке он
+# кусал бы BT-интерпретатор так же, как рендер (см. carthing-debug-log
+# 2026-06-12). Отдельный процесс = своё ядро A53, runtime не трогаем вообще.
+# Протокол: AF_UNIX SOCK_SEQPACKET (границы кадров хранит ядро),
+# кадр = 1 байт codec_id + payload. Подключение = старт ЦАП, разрыв = стоп.
+SINK_SOCKET = "/run/carthing/local-sink.sock"
+CODEC_IDS = {0: "pcm", 1: "aac", 2: "sbc"}
+
+
+def _serve() -> int:
+    import socket as _socket
+    logging.basicConfig(level=logging.INFO)
+    try:
+        os.unlink(SINK_SOCKET)
+    except FileNotFoundError:
+        pass
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_SEQPACKET)
+    srv.bind(SINK_SOCKET)
+    srv.listen(1)
+    logger.info("local sink daemon: listening %s", SINK_SOCKET)
+    while True:
+        conn, _ = srv.accept()
+        # декодер выбирается на подключение; пока есть только passthrough-PCM.
+        # Codex (этаж 3): сюда встаёт DspDecoder (audiodsp_decoder.py), выбор по
+        # codec_id кадра — см. AudioDecoder.decode(codec, payload).
+        sink = AudioLocalSink(PassthroughPcmDecoder())
+        try:
+            sink.start()
+            logger.info("local sink daemon: client connected, DAC open")
+            while True:
+                frame = conn.recv(65536)
+                if not frame:
+                    break
+                codec = CODEC_IDS.get(frame[0], "?")
+                sink.feed_rtp(codec, frame[1:])
+        except Exception as e:
+            logger.warning("local sink daemon: client error: %s", e)
+        finally:
+            sink.stop()
+            conn.close()
+            logger.info("local sink daemon: client gone, DAC closed")
+
+
 def _selftest() -> int:
     """Тракт очередь->поток->ЦАП без BT: секунды синуса кусками по 20 мс."""
     import math, struct
@@ -173,5 +218,8 @@ def _selftest() -> int:
 
 
 if __name__ == "__main__":
+    import os as _os
     import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "serve":
+        sys.exit(_serve())
     sys.exit(_selftest())

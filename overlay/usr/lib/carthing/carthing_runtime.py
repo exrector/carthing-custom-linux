@@ -444,6 +444,18 @@ async def _apply_route_output(key):
     if transfer is None or gui is None:
         return
     self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+    lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
+    if key == lineout_key:
+        # [CLAUDE 2026-06-12] этаж 4: локальный выход T9015. BT-колонке поток
+        # больше не шлём (suspend held-сессии), кадры уводятся в sink-процесс
+        # (см. a2dp_bridge.forward_packet, флаг local_sink_enabled).
+        await transfer.bridge.stop_receiver_stream()
+        transfer.bridge.local_sink_enabled = True
+        model.audio_sink = "lineout"
+        logger.info("ТРУБА: выход = Car Thing line-out (T9015) — кадры в локальный sink")
+        _on_publish()
+        return
+    transfer.bridge.local_sink_enabled = False
     if key and key != self_key:
         try:
             gui.app_state.select_default_speaker(key)
@@ -506,7 +518,9 @@ def _on_route_activate():
             except Exception:
                 pass
         source_up = getattr(transfer.bridge, "_source_connection", None) is not None
+        lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
         if ro and ro != self_key:
+            # line-out: BT-колонка не нужна, но classic-труба от iPhone — нужна
             if not source_up:
                 await _apply_route_command("connect")
         else:
