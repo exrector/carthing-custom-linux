@@ -61,6 +61,16 @@ class IdlePowerController:
                 self.dim_brightness,
             )
             self._set_display_state("active")
+        else:
+            # [CLAUDE 2026-06-11] БАГ-ФИКС: при старте с sleep_on_idle=False
+            # _set_display_state no-op (enabled=False) -> состояние навсегда "init",
+            # а set_active_brightness_percent писал ТОЛЬКО в "active" -> регулировка
+            # яркости «не работала вообще». Экран без сна = всегда active.
+            self._write_int("bl_power", 0)
+            self._write_int("brightness", self._active_brightness)
+            self._display_state = "active"
+            logger.info("Power: idle sleep off (settings); screen always on, brightness=%s",
+                        self._active_brightness)
 
     @staticmethod
     def _find_backlight(root: Path) -> Path | None:
@@ -146,8 +156,13 @@ class IdlePowerController:
         percent = max(5, min(100, int(percent)))
         self._active_brightness = max(1, int(self._max_brightness * percent / 100))
         self.active_brightness = self._active_brightness
-        if apply and self._display_state == "active":
+        # [CLAUDE 2026-06-11] писать ВСЕГДА, кроме погашенного экрана: раньше
+        # условие == "active" молча глотало регулировку при state "init"/"dim".
+        if apply and self._display_state != "off":
             self._write_int("brightness", self._active_brightness)
+            logger.info("Power: brightness %s%% -> %s/%s (state=%s)",
+                        percent, self._active_brightness, self._max_brightness,
+                        self._display_state)
 
     def set_idle_sleep(self, on: bool) -> None:
         """[CLAUDE 2026-06-01] Рантайм-переключатель сна экрана из Settings. off -> экран ВСЕГДА

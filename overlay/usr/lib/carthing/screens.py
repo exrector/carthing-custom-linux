@@ -387,7 +387,9 @@ class SettingsScreen(Screen):
     # длинные лезут под кнопку «−» (следить при добавлении новых).
     DISPLAY_ADJUST = {
         "brightness":  ("Яркость",   lambda st: f"{int(getattr(st, 'screen_brightness', 100)) if st else 100}%"),
-        "theme":       ("Тема",      lambda st: "Терминал" if (getattr(st, 'ui_theme', 'dark') if st else 'dark') == 'terminal' else "Тёмная"),
+        # «(рестарт)» — честное предупреждение: тема применяется рестартом runtime
+        # («перезагрузка» полностью не влезает — Plex Mono наезжает на «−»)
+        "theme":       ("Тема (рестарт)", lambda st: "Терминал" if (getattr(st, 'ui_theme', 'dark') if st else 'dark') == 'terminal' else "Тёмная"),
         # «Сон» = единая шкала: Выкл / 1..10 мин / 20..60 мин (бывшие Сон+Гашение)
         "sleep":       ("Сон",       lambda st: _fmt_sleep(st)),
         # «Индикатор» уведомлений (слово «моргание» отклонено владельцем)
