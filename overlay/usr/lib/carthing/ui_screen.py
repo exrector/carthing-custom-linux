@@ -10,6 +10,7 @@ real DRM display via DRMDisplayAdapter.
 import ctypes
 import logging
 import os
+import asyncio
 import time
 from PIL import Image, ImageDraw
 
@@ -227,7 +228,16 @@ class Compositor:
     def _handle_tap(self, x, y):
         hit = self._regions.hit(x, y)
         if hit:
+            # [CLAUDE 2026-06-11] обратная связь нажатия (просьба владельца):
+            # кольцо-вспышка в точке тапа; дорисовка и затухание — два отложенных рендера
+            self._tap_flash = (x, y, time.monotonic())
             self.on_intent(hit.intent, hit.payload)
+            try:
+                loop = asyncio.get_event_loop()
+                loop.call_later(0.05, self.render)
+                loop.call_later(0.3, self.render)
+            except Exception:
+                pass
             return True
         return False
 
@@ -307,6 +317,11 @@ class Compositor:
                 cs = getattr(self.state, "control_source", None) if self.state else None
                 T.encoder_arc(ImageDraw.Draw(img), level=(cs.volume if cs is not None else None))
 
+        flash = getattr(self, "_tap_flash", None)
+        if flash is not None and time.monotonic() - flash[2] < 0.25:
+            fd = ImageDraw.Draw(img)
+            fd.ellipse([flash[0] - 26, flash[1] - 26, flash[0] + 26, flash[1] + 26],
+                       outline=T.ACCENT, width=4)
         return self.display.present(T.postprocess(img), name=self.current.name)
 
     def _draw_overlays(self, img, full=False):

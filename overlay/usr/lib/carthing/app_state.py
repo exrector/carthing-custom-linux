@@ -491,10 +491,11 @@ class AppState:
             (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),
             "",
         )
-        self.route_output = next(
-            (device.get("key") or device.get("address") for device in self.route_outputs if device.get("route_output")),
-            "",
-        )
+        # [CLAUDE 2026-06-11] Boot-честность (решение владельца): после старта
+        # реального маршрута НЕТ — выход показываем Play Now (Car Thing), а не
+        # последний сохранённый. Раньше GUI после ребута врал «iPhone -> Fosi»,
+        # хотя труба не активна. Сохранённый default колонки остаётся для выбора.
+        self.route_output = self.SELF_OUTPUT_KEY
         self._ensure_default_route_selection()
         # [CLAUDE 2026-06-03] Новый bonded-источник -> ПЕРСИСТИМ в state.json, чтобы ВСЕ устройства
         # (iPhone и колонки) жили в одном месте. Идемпотентно: на следующем load он уже device,

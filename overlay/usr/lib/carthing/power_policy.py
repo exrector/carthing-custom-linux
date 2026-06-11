@@ -67,7 +67,7 @@ class IdlePowerController:
             # а set_active_brightness_percent писал ТОЛЬКО в "active" -> регулировка
             # яркости «не работала вообще». Экран без сна = всегда active.
             self._write_int("bl_power", 0)
-            self._write_int("brightness", self._active_brightness)
+            self._write_brightness(self._active_brightness)
             self._display_state = "active"
             logger.info("Power: idle sleep off (settings); screen always on, brightness=%s",
                         self._active_brightness)
@@ -102,6 +102,16 @@ class IdlePowerController:
         except Exception:
             return default
 
+    # [CLAUDE 2026-06-11] Панель Superbird: шкала подсветки ИНВЕРТИРОВАНА
+    # (0 = максимум света, 255 = погашено). Доказано владельцем: «+» темнил,
+    # 100% = чёрный экран. ВСЯ внутренняя логика остаётся «больше = ярче»,
+    # инверсия применяется только здесь. CARTHING_BL_INVERTED=0 отключает.
+    def _write_brightness(self, value: int) -> None:
+        value = max(0, min(self._max_brightness, int(value)))
+        if os.environ.get("CARTHING_BL_INVERTED", "1") != "0":
+            value = self._max_brightness - value
+        self._write_int("brightness", value)
+
     def _write_int(self, name: str, value: int) -> None:
         path = self._path(name)
         if path is None:
@@ -116,14 +126,14 @@ class IdlePowerController:
             return
         if state == "active":
             self._write_int("bl_power", 0)
-            self._write_int("brightness", self._active_brightness)
+            self._write_brightness(self._active_brightness)
         elif state == "dim":
             self._write_int("bl_power", 0)
-            self._write_int("brightness", max(1, min(self.dim_brightness, self._max_brightness)))
+            self._write_brightness(max(1, min(self.dim_brightness, self._max_brightness)))
         elif state == "off":
             # bl_power is the real panel blanking switch; brightness is kept low
             # so a partially supported driver still dims visibly.
-            self._write_int("brightness", 0)
+            self._write_brightness(0)
             self._write_int("bl_power", 4)
         else:
             return
@@ -159,7 +169,7 @@ class IdlePowerController:
         # [CLAUDE 2026-06-11] писать ВСЕГДА, кроме погашенного экрана: раньше
         # условие == "active" молча глотало регулировку при state "init"/"dim".
         if apply and self._display_state != "off":
-            self._write_int("brightness", self._active_brightness)
+            self._write_brightness(self._active_brightness)
             logger.info("Power: brightness %s%% -> %s/%s (state=%s)",
                         percent, self._active_brightness, self._max_brightness,
                         self._display_state)
@@ -181,7 +191,7 @@ class IdlePowerController:
             logger.info("Power: idle sleep ENABLED (settings)")
         else:
             self._write_int("bl_power", 0)
-            self._write_int("brightness", self._active_brightness)
+            self._write_brightness(self._active_brightness)
             self._display_state = "active"
             logger.info("Power: idle sleep DISABLED (settings) — screen stays on")
 

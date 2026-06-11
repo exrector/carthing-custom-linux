@@ -471,17 +471,28 @@ def _on_route_output_select(key):
 
 
 def _on_route_activate():
-    # [CLAUDE 2026-06-11] Экранная кнопка маршрута = ЕДИНЫЙ тумблер (бывшая кнопка 1,
-    # решение владельца): сначала применяем выбранный выход, затем flip
-    # connect/disconnect источника (classic-тумблер из INVARIANTS).
+    # [CLAUDE 2026-06-11 v2] Кнопка [LNK] — НЕ toggle (решение владельца): она ТОЛЬКО
+    # включает ВЫБРАННЫЙ маршрут. Гашение старого — фоновая обязанность системы:
+    #   выход = колонка   -> применить выход + поднять classic-трубу (если не стоит)
+    #   выход = Play Now  -> закрыть поток к колонке + опустить classic-трубу
+    # Так смена маршрута = выбрал вход/выход -> [LNK]; никаких подвешенных состояний
+    # от «случайного выключения» повторным тапом.
     if power is not None:
         power.note_activity("route_activate")
 
     async def _activate():
-        if gui is not None:
-            ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
-            await _apply_route_output(ro)
-        await _route_toggle_flip()
+        if gui is None or transfer is None or getattr(transfer, "bridge", None) is None:
+            return
+        ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
+        self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+        await _apply_route_output(ro)
+        source_up = getattr(transfer.bridge, "_source_connection", None) is not None
+        if ro and ro != self_key:
+            if not source_up:
+                await _apply_route_command("connect")
+        else:
+            if source_up:
+                await _apply_route_command("disconnect")
 
     asyncio.ensure_future(_activate())
 
