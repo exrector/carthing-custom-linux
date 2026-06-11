@@ -597,6 +597,13 @@ class A2DPBridge:
             _, not_before = self._speaker_backoff.get(address, (0, 0.0))
             if asyncio.get_running_loop().time() < not_before:
                 continue
+            # [CLAUDE 2026-06-11] РАДИО-ГВАРД: пока источник реально льёт поток, page
+            # недоступной ПОСТОРОННЕЙ колонки (не выбранный маршрут) занимает единственное
+            # радио на ~5 c и рвёт играющий звук. Посторонние ждут паузы; выбранную/дефолт
+            # звоним всегда (восстановление активного маршрута важнее).
+            if (self.source_stream_active
+                    and address != normalize_address(self.state.default_speaker_address() or "")):
+                continue
             await self.request_receiver_connection(address)
 
     async def enable_classic_visibility(self):
@@ -652,7 +659,11 @@ class A2DPBridge:
             try:
                 connector = self._selected_speaker_connector()
                 if connector is None or connector.rtp_channel is None:
-                    await self.setup_receiver()
+                    # [CLAUDE 2026-06-11] ЧЕРЕЗ request_receiver_connection, а не напрямую
+                    # setup_receiver: иначе петля игнорировала _speaker_backoff и ПЕЙДЖИЛА
+                    # выключенную колонку каждые 12 c («retry in 300s» в логе ВРАЛ).
+                    # Page занимает радио ~5 c -> дыры в играющем потоке (прерывистый звук).
+                    await self.request_receiver_connection()
                 await asyncio.sleep(self.reconnect_interval)
             except asyncio.CancelledError:
                 raise
