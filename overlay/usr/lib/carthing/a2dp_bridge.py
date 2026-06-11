@@ -949,6 +949,55 @@ class A2DPBridge:
         finally:
             self._standby_connecting.discard(address)
 
+    async def tune_radio_for_stream(self, active: bool):
+        """[CLAUDE 2026-06-12] «Взрослый» аудиотракт (по ресёрчу AirFly-класса устройств):
+        на время стрима освобождаем эфир от лишних BLE-окон и держим выгодные роли.
+          • BLE-коннект iPhone: интервал 45–60 мс + slave latency 4 (вместо коротких
+            дефолтных) — AMS/ANCS чуть медленнее, зато classic-стриму достаются слоты.
+            Откат на 15–30 мс при остановке потока (меню снова отзывчивое).
+          • Classic-линк колонки: если мы вдруг slave — switch_role в master
+            (расписанием эфира должен владеть мост, не колонка).
+        CARTHING_RADIO_TUNE=0 полностью отключает. Все шаги best-effort: отказ
+        пира (iOS вправе отклонить параметры) — это лог, не ошибка."""
+        if os.environ.get("CARTHING_RADIO_TUNE", "1") == "0":
+            return
+        from bumble import hci as _hci
+        # BLE-коннекты (iPhone): подобрать интервал под фазу
+        try:
+            conns = self.device.connections
+            items = list(conns.values()) if hasattr(conns, "values") else list(conns)
+        except Exception:
+            items = []
+        for conn in items:
+            transport = getattr(conn, "transport", None)
+            if transport == BT_BR_EDR_TRANSPORT:
+                continue
+            try:
+                if active:
+                    await conn.update_parameters(45, 60, 4, 4000, use_l2cap=True)
+                    self.logger.info("RADIO_TUNE: BLE %s -> 45-60ms latency=4 (stream)",
+                                     getattr(conn, "peer_address", "?"))
+                else:
+                    await conn.update_parameters(15, 30, 0, 4000, use_l2cap=True)
+                    self.logger.info("RADIO_TUNE: BLE %s -> 15-30ms latency=0 (idle)",
+                                     getattr(conn, "peer_address", "?"))
+            except Exception as exc:
+                self.logger.info("RADIO_TUNE: BLE param update declined: %s", error_text(exc))
+        # classic-роль на линке активной колонки — только при старте потока
+        if active:
+            address = normalize_address(self.state.default_speaker_address() or "")
+            conn = self._speaker_connections.get(address)
+            if conn is not None:
+                role = getattr(conn, "role", None)
+                if role is not None and role != _hci.Role.CENTRAL:
+                    try:
+                        await conn.switch_role(_hci.Role.CENTRAL)
+                        self.logger.info("RADIO_TUNE: switched to master on %s", address)
+                    except Exception as exc:
+                        self.logger.info("RADIO_TUNE: role switch declined: %s", error_text(exc))
+                else:
+                    self.logger.info("RADIO_TUNE: speaker link role=%s (ok)", role)
+
     async def request_receiver_connection(self, address=None, require_online=False, force=False):
         address = normalize_address(address or self.state.default_speaker_address())
         if not address:
@@ -1861,6 +1910,7 @@ class A2DPBridge:
             self.state.active_desktop = self.state.TRANSFER
             self.on_state_change()
             asyncio.create_task(self.request_receiver_for_active_source())
+            asyncio.create_task(self.tune_radio_for_stream(True))
             return original_start()
 
         def on_suspend():
@@ -1870,6 +1920,7 @@ class A2DPBridge:
             # открытым (opened+held). Teardown на suspend ломал resume: Fosi
             # отвечал L2CAP 0x4 (no resources) на пересоздание AVDTP, труба
             # после паузы не восстанавливалась. Закрываем только на CLOSE/ABORT.
+            asyncio.create_task(self.tune_radio_for_stream(False))
             return original_suspend()
 
         def on_close():
