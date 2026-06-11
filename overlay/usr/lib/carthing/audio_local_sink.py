@@ -181,15 +181,30 @@ def _serve() -> int:
         try:
             sink.start()
             logger.info("local sink daemon: client connected, DAC open")
+            # [CLAUDE 2026-06-12] дампер кадров для разработки декодера (Codex):
+            # CARTHING_SINK_DUMP=/tmp/frames.bin -> записи [u8 codec][u32 len][payload].
+            # Снять дамп: env у ДЕМОНА (запустить serve руками с env), играть маршрут
+            # на line-out -> файл кормить декодеру в тестах БЕЗ BT.
+            dump = None
+            dump_path = os.environ.get("CARTHING_SINK_DUMP")
+            if dump_path:
+                import struct as _struct
+                dump = open(dump_path, "ab")
+                logger.info("local sink daemon: dumping frames to %s", dump_path)
             while True:
                 frame = conn.recv(65536)
                 if not frame:
                     break
                 codec = CODEC_IDS.get(frame[0], "?")
+                if dump is not None:
+                    import struct as _struct
+                    dump.write(bytes([frame[0]]) + _struct.pack("<I", len(frame) - 1) + frame[1:])
                 sink.feed_rtp(codec, frame[1:])
         except Exception as e:
             logger.warning("local sink daemon: client error: %s", e)
         finally:
+            if dump is not None:
+                dump.close()
             sink.stop()
             conn.close()
             logger.info("local sink daemon: client gone, DAC closed")

@@ -843,8 +843,26 @@ async def _apply_route_command(cmd):
             if not address:
                 logger.warning("route toggle: no dual-mode bond to connect")
                 return
-            logger.info("route toggle: connect_source %s", address)
-            await transfer.bridge.connect_source(address)
+            # [CLAUDE 2026-06-12] авто-ретрай (задача №3 ранбука): спящий iPhone
+            # отвечает на первый page PAGE_TIMEOUT — будится и со 2-3-й попытки
+            # принимает. Паттерн пауз 3/8 c (как ретраи 3/8/15 в fc2cb5e).
+            last_exc = None
+            for attempt, delay in ((1, 0), (2, 3), (3, 8)):
+                if delay:
+                    logger.info("route toggle: retry connect in %ds (attempt %d)", delay, attempt)
+                    await asyncio.sleep(delay)
+                try:
+                    logger.info("route toggle: connect_source %s", address)
+                    await transfer.bridge.connect_source(address)
+                    last_exc = None
+                    break
+                except Exception as e:
+                    last_exc = e
+                    text = str(e)
+                    if "PAGE_TIMEOUT" not in text and "0x04" not in text.lower():
+                        raise            # не «спит» — настоящая ошибка, не маскируем
+            if last_exc is not None:
+                raise last_exc
             logger.info("route toggle: classic audio up %s", address)
         elif cmd in ("disconnect", "off", "0"):
             logger.info("route toggle: disconnect_source")
