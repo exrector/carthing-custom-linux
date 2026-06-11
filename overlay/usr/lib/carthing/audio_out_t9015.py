@@ -159,10 +159,17 @@ class T9015AudioOutput:
     def write(self, pcm: bytes) -> int:
         # write() на PCM-узле блокируется по мере заполнения кольцевого буфера —
         # темп задаёт железо. Возвращает записанные БАЙТЫ.
+        # XRUN (underrun): если буфер опустел между кусками live-потока, ядро
+        # отвечает EPIPE (BrokenPipeError) — это НЕ фатал, штатное восстановление:
+        # PREPARE и продолжить запись (пауза слышна как короткий провал).
         total = 0
         view = memoryview(pcm)
         while total < len(pcm):
-            total += os.write(self.fd, view[total:total + 32768])
+            try:
+                total += os.write(self.fd, view[total:total + 32768])
+            except BrokenPipeError:
+                self.xruns = getattr(self, "xruns", 0) + 1
+                fcntl.ioctl(self.fd, _IOCTL_PREPARE)
         return total
 
     def drain(self) -> None:
