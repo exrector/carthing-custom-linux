@@ -612,3 +612,61 @@ Hardware note from this turn:
   (HCI_Switch_Role), sniff off при стриме, 3-DH5; delay reporting суммарной
   задержки. Файлы ресёрча: /tmp/gemini*-bt-research.txt (скопировать в docs!).
 - Зонды (max_gap_ms в RTP-строке, render slow) оставлены — дешёвые, полезные.
+
+---
+
+## ЗАДАНИЕ CODEX — ночь 2026-06-12 (Claude уходит по лимиту)
+
+Прочитай ВЕСЬ этот файл и `docs/route-test-series-results.md` (протокол append-only,
+пиши туда же). Железные правила §1 действуют БУКВАЛЬНО — особенно: tools/deploy,
+smoke-ИМПОРТ после правок (py_compile НЕ ловит NameError), INVARIANTS.md перед BT-правками,
+чек-лист §4 после каждого деплоя. Звук сейчас РАБОТАЕТ (владелец подтвердил) — не сломай.
+
+### Контекст: что уже сделано по заиканию (вечер 2026-06-11, Claude)
+Хронология фиксов: `492af14` (бэкофф+радио-гвард пейджинга) → page-сериализация [LNK]
+(`carthing_runtime`) → `480ea0f` (рендер в executor-поток; ДОКАЗАНО зондами: кадр держал
+loop 77-92 мс → дыры 130-180 мс) → `d6aad82` (GC freeze + кадры ≤2/с при стриме) →
+`ade2095` (radio tune: BLE 45-60ms/latency 4 при стриме, master на линке колонки).
+Результат: max_gap 80-130 мс (буфер Fosi 150), на слух чисто. Зонды живут в логе:
+`A2DP_BRIDGE_RTP ... max_gap_ms=` и `render slow (thread)`.
+
+### Задача A (первая): проверить radio tune под музыкой
+1. Маршрут iPhone→Fosi, музыка ≥3 мин. В логе ищи `RADIO_TUNE:` строки:
+   - `BLE ... 45-60ms latency=4 (stream)` при старте, `15-30ms latency=0 (idle)` на паузе;
+   - `speaker link role=...`. iOS может отклонить параметры — это лог, не бага.
+2. Собери max_gap_ms по ≥30 окнам ДО/ПОСЛЕ (до = коридор 80-132). Если стало хуже
+   или AMS/ANCS развалились — `CARTHING_RADIO_TUNE=0` в /etc/default/carthing (через
+   remount rw! см. tools/deploy исходник) и зафиксируй в протоколе.
+3. Результаты → docs/route-test-series-results.md.
+
+### Задача B: ресёрч /dev/audiodsp0 (НЕ кодить в runtime!)
+Узел: major 257, CONFIG_AMLOGIC_AUDIO_DSP, ядро 4.9 amlogic. Цель ресёрча: можно ли
+кормить DSP AAC и забирать PCM (или сразу SBC) для транскода AAC→SBC (Maedhawk-кейс).
+Шаги: найти драйвер в исходниках ядра (buildroot dl/ или github amlogic 4.9,
+drivers/amlogic/audiodsp*), выписать ioctl-набор и формат обмена; проверить наличие
+firmware DSP в /lib/firmware на устройстве; НАПИСАТЬ standalone-тест в tools/
+(не трогая runtime). Итог: docs/audiodsp-research.md — интерфейс + вердикт «годен/нет».
+
+### Задача C: дизайн GUI-процесса (ресёрч + план, БЕЗ реализации этой ночью)
+Остаточные GIL-укусы лечатся только выносом GUI в отдельный ПРОЦЕСС. Ловушка:
+AppState — ОБЩЕЕ мутируемое состояние BT-логики и GUI (a2dp_bridge.state ЕСТЬ
+app_state), наивный сплит невозможен. Связка с carthing-release-architecture:
+docs/l8-state-model.md — там модель состояния, бери её за основу.
+Жду от тебя: docs/gui-process-design.md с (1) границей процессов (рекомендую:
+GUI-процесс владеет input+compositor+DRM, runtime шлёт снапшоты состояния,
+GUI шлёт интенты обратно — unix socket, msgpack/json); (2) протоколом снапшота
+(какие поля AppState читают экраны — выпиши grep'ом); (3) планом миграции
+ПОЭТАПНО с работающей системой на каждом шаге; (4) рисками (regions/hit-test,
+шторка, анимации). НЕ реализуй, пока владелец не утвердит дизайн.
+
+### Задача D (если останется ресурс): мелочи из §3
+- №3 авто-ретрай connect_source (PAGE_TIMEOUT спящего iPhone) — паттерн 3/8/15 c.
+- Maedhawk: сверить нашу SBC-конфигурацию с его GetCapabilities (битпул!) —
+  его перезагрузки при воспроизведении похожи на превышение возможностей.
+- ПРОВЕРЬ освобождение порта: бывает, после kill старый runtime держит HCI.
+
+### НЕ ДЕЛАТЬ этой ночью
+- BAKE (блок прошивки) — только при владельце.
+- Реализацию GUI-процесса и DSP-интеграцию — только дизайн/ресёрч.
+- Никаких правок vendored bumble без check-bumble-vendor.py.
+- Push в git.
