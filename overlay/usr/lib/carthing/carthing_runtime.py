@@ -451,7 +451,11 @@ async def _apply_route_output(key):
             gui.app_state.save_trusted()
         except Exception as e:
             logger.warning("select speaker %s failed: %s", key, e)
-        await transfer.bridge.ensure_trusted_speakers_connected()
+        # [CLAUDE 2026-06-11] НЕ обзваниваем ВСЕ колонки на [LNK]: page выключенной
+        # занимает контроллер ~5 c, и следующий за ним connect_source(iPhone)
+        # отлетает с HCI 0x12 (один page за раз) -> «маршрут не переключается».
+        # Целевую колонку поднимает request_receiver_connection; остальными
+        # занимается standby-петля по своему расписанию.
         await transfer.bridge.request_receiver_connection(key, force=True)
         await transfer.bridge.ensure_source_codec_matches_route()
         model.audio_sink = "speaker"
@@ -492,6 +496,15 @@ def _on_route_activate():
         ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
         self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
         await _apply_route_output(ro)
+        # [CLAUDE 2026-06-11] СЕРИАЛИЗАЦИЯ page: если колонка ещё дозванивается,
+        # ждём её таск — контроллер делает только один page за раз, параллельный
+        # connect_source отлетает с HCI 0x12.
+        task = getattr(transfer.bridge, "_connect_task", None)
+        if task is not None and not task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(task), timeout=20)
+            except Exception:
+                pass
         source_up = getattr(transfer.bridge, "_source_connection", None) is not None
         if ro and ro != self_key:
             if not source_up:
