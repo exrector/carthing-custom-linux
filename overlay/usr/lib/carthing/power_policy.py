@@ -43,6 +43,10 @@ class IdlePowerController:
         self._max_brightness = self._read_int("max_brightness", default=255)
         self._active_brightness = self.active_brightness
         self._active_brightness = max(1, min(self._active_brightness, self._max_brightness))
+        # Яркость в процентах из настроек (UI-ручка) перекрывает сырое значение.
+        pct = self._setting("screen_brightness_pct", None)
+        if pct is not None:
+            self.set_active_brightness_percent(pct, apply=False)
 
         if not self.backlight:
             logger.info("Power: no backlight sysfs; idle policy disabled")
@@ -136,6 +140,14 @@ class IdlePowerController:
             return
         self._pairing_armed = armed
         self.note_activity("pairing" if armed else "pairing_done")
+
+    def set_active_brightness_percent(self, percent, apply=True) -> None:
+        """Яркость из UI (проценты) -> сырые единицы sysfs. Персист — в runtime-callback."""
+        percent = max(5, min(100, int(percent)))
+        self._active_brightness = max(1, int(self._max_brightness * percent / 100))
+        self.active_brightness = self._active_brightness
+        if apply and self._display_state == "active":
+            self._write_int("brightness", self._active_brightness)
 
     def set_idle_sleep(self, on: bool) -> None:
         """[CLAUDE 2026-06-01] Рантайм-переключатель сна экрана из Settings. off -> экран ВСЕГДА

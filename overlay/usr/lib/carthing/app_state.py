@@ -300,6 +300,7 @@ class AppState:
         self.sleep_on_idle = True       # [CLAUDE] сон/гашение экрана (тумблер в Settings)
         self.screen_off_sec = 150       # [CLAUDE] тайм-аут полного гашения (настройка ± в Settings)
         self.notif_blink = True         # [CLAUDE] моргание кружка уведомлений под энкодером (тумблер)
+        self.screen_brightness = 100    # [CLAUDE 2026-06-10] яркость экрана, % (цикл в Settings)
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False

@@ -342,6 +342,8 @@ class SettingsScreen(Screen):
             # отдельной кнопкой [Сопряжение] в баре Routes, дублировать в настройках не нужно.
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
+                # статическая заглушка: живые подписи (Яркость: N% и т.д.) строит
+                # динамический render-путь display ниже
                 ("brightness", "Яркость"),
                 ("sleep", "Тайм-аут сна"),
             ]},
@@ -433,7 +435,7 @@ class SettingsScreen(Screen):
             on = bool(getattr(self.state, "sleep_on_idle", True)) if self.state else True
             blink = bool(getattr(self.state, "notif_blink", True)) if self.state else True
             return [
-                ("brightness", "Яркость"),
+                ("brightness", f"Яркость: {int(getattr(self.state, 'screen_brightness', 100)) if self.state else 100}%"),
                 ("toggle_sleep", f"Сон экрана: {'Вкл' if on else 'Выкл'}"),
                 ("off_timeout", "Гашение экрана"),   # рисуется спец-строкой с −/+
                 ("toggle_notif_blink", f"Моргание уведомлений: {'Вкл' if blink else 'Выкл'}"),

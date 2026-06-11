@@ -499,6 +499,15 @@ def _on_toggle_notif_blink(on):
         settings.set("notif_blink", bool(on))
 
 
+def _on_set_brightness(pct):
+    # [CLAUDE 2026-06-10] яркость из Settings: применяем к power + персистим (UserDefaults-принцип).
+    pct = int(pct)
+    if power is not None:
+        power.set_active_brightness_percent(pct)
+    if settings is not None:
+        settings.set("screen_brightness_pct", pct)
+
+
 def _on_set_off_timeout(sec):
     # [CLAUDE 2026-06-01] ±тайм-аут полного гашения из Settings: применяем к power + персистим.
     sec = int(sec)
@@ -977,7 +986,8 @@ async def main():
                                 on_route_activate=_on_route_activate,
                                 on_toggle_sleep=_on_toggle_sleep,
                                 on_set_off_timeout=_on_set_off_timeout,
-                                on_toggle_notif_blink=_on_toggle_notif_blink)
+                                on_toggle_notif_blink=_on_toggle_notif_blink,
+                                on_set_brightness=_on_set_brightness)
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
             # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма
@@ -997,6 +1007,7 @@ async def main():
             gui.app_state.sleep_on_idle = bool(getattr(power, "enabled", True))
             gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
             gui.app_state.notif_blink = bool(settings.get("notif_blink", True))  # [CLAUDE] персист моргания
+            gui.app_state.screen_brightness = int(settings.get("screen_brightness_pct", 100))
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)
