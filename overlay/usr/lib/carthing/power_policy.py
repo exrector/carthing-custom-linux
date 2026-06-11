@@ -111,6 +111,10 @@ class IdlePowerController:
         value = max(0, min(self._max_brightness, int(value)))
         if os.environ.get("CARTHING_BL_INVERTED", "1") != "0":
             value = self._max_brightness - value
+            # края шкалы у драйвера — «выключено» (0 = нулевая скважность PWM,
+            # 255 = тоже гасит): доказано 2026-06-11, оба конца давали чёрный экран.
+            # Рабочий диапазон [1, max-1]; гашение делает bl_power=4, не brightness.
+            value = max(1, min(self._max_brightness - 1, value))
         self._write_int("brightness", value)
 
     def _write_int(self, name: str, value: int) -> None:
