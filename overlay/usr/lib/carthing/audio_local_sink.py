@@ -74,6 +74,28 @@ class PassthroughPcmDecoder(AudioDecoder):
         return payload
 
 
+class AutoDecoder(AudioDecoder):
+    """Маршрутизация по кодеку кадра: pcm -> passthrough, sbc -> SbcDecoder
+    (C-ускоритель + Python-фолбэк, бит-в-бит с ffmpeg, x1.7 rt на A53).
+    aac -> ошибка до появления DSP-декодера (RUNBOOK задача B)."""
+
+    def __init__(self):
+        self._sbc = None
+        self.sample_rate = 48000     # до первого кадра; sbc уточнит из заголовка
+
+    def decode(self, codec: str, payload: bytes) -> bytes:
+        if codec == "pcm":
+            return payload
+        if codec in ("sbc", "sbc-raw"):
+            if self._sbc is None:
+                from sbc_decoder import SbcDecoder
+                self._sbc = SbcDecoder()
+            pcm = self._sbc.decode(codec, payload)
+            self.sample_rate = self._sbc.sample_rate
+            return pcm
+        raise ValueError(f"нет декодера для {codec} (aac ждёт DSP — RUNBOOK задача B)")
+
+
 class AudioLocalSink:
     """Очередь + поток-плеер. Жизненный цикл:
         sink = AudioLocalSink(decoder)
@@ -111,9 +133,8 @@ class AudioLocalSink:
     def start(self) -> None:
         if self._run:
             return
-        self._out = T9015AudioOutput()
-        info = self._out.open()
-        logger.info("local sink: T9015 open %s", info)
+        # ЦАП открывается ЛЕНИВО в потоке-плеере после первого декодированного
+        # PCM — частоту (44100/48000...) диктует декодер из заголовка потока.
         self._run = True
         self._thread = threading.Thread(target=self._player, name="t9015-player", daemon=True)
         self._thread.start()
@@ -146,7 +167,21 @@ class AudioLocalSink:
                 if self.decode_errors <= 3 or self.decode_errors % 250 == 0:
                     logger.warning("local sink decode error #%d: %s", self.decode_errors, e)
                 continue
-            if pcm and self._out is not None:
+            if pcm:
+                if self._out is None:
+                    rate = int(getattr(self.decoder, "sample_rate", 48000) or 48000)
+                    try:
+                        self._out = T9015AudioOutput(rate=rate)
+                        info = self._out.open()
+                        logger.info("local sink: T9015 open rate=%d %s", rate, info)
+                    except Exception as e:
+                        # ЦАП недоступен (dev-Mac/занят) — НЕ убиваем поток-плеер:
+                        # считаем кадры дропнутыми, ретрай на следующем кадре.
+                        self._out = None
+                        self.decode_errors += 1
+                        if self.decode_errors <= 3:
+                            logger.warning("local sink: DAC open failed: %s", e)
+                        continue
                 self._out.write(pcm)     # блокируется по темпу железа — и хорошо
                 self.frames_played += 1
 
@@ -177,7 +212,7 @@ def _serve() -> int:
         # декодер выбирается на подключение; пока есть только passthrough-PCM.
         # Codex (этаж 3): сюда встаёт DspDecoder (audiodsp_decoder.py), выбор по
         # codec_id кадра — см. AudioDecoder.decode(codec, payload).
-        sink = AudioLocalSink(PassthroughPcmDecoder())
+        sink = AudioLocalSink(AutoDecoder())
         try:
             sink.start()
             logger.info("local sink daemon: client connected, DAC open")

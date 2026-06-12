@@ -43,9 +43,10 @@ class LocalSinkClient:
         if os.path.exists(SINK_SOCKET):
             return  # кто-то уже слушает (пережил наш рестарт) — отлично
         try:
+            log = open("/var/run/carthing/local-sink.log", "ab")
             self._daemon = subprocess.Popen(
                 ["python3", os.path.join(os.path.dirname(__file__), "audio_local_sink.py"), "serve"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stdout=log, stderr=log)
             logger.info("local sink daemon spawned pid=%s", self._daemon.pid)
         except Exception as e:
             logger.warning("local sink daemon spawn failed: %s", e)

@@ -388,6 +388,11 @@ class A2DPBridge:
         self.receiver_last_error = connector.last_error
 
     def _selected_receiver_codec(self) -> str:
+        # [CLAUDE 2026-06-12] line-out: локальный декодер пока SBC-only ->
+        # источнику предлагаем только SBC (тот же механизм, что для Maedhawk).
+        # Когда появится DSP-AAC (задача B), вернуть AAC для local sink.
+        if self.local_sink_enabled:
+            return "SBC"
         connector = self._selected_speaker_connector()
         return (connector.codec_name if connector is not None else "") or ""
 

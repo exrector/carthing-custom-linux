@@ -453,6 +453,8 @@ async def _apply_route_output(key):
         transfer.bridge.local_sink_enabled = True
         model.audio_sink = "lineout"
         logger.info("ТРУБА: выход = Car Thing line-out (T9015) — кадры в локальный sink")
+        # источник мог сидеть на AAC — заставляем перепереговоры на SBC
+        await transfer.bridge.ensure_source_codec_matches_route()
         _on_publish()
         return
     transfer.bridge.local_sink_enabled = False
