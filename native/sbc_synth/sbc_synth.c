@@ -1,6 +1,6 @@
 /* Горячий синтез SBC (8/4 поддиапазонов) — вынос из sbc_decoder.py.
  * Python даёт 0.5x realtime на A53; этот файл — запас в десятки раз.
- * Алгоритм идентичен bluez sbc_synthesize_eight/four (fixed-point, >>15);
+ * Алгоритм идентичен референсного sbc_synthesize_eight/four (fixed-point, >>15);
  * таблицы передаёт Python при инициализации (ctypes).
  *
  * Сборка НА MAC (freestanding, ни одного вызова libc — sysroot не нужен):

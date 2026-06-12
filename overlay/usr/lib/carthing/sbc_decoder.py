@@ -5,10 +5,10 @@
 сделан Codex 2026-06-11 для Maedhawk) -> iPhone шлёт SBC -> декодируем здесь ->
 PCM -> T9015. AAC в чистом Python нереален; SBC — спроектирован «low-complexity».
 
-ИСТОЧНИК АЛГОРИТМА: транскрипция референсной bluez libsbc (sbc.c, sbc_math.h,
+ИСТОЧНИК АЛГОРИТМА: транскрипция референсной эталонная libsbc (reference SBC codec, LGPL) (sbc.c, sbc_math.h,
 sbc_tables.h; LGPL-2.1+; A2DP spec Appendix B). Таблицы СГЕНЕРИРОВАНЫ из
 исходника автоматически (масштабирование SS/SN уже применено) — не редактировать
-руками. Fixed-point идентичен bluez (default-точность: FIXED_T int16), Python-инты
+руками. Fixed-point идентичен reference-реализации (default-точность: FIXED_T int16), Python-инты
 не переполняются — поведение совпадает с C на корректных потоках.
 
 ПРОИЗВОДИТЕЛЬНОСТЬ: декодер живёт в sink-ПРОЦЕССЕ (audio_local_sink serve) на
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import struct
 
-# АВТОГЕНЕРИРОВАНО из bluez sbc_tables.h/sbc.c (LGPL-2.1+, A2DP Appendix B).
+# АВТОГЕНЕРИРОВАНО из libsbc sbc_tables.h/sbc.c (LGPL-2.1+, A2DP Appendix B).
 # Масштабирование применено: proto: SS4>>12/SS8>>14; synmatrix: SN>>14.
 OFFSET4 = [[-1, 0, 0, 0], [-2, 0, 0, 1], [-2, 0, 0, 1], [-2, 0, 0, 1]]
 OFFSET8 = [[-2, 0, 0, 0, 0, 0, 0, 1], [-3, 0, 0, 0, 0, 0, 1, 2], [-4, 0, 0, 0, 0, 0, 1, 2], [-4, 0, 0, 0, 0, 0, 1, 2]]
@@ -77,7 +77,7 @@ def _crc8(data: bytes, bit_len: int) -> int:
 
 
 def _calc_bits(mode, channels, subbands, frequency, allocation, scale_factor, bitpool):
-    """Транскрипция sbc_calculate_bits (bluez). Возвращает bits[2][8]."""
+    """Транскрипция sbc_calculate_bits (reference). Возвращает bits[2][8]."""
     bits = [[0] * 8 for _ in range(2)]
     offsets = OFFSET4 if subbands == 4 else OFFSET8
     if mode in (_MONO, _DUAL):

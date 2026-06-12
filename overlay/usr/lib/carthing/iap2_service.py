@@ -1,7 +1,7 @@
 """iAP2/MFi service for the unified runtime.
 
 This is deliberately a Bumble-native service: SDP + RFCOMM live inside the same
-controller/runtime that already owns BLE, A2DP and AVRCP. Legacy BlueZ/D-Bus
+controller/runtime that already owns BLE, A2DP and AVRCP. Legacy системный BT-стек/D-Bus
 agents in reference/ are protocol maps only, not runtime architecture.
 """
 
