@@ -407,14 +407,37 @@ class SbcDecoder:
 
     def __init__(self):
         self._frame = SbcFrameDecoder()
+        self._hdr_skip = None      # кэш: длина обвязки до первого SBC-кадра
 
     @property
     def sample_rate(self):
         return self._frame.sample_rate
 
+    def _find_start(self, data: bytes) -> int:
+        """[CLAUDE 2026-06-12] bumble отдаёт ВЕСЬ RTP-пакет (12-байтная RTP-шапка
+        [+CSRC] + 1 байт A2DP media-header) — обвязку надо снять. Длина постоянна
+        в рамках потока: ищем 0x9C в первых 24 байтах, кандидата ВАЛИДИРУЕМ
+        декодом кадра (CRC отсеет ложный 0x9C в timestamp), потом кэшируем."""
+        if self._hdr_skip is not None and self._hdr_skip < len(data) and data[self._hdr_skip] == 0x9C:
+            return self._hdr_skip
+        self._hdr_skip = None
+        idx = data.find(0x9C, 0, 24)
+        while idx != -1:
+            try:
+                probe = bytearray()
+                SbcFrameDecoder().decode_frame(data, idx, probe)  # CRC отсеет ложный 0x9C
+                self._hdr_skip = idx
+                return idx
+            except Exception:
+                idx = data.find(0x9C, idx + 1, 24)
+        return -1
+
     def decode(self, codec: str, payload: bytes) -> bytes:
         if codec == "sbc":
-            data = payload[1:]      # A2DP media-payload header (фрагментацию не поддерживаем)
+            start = self._find_start(payload)
+            if start < 0:
+                raise ValueError("SBC syncword не найден в RTP-пакете")
+            data = payload[start:]
         elif codec == "sbc-raw":
             data = payload
         else:
