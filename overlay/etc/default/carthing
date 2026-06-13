@@ -79,3 +79,8 @@ CARTHING_REVERSE_AGENT_DEVICE_ID=device1
 CARTHING_REVERSE_AGENT_POLL_INTERVAL=2
 CARTHING_REVERSE_AGENT_COMMAND_TIMEOUT=45
 CARTHING_REVERSE_AGENT_MAX_OUTPUT=65536
+
+# [CLAUDE 2026-06-13] Тема UI принудительно: state.json на vfat-разделе бывает
+# повреждён (битая цепочка кластеров -> чтение падает -> откат на dark).
+# Env имеет приоритет над state.json в ui_theme._settings_theme.
+export CARTHING_UI_THEME=terminal
