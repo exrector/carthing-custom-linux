@@ -129,6 +129,14 @@ class Dispatcher:
 
     # ── settings ───────────────────────────────────────────────────────────────
     def _settings(self, key):
+        if key == "power_off_confirm":          # [CLAUDE 2026-06-13] подтверждённое мягкое выключение
+            self.on_power_off()
+            return
+        if key == "power_off_noop":             # строка-предупреждение — не действие
+            return
+        if key.startswith("set_mode:"):         # [CLAUDE 2026-06-13] выбор конкретного режима
+            self.on_set_mode(key.split(":", 1)[1])
+            return
         if key in ("pairing_input", "pairing_source"):
             self.state.pairing_role = "input"
             self.state.pairing_mode = True

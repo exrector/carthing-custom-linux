@@ -525,9 +525,14 @@ class SettingsScreen(Screen):
     def _visible(self):
         """Flatten to rows: (level, key, label, expandable, expanded)."""
         rows = []
+        import operation_mode as _om
+        cur_mode = getattr(self.state, "operation_mode", _om.DEFAULT) if self.state else _om.DEFAULT
         for it in self.items:
             has_children = "children" in it
-            rows.append((0, it["key"], it["label"], has_children, it["key"] in self.expanded, None))
+            plabel = it["label"]
+            if it["key"] == "mode":          # [CLAUDE 2026-06-13] показываем активный режим на самом пункте
+                plabel = f'{it["label"]}: {_om.label(cur_mode)}'
+            rows.append((0, it["key"], plabel, has_children, it["key"] in self.expanded, None))
             if has_children and it["key"] in self.expanded:
                 for child in self._children(it):
                     ckey, clabel = child[0], child[1]
@@ -594,6 +599,12 @@ class SettingsScreen(Screen):
                 self.expanded.remove(key)
                 self.expanded_stack = [item for item in self.expanded_stack if item != key]
             else:
+                # [CLAUDE 2026-06-13] single-open: раскрытие пункта ВЕРХНЕГО уровня
+                # закрывает остальные top-level (лента не растягивается бесконечно).
+                if level == 0:
+                    top_keys = {it["key"] for it in self.items if "children" in it}
+                    self.expanded -= top_keys
+                    self.expanded_stack = [k for k in self.expanded_stack if k not in top_keys]
                 self.expanded.add(key)
                 self.expanded_stack = [item for item in self.expanded_stack if item != key]
                 self.expanded_stack.append(key)
