@@ -404,6 +404,8 @@ class SettingsScreen(Screen):
                 # строки «− значение +» (DISPLAY_ADJUST ниже)
                 ("brightness", "Яркость"),
             ]},
+            {"key": "mode", "label": "Режим"},
+            {"key": "power_off", "label": "Выключение"},
             {"key": "about", "label": "О системе"},
         ]
         self.expanded = set()

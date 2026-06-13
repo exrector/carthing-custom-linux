@@ -448,6 +448,7 @@ class AppState:
         self.route_warnings = []
         self.route_cables = []
         self._active_session = "remote"
+        self.operation_mode = "commutator"   # [CLAUDE 2026-06-13] playnow|commutator|reserved; рантайм сидит из settings
         self.power_tier = "boot"
         self.sleep_on_idle = True       # [CLAUDE] сон/гашение экрана (тумблер в Settings)
         self.screen_off_sec = 150       # [CLAUDE] тайм-аут полного гашения (настройка ± в Settings)
