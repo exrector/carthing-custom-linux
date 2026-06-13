@@ -31,8 +31,9 @@ RESERVED = "reserved"
 ALL = (PLAYNOW, COMMUTATOR, RESERVED)
 LABELS = {PLAYNOW: "Play Now", COMMUTATOR: "Коммутатор", RESERVED: "Резерв"}
 
-# Дефолт — COMMUTATOR (сохраняем текущее поведение, пока владелец не выбрал иное).
-DEFAULT = COMMUTATOR
+# Дефолт — PLAYNOW (повторено владельцем многократно: спокойное состояние,
+# без гоняния коммутатора по кругу).
+DEFAULT = PLAYNOW
 
 
 def current(settings) -> str:

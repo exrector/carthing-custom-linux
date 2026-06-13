@@ -686,12 +686,12 @@ def _on_power_off():
     asyncio.ensure_future(power_control.graceful_shutdown(transfer=transfer, power=power, halt=True))
 
 
-def _on_cycle_mode():
-    # [CLAUDE 2026-06-13] Переключить режим работы по кругу: playnow -> commutator
-    # -> reserved. Персист + применить (поднять/погасить коммутатор без рестарта).
+def _on_set_mode(new):
+    # [CLAUDE 2026-06-13] Выбрать КОНКРЕТНЫЙ режим из подпунктов настроек.
+    # Персист + применить (поднять/погасить коммутатор без рестарта).
     import operation_mode as _opmode
-    cur = getattr(gui.app_state, "operation_mode", _opmode.DEFAULT) if gui is not None else _opmode.DEFAULT
-    new = _opmode.cycle(cur)
+    if new not in _opmode.ALL:
+        return
     if gui is not None:
         gui.app_state.operation_mode = new
     if settings is not None:
@@ -1363,7 +1363,7 @@ async def main():
                                 on_set_brightness=_on_set_brightness,
                                 on_set_theme=_on_set_theme,
                                 on_power_off=_on_power_off,
-                                on_cycle_mode=_on_cycle_mode)
+                                on_set_mode=_on_set_mode)
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
             # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма

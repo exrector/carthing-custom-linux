@@ -43,7 +43,7 @@ class GuiController:
                  on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None, on_set_off_timeout=None,
                  on_toggle_notif_blink=None, on_set_brightness=None, on_set_theme=None,
-                 on_power_off=None, on_cycle_mode=None):
+                 on_power_off=None, on_set_mode=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
@@ -64,7 +64,7 @@ class GuiController:
             on_set_brightness=on_set_brightness or (lambda pct: None),  # [CLAUDE 2026-06-10] яркость
             on_set_theme=on_set_theme or (lambda name: None),  # [CLAUDE 2026-06-11] тема UI
             on_power_off=on_power_off or (lambda: None),
-            on_cycle_mode=on_cycle_mode or (lambda: None),
+            on_set_mode=on_set_mode or (lambda mode: None),
         )
         emit = self.dispatcher.dispatch
         screens = [

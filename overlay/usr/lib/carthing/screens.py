@@ -404,8 +404,8 @@ class SettingsScreen(Screen):
                 # строки «− значение +» (DISPLAY_ADJUST ниже)
                 ("brightness", "Яркость"),
             ]},
-            {"key": "mode", "label": "Режим"},
-            {"key": "power_off", "label": "Выключение"},
+            {"key": "mode", "label": "Режим", "children": []},
+            {"key": "power_off", "label": "Выключение", "children": []},
             {"key": "about", "label": "О системе"},
         ]
         self.expanded = set()
@@ -507,6 +507,19 @@ class SettingsScreen(Screen):
             return rows
         if it["key"] == "display":      # [CLAUDE 2026-06-11] ВСЕ под-настройки = единый «− значение +»
             return [(k, spec[0]) for k, spec in self.DISPLAY_ADJUST.items()]
+        if it["key"] == "mode":         # [CLAUDE 2026-06-13] выбор режима: подпункты с отметкой текущего
+            import operation_mode as _om
+            cur = getattr(self.state, "operation_mode", _om.DEFAULT) if self.state else _om.DEFAULT
+            rows = []
+            for m in _om.ALL:
+                mark = "● " if m == cur else "○ "
+                rows.append(("set_mode:" + m, mark + _om.label(m)))
+            return rows
+        if it["key"] == "power_off":    # [CLAUDE 2026-06-13] предупреждение перед выключением
+            return [
+                ("power_off_noop", "Устройство выключится!"),
+                ("power_off_confirm", "⏻ Да, выключить"),
+            ]
         return it.get("children", [])
 
     def _visible(self):
