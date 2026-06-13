@@ -54,7 +54,14 @@ CARTHING_NAME_BASE=CarThing
 # second classic-audio identity next to the BLE media remote on iOS/macOS.
 CARTHING_A2DP_BRIDGE_ENABLE=0
 CARTHING_A2DP_AUTOCONNECT=0
-CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/trusted-devices.json
+CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/state.json
+
+# Release audio relay: use native AAC->SBC transcode only when a selected
+# Bluetooth speaker cannot accept AAC. Local T9015 line-out remains disabled on
+# this hardware build; the name is intentionally experimental to avoid legacy
+# lab env accidentally enabling it.
+CARTHING_TRANSCODE_AAC_TO_SBC=1
+CARTHING_EXPERIMENTAL_LINEOUT_ENABLE=0
 
 CARTHING_SSH_ENABLE=1
 CARTHING_DROPBEAR_ARGS=""

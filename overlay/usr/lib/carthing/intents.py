@@ -75,6 +75,8 @@ class Dispatcher:
             self.on_pairing(False, role)
         elif intent == "speaker_pair_select":
             self._speaker_pair_select(payload)
+        elif intent == "speaker_pair_confirm":
+            self._speaker_pair_confirm(payload)
         elif intent == "trusted_remove":
             self._trusted_remove(payload)
         elif intent == "route_input_select":
@@ -124,13 +126,20 @@ class Dispatcher:
 
     # ── settings ───────────────────────────────────────────────────────────────
     def _settings(self, key):
-        if key == "pairing_device":
-            self.state.pairing_role = "device"
+        if key in ("pairing_input", "pairing_source"):
+            self.state.pairing_role = "input"
+            self.state.pairing_mode = True
+            self.state.speaker_pairing_status = "advertise"
+            self.state.pairing_message = ""
+            self.state.clear_speaker_candidates()
+            self.on_pairing(True, "input")
+        elif key in ("pairing_output", "pairing_speaker", "pairing_device"):
+            self.state.pairing_role = "output"
             self.state.pairing_mode = True
             self.state.speaker_pairing_status = "scan"
             self.state.pairing_message = ""
             self.state.clear_speaker_candidates()
-            self.on_pairing(True, "device")
+            self.on_pairing(True, "output")
         elif key in ("sessions", "modes", "routes"):
             # [CLAUDE 2026-06-02] режимы удалены — пункт ведёт на маршрутный экран (ВХОД/ВЫХОД)
             self.state.active_desktop = self.state.ROUTER
@@ -142,8 +151,23 @@ class Dispatcher:
     def _speaker_pair_select(self, address):
         if not address:
             return
+        self.state.select_speaker_candidate(address)
+
+    def _speaker_pair_confirm(self, address=None):
+        if getattr(self.state, "speaker_pairing_status", "") in ("connect", "done"):
+            return
+        address = address or getattr(self.state, "selected_speaker_candidate", "")
+        if not address:
+            return
+        candidate = self.state.select_speaker_candidate(address)
+        if candidate is None:
+            return
+        if candidate.get("trusted_output"):
+            self.state.speaker_pairing_status = "done"
+            self.state.pairing_message = (candidate.get("label") or address) + " уже добавлен"
+            return
         self.state.speaker_pairing_status = "connect"
-        self.state.pairing_message = ""
+        self.state.pairing_message = (candidate.get("label") or address) + " подключается"
         self.on_speaker_pair_select(address)
 
     def _trusted_remove(self, key):
@@ -161,7 +185,7 @@ class Dispatcher:
             self.on_trusted_remove(address)
 
     def _transfer_select(self, key):
-        address = self.state.select_default_speaker(key)
+        address = self.state.select_route_speaker(key)
         if address:
             try:
                 self.state.save_trusted()

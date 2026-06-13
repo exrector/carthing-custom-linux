@@ -241,6 +241,38 @@ def check_enrollment():
     assert fosi.output_endpoints()
     assert fosi.control_endpoints()
     assert iphone.input_endpoints()
+    fosi_profile = fosi.metadata.get("capability_profile") or {}
+    iphone_profile = iphone.metadata.get("capability_profile") or {}
+    assert "classic_sdp" in set(fosi_profile.get("evidence_sources") or [])
+    assert "ble_gatt" in set(iphone_profile.get("evidence_sources") or [])
+    assert "audio_output" in set(fosi_profile.get("verified_capabilities") or [])
+    assert "audio_input" in set(iphone_profile.get("verified_capabilities") or [])
+    le_speaker = manager.enroll(EnrollmentEvidence(
+        "22:33:44:55:66:88",
+        "LE Speaker",
+        ble_services={"184e", "1850"},
+    ))
+    assert le_speaker.output_endpoints()
+    le_protocols = set().union(*(endpoint.protocols for endpoint in le_speaker.output_endpoints()))
+    assert Protocol.BLE_LE_AUDIO_SINK in le_protocols
+    assert Protocol.CLASSIC_A2DP_SOURCE not in le_protocols
+    airfly = manager.enroll(EnrollmentEvidence(
+        "AA:BB:CC:DD:EE:FF",
+        "AirFly",
+        service_uuids={"110b"},
+    ))
+    assert "ble_gatt" in set((airfly.metadata.get("capability_profile") or {}).get("unknowns") or [])
+    airfly = manager.enroll(EnrollmentEvidence(
+        "AA:BB:CC:DD:EE:FF",
+        "AirFly",
+        service_uuids={"110a"},
+        ble_services={"ams"},
+    ))
+    assert airfly.input_endpoints()
+    assert airfly.output_endpoints()
+    profile = airfly.metadata.get("capability_profile") or {}
+    assert {"classic_sdp", "ble_gatt"} <= set(profile.get("evidence_sources") or [])
+    assert "ble_gatt" not in set(profile.get("unknowns") or [])
 
 
 def check_degraded_enrollment():
@@ -280,8 +312,12 @@ def check_multirole_app_state():
         device = app_state.trust_speaker("AA:BB:CC:DD:EE:FF", "Multi Peer")
         assert device is not None
         assert device["role"] == "device"
+        assert device["metadata"].get("output_enrolled") is True
         assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_inputs)
         assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_outputs)
+        assert app_state.revoke_speaker_role("AA:BB:CC:DD:EE:FF") is True
+        assert any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_inputs)
+        assert not any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_outputs)
 
 
 def check_route_activation_intent():

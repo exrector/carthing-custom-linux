@@ -2,7 +2,7 @@
 
 Хранит settings.json на persistent-разделе (state_paths). Доверенные источники/динамики —
 отдельный реестр (trusted-devices.json, им владеет AppState/трекинг), здесь — скалярные
-настройки: предпочитаемый view, динамик по умолчанию, политика сна.
+настройки: предпочитаемый view, активная сессия, политика сна.
 """
 
 import json
@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 _DEFAULTS = {
     "preferred_view": "now_playing",   # стартовый view (gui-contract)
     "active_session": "remote",        # route-graph session preset
-    "default_speaker": None,           # адрес динамика по умолчанию для Transfer
     "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
     "notif_blink": True,               # [CLAUDE 2026-06-03] моргание уведомлений (раньше НЕ грузился -> сбрасывался)
     "volume": 0.5,                     # [CLAUDE 2026-06-03] последняя громкость (восстанавливается на буст)

@@ -16,6 +16,21 @@ from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Pro
 
 
 COD_MAJOR_AUDIO_VIDEO = 0x0400
+LE_AUDIO_OUTPUT_SERVICES = {
+    "184e", "0x184e",  # Audio Stream Control Service
+    "1850", "0x1850",  # Published Audio Capabilities Service
+    "1851", "0x1851",  # Basic Audio Announcement
+    "1852", "0x1852",  # Broadcast Audio Announcement
+    "1853", "0x1853",  # Common Audio Service
+    "1855", "0x1855",  # Telephony and Media Audio Service
+    "1858", "0x1858",  # Gaming Audio Service
+    "fdf0", "0xfdf0",  # ASHA
+}
+LE_AUDIO_INPUT_SERVICES = {
+    "1843", "0x1843",  # Audio Input Control Service
+    "184e", "0x184e",  # ASCS can expose source ASEs too
+    "1850", "0x1850",  # PACS can expose source capabilities too
+}
 
 
 @dataclass(slots=True)
@@ -46,7 +61,8 @@ class EnrollmentManager:
             Constraint.ACTIVE_MEDIA_REQUIRES_ROUTE,
         }
 
-        if self._looks_like_audio_output(evidence):
+        output_protocols = self._audio_output_protocols(evidence)
+        if output_protocols:
             capabilities.update({
                 Capability.AUDIO_OUTPUT,
                 Capability.CONTROL_INPUT,
@@ -56,24 +72,31 @@ class EnrollmentManager:
             endpoints.append(Endpoint(
                 id="audio-output",
                 direction=EndpointDirection.OUTPUT,
-                protocols={Protocol.CLASSIC_A2DP_SOURCE},
+                protocols=output_protocols,
                 capabilities={Capability.AUDIO_OUTPUT},
                 label="Bluetooth audio output",
-            ))
-            endpoints.append(Endpoint(
-                id="remote-control",
-                direction=EndpointDirection.CONTROL,
-                protocols={Protocol.CLASSIC_AVRCP},
-                capabilities={
-                    Capability.CONTROL_INPUT,
-                    Capability.VOLUME_CONTROL,
-                    Capability.TRANSPORT_CONTROL,
+                metadata={
+                    "transport_adapter": "a2dp"
+                    if Protocol.CLASSIC_A2DP_SOURCE in output_protocols
+                    else "pending"
                 },
-                label="Remote control backchannel",
             ))
+            if Protocol.CLASSIC_A2DP_SOURCE in output_protocols:
+                endpoints.append(Endpoint(
+                    id="remote-control",
+                    direction=EndpointDirection.CONTROL,
+                    protocols={Protocol.CLASSIC_AVRCP},
+                    capabilities={
+                        Capability.CONTROL_INPUT,
+                        Capability.VOLUME_CONTROL,
+                        Capability.TRANSPORT_CONTROL,
+                    },
+                    label="Remote control backchannel",
+                ))
             constraints.add(Constraint.CONTROL_BACKCHANNEL_ONLY)
 
-        if self._looks_like_media_source(evidence):
+        input_protocols = self._audio_input_protocols(evidence)
+        if input_protocols:
             capabilities.update({
                 Capability.AUDIO_INPUT,
                 Capability.CONTROL_OUTPUT,
@@ -82,7 +105,7 @@ class EnrollmentManager:
             endpoints.append(Endpoint(
                 id="audio-input",
                 direction=EndpointDirection.INPUT,
-                protocols={Protocol.CLASSIC_A2DP_SINK},
+                protocols=input_protocols,
                 capabilities={Capability.AUDIO_INPUT},
                 label="Bluetooth audio input",
             ))
@@ -119,6 +142,27 @@ class EnrollmentManager:
             constraints.add(Constraint.REQUIRES_STOP_BEFORE_START)
 
         enrollment_state = "degraded" if degraded else "ready"
+        endpoint_protocols = {
+            str(self._enum_value(protocol))
+            for endpoint in endpoints
+            for protocol in endpoint.protocols
+        }
+        evidence_sources = []
+        if evidence.class_of_device is not None:
+            evidence_sources.append("classic_cod")
+        if evidence.service_uuids:
+            evidence_sources.append("classic_sdp")
+        if evidence.ble_services:
+            evidence_sources.append("ble_gatt")
+        if evidence.capabilities:
+            evidence_sources.append("explicit_capabilities")
+        if evidence.endpoints:
+            evidence_sources.append("explicit_endpoints")
+        unknowns = []
+        if not evidence.service_uuids:
+            unknowns.append("classic_sdp")
+        if not evidence.ble_services:
+            unknowns.append("ble_gatt")
         return TrustedDevice(
             id=address or name,
             address=address,
@@ -136,7 +180,14 @@ class EnrollmentManager:
                     ),
                     "enrollment_state": enrollment_state,
                     **evidence.metadata,
-                }
+                },
+                "capability_profile": {
+                    "probe_status": enrollment_state,
+                    "evidence_sources": sorted(evidence_sources),
+                    "verified_capabilities": sorted(str(self._enum_value(value)) for value in capabilities),
+                    "protocols": sorted(endpoint_protocols),
+                    "unknowns": sorted(unknowns),
+                },
             },
         )
 
@@ -147,15 +198,15 @@ class EnrollmentManager:
             self.registry.devices.append(device)
         else:
             existing.name = device.name
-            existing.capabilities = device.capabilities
-            existing.endpoints = device.endpoints
-            existing.constraints = device.constraints
-            existing.metadata.update(device.metadata)
+            existing.capabilities.update(device.capabilities)
+            existing.endpoints = self._merge_endpoints(existing.endpoints, device.endpoints)
+            existing.constraints.update(device.constraints)
+            existing.metadata = self._merge_metadata(existing.metadata, device.metadata)
             device = existing
         return device
 
     @staticmethod
-    def _looks_like_audio_output(evidence: EnrollmentEvidence) -> bool:
+    def _has_classic_audio_output(evidence: EnrollmentEvidence) -> bool:
         services = {str(value).lower() for value in evidence.service_uuids}
         if "110b" in services or "0x110b" in services or "audio_sink" in services:
             return True
@@ -164,12 +215,44 @@ class EnrollmentManager:
         return (int(evidence.class_of_device) & 0x1F00) == COD_MAJOR_AUDIO_VIDEO
 
     @staticmethod
-    def _looks_like_media_source(evidence: EnrollmentEvidence) -> bool:
+    def _has_le_audio_output(evidence: EnrollmentEvidence) -> bool:
+        ble = {str(value).lower() for value in evidence.ble_services}
+        return bool(LE_AUDIO_OUTPUT_SERVICES & ble)
+
+    @classmethod
+    def _audio_output_protocols(cls, evidence: EnrollmentEvidence) -> set[Protocol]:
+        protocols: set[Protocol] = set()
+        ble = {str(value).lower() for value in evidence.ble_services}
+        if cls._has_classic_audio_output(evidence):
+            protocols.add(Protocol.CLASSIC_A2DP_SOURCE)
+        if cls._has_le_audio_output(evidence):
+            if "fdf0" in ble or "0xfdf0" in ble:
+                protocols.add(Protocol.BLE_ASHA_AUDIO)
+            else:
+                protocols.add(Protocol.BLE_LE_AUDIO_SINK)
+        return protocols
+
+    @staticmethod
+    def _has_classic_media_source(evidence: EnrollmentEvidence) -> bool:
         services = {str(value).lower() for value in evidence.service_uuids}
         ble = {str(value).lower() for value in evidence.ble_services}
         return bool({
             "110a", "0x110a", "audio_source", "ams", "1812", "0x1812",
         } & (services | ble))
+
+    @staticmethod
+    def _has_le_audio_input(evidence: EnrollmentEvidence) -> bool:
+        ble = {str(value).lower() for value in evidence.ble_services}
+        return bool(LE_AUDIO_INPUT_SERVICES & ble)
+
+    @classmethod
+    def _audio_input_protocols(cls, evidence: EnrollmentEvidence) -> set[Protocol]:
+        protocols: set[Protocol] = set()
+        if cls._has_classic_media_source(evidence):
+            protocols.add(Protocol.CLASSIC_A2DP_SINK)
+        if cls._has_le_audio_input(evidence):
+            protocols.add(Protocol.BLE_LE_AUDIO_SOURCE)
+        return protocols
 
     @staticmethod
     def _has_ancs(evidence: EnrollmentEvidence) -> bool:
@@ -209,3 +292,32 @@ class EnrollmentManager:
                 existing.label = endpoint.label
             existing.metadata.update(endpoint.metadata or {})
         return result
+
+    @staticmethod
+    def _merge_metadata(base: dict[str, Any], extra: dict[str, Any]) -> dict[str, Any]:
+        merged = dict(base or {})
+        for key, value in (extra or {}).items():
+            if key == "capability_profile" and isinstance(value, dict):
+                current = dict(merged.get(key) or {})
+                for list_key in ("evidence_sources", "verified_capabilities", "protocols"):
+                    current[list_key] = sorted(set(current.get(list_key) or []) | set(value.get(list_key) or []))
+                unknowns = set(current.get("unknowns") or []) | set(value.get("unknowns") or [])
+                evidence_sources = set(current.get("evidence_sources") or [])
+                if "classic_sdp" in evidence_sources:
+                    unknowns.discard("classic_sdp")
+                if "ble_gatt" in evidence_sources:
+                    unknowns.discard("ble_gatt")
+                current["unknowns"] = sorted(unknowns)
+                current["probe_status"] = value.get("probe_status") or current.get("probe_status")
+                merged[key] = current
+            elif key == "enrollment_evidence" and isinstance(value, dict):
+                current = dict(merged.get(key) or {})
+                for list_key in ("service_uuids", "ble_services", "missing_capabilities"):
+                    current[list_key] = sorted(set(current.get(list_key) or []) | set(value.get(list_key) or []))
+                for scalar_key, scalar_value in value.items():
+                    if scalar_key not in ("service_uuids", "ble_services", "missing_capabilities"):
+                        current[scalar_key] = scalar_value
+                merged[key] = current
+            else:
+                merged[key] = value
+        return merged

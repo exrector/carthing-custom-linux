@@ -34,6 +34,9 @@ class Protocol(str, Enum):
     BLE_ANCS = "ble_ancs"
     BLE_CTS = "ble_cts"
     BLE_HID = "ble_hid"
+    BLE_LE_AUDIO_SINK = "ble_le_audio_sink"
+    BLE_LE_AUDIO_SOURCE = "ble_le_audio_source"
+    BLE_ASHA_AUDIO = "ble_asha_audio"
     CLASSIC_A2DP_SINK = "classic_a2dp_sink"
     CLASSIC_A2DP_SOURCE = "classic_a2dp_source"
     CLASSIC_AVRCP = "classic_avrcp"
@@ -116,4 +119,3 @@ class PlannedSession:
     required_protocols: set[Protocol] = field(default_factory=set)
     constraints: set[Constraint | str] = field(default_factory=set)
     warnings: list[str] = field(default_factory=list)
-

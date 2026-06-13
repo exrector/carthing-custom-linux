@@ -1,13 +1,11 @@
 """Локальный аудиовыход Car Thing: T9015 DAC через голые ALSA ioctl.
 
 АРХИТЕКТУРНОЕ МЕСТО (читай, Codex, прежде чем трогать):
-  Это НИЖНИЙ слой будущего endpoint'а «Car Thing line-out» в Routes:
-    iPhone --BT A2DP--> a2dp_bridge --PCM--> T9015AudioOutput --analog--> провод
-  Слой умеет ТОЛЬКО играть готовый PCM (S16_LE). Декод AAC/SBC -> PCM — слой ВЫШЕ
-  (кандидаты: /dev/audiodsp0 — задача B ранбука; либо программный декодер).
-  Когда декод появится, этот модуль регистрируется в route_outputs как
-  полноправный audio-output endpoint (см. RUNBOOK-NEXT §дизайн задачи №5 и
-  carthing-vision: «мир делится на сервисы/endpoint'ы»).
+  Это НИЖНИЙ слой disabled/future hardware-audio ветки. На текущем устройстве
+  физический аналоговый выход не распаян, поэтому этот модуль НЕ является
+  release output для Bluetooth hub и не регистрируется в Routes по умолчанию.
+  Он умеет только писать готовый PCM (S16_LE) в ALSA; декод AAC/SBC -> PCM
+  находится выше и относится к отдельному исследованию.
 
 ДОКАЗАТЕЛЬНАЯ БАЗА (не переоткрывать):
   - 2026-05-24: тракт доказан на nixos-ядре — carthing-release-architecture/

@@ -38,7 +38,7 @@ class Stub:
     def __init__(self):
         self.transfer_status = ""
 
-    def default_speaker_address(self):
+    def route_speaker_address(self):
         return FOSI
 
     def is_trusted_speaker(self, a):

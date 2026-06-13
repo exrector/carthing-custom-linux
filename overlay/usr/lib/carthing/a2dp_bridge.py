@@ -13,11 +13,12 @@ from bumble.core import (
     BT_SERVICE_DISCOVERY_SERVER_SERVICE_CLASS_ID_SERVICE,
     UUID,
 )
-from bumble.device import AdvertisingData, Device
+from bumble.device import AdvertisingData, Device, Peer
 from bumble.hci import (
     HCI_Read_Class_Of_Device_Command,
     HCI_Write_Class_Of_Device_Command,
 )
+from bumble.rtp import MediaPacket
 from bumble.sdp import (
     SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
     SDP_PUBLIC_BROWSE_ROOT,
@@ -30,6 +31,7 @@ from bumble.sdp import (
 
 from app_state import normalize_address
 from local_sink_client import LocalSinkClient
+from route_graph import Capability, Endpoint, EndpointDirection, Protocol
 from runtime_paths import device_name
 
 
@@ -64,6 +66,14 @@ def error_text(error: Exception) -> str:
     return str(error) or type(error).__name__
 
 
+def looks_like_address(value) -> bool:
+    text = str(value or "").strip()
+    parts = text.split(":")
+    if len(parts) != 6:
+        return False
+    return all(len(part) == 2 and all(ch in "0123456789abcdefABCDEF" for ch in part) for part in parts)
+
+
 @dataclass
 class SpeakerConnector:
     """Per-speaker A2DP connector state.
@@ -82,6 +92,39 @@ class SpeakerConnector:
     connecting: bool = False
     last_error: str = ""
     codec_name: str = ""
+
+
+@dataclass
+class SpeakerRuntime:
+    """One live runtime cell for one trusted output card.
+
+    AppState owns the persistent card. SpeakerRuntime owns the volatile
+    transport footprint for that card: connector, connect task, standby lock,
+    backoff and health. No other speaker should share this state.
+    """
+
+    address: str
+    connector: SpeakerConnector
+    connect_task: asyncio.Task | None = None
+    backoff_failures: int = 0
+    backoff_not_before: float = 0.0
+    standby_connecting: bool = False
+
+    def active_task(self) -> asyncio.Task | None:
+        if self.connect_task is not None and self.connect_task.done():
+            self.connect_task = None
+        return self.connect_task
+
+    def backoff_remaining(self, now: float) -> float:
+        return max(0.0, self.backoff_not_before - now) if self.backoff_not_before else 0.0
+
+    def clear_backoff(self) -> None:
+        self.backoff_failures = 0
+        self.backoff_not_before = 0.0
+
+    def set_backoff(self, failures: int, not_before: float) -> None:
+        self.backoff_failures = failures
+        self.backoff_not_before = not_before
 
 
 class AudioSinkAvrcpDelegate(avrcp.Delegate):
@@ -321,12 +364,16 @@ class A2DPBridge:
         self.receiver_stream = None
         self.receiver_rtp_channel = None
         self.receiver_address = None
+        self.receiver_codec_name = ""
         self.receiver_connecting_address = None
         self.receiver_last_error = ""
         self.source_stream_active = False
         self.source_codec_name = ""
         self._source_codec_reconnect_task: asyncio.Task | None = None
         self._source_connection = None      # [CLAUDE 2026-06-02] classic-ACL источника (iPhone) для CarThing-инициируемого teardown
+        self._source_stream = None
+        self._speaker_ble_evidence: dict[str, dict] = {}
+        self._avrcp_observed_events: set[tuple[str, str]] = set()
         self.started = False
         self.packets_forwarded = 0
         self.packets_dropped = 0
@@ -335,39 +382,129 @@ class A2DPBridge:
         self._standby_task: asyncio.Task | None = None
         self._scan_task: asyncio.Task | None = None
         self._enroll_task: asyncio.Task | None = None
-        self._connect_task: asyncio.Task | None = None
         self._receiver_retry_task: asyncio.Task | None = None
-        self._standby_connecting = set()
-        self._speaker_connections = {}
-        self._speaker_connectors: dict[str, SpeakerConnector] = {}
+        self._speaker_runtimes: dict[str, SpeakerRuntime] = {}
         self._stale_link_key_addresses = set()
-        # Backoff дозвона к недоступной колонке: каждый page = ~5 c радио;
-        # без backoff выключенная колонка съедала эфир каждые 12 c (run10).
-        self._speaker_backoff: dict[str, tuple[int, float]] = {}
         # [CLAUDE 2026-06-12] локальный выход (этаж 4): флаг ставит runtime
         # (_apply_route_output, ветка carthing-lineout); клиент дешёвый —
         # демона не трогает до первого send.
         self.local_sink_enabled = False
         self.local_sink = LocalSinkClient()
+        self._aac_to_sbc_transcoder = None
+        self._transcode_sequence_number = 0
+        self._transcode_sample_count = 0
+        self._transcode_payloads_sent = 0
+        self._transcode_log_next = 1
+
+    def _speaker_runtime(self, address, create: bool = True) -> SpeakerRuntime | None:
+        address = normalize_address(address)
+        if not address:
+            return None
+        runtime = self._speaker_runtimes.get(address)
+        if runtime is None and create:
+            runtime = SpeakerRuntime(address=address, connector=SpeakerConnector(address=address))
+            self._speaker_runtimes[address] = runtime
+        return runtime
 
     def _speaker_connector(self, address) -> SpeakerConnector:
-        address = normalize_address(address)
-        connector = self._speaker_connectors.get(address)
-        if connector is None:
-            connector = SpeakerConnector(address=address)
-            self._speaker_connectors[address] = connector
-        return connector
+        runtime = self._speaker_runtime(address, create=True)
+        return runtime.connector
+
+    def _known_speaker_connector(self, address) -> SpeakerConnector | None:
+        runtime = self._speaker_runtime(address, create=False)
+        return runtime.connector if runtime is not None else None
+
+    def _speaker_connection(self, address):
+        connector = self._known_speaker_connector(address)
+        return connector.connection if connector is not None else None
+
+    def _set_speaker_connection(self, address, connection) -> SpeakerRuntime:
+        runtime = self._speaker_runtime(address, create=True)
+        runtime.connector.connection = connection
+        return runtime
 
     def _selected_speaker_connector(self) -> SpeakerConnector | None:
-        address = normalize_address(self.state.default_speaker_address())
-        return self._speaker_connectors.get(address) if address else None
+        address = normalize_address(self.state.active_route_speaker_address())
+        return self._known_speaker_connector(address) if address else None
 
     def _current_receiver_connector(self) -> SpeakerConnector | None:
         selected = self._selected_speaker_connector()
         if selected is not None:
             return selected
         address = normalize_address(self.receiver_address)
-        return self._speaker_connectors.get(address) if address else None
+        return self._known_speaker_connector(address) if address else None
+
+    def _receiver_connect_task(self, address) -> asyncio.Task | None:
+        runtime = self._speaker_runtime(address, create=False)
+        return runtime.active_task() if runtime is not None else None
+
+    def _selected_receiver_connect_task(self) -> asyncio.Task | None:
+        return self._receiver_connect_task(self.state.active_route_speaker_address())
+
+    def _any_receiver_connect_task(self) -> asyncio.Task | None:
+        for runtime in list(self._speaker_runtimes.values()):
+            task = runtime.active_task()
+            if task is not None:
+                return task
+        return None
+
+    def _has_active_receiver_page(self) -> bool:
+        for runtime in list(self._speaker_runtimes.values()):
+            task = runtime.active_task()
+            if task is None:
+                continue
+            connector = runtime.connector
+            if connector is None or connector.connection is None:
+                return True
+        return False
+
+    def speaker_statuses(self):
+        active_address = normalize_address(self.state.active_route_speaker_address())
+        statuses = []
+        now = time.monotonic()
+        for speaker in self.state.trusted_speakers:
+            address = normalize_address(speaker.get("address"))
+            runtime = self._speaker_runtime(address, create=False)
+            connector = runtime.connector if runtime is not None else None
+            task = runtime.active_task() if runtime is not None else None
+            connection = connector.connection if connector is not None else None
+            rtp = connector.rtp_channel if connector is not None else None
+            last_error = connector.last_error if connector is not None else ""
+            connecting = bool(rtp is None and (
+                task is not None or (connector is not None and connector.connecting)
+            ))
+            backoff_remaining = runtime.backoff_remaining(now) if runtime is not None else 0.0
+            backoff_failures = runtime.backoff_failures if runtime is not None else 0
+            if address == active_address and rtp is not None:
+                status = "active"
+            elif rtp is not None:
+                status = "standby"
+            elif connecting:
+                status = "connecting"
+            elif backoff_remaining > 0:
+                status = "backoff"
+            elif connection is not None or speaker.get("connected"):
+                status = "connected"
+            elif speaker.get("online"):
+                status = "online"
+            else:
+                status = "offline"
+            statuses.append({
+                "key": speaker.get("key") or address,
+                "address": address,
+                "label": speaker.get("label") or address,
+                "active": address == active_address,
+                "connected": bool(connection is not None or speaker.get("connected") or rtp is not None),
+                "standby": bool(rtp is not None),
+                "connecting": connecting,
+                "status": status,
+                "codec": connector.codec_name if connector is not None else "",
+                "last_error": last_error,
+                "backoff_remaining_sec": round(backoff_remaining, 1),
+                "backoff_failures": backoff_failures,
+                "connector_owned": bool(runtime is not None),
+            })
+        return statuses
 
     def _sync_receiver_fields(self, connector: SpeakerConnector | None):
         if connector is None:
@@ -377,6 +514,7 @@ class A2DPBridge:
             self.receiver_stream = None
             self.receiver_rtp_channel = None
             self.receiver_address = None
+            self.receiver_codec_name = ""
             self.receiver_last_error = ""
             return
         self.receiver_connection = connector.connection
@@ -385,12 +523,12 @@ class A2DPBridge:
         self.receiver_stream = connector.stream
         self.receiver_rtp_channel = connector.rtp_channel
         self.receiver_address = connector.address
+        self.receiver_codec_name = connector.codec_name
         self.receiver_last_error = connector.last_error
 
     def _selected_receiver_codec(self) -> str:
-        # [CLAUDE 2026-06-12] line-out: локальный декодер пока SBC-only ->
-        # источнику предлагаем только SBC (тот же механизм, что для Maedhawk).
-        # Когда появится DSP-AAC (задача B), вернуть AAC для local sink.
+        # Experimental-only local sink: keep it SBC-only until the separate
+        # hardware-audio branch proves a real decoder/output path.
         if self.local_sink_enabled:
             return "SBC"
         connector = self._selected_speaker_connector()
@@ -400,6 +538,8 @@ class A2DPBridge:
         if os.environ.get("CARTHING_A2DP_SINK_BASELINE") == "1":
             return False
         selected_codec = self._selected_receiver_codec()
+        if selected_codec == "SBC" and self._aac_to_sbc_enabled():
+            return True
         # We forward RTP packets; there is no transcoder. If the selected output
         # is SBC-only, do not let iOS choose AAC for the Car Thing sink endpoint.
         return selected_codec != "SBC"
@@ -416,12 +556,29 @@ class A2DPBridge:
         if mismatch is None:
             return
         source_codec, receiver_codec = mismatch
+        if self._can_transcode_mismatch(source_codec, receiver_codec):
+            self.logger.info(
+                "A2DP source codec mismatch accepted for transcode: source=%s receiver=%s",
+                source_codec,
+                receiver_codec,
+            )
+            return
         self.logger.warning(
             "A2DP source codec mismatch: source=%s receiver=%s; closing source for renegotiation",
             source_codec,
             receiver_codec,
         )
         await self.disconnect_source()
+
+    def _aac_to_sbc_enabled(self) -> bool:
+        return os.environ.get("CARTHING_TRANSCODE_AAC_TO_SBC") == "1"
+
+    def _can_transcode_mismatch(self, source_codec: str, receiver_codec: str) -> bool:
+        return (
+            self._aac_to_sbc_enabled()
+            and source_codec.upper() == "AAC"
+            and receiver_codec.upper() == "SBC"
+        )
 
     async def _gate(self, label, operation):
         if self.hci_gate is None:
@@ -580,17 +737,29 @@ class A2DPBridge:
             await asyncio.sleep(self.reconnect_interval)
 
     async def ensure_trusted_speakers_connected(self):
-        for speaker in list(self.state.trusted_speakers):
-            # [CLAUDE 2026-06-03] Standby ТОЛЬКО для ЧИСТЫХ колонок (role=="speaker").
-            # Устройства, которые ещё и источники (Mac/iPhone — у них есть A2DP-sink возможность,
-            # role=="device"/"source"), НЕ авто-звоним как колонку — иначе HCI_AUTHENTICATION
-            # failure спамом (они не в pairing-режиме приёмника). Их аудио идёт через свой маршрут.
-            if speaker.get("role") != "speaker":
+        speakers = list(self.state.trusted_speakers)
+        selected_address = normalize_address(self.state.active_route_speaker_address() or "")
+        if selected_address:
+            speakers.sort(
+                key=lambda speaker: 0
+                if normalize_address(speaker.get("address")) == selected_address
+                else 1
+            )
+        for speaker in speakers:
+            # Pure sources are not paged as speakers. Multirole devices are
+            # eligible only after the output side was explicitly enrolled, so
+            # an AirFly-like TX/RX card can keep RX standby without making
+            # phones/Macs with accidental output hints noisy.
+            metadata = dict(speaker.get("metadata") or {})
+            if speaker.get("role") != "speaker" and not metadata.get("output_enrolled"):
                 continue
             address = normalize_address(speaker.get("address"))
-            if not address or address in self._speaker_connections:
+            runtime = self._speaker_runtime(address, create=True) if address else None
+            if not address:
                 continue
-            if address in self._standby_connecting:
+            if runtime.connector.rtp_channel is not None:
+                continue
+            if runtime.standby_connecting:
                 continue
             if not await self._has_link_key(address):
                 # [CLAUDE 2026-06-02] НЕ ломиться в неспаренную колонку. Динамик без
@@ -606,21 +775,16 @@ class A2DPBridge:
             # и висит в режиме пары. request_receiver_connection открывает и держит A2DP-поток ->
             # колонка выходит из пары и горит «подключено». RTP не форвардится, пока нет источника —
             # канал просто живёт в фоне. Идемпотентно: если уже held на этот адрес — no-op.
-            _, not_before = self._speaker_backoff.get(address, (0, 0.0))
-            if asyncio.get_running_loop().time() < not_before:
+            if asyncio.get_running_loop().time() < runtime.backoff_not_before:
                 continue
-            # [CLAUDE 2026-06-11] РАДИО-ГВАРД: пока источник реально льёт поток, page
-            # недоступной ПОСТОРОННЕЙ колонки (не выбранный маршрут) занимает единственное
-            # радио на ~5 c и рвёт играющий звук. Посторонние ждут паузы; выбранную/дефолт
-            # звоним всегда (восстановление активного маршрута важнее).
-            if (self.source_stream_active
-                    and address != normalize_address(self.state.default_speaker_address() or "")):
-                continue
+            # Standby is a per-device invariant. HCI paging is still serialized
+            # by request_receiver_connection(), but active route selection no
+            # longer suppresses other trusted outputs.
             await self.request_receiver_connection(address)
 
     async def enable_classic_visibility(self):
         # Connectable always (bonded peers reconnect, incoming A2DP works), but
-        # NOT discoverable by default — discovery is opened only in pairing mode.
+        # Normally not discoverable: discovery is opened only in pairing mode.
         self.device.class_of_device = COD_AUDIO_LOUDSPEAKER
         await self.device.host.send_command(
             HCI_Write_Class_Of_Device_Command(class_of_device=COD_AUDIO_LOUDSPEAKER),
@@ -672,7 +836,7 @@ class A2DPBridge:
                 connector = self._selected_speaker_connector()
                 if connector is None or connector.rtp_channel is None:
                     # [CLAUDE 2026-06-11] ЧЕРЕЗ request_receiver_connection, а не напрямую
-                    # setup_receiver: иначе петля игнорировала _speaker_backoff и ПЕЙДЖИЛА
+                    # setup_receiver: иначе петля игнорировала per-device backoff и ПЕЙДЖИЛА
                     # выключенную колонку каждые 12 c («retry in 300s» в логе ВРАЛ).
                     # Page занимает радио ~5 c -> дыры в играющем потоке (прерывистый звук).
                     await self.request_receiver_connection()
@@ -690,7 +854,7 @@ class A2DPBridge:
                 await asyncio.sleep(self.reconnect_interval)
 
     async def setup_receiver(self, address=None, connection=None):
-        address = address or self.state.default_speaker_address()
+        address = address or self.state.active_route_speaker_address()
         if not address:
             raise RuntimeError("no trusted speaker configured")
         if not self.state.is_trusted_speaker(address):
@@ -698,6 +862,7 @@ class A2DPBridge:
 
         target_address = normalize_address(address)
         connector = self._speaker_connector(target_address)
+        selected_receiver = target_address == normalize_address(self.state.active_route_speaker_address() or "")
 
         # [CLAUDE 2026-06-11] RESUME held-сессии (пара к suspend-стопу выше): если
         # AVDTP-сессия к этой колонке уже стоит — НЕ пересоздаём Protocol (Fosi
@@ -711,8 +876,9 @@ class A2DPBridge:
                     self.logger.info("A2DP receiver resume start note: %s", error_text(exc))
                 connector.rtp_channel = connector.stream.rtp_channel
                 connector.last_error = ""
-                self._sync_receiver_fields(connector)
-                self.state.transfer_status = "connected"
+                if selected_receiver:
+                    self._sync_receiver_fields(connector)
+                    self.state.transfer_status = "connected"
                 self.state.set_speaker_connected(target_address, True)
                 self.on_state_change()
                 self.logger.info("A2DP_SPEAKER_STREAM_RESUMED address=%s", target_address)
@@ -723,9 +889,10 @@ class A2DPBridge:
                 await self._close_receiver_protocol(target_address)
 
         connector.connecting = True
-        self.receiver_connecting_address = target_address
-        self.receiver_last_error = ""
-        self.state.transfer_status = "connecting"
+        if selected_receiver:
+            self.receiver_connecting_address = target_address
+            self.receiver_last_error = ""
+            self.state.transfer_status = "connecting"
         self.on_state_change()
 
         if connector.protocol is not None:
@@ -735,7 +902,9 @@ class A2DPBridge:
         connection = connection or await self.ensure_speaker_connection(target_address)
         self.logger.info("A2DP receiver ACL ready: %s", target_address)
         connector.connection = connection
-        self._sync_receiver_fields(connector)
+        asyncio.create_task(self._heal_speaker_name(target_address, connection))
+        if selected_receiver:
+            self._sync_receiver_fields(connector)
         connection.on(
             "disconnection",
             lambda reason, address=target_address: asyncio.ensure_future(
@@ -768,7 +937,7 @@ class A2DPBridge:
             version = await self._gate(
                 "a2dp-receiver-sdp-version",
                 lambda: asyncio.wait_for(
-                    avdtp.find_avdtp_service_with_connection(self.device, connection),
+                    avdtp.find_avdtp_service_with_connection(connection),
                     timeout=self.connect_timeout,
                 ),
             )
@@ -785,12 +954,23 @@ class A2DPBridge:
             ),
         )
         connector.protocol = protocol
-        self._sync_receiver_fields(connector)
+        if selected_receiver:
+            self._sync_receiver_fields(connector)
         self.logger.info("A2DP receiver discover endpoints: %s", target_address)
-        await self._gate(
-            "a2dp-receiver-discover",
-            lambda: asyncio.wait_for(protocol.discover_remote_endpoints(), timeout=self.connect_timeout),
-        )
+        try:
+            await self._gate(
+                "a2dp-receiver-discover",
+                lambda: asyncio.wait_for(protocol.discover_remote_endpoints(), timeout=self.connect_timeout),
+            )
+        except asyncio.TimeoutError as exc:
+            connector.last_error = "avdtp discover timeout"
+            self.logger.warning(
+                "A2DP receiver discover timeout: address=%s version=%s",
+                target_address,
+                version,
+            )
+            await self._close_receiver_protocol(target_address)
+            raise RuntimeError("avdtp discover timeout") from exc
 
         for endpoint in protocol.remote_endpoints.values():
             caps = "; ".join(str(capability) for capability in getattr(endpoint, "capabilities", []))
@@ -814,6 +994,10 @@ class A2DPBridge:
             codec_name,
             getattr(sink, "seid", "?"),
         )
+        try:
+            self._persist_receiver_avdtp_profile(target_address, protocol, codec_name)
+        except Exception as exc:
+            self.logger.info("A2DP receiver card profile persist ignored: %s", error_text(exc))
         source = protocol.add_source(source_capability, None)
         source.configuration = source_configuration
         stream = await self._gate(
@@ -829,15 +1013,17 @@ class A2DPBridge:
         connector.connecting = False
         connector.last_error = ""
         connector.codec_name = codec_name
-        self._sync_receiver_fields(connector)
-        self.receiver_connecting_address = None
-        self.state.transfer_status = "connected"
+        if selected_receiver:
+            self._sync_receiver_fields(connector)
+            self.state.transfer_status = "connected"
+        if selected_receiver:
+            self.receiver_connecting_address = None
         self.state.set_speaker_connected(target_address, True)
         self.on_state_change()
         self.logger.info("A2DP_SPEAKER_STREAM_STARTED codec=%s seid=%s", codec_name, getattr(sink, "seid", "?"))
         # Коммутатор сам поднимает AVRCP к колонке (backchannel-кнопки, volume),
         # не дожидаясь её инициативы.
-        speaker_connection = self._speaker_connections.get(target_address) or self.receiver_connection
+        speaker_connection = self._speaker_connection(target_address) or self.receiver_connection
         if speaker_connection is not None:
             asyncio.create_task(self.ensure_speaker_avrcp(speaker_connection))
 
@@ -865,6 +1051,234 @@ class A2DPBridge:
                 )
         return None, None, None, None
 
+    @staticmethod
+    def _enum_names(value) -> list[str]:
+        try:
+            return [item.name for item in type(value) if item in value]
+        except Exception:
+            return [str(value)]
+
+    @staticmethod
+    def _codec_name_from_capability(capability):
+        codec_type = getattr(capability, "media_codec_type", None)
+        if codec_type == a2dp.A2DP_SBC_CODEC_TYPE:
+            return "SBC"
+        if codec_type == a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE:
+            return "AAC"
+        info = getattr(capability, "media_codec_information", None)
+        vendor_id = getattr(info, "vendor_id", None)
+        codec_id = getattr(info, "codec_id", None)
+        if vendor_id is not None and codec_id is not None:
+            return f"vendor:{vendor_id:08x}:{codec_id:04x}"
+        return str(codec_type)
+
+    @classmethod
+    def _codec_capability_summary(cls, capability):
+        info = getattr(capability, "media_codec_information", None)
+        summary = {
+            "codec": cls._codec_name_from_capability(capability),
+            "media_type": getattr(capability, "media_type", None),
+            "codec_type": getattr(capability, "media_codec_type", None),
+        }
+        if isinstance(info, a2dp.SbcMediaCodecInformation):
+            summary.update({
+                "sampling_frequency": cls._enum_names(info.sampling_frequency),
+                "channel_mode": cls._enum_names(info.channel_mode),
+                "block_length": cls._enum_names(info.block_length),
+                "subbands": cls._enum_names(info.subbands),
+                "allocation_method": cls._enum_names(info.allocation_method),
+                "min_bitpool": info.minimum_bitpool_value,
+                "max_bitpool": info.maximum_bitpool_value,
+            })
+        elif isinstance(info, a2dp.AacMediaCodecInformation):
+            summary.update({
+                "object_type": cls._enum_names(info.object_type),
+                "sampling_frequency": cls._enum_names(info.sampling_frequency),
+                "channels": cls._enum_names(info.channels),
+                "vbr": int(info.vbr),
+                "bitrate": int(info.bitrate),
+            })
+        elif info is not None:
+            value = getattr(info, "value", b"")
+            summary.update({
+                "vendor_id": getattr(info, "vendor_id", None),
+                "codec_id": getattr(info, "codec_id", None),
+                "raw": bytes(value).hex()[:128] if isinstance(value, (bytes, bytearray)) else str(info)[:128],
+            })
+        return summary
+
+    @classmethod
+    def _avdtp_endpoint_summaries(cls, protocol):
+        summaries = []
+        for endpoint in getattr(protocol, "remote_endpoints", {}).values():
+            codec_caps = [
+                cls._codec_capability_summary(capability)
+                for capability in getattr(endpoint, "capabilities", [])
+                if isinstance(capability, avdtp.MediaCodecCapabilities)
+            ]
+            summaries.append({
+                "seid": getattr(endpoint, "seid", None),
+                "in_use": bool(getattr(endpoint, "in_use", False)),
+                "media_type": getattr(endpoint, "media_type", None),
+                "tsep": getattr(endpoint, "tsep", None),
+                "has_media_transport": _endpoint_has_media_transport(endpoint),
+                "codecs": codec_caps,
+            })
+        return summaries
+
+    def _persist_receiver_avdtp_profile(self, address, protocol, selected_codec):
+        address = normalize_address(address)
+        endpoint_summaries = self._avdtp_endpoint_summaries(protocol)
+        supported_codecs = sorted({
+            codec.get("codec")
+            for endpoint in endpoint_summaries
+            for codec in endpoint.get("codecs", [])
+            if codec.get("codec")
+        })
+        endpoint = Endpoint(
+            id="audio-output",
+            direction=EndpointDirection.OUTPUT,
+            protocols={Protocol.CLASSIC_A2DP_SOURCE},
+            capabilities={Capability.AUDIO_OUTPUT},
+            label="Bluetooth audio output",
+            metadata={
+                "transport_adapter": "a2dp",
+                "selected_codec": selected_codec,
+                "supported_codecs": supported_codecs,
+                "avdtp_endpoints": endpoint_summaries,
+            },
+        )
+        self.state.enroll_trusted_device(
+            address,
+            service_uuids={"audio_sink", "110b"},
+            metadata={
+                "probe_stage": "avdtp_ready",
+                "avdtp_profile": {
+                    "selected_codec": selected_codec,
+                    "supported_codecs": supported_codecs,
+                    "endpoints": endpoint_summaries,
+                    "updated_at": int(time.time()),
+                },
+            },
+            endpoints=[endpoint],
+        )
+        self.state.save_trusted()
+        self.logger.info(
+            "device card AVDTP profile persisted: %s codecs=%s selected=%s",
+            address,
+            supported_codecs,
+            selected_codec,
+        )
+
+    def _persist_avrcp_profile(self, address, role, supported_events):
+        address = normalize_address(address)
+        event_names = sorted(getattr(event, "name", str(event)) for event in supported_events)
+        endpoint_id = "remote-control" if role == "speaker" else "media-control"
+        direction = EndpointDirection.CONTROL
+        capabilities = {
+            Capability.VOLUME_CONTROL,
+            Capability.TRANSPORT_CONTROL,
+        }
+        if role == "speaker":
+            capabilities.add(Capability.CONTROL_INPUT)
+        else:
+            capabilities.update({Capability.CONTROL_OUTPUT, Capability.METADATA_INPUT})
+        endpoint = Endpoint(
+            id=endpoint_id,
+            direction=direction,
+            protocols={Protocol.CLASSIC_AVRCP},
+            capabilities=capabilities,
+            label="AVRCP control",
+            metadata={
+                "role": role,
+                "supported_events": event_names,
+            },
+        )
+        service_uuids = {"110e", "110f", "avrcp"}
+        if role == "speaker":
+            service_uuids.update({"audio_sink", "110b"})
+        else:
+            service_uuids.update({"audio_source", "110a"})
+        self.state.enroll_trusted_device(
+            address,
+            service_uuids=service_uuids,
+            metadata={
+                "probe_stage": f"avrcp_{role}_ready",
+                "avrcp_profile": {
+                    "role": role,
+                    "supported_events": event_names,
+                    "updated_at": int(time.time()),
+                },
+            },
+            endpoints=[endpoint],
+        )
+        self.state.save_trusted()
+        self.logger.info(
+            "device card AVRCP profile persisted: %s role=%s events=%s",
+            address,
+            role,
+            event_names,
+        )
+
+    def _persist_avrcp_observed_event(self, address, role, label, value):
+        address = normalize_address(address)
+        key = (address, f"{role}:{label}")
+        if key in self._avrcp_observed_events:
+            return
+        self._avrcp_observed_events.add(key)
+        try:
+            self.state.enroll_trusted_device(
+                address,
+                metadata={
+                    "avrcp_observed": {
+                        "role": role,
+                        "event": label,
+                        "first_value": str(value),
+                        "updated_at": int(time.time()),
+                    }
+                },
+            )
+            self.state.save_trusted()
+        except Exception as exc:
+            self.logger.info("AVRCP observed event persist failed: %s", error_text(exc))
+
+    async def _heal_speaker_name(self, address, connection=None):
+        address = normalize_address(address)
+        if not address:
+            return
+        try:
+            device_row = next(
+                (d for d in getattr(self.state, "trusted", [])
+                 if normalize_address(d.get("address")) == address),
+                None,
+            )
+            current = (device_row or {}).get("label") or ""
+            if current and not looks_like_address(current) and current != address:
+                return
+            name = await self._gate(
+                "a2dp-speaker-remote-name",
+                lambda: asyncio.wait_for(
+                    self.device.request_remote_name(connection or address),
+                    timeout=5.0,
+                ),
+            )
+            name = str(name or "").strip()
+            if not name or looks_like_address(name):
+                return
+            self.state.enroll_trusted_device(
+                address,
+                name=name,
+                service_uuids={"audio_sink", "110b"},
+                metadata={
+                    "name_source": "classic_remote_name",
+                    "probe_stage": "name_ready",
+                },
+            )
+            self.state.save_trusted()
+            self.logger.info("device card speaker name healed: %s -> %s", address, name)
+        except Exception as exc:
+            self.logger.info("speaker remote-name heal ignored (%s): %s", address, error_text(exc))
+
     def _find_classic_connection(self, address):
         """[CLAUDE 2026-06-02] Найти ЖИВОЙ classic (BR/EDR) коннект к адресу среди
         device.connections — чтобы переиспользовать, а не дозваниваться вторично (раса 0xB)."""
@@ -882,7 +1296,8 @@ class A2DPBridge:
 
     async def ensure_speaker_connection(self, address, require_trusted=True, strict_security=False):
         address = normalize_address(address)
-        connection = self._speaker_connections.get(address)
+        runtime = self._speaker_runtime(address, create=True)
+        connection = runtime.connector.connection
         if connection is not None:
             if strict_security:
                 await self._gate(
@@ -901,9 +1316,9 @@ class A2DPBridge:
         if require_trusted and not self.state.is_trusted_speaker(address):
             raise RuntimeError(f"speaker is not trusted: {address}")
         deadline = asyncio.get_running_loop().time() + self.connect_timeout
-        while address in self._standby_connecting:
+        while runtime.standby_connecting:
             await asyncio.sleep(0.1)
-            connection = self._speaker_connections.get(address)
+            connection = runtime.connector.connection
             if connection is not None:
                 self.state.set_speaker_connected(address, True)
                 self.on_state_change()
@@ -911,7 +1326,7 @@ class A2DPBridge:
             if asyncio.get_running_loop().time() >= deadline:
                 raise RuntimeError(f"speaker connect already in progress: {address}")
 
-        self._standby_connecting.add(address)
+        runtime.standby_connecting = True
         try:
             # [CLAUDE 2026-06-02] Идемпотентность против расы pair_speaker <-> standby-loop:
             # если classic-линк к адресу уже есть на HCI (другой путь успел) — переиспользуем,
@@ -935,7 +1350,7 @@ class A2DPBridge:
                         raise
                     self.logger.info("A2DP speaker connect raced (%s) -> reuse existing: %s",
                                      error_text(exc), address)
-            self._speaker_connections[address] = connection
+            runtime.connector.connection = connection
             connection.on(
                 "disconnection",
                 lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(address, reason)),
@@ -958,7 +1373,7 @@ class A2DPBridge:
             self.logger.info("A2DP_SPEAKER_STANDBY_CONNECTED %s", address)
             return connection
         finally:
-            self._standby_connecting.discard(address)
+            runtime.standby_connecting = False
 
     async def tune_radio_for_stream(self, active: bool):
         """[CLAUDE 2026-06-12] «Взрослый» аудиотракт (по ресёрчу AirFly-класса устройств):
@@ -996,8 +1411,8 @@ class A2DPBridge:
                 self.logger.info("RADIO_TUNE: BLE param update declined: %s", error_text(exc))
         # classic-роль на линке активной колонки — только при старте потока
         if active:
-            address = normalize_address(self.state.default_speaker_address() or "")
-            conn = self._speaker_connections.get(address)
+            address = normalize_address(self.state.active_route_speaker_address() or "")
+            conn = self._speaker_connection(address)
             if conn is not None:
                 role = getattr(conn, "role", None)
                 if role is not None and role != _hci.Role.CENTRAL:
@@ -1010,29 +1425,44 @@ class A2DPBridge:
                     self.logger.info("RADIO_TUNE: speaker link role=%s (ok)", role)
 
     async def request_receiver_connection(self, address=None, require_online=False, force=False):
-        address = normalize_address(address or self.state.default_speaker_address())
+        address = normalize_address(address or self.state.active_route_speaker_address())
         if not address:
             self.logger.info("A2DP receiver not requested: no trusted speaker")
             return
+        runtime = self._speaker_runtime(address, create=True)
         if not force:
-            _, not_before = self._speaker_backoff.get(address, (0, 0.0))
-            if asyncio.get_running_loop().time() < not_before:
+            if asyncio.get_running_loop().time() < runtime.backoff_not_before:
                 self.logger.info("A2DP receiver connect deferred by backoff: %s", address)
                 return
         if require_online:
             speakers = [speaker for speaker in self.state.trusted_speakers if speaker.get("address") == address]
             if not speakers or not (speakers[0].get("online") or speakers[0].get("connected")):
-                self.logger.info("A2DP receiver wait: default speaker not seen online: %s", address)
+                self.logger.info("A2DP receiver wait: route speaker not seen online: %s", address)
                 return
-        connector = self._speaker_connector(address)
+        connector = runtime.connector
+        selected_receiver = address == normalize_address(self.state.active_route_speaker_address() or "")
         if connector.rtp_channel is not None:
             self.logger.info("A2DP receiver already ready: %s", address)
-            self._sync_receiver_fields(connector)
+            if selected_receiver:
+                self._sync_receiver_fields(connector)
+                self.state.transfer_status = "connected"
+            self.on_state_change()
             return
-        if self._connect_task is not None and not self._connect_task.done():
-            self.logger.info("A2DP receiver connect already in progress")
+        task = runtime.active_task()
+        if task is not None:
+            self.logger.info("A2DP receiver connect already in progress: %s", address)
             return
-        self._connect_task = asyncio.create_task(self._connect_receiver(address))
+        if self._has_active_receiver_page() and runtime.connector.connection is None and not force:
+            self.logger.info("A2DP receiver connect deferred by other connect: %s", address)
+            return
+        task = asyncio.create_task(self._connect_receiver(address))
+        runtime.connect_task = task
+
+        def _clear_done(done_task, task_runtime=runtime):
+            if task_runtime.connect_task is done_task:
+                task_runtime.connect_task = None
+
+        task.add_done_callback(_clear_done)
 
     async def request_receiver_for_active_source(self, address=None):
         if not self.source_stream_active:
@@ -1048,12 +1478,16 @@ class A2DPBridge:
         # дропнутый RTP-пакет → request_receiver_connection спамил «no trusted speaker»
         # ~4 раза/сек и заливал лог (видели dropped=27500). Колонка выбрана → ретрай имеет
         # смысл (например, classic-link дропнул и надо переподнять).
-        if not normalize_address(self.state.default_speaker_address()):
+        if not normalize_address(self.state.active_route_speaker_address()):
+            return
+        address = normalize_address(self.state.active_route_speaker_address())
+        runtime = self._speaker_runtime(address, create=False)
+        if runtime is not None and asyncio.get_running_loop().time() < runtime.backoff_not_before:
             return
         connector = self._selected_speaker_connector()
         if connector is not None and connector.rtp_channel is not None:
             return
-        if self._connect_task is not None and not self._connect_task.done():
+        if self._selected_receiver_connect_task() is not None:
             return
         if self._receiver_retry_task is not None and not self._receiver_retry_task.done():
             return
@@ -1071,33 +1505,35 @@ class A2DPBridge:
 
     async def _connect_receiver(self, address):
         address = normalize_address(address)
-        connector = self._speaker_connector(address)
+        runtime = self._speaker_runtime(address, create=True)
+        connector = runtime.connector
         try:
             await self.setup_receiver(address=address)
-            self._speaker_backoff.pop(address, None)
+            runtime.clear_backoff()
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             connector.connecting = False
             connector.rtp_channel = None
             connector.last_error = error_text(exc)
+            selected_receiver = address == normalize_address(self.state.active_route_speaker_address() or "")
             if self.receiver_address == address:
                 self.receiver_address = None
                 self.receiver_rtp_channel = None
                 self.receiver_last_error = connector.last_error
             self.receiver_connecting_address = None
-            self.state.transfer_status = "failed"
-            self.state.transfer_error = connector.last_error
-            if address in self._speaker_connections:
+            if selected_receiver:
+                self.state.transfer_status = "failed"
+                self.state.transfer_error = connector.last_error
+            if runtime.connector.connection is not None:
                 self.state.set_speaker_connected(address, True)
             self.on_state_change()
-            failures, _ = self._speaker_backoff.get(address, (0, 0.0))
-            failures = min(failures + 1, 5)
-            delay = min(12.0 * (2 ** failures), 300.0)
-            self._speaker_backoff[address] = (
-                failures,
-                asyncio.get_running_loop().time() + delay,
-            )
+            failures = min(runtime.backoff_failures + 1, 5)
+            if "avdtp discover timeout" in connector.last_error.lower():
+                delay = 300.0
+            else:
+                delay = min(12.0 * (2 ** failures), 300.0)
+            runtime.set_backoff(failures, asyncio.get_running_loop().time() + delay)
             self.logger.warning(
                 "A2DP receiver connect failed: %s (retry in %.0fs)",
                 error_text(exc),
@@ -1174,6 +1610,12 @@ class A2DPBridge:
         def on_inquiry_result(address, class_of_device, data, rssi):
             name = _eir_name(data)
             audio_like = _is_audio_video_class(class_of_device)
+            if not audio_like:
+                self.logger.info(
+                    "A2DP pairable non-output ignored: %s name=%s cod=%s rssi=%s",
+                    normalize_address(address), name or "-", class_of_device, rssi,
+                )
+                return
             # Keep non-audio devices visible too: many cheap speakers report a
             # weak COD. Audio-like devices are simply shown first by insertion.
             self.state.upsert_speaker_candidate(
@@ -1215,6 +1657,13 @@ class A2DPBridge:
                 await self._gate("a2dp-pair-scan-stop", self.device.stop_discovery)
             except Exception as exc:
                 self.logger.info("A2DP pairable scan stop ignored: %s", error_text(exc))
+            try:
+                self.state.speaker_pairing_status = "scan"
+                self.on_state_change()
+                ble_status = await self.scan_ble_pairable_outputs(duration=min(4.0, max(1.0, duration / 3.0)))
+                self.logger.info("BLE output scan completed: %s", ble_status)
+            except Exception as exc:
+                self.logger.info("BLE output scan ignored: %s", error_text(exc))
             self.state.speaker_pairing_status = "idle"
             self.on_state_change()
 
@@ -1257,6 +1706,211 @@ class A2DPBridge:
             for e in node:
                 A2DPBridge._collect_uuid_tokens(e, out, depth + 1)
 
+    @staticmethod
+    def _uuid_token(value) -> str:
+        try:
+            return value.to_hex_str().lower()
+        except Exception:
+            return str(value).lower()
+
+    def _ble_advertisement_evidence(self, advertisement) -> dict:
+        data = getattr(advertisement, "data", None)
+        if data is None:
+            data = AdvertisingData.from_bytes(getattr(advertisement, "data_bytes", b""))
+        services = set()
+        for ad_type in (
+            AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
+            AdvertisingData.INCOMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
+            AdvertisingData.COMPLETE_LIST_OF_32_BIT_SERVICE_CLASS_UUIDS,
+            AdvertisingData.INCOMPLETE_LIST_OF_32_BIT_SERVICE_CLASS_UUIDS,
+            AdvertisingData.COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
+            AdvertisingData.INCOMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
+            AdvertisingData.LIST_OF_16_BIT_SERVICE_SOLICITATION_UUIDS,
+            AdvertisingData.LIST_OF_32_BIT_SERVICE_SOLICITATION_UUIDS,
+            AdvertisingData.LIST_OF_128_BIT_SERVICE_SOLICITATION_UUIDS,
+        ):
+            for group in data.get_all(ad_type):
+                values = group if isinstance(group, list) else [group]
+                services.update(self._uuid_token(value) for value in values)
+        service_data = []
+        for ad_type in (
+            AdvertisingData.SERVICE_DATA_16_BIT_UUID,
+            AdvertisingData.SERVICE_DATA_32_BIT_UUID,
+            AdvertisingData.SERVICE_DATA_128_BIT_UUID,
+        ):
+            for item in data.get_all(ad_type):
+                try:
+                    uuid, payload = item
+                    token = self._uuid_token(uuid)
+                    services.add(token)
+                    service_data.append({"uuid": token, "bytes": bytes(payload).hex()[:128]})
+                except Exception:
+                    continue
+        names = [
+            data.get(AdvertisingData.COMPLETE_LOCAL_NAME),
+            data.get(AdvertisingData.SHORTENED_LOCAL_NAME),
+            data.get(AdvertisingData.BROADCAST_NAME),
+        ]
+        manufacturers = []
+        for item in data.get_all(AdvertisingData.MANUFACTURER_SPECIFIC_DATA):
+            try:
+                company_id, payload = item
+                manufacturers.append({"company_id": int(company_id), "bytes": bytes(payload).hex()[:128]})
+            except Exception:
+                continue
+        raw_types = sorted({int(ad_type) for ad_type, _ in getattr(data, "ad_structures", [])})
+        return {
+            "address": normalize_address(str(getattr(advertisement, "address", ""))),
+            "name": next((name for name in names if name), ""),
+            "ble_services": sorted(services),
+            "metadata": {
+                "ble_advertisement": {
+                    "rssi": getattr(advertisement, "rssi", None),
+                    "connectable": bool(getattr(advertisement, "is_connectable", False)),
+                    "scannable": bool(getattr(advertisement, "is_scannable", False)),
+                    "legacy": bool(getattr(advertisement, "is_legacy", False)),
+                    "scan_response": bool(getattr(advertisement, "is_scan_response", False)),
+                    "tx_power": getattr(advertisement, "tx_power", None),
+                    "appearance": str(data.get(AdvertisingData.APPEARANCE) or ""),
+                    "service_data": service_data[:12],
+                    "manufacturers": manufacturers[:6],
+                    "ad_types": raw_types,
+                    "updated_at": int(time.time()),
+                },
+            },
+        }
+
+    async def scan_ble_pairable_outputs(self, duration: float = 4.0):
+        """BLE advertising pass for output enrollment evidence.
+
+        This complements Classic inquiry. It does not make Car Thing discoverable
+        and it does not create a separate registry: evidence is cached by BLE
+        address and merged into the same trusted-device card when possible.
+        """
+        seen = {}
+
+        def on_advertisement(advertisement):
+            try:
+                evidence = self._ble_advertisement_evidence(advertisement)
+            except Exception as exc:
+                self.logger.info("BLE output advertisement parse ignored: %s", error_text(exc))
+                return
+            address = evidence.get("address")
+            if not address:
+                return
+            seen[address] = evidence
+            self._speaker_ble_evidence[address] = evidence
+            services = set(evidence.get("ble_services") or [])
+            audio_like = bool(services & {
+                "184e", "1850", "1851", "1852", "1853", "1855", "1858", "fdf0",
+            })
+            if audio_like:
+                self.state.upsert_speaker_candidate(
+                    address,
+                    name=evidence.get("name") or "",
+                    class_of_device=None,
+                    rssi=(evidence.get("metadata") or {}).get("ble_advertisement", {}).get("rssi"),
+                    audio=audio_like,
+                )
+                self.on_state_change()
+                self.logger.info(
+                    "BLE output candidate: %s name=%s services=%s",
+                    address,
+                    evidence.get("name") or "-",
+                    sorted(services),
+                )
+            self.logger.info(
+                "BLE output evidence: %s name=%s services=%s",
+                address,
+                evidence.get("name") or "-",
+                sorted(services),
+            )
+
+        self.device.on(Device.EVENT_ADVERTISEMENT, on_advertisement)
+        try:
+            await self._gate(
+                "a2dp-pair-ble-scan-start",
+                lambda: self.device.start_scanning(active=True, filter_duplicates=False),
+            )
+            await asyncio.sleep(max(0.5, duration))
+        except Exception as exc:
+            self.logger.info("BLE output scan failed: %s", error_text(exc))
+            return {
+                "status": "failed",
+                "error": error_text(exc),
+                "updated_at": int(time.time()),
+            }
+        finally:
+            self.device.remove_listener(Device.EVENT_ADVERTISEMENT, on_advertisement)
+            try:
+                await self._gate("a2dp-pair-ble-scan-stop", self.device.stop_scanning)
+            except Exception as exc:
+                self.logger.info("BLE output scan stop ignored: %s", error_text(exc))
+        return {
+            "status": "ok",
+            "count": len(seen),
+            "updated_at": int(time.time()),
+        }
+
+    async def scan_output_gatt_capabilities(self, address, candidate=None):
+        """Try LE/GATT primary service discovery for the selected output card."""
+        address = normalize_address(address)
+        evidence = dict(self._speaker_ble_evidence.get(address) or {})
+        candidate_metadata = (candidate or {}).get("metadata") or {}
+        if not evidence and candidate_metadata.get("ble_services"):
+            evidence = {
+                "address": address,
+                "ble_services": sorted(candidate_metadata.get("ble_services") or []),
+                "metadata": {"ble_advertisement": {"source": "candidate_metadata"}},
+            }
+        metadata = dict(evidence.get("metadata") or {})
+        ble_services = set(evidence.get("ble_services") or [])
+        adv = metadata.get("ble_advertisement") or {}
+        connectable = adv.get("connectable")
+        if connectable is False:
+            metadata["ble_gatt_probe"] = {
+                "status": "not_connectable",
+                "updated_at": int(time.time()),
+            }
+            return ble_services, metadata
+        connection = None
+        try:
+            connection = await self._gate(
+                "a2dp-output-gatt-connect",
+                lambda: asyncio.wait_for(
+                    self.device.connect(address, timeout=5.0),
+                    timeout=6.0,
+                ),
+            )
+            peer = Peer(connection)
+            services = await self._gate(
+                "a2dp-output-gatt-discover",
+                lambda: asyncio.wait_for(peer.discover_services(), timeout=6.0),
+            )
+            for service in services:
+                uuid = getattr(service, "uuid", None)
+                if uuid is not None:
+                    ble_services.add(self._uuid_token(uuid))
+            metadata["ble_gatt_probe"] = {
+                "status": "ok",
+                "service_count": len(services),
+                "updated_at": int(time.time()),
+            }
+        except Exception as exc:
+            metadata["ble_gatt_probe"] = {
+                "status": "failed",
+                "error": error_text(exc),
+                "updated_at": int(time.time()),
+            }
+            self.logger.info("BLE/GATT output probe failed (%s): %s", address, error_text(exc))
+        finally:
+            if connection is not None:
+                try:
+                    await connection.disconnect()
+                except Exception:
+                    pass
+        return ble_services, metadata
+
     async def pair_speaker(self, address):
         address = normalize_address(address)
         if not address:
@@ -1282,13 +1936,25 @@ class A2DPBridge:
         speaker = self.state.trust_speaker(address, label)
         if speaker is None:
             raise RuntimeError(f"refused to trust non-speaker {address}")
-        self.state.select_default_speaker(address)
         try:
             connection = await self.ensure_speaker_connection(address, strict_security=True)
         except Exception:
-            self.state.remove_trusted(address)
+            self.state.revoke_speaker_role(address)
             raise
         self.state.set_speaker_connected(address, True)
+        ble_services = set()
+        ble_metadata = {}
+        try:
+            ble_services, ble_metadata = await self.scan_output_gatt_capabilities(address, candidate=candidate)
+        except Exception as exc:
+            ble_metadata = {
+                "ble_gatt_probe": {
+                    "status": "failed",
+                    "error": error_text(exc),
+                    "updated_at": int(time.time()),
+                }
+            }
+            self.logger.info("BLE/GATT output probe ignored (%s): %s", address, error_text(exc))
         # [CLAUDE 2026-06-03] МОЩНЫЙ СКАН по SDP -> богатая карточка (протоколы/возможности).
         try:
             uuids = await self.scan_device_capabilities(connection)
@@ -1306,9 +1972,31 @@ class A2DPBridge:
                 uuids = set(uuids or ())
                 uuids.update({"audio_sink", "110b"})
             self.state.enroll_trusted_device(address, name=label,
-                                             class_of_device=cod, service_uuids=uuids)
+                                             class_of_device=cod, service_uuids=uuids,
+                                             ble_services=ble_services,
+                                             metadata={
+                                                 "enrolled_from": "classic_pairing",
+                                                 "output_enrolled": True,
+                                                 "probe_stage": "classic_sdp_ready",
+                                                 **ble_metadata,
+                                             })
             self.logger.info("device card enriched: %s -> %s", address, sorted(uuids))
         except Exception as exc:
+            self.state.enroll_trusted_device(
+                address,
+                name=label,
+                class_of_device=(candidate or {}).get("class_of_device"),
+                service_uuids={"audio_sink", "110b"},
+                ble_services=ble_services,
+                metadata={
+                    "enrolled_from": "classic_pairing",
+                    "output_enrolled": True,
+                    "probe_stage": "classic_sdp_degraded",
+                    "probe_error": error_text(exc),
+                    **ble_metadata,
+                },
+                missing_capabilities={"classic_sdp"},
+            )
             self.logger.info("capability scan skipped (card stays on CoD): %s", error_text(exc))
         # [CLAUDE 2026-06-03] ACL+encrypt мало: Fosi видит «пустой» ACL и ВИСИТ В РЕЖИМЕ ПАРЫ
         # (мигает), пока нет открытого медиа-транспорта. Открываем AVDTP (open+start) сразу при
@@ -1323,7 +2011,7 @@ class A2DPBridge:
                                  error_text(exc))
         self.start_standby_loop()
         self.state.speaker_pairing_status = "done"
-        self.state.pairing_message = f"{label} подключен"
+        self.state.pairing_message = f"{label} добавлен"
         try:
             self.state.save_trusted()
         except Exception as exc:
@@ -1371,6 +2059,18 @@ class A2DPBridge:
         async def _enrich_source_card():
             try:
                 capabilities = await self.scan_device_capabilities(connection)
+                source_capabilities = set(capabilities or ())
+                source_capabilities.update({"audio_source", "110a"})
+                self.state.enroll_trusted_device(
+                    address,
+                    service_uuids=source_capabilities,
+                    metadata={
+                        "input_enrolled": True,
+                        "probe_stage": "classic_source_sdp_ready",
+                        "source_sdp_uuids": sorted(source_capabilities),
+                    },
+                )
+                self.state.save_trusted()
                 self.logger.info("A2DP source peer SDP UUIDs: %s", sorted(capabilities))
             except Exception as exc:
                 self.logger.info("A2DP source peer SDP scan ignored: %s", error_text(exc))
@@ -1438,6 +2138,10 @@ class A2DPBridge:
                 address,
                 [event.name for event in supported_events],
             )
+            try:
+                self._persist_avrcp_profile(address, "speaker", supported_events)
+            except Exception as exc:
+                self.logger.info("AVRCP speaker card profile persist ignored: %s", error_text(exc))
         except Exception as exc:
             self.logger.info(
                 "AVRCP speaker capabilities query failed (%s): %s",
@@ -1507,6 +2211,7 @@ class A2DPBridge:
                 self.logger.info(
                     "AVRCP speaker %s=%s peer=%s", label, value, address
                 )
+                self._persist_avrcp_observed_event(address, "speaker", label, value)
                 if label == "volume":
                     try:
                         self._on_speaker_volume(int(value), address)
@@ -1540,11 +2245,9 @@ class A2DPBridge:
         if volume == self._route_volume:
             return  # эхо нашей же VOLUME_CHANGED-нотификации
         self._route_volume = volume
-        # Громкость идёт колонке АКТИВНОГО маршрута; default_speaker из реестра —
-        # только фолбэк (там первым может стоять виртуальный выход с пустым адресом).
-        speaker = normalize_address(
-            self.receiver_address or self.state.default_speaker_address()
-        )
+        # Громкость идёт только колонке активного маршрута. Standby outputs не
+        # получают volume side effects.
+        speaker = normalize_address(self.state.active_route_speaker_address())
         if not speaker or speaker in self._speaker_volume_unsupported:
             return
         self._pending_speaker_volume = volume
@@ -1671,6 +2374,10 @@ class A2DPBridge:
                 "AVRCP source supported events: %s",
                 [event.name for event in supported_events],
             )
+            try:
+                self._persist_avrcp_profile(self._source_avrcp_addr, "source", supported_events)
+            except Exception as exc:
+                self.logger.info("AVRCP source card profile persist ignored: %s", error_text(exc))
         except Exception as exc:
             self.logger.warning("AVRCP source capabilities query failed: %s", error_text(exc))
             return
@@ -1700,6 +2407,7 @@ class A2DPBridge:
                 self.logger.info(
                     "AVRCP source %s=%s peer=%s", label, value, self._source_avrcp_addr
                 )
+                self._persist_avrcp_observed_event(self._source_avrcp_addr, "source", label, value)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -1713,12 +2421,23 @@ class A2DPBridge:
     def _clear_source_connection(self):
         self._source_connection = None
 
+    def _mark_source_stream_inactive(self):
+        self.source_stream_active = False
+        self.source_codec_name = ""
+        self.state.transfer_active = False
+        self.state.transfer_source = ""
+        if self._aac_to_sbc_transcoder is not None:
+            self._aac_to_sbc_transcoder.close()
+            self._aac_to_sbc_transcoder = None
+
     async def disconnect_source(self):
         """[CLAUDE 2026-06-02] CarThing-инициируемый возврат «на BLE»: рвём classic-ACL
         источника (iPhone). BLE-линк (AMS/ANCS/CTS) НЕ трогаем — он независимый транспорт
         и живёт постоянно. Симметрично connect_source: весь тумблер classic держит CarThing."""
         connection = self._source_connection
         self._source_connection = None
+        self._mark_source_stream_inactive()
+        self.on_state_change()
         if connection is None:
             return
         # Сначала вежливо закрыть AVDTP-сигналинг: по спецификации это teardown
@@ -1726,6 +2445,17 @@ class A2DPBridge:
         # как «вышел из радиуса» и держит маршрут до своих таймаутов (жалоба
         # владельца: долгое переключение на динамик iPhone).
         protocol = getattr(self, "_source_avdtp", None)
+        stream = getattr(self, "_source_stream", None)
+        if stream is not None:
+            try:
+                await asyncio.wait_for(stream.close(), timeout=2.0)
+                self.logger.info("A2DP source stream closed gracefully")
+                stream = None
+            except Exception as exc:
+                self.logger.info("A2DP source stream close ignored: %s", error_text(exc))
+            finally:
+                if getattr(self, "_source_stream", None) is not None:
+                    self._source_stream = None
         if protocol is not None:
             try:
                 await asyncio.wait_for(protocol.l2cap_channel.disconnect(), timeout=2.0)
@@ -1763,11 +2493,56 @@ class A2DPBridge:
             except Exception:
                 pass
 
+    async def forget_speaker_runtime(self, address):
+        """Remove one speaker from all live transport state.
+
+        AppState owns the persisted registry. This method owns the runtime
+        shadows that otherwise keep standby/retry alive after a GUI delete.
+        """
+        address = normalize_address(address)
+        if not address:
+            return
+        runtime = self._speaker_runtime(address, create=False)
+        has_runtime_footprint = runtime is not None or self.receiver_address == address or self.state.is_trusted_speaker(address)
+        if not has_runtime_footprint:
+            self.on_state_change()
+            self.logger.info("A2DP speaker runtime forget skipped (no speaker footprint): %s", address)
+            return
+        if runtime is not None:
+            task = runtime.active_task()
+            if task is not None and not task.done():
+                task.cancel()
+            runtime.connect_task = None
+            runtime.standby_connecting = False
+            runtime.clear_backoff()
+        await self._close_receiver_protocol(address)
+        runtime = self._speaker_runtimes.pop(address, None)
+        connector = runtime.connector if runtime is not None else None
+        connection = connector.connection if connector is not None else None
+        if connection is not None:
+            try:
+                await connection.disconnect()
+            except Exception as exc:
+                self.logger.info("A2DP forget speaker disconnect ignored: %s: %s", address, error_text(exc))
+        if self.receiver_address == address:
+            self._sync_receiver_fields(None)
+        self.receiver_connecting_address = None
+        selected = self._selected_speaker_connector()
+        if selected is not None:
+            self._sync_receiver_fields(selected)
+        else:
+            self._sync_receiver_fields(None)
+            self.state.transfer_status = "standby"
+        self.on_state_change()
+        self.logger.info("A2DP speaker runtime forgotten: %s", address)
+
     async def _close_receiver_protocol(self, address=None):
         """[CLAUDE 2026-06-11] Закрыть AVDTP-сигнальный канал ЯВНО перед пересозданием —
         иначе у колонки остаётся занятый слот и новый connect ловит 0x4."""
         address = normalize_address(address or self.receiver_address)
-        connector = self._speaker_connectors.get(address) if address else self._current_receiver_connector()
+        connector = self._known_speaker_connector(address) if address else self._current_receiver_connector()
+        if address and connector is None and self.receiver_address != address:
+            return
         proto = connector.protocol if connector is not None else self.receiver_protocol
         if connector is not None:
             connector.protocol = None
@@ -1794,7 +2569,7 @@ class A2DPBridge:
     async def on_receiver_disconnected(self, reason, address=None):
         address = normalize_address(address or self.receiver_address)
         self.logger.warning("A2DP receiver disconnected: address=%s reason=0x%02x", address or "?", reason)
-        connector = self._speaker_connectors.get(address)
+        connector = self._known_speaker_connector(address)
         error = f"disconnected 0x{reason:02x}"
         if connector is not None:
             connector.connection = None
@@ -1813,7 +2588,7 @@ class A2DPBridge:
         else:
             self.receiver_last_error = error
         if (
-            address == normalize_address(self.state.default_speaker_address())
+            address == normalize_address(self.state.active_route_speaker_address())
             and self.source_stream_active
             and getattr(self.state, "transfer_active", False)
         ):
@@ -1823,25 +2598,20 @@ class A2DPBridge:
         self.schedule_receiver_retry(delay=1.5)
 
     async def stop_receiver_stream(self, address=None):
-        """[CLAUDE 2026-06-11] SUSPEND, НЕ teardown (INVARIANTS п.3). Раньше здесь
-        закрывался stream и обнулялся receiver_protocol БЕЗ закрытия сигнального
-        L2CAP-канала AVDTP -> у Fosi оставалась висящая сессия, повторный
-        Protocol.connect получал L2CAP 0x4 (no resources) ШТОРМОМ (ретрай 0.2с),
-        труба «включалась», но RTP к колонке не шёл. Теперь: глушим только
-        пересылку (rtp_channel=None -> гейт forward_packet) + AVDTP SUSPEND;
-        сессия остаётся held, возврат маршрута = stream.start() (resume).
-        Полный teardown — ТОЛЬКО при разрыве ACL (on_receiver_disconnected)."""
+        """Suspend one device, or just clear the active route view.
+
+        `address=None` means Play Now / no external active output. It must not
+        suspend every trusted speaker: standby is owned by each device card and
+        should remain held. A concrete address is the per-device suspend path.
+        """
         target_address = normalize_address(address)
-        if target_address:
-            connectors = [self._speaker_connector(target_address)]
-        else:
-            connectors = [
-                connector for connector in self._speaker_connectors.values()
-                if connector.stream is not None or connector.rtp_channel is not None
-            ]
-            if not connectors and self.receiver_stream is not None and normalize_address(self.receiver_address):
-                connectors = [self._current_receiver_connector() or self._speaker_connector(self.receiver_address)]
         self.receiver_connecting_address = None
+        if not target_address:
+            self._sync_receiver_fields(None)
+            self.state.transfer_status = "standby"
+            self.on_state_change()
+            return
+        connectors = [self._speaker_connector(target_address)]
         for connector in [connector for connector in connectors if connector is not None]:
             stream = connector.stream
             connector.rtp_channel = None      # гейт пересылки выключен
@@ -1874,6 +2644,7 @@ class A2DPBridge:
         def _clear_source_avdtp():
             if getattr(self, "_source_avdtp", None) is protocol:
                 self._source_avdtp = None
+            self._source_stream = None
 
         protocol.l2cap_channel.on(
             protocol.l2cap_channel.EVENT_CLOSE, _clear_source_avdtp
@@ -1909,13 +2680,19 @@ class A2DPBridge:
 
         def on_open():
             self.logger.info("A2DP_SOURCE_OPEN codec=%s", codec_name)
+            self._source_stream = getattr(sink, "stream", None)
             asyncio.create_task(self._send_source_delay_report(protocol, sink, codec_name))
             return original_open()
 
         def on_start():
             self.logger.info("A2DP_SOURCE_START codec=%s", codec_name)
+            self._source_stream = getattr(sink, "stream", None)
             self.source_codec_name = codec_name
             self.source_stream_active = True
+            self._transcode_sequence_number = 0
+            self._transcode_sample_count = 0
+            self._transcode_payloads_sent = 0
+            self._transcode_log_next = 1
             self.state.transfer_active = True
             self.state.transfer_source = normalize_address(peer_address)
             self.state.active_desktop = self.state.TRANSFER
@@ -1938,6 +2715,10 @@ class A2DPBridge:
             self.logger.info("A2DP_SOURCE_CLOSE codec=%s", codec_name)
             self.source_stream_active = False
             self.source_codec_name = ""
+            self._source_stream = None
+            if self._aac_to_sbc_transcoder is not None:
+                self._aac_to_sbc_transcoder.close()
+                self._aac_to_sbc_transcoder = None
             # Поток источника закрыт -> маршрут больше не активен.
             self.state.transfer_active = False
             self.state.transfer_source = ""
@@ -1948,6 +2729,10 @@ class A2DPBridge:
             self.logger.info("A2DP_SOURCE_ABORT codec=%s", codec_name)
             self.source_stream_active = False
             self.source_codec_name = ""
+            self._source_stream = None
+            if self._aac_to_sbc_transcoder is not None:
+                self._aac_to_sbc_transcoder.close()
+                self._aac_to_sbc_transcoder = None
             self.state.transfer_active = False
             self.state.transfer_source = ""
             asyncio.create_task(self.stop_receiver_stream())
@@ -2011,9 +2796,8 @@ class A2DPBridge:
         self._rtp_last_ts = now
         payload = bytes(packet)
         sent = False
-        # [CLAUDE 2026-06-12] этаж 4 «работы над чипом»: активен локальный выход
-        # (T9015 line-out) -> кадр уходит в sink-ПРОЦЕСС вместо BT-колонки.
-        # Раньше любых codec-mismatch проверок: у локального выхода свой декодер.
+        # Experimental-only local sink. The release route graph keeps T9015
+        # disabled on this hardware build and uses Bluetooth speaker output.
         if self.local_sink_enabled:
             codec = (getattr(self, "source_codec_name", "") or "aac").lower()
             if self.local_sink.send(codec, payload):
@@ -2024,11 +2808,15 @@ class A2DPBridge:
                 self.packets_dropped += 1
             self._log_rtp_window(payload, sent)
             return
-        selected_address = normalize_address(self.state.default_speaker_address())
-        connector = self._speaker_connectors.get(selected_address) if selected_address else None
+        selected_address = normalize_address(self.state.active_route_speaker_address())
+        connector = self._known_speaker_connector(selected_address) if selected_address else None
         mismatch = self._source_receiver_codec_mismatch(connector)
         if mismatch is not None:
             source_codec, receiver_codec = mismatch
+            if self._can_transcode_mismatch(source_codec, receiver_codec):
+                sent = self._send_transcoded_aac_to_sbc(payload, connector)
+                self._log_rtp_window(payload, sent)
+                return
             self.packets_dropped += 1
             if self.packets_dropped < 10 or self.packets_dropped % 250 == 0:
                 self.logger.warning(
@@ -2086,6 +2874,66 @@ class A2DPBridge:
 
         self._log_rtp_window(payload, sent)
 
+    def _send_transcoded_aac_to_sbc(self, packet: bytes, connector: SpeakerConnector | None) -> bool:
+        channel = connector.rtp_channel if connector is not None else None
+        selected_address = normalize_address(self.state.active_route_speaker_address())
+        if channel is None and self.receiver_address == selected_address:
+            channel = self.receiver_rtp_channel
+        if channel is None:
+            self.packets_dropped += 1
+            if self.source_stream_active and getattr(self.state, "transfer_active", False):
+                self.schedule_receiver_retry(delay=0.2)
+            return False
+        try:
+            if self._aac_to_sbc_transcoder is None:
+                from aac_to_sbc_transcoder import AacToSbcTranscoder
+
+                self._aac_to_sbc_transcoder = AacToSbcTranscoder()
+            media_payloads = self._aac_to_sbc_transcoder.feed_aac_rtp(packet)
+            sample_rate = int(getattr(self._aac_to_sbc_transcoder, "sample_rate", 44100) or 44100)
+            sent_any = False
+            for media_payload in media_payloads:
+                frame_count = media_payload[0] & 0x0F if media_payload else 0
+                out_packet = MediaPacket(
+                    2,
+                    0,
+                    0,
+                    0,
+                    self._transcode_sequence_number,
+                    self._transcode_sample_count,
+                    0,
+                    [],
+                    96,
+                    media_payload,
+                )
+                channel.send_pdu(bytes(out_packet))
+                self._transcode_sequence_number = (self._transcode_sequence_number + 1) & 0xFFFF
+                self._transcode_sample_count += frame_count * 128
+                self._transcode_payloads_sent += 1
+                self.packets_forwarded += 1
+                self.bytes_forwarded += len(media_payload)
+                sent_any = True
+            if sent_any:
+                count = self._transcode_payloads_sent
+                if count >= self._transcode_log_next:
+                    self.logger.info(
+                        "A2DP RTP transcoded: speaker=%s source=AAC receiver=SBC total_payloads=%d emitted=%d sample_rate=%d",
+                        selected_address,
+                        count,
+                        len(media_payloads),
+                        sample_rate,
+                    )
+                    self._transcode_log_next = 10 if count < 10 else count + 250
+            return sent_any
+        except Exception as exc:
+            self.packets_dropped += 1
+            self.logger.warning(
+                "A2DP RTP transcode failed: speaker=%s error=%s",
+                selected_address,
+                error_text(exc),
+            )
+            return False
+
     def _log_rtp_window(self, payload: bytes, sent: bool) -> None:
         # окно-сводка раз в 250 пакетов (+ первые 10) с max_gap_ms джиттер-зонда
         count = self.packets_forwarded if sent else self.packets_dropped
@@ -2113,7 +2961,7 @@ class A2DPBridge:
             lambda _error: self.on_classic_authentication_failure(peer_address),
         )
         if self.state.is_trusted_speaker(peer_address):
-            self._speaker_connections[peer_address] = connection
+            self._set_speaker_connection(peer_address, connection)
             self.state.set_speaker_connected(peer_address, True)
             self.on_state_change()
             connection.on(
@@ -2121,15 +2969,16 @@ class A2DPBridge:
                 lambda reason: asyncio.ensure_future(self.on_speaker_disconnected(peer_address, reason)),
             )
             if self.state.transfer_active and self.source_stream_active:
-                selected = normalize_address(self.state.default_speaker_address())
+                selected = normalize_address(self.state.active_route_speaker_address())
                 if peer_address == selected:
                     await self.request_receiver_for_active_source(peer_address)
                 else:
                     self.logger.info(
-                        "A2DP speaker classic ignored for active route: peer=%s selected=%s",
+                        "A2DP speaker classic standby while active route: peer=%s selected=%s",
                         peer_address,
                         selected,
                     )
+                    await self.request_receiver_connection(peer_address, force=True)
         elif self.state.is_trusted_source(peer_address):
             # [CLAUDE 2026-06-02] Входящий classic от доверенного источника (айфон сам
             # подключился). Храним ACL, чтобы CarThing мог инициировать teardown (disconnect_source).
@@ -2146,12 +2995,15 @@ class A2DPBridge:
 
     async def on_speaker_disconnected(self, address, reason):
         address = normalize_address(address)
-        self._speaker_connections.pop(address, None)
+        runtime = self._speaker_runtime(address, create=False)
+        if runtime is not None:
+            runtime.connector.connection = None
         # Свежий дисконнект = новая попытка без штрафа (колонку могли включить).
-        self._speaker_backoff.pop(address, None)
+        if runtime is not None:
+            runtime.clear_backoff()
         self.state.set_speaker_online(address, False)
         self.state.set_speaker_connected(address, False)
-        connector = self._speaker_connectors.get(address)
+        connector = runtime.connector if runtime is not None else None
         if connector is not None:
             connector.connection = None
         if self.receiver_address == address or connector is not None:

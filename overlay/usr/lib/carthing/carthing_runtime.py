@@ -59,6 +59,11 @@ link_manager = None      # LinkManager
 hci_gate = None          # HciOperationGate
 route_patchbay = None    # VirtualRoutePatchBay
 _classic_probe_done = set()
+ACTIVE_ROUTE_PROTOCOLS = {
+    Protocol.CLASSIC_A2DP_SINK,
+    Protocol.CLASSIC_A2DP_SOURCE,
+    Protocol.CLASSIC_AVRCP,
+}
 
 
 
@@ -162,13 +167,20 @@ def _best_bonded_source_address():
         states.append(bridge_state)
     for app_state in states:
         try:
-            app_state.load_trusted()
             for row in app_state.trusted_sources:
                 address = row.get("address")
                 if address:
                     return address
         except Exception:
             pass
+    try:
+        from app_state import _bonded_source_rows
+        for row in _bonded_source_rows():
+            address = row.get("address")
+            if address:
+                return address
+    except Exception:
+        pass
     return None
 
 
@@ -202,24 +214,21 @@ def _on_pairing(enabled, role="source"):
     role = role or "source"
     if power is not None:
         power.set_pairing(bool(enabled))
-    if role == "device":
-        async def _run_device_pairing():
+    if role in ("input", "source"):
+        async def _run_input_pairing():
             if enabled:
+                if transfer is not None:
+                    await transfer.stop_speaker_enrollment()
                 if orch is not None:
                     await orch.arm_pairing(True, disconnect_current=False,
                                            classic_discoverable=False)
-                # Сканер для источников = тот же инквайри что и для колонок.
-                # transfer_service.start_speaker_enrollment() восстанавливает BLE-рекламу
-                # через orch.apply_visibility() после каждого цикла инквайри — радио не теряется.
-                if transfer is not None:
-                    asyncio.create_task(transfer.start_speaker_enrollment())
             else:
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
                 if orch is not None:
                     await orch.arm_pairing(False)
-        asyncio.ensure_future(_run_device_pairing())
-    elif role == "speaker":
+        asyncio.ensure_future(_run_input_pairing())
+    elif role in ("output", "speaker", "device"):
         if orch is not None:
             asyncio.ensure_future(orch.arm_pairing(False))
         if transfer is not None:
@@ -287,6 +296,23 @@ def _on_trusted_remove(key):
                     pass
         if transfer is not None:
             await transfer.forget_trusted(address)
+        if gui is not None:
+            try:
+                gui.app_state.remove_trusted(address)
+                gui.app_state.save_trusted()
+                _recompute_route_compat()
+            except Exception as exc:
+                logger.warning("trusted registry remove failed: %s", exc)
+        try:
+            from app_state import normalize_address
+            if normalize_address(getattr(model, "speaker_name", "")) == normalize_address(address):
+                model.speaker_name = None
+                model.speaker_connected = False
+                model.audio_sink = "builtin"
+                model.mode_status = "standby"
+                _on_publish()
+        except Exception:
+            pass
         dev = orch.device if orch is not None else None
         if dev is not None and getattr(dev, "keystore", None) is not None:
             from app_state import normalize_address
@@ -332,6 +358,29 @@ async def _teardown_current_route():
     logger.info("ROUTE TEARDOWN <<< интерфейс свободен (HCI/Bumble), можно поднимать новый маршрут")
 
 
+def _bind_bridge_app_state():
+    if gui is None or transfer is None or getattr(transfer, "bridge", None) is None:
+        return
+    if transfer.bridge.state is not gui.app_state:
+        transfer.bridge.state = gui.app_state
+
+
+def _select_boot_play_now(app_state):
+    try:
+        self_key = getattr(app_state, "SELF_OUTPUT_KEY", "carthing")
+        app_state.select_route_output(self_key)
+        app_state.select_active_route_output(self_key)
+    except Exception as exc:
+        logger.warning("boot Play Now selection failed: %s", exc)
+
+
+def _unsupported_route_protocols(plan):
+    return [
+        protocol for protocol in plan.required_protocols
+        if protocol not in ACTIVE_ROUTE_PROTOCOLS
+    ]
+
+
 async def _activate_route():
     """[CLAUDE 2026-06-02/06-03] Единственная активируемая сущность — ребро input->output.
     ЖЁСТКИЙ переход: всегда сначала полный teardown текущего маршрута, потом новый. Присутствие
@@ -369,6 +418,12 @@ async def _activate_route():
         routed = planner.plan_simple_route(route_input, route_output, name="route")
     except RoutePlanError as exc:
         logger.warning("route rejected: %s -> %s: %s", route_input, route_output, exc)
+        _on_publish()
+        return
+    unsupported = _unsupported_route_protocols(routed)
+    if unsupported:
+        readable = ", ".join(str(item.value if hasattr(item, "value") else item) for item in unsupported)
+        logger.warning("route rejected: transport adapter not implemented for %s", readable)
         _on_publish()
         return
     if route_patchbay is not None:
@@ -410,7 +465,13 @@ def _recompute_route_compat():
         registry = TrustedDeviceRegistry.from_trusted_list(
             getattr(app_state, "trusted", [])
         )
-        RoutePlanner(registry).plan_simple_route(ri, ro, name="probe")
+        plan = RoutePlanner(registry).plan_simple_route(ri, ro, name="probe")
+        unsupported = _unsupported_route_protocols(plan)
+        if unsupported:
+            raise RoutePlanError(
+                "transport adapter not implemented for "
+                + ", ".join(str(item.value if hasattr(item, "value") else item) for item in unsupported)
+            )
         app_state.route_compatible = True
     except RoutePlanError as exc:
         app_state.route_compatible = False
@@ -443,26 +504,35 @@ async def _apply_route_output(key):
     Источник (iPhone) не выбирается — труба ретранслирует что бы iPhone ни прислал."""
     if transfer is None or gui is None:
         return
+    _bind_bridge_app_state()
     self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
     lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
     if key == lineout_key:
-        # [CLAUDE 2026-06-12] этаж 4: локальный выход T9015. BT-колонке поток
-        # больше не шлём (suspend held-сессии), кадры уводятся в sink-процесс
-        # (см. a2dp_bridge.forward_packet, флаг local_sink_enabled).
+        if os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") != "1":
+            gui.app_state.select_active_route_output(self_key)
+            transfer.bridge.state.select_active_route_output(self_key)
+            await transfer.bridge.stop_receiver_stream()
+            transfer.bridge.local_sink_enabled = False
+            model.audio_sink = "builtin"
+            logger.warning("route output line-out ignored: local T9015 audio is disabled for release")
+            _on_publish()
+            return
+        # Experimental lab path only: local T9015 sink is not a release output
+        # on this hardware build because the analog line-out is not populated.
+        gui.app_state.select_active_route_output(lineout_key)
+        transfer.bridge.state.select_active_route_output(lineout_key)
         await transfer.bridge.stop_receiver_stream()
         transfer.bridge.local_sink_enabled = True
         model.audio_sink = "lineout"
-        logger.info("ТРУБА: выход = Car Thing line-out (T9015) — кадры в локальный sink")
-        # источник мог сидеть на AAC — заставляем перепереговоры на SBC
+        logger.info("ТРУБА: выход = experimental Car Thing line-out (T9015)")
         await transfer.bridge.ensure_source_codec_matches_route()
         _on_publish()
         return
     transfer.bridge.local_sink_enabled = False
     if key and key != self_key:
         try:
-            gui.app_state.select_default_speaker(key)
-            transfer.bridge.state.select_default_speaker(key)
-            gui.app_state.save_trusted()
+            gui.app_state.select_active_route_output(key)
+            transfer.bridge.state.select_active_route_output(key)
         except Exception as e:
             logger.warning("select speaker %s failed: %s", key, e)
         # [CLAUDE 2026-06-11] НЕ обзваниваем ВСЕ колонки на [LNK]: page выключенной
@@ -475,6 +545,11 @@ async def _apply_route_output(key):
         model.audio_sink = "speaker"
         logger.info("ТРУБА: выход = %s (динамик) — поток льётся туда", key)
     else:
+        try:
+            gui.app_state.select_active_route_output(self_key)
+            transfer.bridge.state.select_active_route_output(self_key)
+        except Exception as e:
+            logger.warning("select Play Now failed: %s", e)
         await transfer.bridge.stop_receiver_stream()
         model.audio_sink = "builtin"
         logger.info("ТРУБА: выход = Play Now — поток на динамик НЕ льётся")
@@ -491,6 +566,8 @@ def _on_route_output_select(key):
     if gui is not None:
         gui.app_state.select_route_output(key)
         gui.app_state.save_trusted()
+        _recompute_route_compat()
+        _on_publish()
     logger.info("route output selected (passive): %s", key)
 
 
@@ -503,33 +580,34 @@ def _on_route_activate():
     # от «случайного выключения» повторным тапом.
     if power is not None:
         power.note_activity("route_activate")
+    asyncio.ensure_future(_activate_selected_route_output())
 
-    async def _activate():
-        if gui is None or transfer is None or getattr(transfer, "bridge", None) is None:
-            return
-        ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
-        self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
-        await _apply_route_output(ro)
-        # [CLAUDE 2026-06-11] СЕРИАЛИЗАЦИЯ page: если колонка ещё дозванивается,
-        # ждём её таск — контроллер делает только один page за раз, параллельный
-        # connect_source отлетает с HCI 0x12.
-        task = getattr(transfer.bridge, "_connect_task", None)
-        if task is not None and not task.done():
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=20)
-            except Exception:
-                pass
-        source_up = getattr(transfer.bridge, "_source_connection", None) is not None
-        lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
-        if ro and ro != self_key:
-            # line-out: BT-колонка не нужна, но classic-труба от iPhone — нужна
-            if not source_up:
-                await _apply_route_command("connect")
-        else:
-            if source_up:
-                await _apply_route_command("disconnect")
 
-    asyncio.ensure_future(_activate())
+async def _activate_selected_route_output():
+    if gui is None or transfer is None or getattr(transfer, "bridge", None) is None:
+        return
+    ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
+    self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+    await _apply_route_output(ro)
+    # [CLAUDE 2026-06-11] СЕРИАЛИЗАЦИЯ page: если колонка ещё дозванивается,
+    # ждём её таск — контроллер делает только один page за раз, параллельный
+    # connect_source отлетает с HCI 0x12.
+    task_getter = getattr(transfer.bridge, "_selected_receiver_connect_task", None)
+    task = task_getter() if callable(task_getter) else None
+    if task is not None and not task.done():
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=20)
+        except Exception:
+            pass
+    source_up = getattr(transfer.bridge, "_source_connection", None) is not None
+    lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
+    lineout_enabled = os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1"
+    if ro and ro != self_key and (ro != lineout_key or lineout_enabled):
+        if not source_up:
+            await _apply_route_command("connect")
+    else:
+        if source_up:
+            await _apply_route_command("disconnect")
 
 
 def _on_toggle_sleep(on):
@@ -600,7 +678,19 @@ def _verify_persistent():
         logger.error("DEGRADED — %s", e)
 
 
+def _sync_model_route_selection():
+    if gui is None:
+        return
+    try:
+        app_state = gui.app_state
+        model.route_input = str(getattr(app_state, "route_input", "") or "")
+        model.route_output = str(getattr(app_state, "active_route_output", "") or "")
+    except Exception:
+        pass
+
+
 def _on_publish():
+    _sync_model_route_selection()
     model.write_bt_json()
 
 
@@ -675,10 +765,23 @@ async def _on_connection(connection):
                     # the identity address from the keystore. Label AMS-capable sources
                     # as iPhone instead of leaving the generic "Bluetooth Source".
                     for row in gui.app_state.trusted_sources:
+                        address = row.get("address")
                         if row.get("label") == "Bluetooth Source":
                             row["label"] = "iPhone"
                             row["type"] = row.get("type") or "Источник"
-                            peer = row.get("address") or peer
+                        if address:
+                            gui.app_state.enroll_trusted_device(
+                                address,
+                                name=row.get("label") or "iPhone",
+                                service_uuids={"110a", "audio_source"},
+                                ble_services={"ams", "ancs", "1812"},
+                                metadata={
+                                    "enrolled_from": "ble_source_connection",
+                                    "input_enrolled": True,
+                                    "probe_stage": "ams_ancs_ready",
+                                },
+                            )
+                            peer = address or peer
                     gui.app_state.save_trusted()
                 finally:
                     logger.info("trusted sources synced after AMS: %s", peer or "ok")
@@ -829,7 +932,101 @@ async def _apply_route_command(cmd):
     Транспорты команды: файл route-cmd, физкнопка (пресет 1), позже GUI."""
     if transfer is None or getattr(transfer, "bridge", None) is None:
         return
+    _bind_bridge_app_state()
     try:
+        if cmd == "status":
+            bridge = transfer.bridge
+            selected = None
+            try:
+                selected = bridge._selected_speaker_connector()
+            except Exception:
+                selected = None
+            logger.info(
+                "route status: output=%s pending=%s speaker=%s receiver=%s receiver_codec=%s source_active=%s source_codec=%s "
+                "selected=%s selected_codec=%s selected_rtp=%s forwarded=%s dropped=%s transcode_payloads=%s",
+                getattr(bridge.state, "active_route_output", ""),
+                getattr(bridge.state, "route_output", ""),
+                bridge.state.active_route_speaker_address(),
+                getattr(bridge, "receiver_address", None),
+                getattr(bridge, "receiver_codec_name", None),
+                getattr(bridge, "source_stream_active", None),
+                getattr(bridge, "source_codec_name", None),
+                getattr(selected, "address", None),
+                getattr(selected, "codec_name", None),
+                bool(getattr(selected, "rtp_channel", None)) if selected is not None else False,
+                getattr(bridge, "packets_forwarded", None),
+                getattr(bridge, "packets_dropped", None),
+                getattr(bridge, "_transcode_payloads_sent", None),
+            )
+            try:
+                tasks = ",".join(
+                    runtime.address
+                    for runtime in getattr(bridge, "_speaker_runtimes", {}).values()
+                    if getattr(runtime, "connect_task", None) is not None and not runtime.connect_task.done()
+                ) or "-"
+                connectors = []
+                for address, runtime in getattr(bridge, "_speaker_runtimes", {}).items():
+                    connector = getattr(runtime, "connector", None)
+                    if connector is None:
+                        continue
+                    connectors.append(
+                        "%s:acl=%s proto=%s stream=%s rtp=%s codec=%s connecting=%s backoff=%.1f err=%s"
+                        % (
+                            address,
+                            bool(getattr(connector, "connection", None)),
+                            bool(getattr(connector, "protocol", None)),
+                            bool(getattr(connector, "stream", None)),
+                            bool(getattr(connector, "rtp_channel", None)),
+                            getattr(connector, "codec_name", "") or "-",
+                            bool(getattr(connector, "connecting", False)),
+                            max(0.0, getattr(runtime, "backoff_not_before", 0.0) - __import__("time").monotonic()),
+                            getattr(connector, "last_error", "") or "-",
+                        )
+                    )
+                logger.info("route connectors: tasks=%s %s", tasks, " | ".join(connectors) or "-")
+            except Exception as exc:
+                logger.info("route connectors unavailable: %s", exc)
+            return
+        if cmd.startswith("select "):
+            key = cmd.split(None, 1)[1].strip()
+            if not key or gui is None:
+                logger.warning("route select command ignored: key=%r gui=%s", key, bool(gui))
+                return
+            selected = gui.app_state.select_route_output(key)
+            gui.app_state.save_trusted()
+            if not selected:
+                logger.warning("route select command unknown output: %s", key)
+                return
+            _recompute_route_compat()
+            _on_publish()
+            logger.info("route select command selected pending output: %s", selected)
+            return
+        if cmd in ("activate", "lnk"):
+            await _activate_selected_route_output()
+            return
+        if cmd.startswith("output "):
+            key = cmd.split(None, 1)[1].strip()
+            if not key or gui is None:
+                logger.warning("route output command ignored: key=%r gui=%s", key, bool(gui))
+                return
+            selected = gui.app_state.select_route_output(key)
+            gui.app_state.save_trusted()
+            if not selected:
+                logger.warning("route output command unknown output: %s", key)
+                return
+            logger.info("route output command selected: %s", selected)
+            await _apply_route_output(selected)
+            task_getter = getattr(transfer.bridge, "_selected_receiver_connect_task", None)
+            task = task_getter() if callable(task_getter) else None
+            if task is not None and not task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=20)
+                except Exception as e:
+                    logger.info("route output command receiver wait ended: %s", e)
+            self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+            if selected != self_key and getattr(transfer.bridge, "_source_connection", None) is None:
+                await _apply_route_command("connect")
+            return
         if cmd in ("connect", "on", "1"):
             address = _best_bonded_source_address()
             if not address:
@@ -885,7 +1082,11 @@ async def _route_toggle_flip():
 
 
 async def _route_command_watcher():
-    """Файловый транспорт тумблера: `echo connect|disconnect > /run/carthing/route-cmd`."""
+    """Файловый транспорт:
+    `echo connect|disconnect > /run/carthing/route-cmd`
+    `echo select AA:BB:CC:DD:EE:FF > /run/carthing/route-cmd`
+    `echo output AA:BB:CC:DD:EE:FF > /run/carthing/route-cmd`
+    `echo status > /run/carthing/route-cmd`."""
     path = "/run/carthing/route-cmd"
     while True:
         await asyncio.sleep(1.0)
@@ -1087,6 +1288,7 @@ async def main():
             gui.app_state.screen_brightness = int(settings.get("screen_brightness_pct", 100))
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
+            _select_boot_play_now(gui.app_state)
         except Exception as e:
             gui = None
             logger.warning("GUI disabled: %s", e)
@@ -1097,7 +1299,7 @@ async def main():
     #
     # Clean Bumble lab uses CARTHING_TRANSFER_ENABLE=0 to prove the BLE/Bumble
     # pairing surface without installing any Classic A2DP/AVRCP SDP records.
-    # Production/default stays enabled unless this explicit lab switch is used.
+    # Production path stays enabled unless this explicit lab switch is used.
     if os.environ.get("CARTHING_TRANSFER_ENABLE", "1") == "1":
         try:
             from transfer_service import TransferService
@@ -1107,6 +1309,7 @@ async def main():
             else:
                 from app_state import AppState
                 app_state = AppState()
+                _select_boot_play_now(app_state)
             transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
             backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
             # Кнопки колонки -> backchannel -> активный источник (finding A2:
@@ -1140,7 +1343,7 @@ async def main():
             iap2 = None
             logger.warning("iAP2 disabled: %s", e)
     else:
-        logger.info("iAP2 disabled by default for clean dual-mode audio pairing")
+        logger.info("iAP2 disabled by lab switch for clean dual-mode audio pairing")
 
     # macOS-источник (Фаза 4, каркас).
     from mac_service import MacService

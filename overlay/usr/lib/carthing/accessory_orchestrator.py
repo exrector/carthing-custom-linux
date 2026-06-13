@@ -214,17 +214,9 @@ class AccessoryOrchestrator:
         #   • pairing_armed → general с именем (видим при сопряжении из меню)
         #   • есть LE-бонд → bonded-only sticky (реконнект к уже-bonded iPhone)
         #   • иначе → ПОЛНАЯ ТИШИНА (нет бонда + не сопряжение)
-        ble_connected = False
-        try:
-            from bumble.core import BT_BR_EDR_TRANSPORT
-            ble_connected = any(
-                getattr(c, "transport", None) != BT_BR_EDR_TRANSPORT
-                for c in self.device.connections.values()
-            )
-        except Exception:
-            pass
+        ble_connected = self._has_le_connection()
         if ble_connected:
-            await self._advertise_silent()
+            self._mark_advertising_silent_after_le_connect()
         elif self.pairing_armed and classic_first:
             # Audio-first lab flow: expose exactly one Classic pairing surface.
             # After Classic SSP, SMP over BR/EDR derives the LE bond through CTKD;
@@ -264,6 +256,9 @@ class AccessoryOrchestrator:
 
     async def _advertise_general(self):
         await self._stop()
+        if self._has_le_connection():
+            self._mark_advertising_silent_after_le_connect()
+            return
         self.device.advertising_data = self._adv_payload()
         self.device.scan_response_data = self._scan_response_payload(with_name=True)
         # [CLAUDE 2026-06-04] После disconnect контроллер может вернуть HCI_COMMAND_DISALLOWED 0xC
@@ -303,10 +298,33 @@ class AccessoryOrchestrator:
         await self._stop()
 
     async def _stop(self):
+        if not getattr(self.device, "is_advertising", False):
+            return
         try:
             await self._gate("orch-adv-stop", self.device.stop_advertising)
         except Exception:
             pass
+
+    def _has_le_connection(self) -> bool:
+        try:
+            from bumble.core import BT_BR_EDR_TRANSPORT
+            return any(
+                getattr(c, "transport", None) != BT_BR_EDR_TRANSPORT
+                for c in self.device.connections.values()
+            )
+        except Exception:
+            return False
+
+    def _mark_advertising_silent_after_le_connect(self):
+        """Connection complete already makes legacy advertising inactive.
+
+        Some controllers reject an explicit LE Set Advertising Enable=0 after
+        that point with COMMAND_DISALLOWED. Drop Bumble's stale local advertiser
+        handle instead of sending another HCI command while an LE central is
+        connected.
+        """
+        if getattr(self.device, "legacy_advertiser", None) is not None:
+            self.device.legacy_advertiser = None
 
     async def _set_classic(self, connectable: bool, discoverable: bool):
         if os.environ.get("CARTHING_CLASSIC_ENABLE", "1") == "0":
@@ -428,6 +446,9 @@ class AccessoryOrchestrator:
             await self._gate("orch-refresh-fal", self.device.refresh_filter_accept_list)
         except Exception:
             pass
+        if self._has_le_connection():
+            self._mark_advertising_silent_after_le_connect()
+            return
         self.device.advertising_data = self._adv_payload()
         self.device.scan_response_data = self._scan_response_payload(with_name=False)
         # [CLAUDE 2026-06-01] быстрый интервал -> iPhone обнаруживает для реконнекта почти мгновенно

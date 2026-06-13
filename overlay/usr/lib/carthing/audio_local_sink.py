@@ -77,7 +77,8 @@ class PassthroughPcmDecoder(AudioDecoder):
 class AutoDecoder(AudioDecoder):
     """Маршрутизация по кодеку кадра: pcm -> passthrough, sbc -> SbcDecoder
     (C-ускоритель + Python-фолбэк, бит-в-бит с ffmpeg, x1.7 rt на A53).
-    aac -> ошибка до появления DSP-декодера (RUNBOOK задача B)."""
+    aac -> ошибка до отдельной hardware-audio ветки. Helix AAC в релизе
+    используется только для Bluetooth AAC->SBC transcode, не для local line-out."""
 
     def __init__(self):
         self._sbc = None
@@ -93,7 +94,7 @@ class AutoDecoder(AudioDecoder):
             pcm = self._sbc.decode(codec, payload)
             self.sample_rate = self._sbc.sample_rate
             return pcm
-        raise ValueError(f"нет декодера для {codec} (aac ждёт DSP — RUNBOOK задача B)")
+        raise ValueError(f"нет декодера для {codec} (local line-out отключён в release)")
 
 
 class AudioLocalSink:

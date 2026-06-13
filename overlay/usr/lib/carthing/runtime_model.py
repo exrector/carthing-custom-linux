@@ -86,6 +86,7 @@ class RuntimeModel:
         self.audio_sink = "builtin"          # builtin|speaker
         self.speaker_name = None
         self.speaker_connected = False
+        self.speakers = []
         self.transfer_active = False
         # ControlRoute: кто рулит источником (local/speaker_remote -> source).
         self.control_routes = []             # list[(controller, source)]
@@ -197,6 +198,7 @@ class RuntimeModel:
                 "supported_commands": sorted(s.supported_commands),
             },
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
+            "speakers": list(self.speakers),
             "route": {
                 "name": self.route_name,
                 "input": self.route_input,

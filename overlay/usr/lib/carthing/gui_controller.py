@@ -233,6 +233,8 @@ class GuiController:
                 self.compositor.render()
 
     def _scrollable_screen(self):
+        if self.compositor.modal is not None:
+            return self.compositor.modal
         return self.compositor.current
 
     def _apply_scroll_delta(self, delta):

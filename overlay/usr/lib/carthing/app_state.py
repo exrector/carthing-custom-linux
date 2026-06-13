@@ -53,7 +53,6 @@ def _bonded_source_rows(keystore_path=None):
                 "role": "source",
                 "online": False,
                 "connected": False,
-                "default": False,
                 "capabilities": ["audio_input", "metadata_input", "control_output", "notifications_input"],
                 "endpoints": [
                     {
@@ -154,12 +153,11 @@ def _trusted_device_to_row(device):
     return {
         "key": device.id,
         "address": normalize_address(device.address),
-        "label": device.name,
+        "label": _clean_label(device.name),
         "type": dtype,
         "role": role,
         "online": bool(device.online),
         "connected": bool(device.connected),
-        "default": False,
         "capabilities": capabilities,
         "endpoints": endpoints,
         "constraints": sorted(str(_value(value)) for value in device.constraints),
@@ -175,6 +173,33 @@ def _merge_unique_strings(left, right):
             result.append(value)
             seen.add(value)
     return result
+
+
+def _looks_like_address(value):
+    text = str(value or "").strip()
+    parts = text.split(":")
+    if len(parts) != 6:
+        return False
+    return all(len(part) == 2 and all(ch in "0123456789abcdefABCDEF" for ch in part) for part in parts)
+
+
+def _clean_label(value):
+    text = str(value or "")
+    text = "".join(ch for ch in text if ch >= " " and ch != "\x7f")
+    return " ".join(text.strip().split())
+
+
+def _merge_label(current, incoming, address=""):
+    current = _clean_label(current)
+    incoming = _clean_label(incoming)
+    address = normalize_address(address)
+    if not incoming:
+        return current
+    if _looks_like_address(incoming) or normalize_address(incoming) == address:
+        return current or incoming
+    if not current or _looks_like_address(current) or normalize_address(current) == address:
+        return incoming
+    return current
 
 
 def _merge_endpoints(left, right):
@@ -194,6 +219,35 @@ def _merge_endpoints(left, right):
         existing.setdefault("metadata", {}).update(endpoint.get("metadata") or {})
         if endpoint.get("label"):
             existing["label"] = endpoint["label"]
+    return result
+
+
+def _merge_metadata(left, right):
+    result = dict(left or {})
+    for key, value in (right or {}).items():
+        if key == "capability_profile" and isinstance(value, dict):
+            current = dict(result.get(key) or {})
+            for list_key in ("evidence_sources", "verified_capabilities", "protocols"):
+                current[list_key] = sorted(set(current.get(list_key) or []) | set(value.get(list_key) or []))
+            unknowns = set(current.get("unknowns") or []) | set(value.get("unknowns") or [])
+            evidence_sources = set(current.get("evidence_sources") or [])
+            if "classic_sdp" in evidence_sources:
+                unknowns.discard("classic_sdp")
+            if "ble_gatt" in evidence_sources:
+                unknowns.discard("ble_gatt")
+            current["unknowns"] = sorted(unknowns)
+            current["probe_status"] = value.get("probe_status") or current.get("probe_status")
+            result[key] = current
+        elif key == "enrollment_evidence" and isinstance(value, dict):
+            current = dict(result.get(key) or {})
+            for list_key in ("service_uuids", "ble_services", "missing_capabilities"):
+                current[list_key] = sorted(set(current.get(list_key) or []) | set(value.get(list_key) or []))
+            for scalar_key, scalar_value in value.items():
+                if scalar_key not in ("service_uuids", "ble_services", "missing_capabilities"):
+                    current[scalar_key] = scalar_value
+            result[key] = current
+        else:
+            result[key] = value
     return result
 
 
@@ -241,7 +295,45 @@ def _normalize_trusted_row(device):
     elif _device_is_input(device):
         device["role"] = device.get("role") if device.get("role") not in ("speaker",) else "source"
         device["type"] = device.get("type") or "Источник"
+    _ensure_capability_profile(device)
     return device
+
+
+def _ensure_capability_profile(device):
+    metadata = dict(device.get("metadata") or {})
+    if metadata.get("capability_profile"):
+        device["metadata"] = metadata
+        return
+    evidence = dict(metadata.get("enrollment_evidence") or {})
+    capabilities = sorted(set(str(value) for value in (device.get("capabilities") or [])))
+    protocols = sorted({
+        str(protocol)
+        for endpoint in (device.get("endpoints") or [])
+        for protocol in (endpoint.get("protocols") or [])
+    })
+    if not capabilities and not protocols and not evidence:
+        device["metadata"] = metadata
+        return
+    sources = []
+    if evidence.get("class_of_device") is not None:
+        sources.append("classic_cod")
+    if evidence.get("service_uuids"):
+        sources.append("classic_sdp")
+    if evidence.get("ble_services"):
+        sources.append("ble_gatt")
+    unknowns = []
+    if not evidence.get("service_uuids"):
+        unknowns.append("classic_sdp")
+    if not evidence.get("ble_services"):
+        unknowns.append("ble_gatt")
+    metadata["capability_profile"] = {
+        "probe_status": evidence.get("enrollment_state") or ("ready" if capabilities or protocols else "degraded"),
+        "evidence_sources": sorted(set(sources)),
+        "verified_capabilities": capabilities,
+        "protocols": protocols,
+        "unknowns": sorted(set(unknowns)),
+    }
+    device["metadata"] = metadata
 
 
 class MediaSession:
@@ -281,12 +373,13 @@ class AppState:
         self.last_media_source = "iphone"   # fallback for non-media desktops
         self.unread_count = 0
         self.notifications = []             # list of {"app","title","message"}
-        self.trusted = []                   # {"key","label","type","role","online","connected","default"}
+        self.trusted = []                   # {"key","label","type","role","online","connected",...}
         self.transfer_active = False
         self.transfer_scanning = False
         self.transfer_source = ""
         self._route_input = ""
         self._route_output = ""
+        self._active_route_output = ""
         # [CLAUDE 2026-06-02] какая колонка активна (для скролла/подсветки) и совместимость
         # выбранной пары вход→выход: True=зелёный, False=красный (нельзя), None=ещё не оба выбраны.
         self.route_focus = "input"
@@ -307,6 +400,7 @@ class AppState:
         self.pairing_mode = False
         self.pairing_role = "source"   # source|speaker
         self.speaker_candidates = []   # classic inquiry candidates while adding a speaker
+        self.selected_speaker_candidate = ""
         self.speaker_pairing_status = ""
         self.pairing_message = ""
         self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
@@ -345,6 +439,17 @@ class AppState:
 
     @property
     def route_output(self):
+        selected_speaker = next(
+            (
+                device.get("key") or device.get("address")
+                for device in self.trusted_speakers
+                if device.get("route_output")
+            ),
+            "",
+        )
+        if selected_speaker:
+            self._route_output = selected_speaker
+            return selected_speaker
         return self._route_output
 
     @route_output.setter
@@ -352,8 +457,21 @@ class AppState:
         self.select_route_output(key_or_address)
 
     @property
+    def active_route_output(self):
+        return self._active_route_output or self.SELF_OUTPUT_KEY
+
+    @active_route_output.setter
+    def active_route_output(self, key_or_address):
+        self.select_active_route_output(key_or_address)
+
+    @property
     def route_active(self):
-        return bool(self.route_input and self.route_output and self.transfer_active)
+        return bool(
+            self.route_input
+            and self.active_route_output
+            and self.active_route_output != self.SELF_OUTPUT_KEY
+            and self.transfer_active
+        )
 
     @property
     def sources(self):
@@ -389,6 +507,9 @@ class AppState:
     def load_trusted(self, path=None):
         path = Path(path or os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.trusted_path = path
+        current_route_input = self._route_input
+        current_route_output = self._route_output
+        current_active_route_output = self._active_route_output
         try:
             data = json.loads(path.read_text())
         except FileNotFoundError:
@@ -399,6 +520,8 @@ class AppState:
             data = {"sources": [], "speakers": data}
         elif not isinstance(data, dict):
             data = {}
+        persisted_route_output = str(data.get("route_output") or "").strip()
+        persisted_active_route_output = str(data.get("active_route_output") or "").strip()
 
         devices = []
         if data.get("schema") == 2 and isinstance(data.get("devices"), list):
@@ -418,7 +541,6 @@ class AppState:
                     "role": peer.get("role") or "device",
                     "online": bool(peer.get("online", False)),
                     "connected": bool(peer.get("connected", False)),
-                    "default": bool(peer.get("default", False)),
                     "route_input": bool(peer.get("route_input", False)),
                     "route_output": bool(peer.get("route_output", False)),
                     "capabilities": capabilities,
@@ -449,7 +571,6 @@ class AppState:
                         "role": role,
                         "online": bool(peer.get("online", False)),
                         "connected": bool(peer.get("connected", False)),
-                        "default": bool(peer.get("default", index == 0 and role == "speaker")),
                         "capabilities": capabilities,
                         "endpoints": [{"id": role, "direction": endpoint_direction, "capabilities": capabilities}],
                         "constraints": ["idle_link_allowed", "active_media_requires_route"],
@@ -487,16 +608,30 @@ class AppState:
                 if not had_address or not had_endpoints:
                     new_bond = True
         self.trusted = devices
-        self.route_input = next(
+        loaded_route_input = next(
             (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),
             "",
         )
-        # [CLAUDE 2026-06-11] Boot-честность (решение владельца): после старта
-        # реального маршрута НЕТ — выход показываем Play Now (Car Thing), а не
-        # последний сохранённый. Раньше GUI после ребута врал «iPhone -> Fosi»,
-        # хотя труба не активна. Сохранённый default колонки остаётся для выбора.
-        self.route_output = self.SELF_OUTPUT_KEY
-        self._ensure_default_route_selection()
+        self.route_input = current_route_input or loaded_route_input
+        # Loading the registry must not mutate route ownership flags. Runtime
+        # boot policy can still choose Play Now explicitly. After that, later
+        # reloads preserve the live route instead of resurrecting a stale
+        # persisted selection during AMS/source sync.
+        loaded_route_output = next(
+            (device.get("key") or device.get("address") for device in self.route_outputs if device.get("route_output")),
+            "",
+        )
+        if current_route_output:
+            self.route_output = current_route_output
+        elif persisted_route_output:
+            self.route_output = persisted_route_output
+        else:
+            self._route_output = loaded_route_output
+        if current_active_route_output:
+            self._active_route_output = current_active_route_output
+        elif persisted_active_route_output:
+            self._active_route_output = persisted_active_route_output
+        self._ensure_route_selection()
         # [CLAUDE 2026-06-03] Новый bonded-источник -> ПЕРСИСТИМ в state.json, чтобы ВСЕ устройства
         # (iPhone и колонки) жили в одном месте. Идемпотентно: на следующем load он уже device,
         # new_bond=False -> повторной записи нет. На Mac degraded write_state просто no-op.
@@ -506,24 +641,25 @@ class AppState:
             except Exception:
                 pass
 
-    def _ensure_default_route_selection(self):
+    def _ensure_route_selection(self):
         if not self.route_input and len(self.route_inputs) == 1:
             selected = self.route_inputs[0]
             selected["route_input"] = True
             self.route_input = selected.get("key") or selected.get("address")
         if not self.route_output:
-            outputs = self.route_outputs
-            default_output = next((device for device in outputs if device.get("default")), None)
-            selected = default_output or (outputs[0] if len(outputs) == 1 else None)
-            if selected is not None:
-                selected["route_output"] = True
-                self.route_output = selected.get("key") or selected.get("address")
+            self.route_output = self.SELF_OUTPUT_KEY
+        if not self._active_route_output:
+            self._active_route_output = self.SELF_OUTPUT_KEY
 
     def save_trusted(self, path=None):
         path = Path(path or self.trusted_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = {"schema": 2, "devices": []}
         seen = set()
+        route_input_key = self._route_input
+        route_input_address = normalize_address(route_input_key)
+        route_output_key = self._route_output
+        route_output_address = normalize_address(route_output_key)
         for device in self.trusted:
             device = _normalize_trusted_row(dict(device))
             address = normalize_address(device.get("address"))
@@ -537,7 +673,7 @@ class AppState:
             row = {
                 "id": key,
                 "address": address,
-                "name": device.get("label") or key,
+                "name": _clean_label(device.get("label")) or key,
                 "type": device.get("type") or "Устройство",
                 "role": device.get("role") or "device",
                 "trusted": True,
@@ -546,11 +682,9 @@ class AppState:
                 "constraints": list(device.get("constraints") or []),
                 "metadata": dict(device.get("metadata") or {}),
             }
-            if device.get("default"):
-                row["default"] = True
-            if device.get("route_input"):
+            if key == route_input_key or (address and address == route_input_address):
                 row["route_input"] = True
-            if device.get("route_output"):
+            if key == route_output_key or (address and address == route_output_address):
                 row["route_output"] = True
             data["devices"].append(row)
         # [CLAUDE 2026-06-03] Пишем devices в ЕДИНЫЙ state.json через write_state (read-modify-write:
@@ -573,12 +707,10 @@ class AppState:
             None,
         )
         if existing is None:
-            if _device_is_output(row) and not any(d.get("default") for d in self.trusted_speakers):
-                row["default"] = True
             self.trusted.append(row)
             return row
 
-        existing["label"] = row.get("label") or existing.get("label")
+        existing["label"] = _merge_label(existing.get("label"), row.get("label"), address)
         existing["type"] = row.get("type") or existing.get("type") or "Устройство"
         existing["role"] = "device" if (
             (_device_is_input(existing) or _device_is_input(row))
@@ -589,7 +721,7 @@ class AppState:
         existing["capabilities"] = _merge_unique_strings(existing.get("capabilities"), row.get("capabilities"))
         existing["endpoints"] = _merge_endpoints(existing.get("endpoints"), row.get("endpoints"))
         existing["constraints"] = _merge_unique_strings(existing.get("constraints"), row.get("constraints"))
-        existing.setdefault("metadata", {}).update(row.get("metadata") or {})
+        existing["metadata"] = _merge_metadata(existing.get("metadata"), row.get("metadata"))
         return existing
 
     def enroll_trusted_device(self, address, name=None, class_of_device=None,
@@ -606,7 +738,7 @@ class AppState:
 
         evidence = EnrollmentEvidence(
             address=address,
-            name=name or "",
+            name=_clean_label(name),
             class_of_device=class_of_device,
             service_uuids=set(service_uuids or []),
             ble_services=set(ble_services or []),
@@ -617,6 +749,9 @@ class AppState:
             metadata=dict(metadata or {}),
         )
         device = EnrollmentManager(_Registry()).build_device(evidence)
+        for marker in ("input_enrolled", "output_enrolled"):
+            if marker in evidence.metadata:
+                device.metadata[marker] = bool(evidence.metadata[marker])
         return self.upsert_trusted_device(device)
 
     @property
@@ -646,7 +781,6 @@ class AppState:
             "role": "self",
             "online": True,
             "connected": True,
-            "default": False,
             "capabilities": ["control_input", "metadata_input"],
             "endpoints": [{
                 "id": "playnow",
@@ -659,10 +793,10 @@ class AppState:
             "route_output": self._route_output == self.SELF_OUTPUT_KEY,
         }
 
-    # [CLAUDE 2026-06-12] этаж 5 «работы над чипом»: endpoint «Car Thing line-out»
-    # (T9015 DAC -> провод). За env-флагом CARTHING_LINEOUT_ENABLE=1 СОЗНАТЕЛЬНО:
-    # правило boot-честности — выход без рабочего декодера (этаж 3, Codex) в GUI
-    # не показываем. Флаг включается для разработки/после декодера — насовсем.
+    # Future lab endpoint only. The board exposes T9015/ALSA, but this product
+    # unit has no populated analog line-out path, so it must not appear in the
+    # release route graph. Keep it behind an explicit experimental flag for
+    # later hardware-audio/remote-mic research.
     LINEOUT_OUTPUT_KEY = "carthing-lineout"
 
     def _lineout_output_device(self):
@@ -674,7 +808,6 @@ class AppState:
             "role": "lineout",            # НЕ "speaker": standby-петля не пейджит
             "online": True,
             "connected": True,            # ЦАП всегда на месте
-            "default": False,
             "capabilities": ["audio_output"],
             "endpoints": [{
                 "id": "lineout",
@@ -691,7 +824,7 @@ class AppState:
     def route_outputs(self):
         # Car Thing-self первым в списке выходов, затем доверенные колонки.
         outputs = [self._self_output_device()]
-        if os.environ.get("CARTHING_LINEOUT_ENABLE") == "1":
+        if os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1":
             outputs.append(self._lineout_output_device())
         return outputs + self.trusted_speakers
 
@@ -721,6 +854,16 @@ class AppState:
         self.route_compatible = None        # пересчитает рантайм
         return selected
 
+    def select_active_route_output(self, key_or_address):
+        selected = None
+        needle = normalize_address(key_or_address)
+        for device in self.route_outputs:
+            match = device.get("key") == key_or_address or device.get("address") == needle
+            if match:
+                selected = device.get("key") or device.get("address")
+        self._active_route_output = selected or self.SELF_OUTPUT_KEY
+        return self._active_route_output
+
     def is_trusted_source(self, address):
         address = normalize_address(address)
         return any(device.get("address") == address for device in self.trusted_sources)
@@ -729,11 +872,15 @@ class AppState:
         address = normalize_address(address)
         return any(device.get("address") == address for device in self.trusted_speakers)
 
+    def is_trusted_device(self, address):
+        address = normalize_address(address)
+        return any(device.get("address") == address for device in self.trusted)
+
     def upsert_speaker_candidate(self, address, name=None, class_of_device=None, rssi=None, audio=None):
         address = normalize_address(address)
         if not address:
             return None
-        label = str(name or "").strip() or address
+        label = _clean_label(name) or address
         for candidate in self.speaker_candidates:
             if candidate.get("address") == address:
                 if name:
@@ -744,24 +891,39 @@ class AppState:
                     candidate["rssi"] = rssi
                 if audio is not None:
                     candidate["audio"] = bool(audio)
-                candidate["trusted"] = self.is_trusted_speaker(address)
+                candidate["trusted"] = self.is_trusted_device(address)
+                candidate["trusted_input"] = self.is_trusted_source(address)
+                candidate["trusted_output"] = self.is_trusted_speaker(address)
                 return candidate
         candidate = {
             "key": address,
             "address": address,
             "label": label,
-            "type": "Динамик",
-            "role": "speaker",
+            "type": "Динамик" if audio else "Устройство",
+            "role": "speaker" if audio else "device",
             "class_of_device": class_of_device,
             "rssi": rssi,
             "audio": bool(audio),
-            "trusted": self.is_trusted_speaker(address),
+            "trusted": self.is_trusted_device(address),
+            "trusted_input": self.is_trusted_source(address),
+            "trusted_output": self.is_trusted_speaker(address),
         }
         self.speaker_candidates.append(candidate)
         return candidate
 
     def clear_speaker_candidates(self):
         self.speaker_candidates = []
+        self.selected_speaker_candidate = ""
+
+    def select_speaker_candidate(self, address):
+        address = normalize_address(address)
+        if not address:
+            return None
+        candidate = next((c for c in self.speaker_candidates if c.get("address") == address), None)
+        if candidate is None:
+            return None
+        self.selected_speaker_candidate = address
+        return candidate
 
     def trust_speaker(self, address, name=None):
         address = normalize_address(address)
@@ -770,24 +932,69 @@ class AppState:
         candidate = next((c for c in self.speaker_candidates if c.get("address") == address), None)
         if candidate is not None and not candidate.get("audio"):
             return None
-        label = str(name or "").strip() or (candidate or {}).get("label") or address
+        label = _clean_label(name) or _clean_label((candidate or {}).get("label")) or address
         existing = self.enroll_trusted_device(
             address,
             name=label,
             class_of_device=(candidate or {}).get("class_of_device"),
             service_uuids={"110b", "audio_sink"},
-            metadata={"enrolled_from": "classic_pairing", "audio": True},
+            metadata={
+                "enrolled_from": "classic_pairing",
+                "audio": True,
+                "output_enrolled": True,
+                "probe_stage": "classic_cod_provisional",
+            },
         )
         existing["online"] = True
-        if _device_is_output(existing) and not any(d.get("default") for d in self.trusted_speakers):
-            existing["default"] = True
         for candidate in self.speaker_candidates:
             if candidate.get("address") == address:
                 candidate["trusted"] = True
+                candidate["trusted_output"] = True
         return existing
+
+    def revoke_speaker_role(self, key_or_address):
+        """Remove only the output role from a card, preserving input identity."""
+        needle = normalize_address(key_or_address)
+        device = next(
+            (
+                item for item in self.trusted
+                if item.get("key") == key_or_address or normalize_address(item.get("address")) == needle
+            ),
+            None,
+        )
+        if device is None:
+            return False
+        if not _device_is_input(device):
+            return self.remove_trusted(key_or_address)
+        output_caps = {"audio_output", "control_input", "volume_control", "transport_control"}
+        device["capabilities"] = [
+            cap for cap in (device.get("capabilities") or [])
+            if cap not in output_caps
+        ]
+        device["endpoints"] = [
+            endpoint for endpoint in (device.get("endpoints") or [])
+            if endpoint.get("direction") != "output"
+            and endpoint.get("id") not in {"audio-output", "remote-control", "speaker-remote"}
+        ]
+        metadata = dict(device.get("metadata") or {})
+        metadata.pop("output_enrolled", None)
+        device["metadata"] = metadata
+        device["role"] = "source"
+        device["type"] = "Источник"
+        device["connected"] = False
+        if self._route_output in {device.get("key"), normalize_address(device.get("address"))}:
+            self._route_output = self.SELF_OUTPUT_KEY
+        if self._active_route_output in {device.get("key"), normalize_address(device.get("address"))}:
+            self._active_route_output = self.SELF_OUTPUT_KEY
+        _normalize_trusted_row(device)
+        return True
 
     def remove_trusted(self, key_or_address):
         needle = normalize_address(key_or_address)
+        removed = [
+            device for device in self.trusted
+            if device.get("key") == key_or_address or normalize_address(device.get("address")) == needle
+        ]
         before = len(self.trusted)
         self.trusted = [
             device for device in self.trusted
@@ -795,27 +1002,51 @@ class AppState:
         ]
         if len(self.trusted) == before:
             return False
-        speakers = self.trusted_speakers
-        if speakers and not any(s.get("default") for s in speakers):
-            speakers[0]["default"] = True
+        removed_keys = {
+            value
+            for device in removed
+            for value in (device.get("key"), normalize_address(device.get("address")))
+            if value
+        }
+        if self._route_input in removed_keys:
+            self._route_input = ""
+        if self._route_output in removed_keys:
+            self._route_output = self.SELF_OUTPUT_KEY
+        if self._active_route_output in removed_keys:
+            self._active_route_output = self.SELF_OUTPUT_KEY
+        for candidate in self.speaker_candidates:
+            if normalize_address(candidate.get("address")) == needle:
+                candidate["trusted"] = False
         return True
 
-    def default_speaker_address(self):
-        speakers = self.trusted_speakers
-        for speaker in speakers:
-            if speaker.get("default"):
-                return speaker.get("address")
-        return speakers[0].get("address") if speakers else None
+    def route_speaker_address(self):
+        output = normalize_address(self.route_output)
+        if not output:
+            return None
+        for speaker in self.trusted_speakers:
+            if speaker.get("key") == self.route_output or normalize_address(speaker.get("address")) == output:
+                return normalize_address(speaker.get("address"))
+        return None
 
-    def select_default_speaker(self, key_or_address):
-        selected = None
+    def active_route_speaker_address(self):
+        output_key = self.active_route_output
+        output = normalize_address(output_key)
+        if not output:
+            return None
+        for speaker in self.trusted_speakers:
+            if speaker.get("key") == output_key or normalize_address(speaker.get("address")) == output:
+                return normalize_address(speaker.get("address"))
+        return None
+
+    def select_route_speaker(self, key_or_address):
+        """Select an active output route without changing any standby ownership."""
         needle = normalize_address(key_or_address)
         for speaker in self.trusted_speakers:
             match = speaker.get("key") == key_or_address or speaker.get("address") == needle
-            speaker["default"] = match
             if match:
-                selected = speaker.get("address")
-        return selected
+                self.select_route_output(key_or_address)
+                return speaker.get("address")
+        return None
 
     def set_speaker_online(self, address, online=True):
         address = normalize_address(address)
@@ -841,7 +1072,3 @@ class AppState:
                 device["connected"] = bool(connected)
                 if connected:
                     device["online"] = True
-
-    def clear_connected_speakers(self):
-        for device in self.trusted_speakers:
-            device["connected"] = False

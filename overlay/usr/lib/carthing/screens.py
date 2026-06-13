@@ -325,11 +325,14 @@ class RouteBuilderScreen(Screen):
         else:
             act_col, act_intent = T.STATUS_OK, "route_activate"
 
-        # [настройки(шестерёнка) · маршрут(узлы-связь) · сопряжение(+) · ассистент(○)] — по центру
+        # [настройки · LNK · add-in · add-out · ассистент] — по центру.
+        # Add In is passive advertising for sources. Add Out is active inquiry
+        # for speakers/receivers; the transport route still changes only via LNK.
         btns = [
             ("gear", T.MUTED, "open_settings", None),
             ("route", act_col, act_intent, None),
-            ("plus", T.MUTED, "settings_select", "pairing_device"),
+            ("add_in", T.MUTED, "settings_select", "pairing_input"),
+            ("add_out", T.MUTED, "settings_select", "pairing_output"),
             ("orb",  T.MUTED, "assistant", None),
         ]
         n = len(btns)
@@ -337,7 +340,7 @@ class RouteBuilderScreen(Screen):
         if T.THEME == "terminal":
             # [CLAUDE 2026-06-11] терминальная тема: софт-кнопки [XXX] вместо кружков
             # (идея владельца: сокращения как на старых терминалах, без значков)
-            TERM = {"gear": "SET", "route": "LNK", "plus": "ADD", "orb": "AST"}
+            TERM = {"gear": "SET", "route": "LNK", "add_in": "IN+", "add_out": "OUT+", "orb": "AST"}
             f = T.font(T.SZ_BODY)
             labels = ["[" + TERM[k] + "]" for k, _c, _i, _p in btns]
             widths = [int(draw.textlength(l, font=f)) for l in labels]
@@ -357,8 +360,18 @@ class RouteBuilderScreen(Screen):
                 T.icon_gear(draw, x, cy, R - 12, color=col, width=2)
             elif kind == "route":
                 T.icon_route(draw, x, cy, R - 10, color=col, width=3)
-            elif kind == "plus":
+            elif kind == "add_in":
                 T.icon_plus(draw, x, cy, R - 14, color=col, width=3)
+                draw.arc([x - R + 14, cy - R + 14, x + R - 14, cy + R - 14],
+                         start=140, end=250, fill=col, width=3)
+                draw.polygon([(x - 8, cy + R - 18), (x - 20, cy + R - 14), (x - 12, cy + R - 6)],
+                             fill=col)
+            elif kind == "add_out":
+                T.icon_plus(draw, x, cy, R - 14, color=col, width=3)
+                draw.arc([x - R + 14, cy - R + 14, x + R - 14, cy + R - 14],
+                         start=320, end=70, fill=col, width=3)
+                draw.polygon([(x + 8, cy - R + 18), (x + 20, cy - R + 14), (x + 12, cy - R + 6)],
+                             fill=col)
             elif kind == "orb":
                 T.icon_ring(draw, x, cy, R - 12, color=col, width=3)
             if regions is not None and intent is not None:
@@ -889,19 +902,54 @@ class PairingModal:
     X0 = 36
     X1 = T.ARC_SAFE_X            # держим зазор от дуги
     ROW_H2 = 56
+    CONFIRM_H = 54
+    STATUS_H = 34
 
     def __init__(self, emit=None):
         self.emit = emit or (lambda intent, payload=None: None)
         self.state = None
+        self.scroll_y = 0.0
 
     def on_state(self, state):
         self.state = state
 
     def on_input(self, event):
-        if event in (Input.BACK, Input.PRESS):
+        if event == Input.BACK:
             self.emit("pairing_cancel")
             return True
+        if event == Input.PRESS:
+            status = getattr(self.state, "speaker_pairing_status", "") if self.state else ""
+            if status in ("connect", "done"):
+                return True
+            selected = getattr(self.state, "selected_speaker_candidate", "") if self.state else ""
+            if selected:
+                self.emit("speaker_pair_confirm", selected)
+            return True
+        if isinstance(event, tuple) and event and event[0] == "scroll":
+            candidates = self._visible_candidates()
+            max_y = max(0, len(candidates) * self.ROW_H2 - (self._list_bottom() - 72))
+            before = self.scroll_y
+            self.scroll_y = max(0.0, min(float(max_y), self.scroll_y + float(event[1])))
+            return abs(self.scroll_y - before) >= 0.01
         return False
+
+    def _list_bottom(self):
+        return T.H - self.CONFIRM_H - self.STATUS_H - 16
+
+    def _visible_candidates(self):
+        candidates = [
+            cand for cand in (getattr(self.state, "speaker_candidates", []) or [])
+            if bool(cand.get("audio")) or bool(cand.get("trusted_output"))
+        ]
+        return sorted(
+            candidates,
+            key=lambda c: (
+                not bool(c.get("audio")),
+                0 - int(c.get("rssi") or -999),
+                str(c.get("label") or c.get("address") or ""),
+                str(c.get("address") or ""),
+            ),
+        )
 
     def _scan_indicator(self, draw, cx, y):
         """[CLAUDE 2026-06-03] Единственный элемент-«живость»: бегущий ряд точек, пока
@@ -913,34 +961,102 @@ class PairingModal:
             T.icon_dot(draw, x0 + i * gap, y, 6 if i == t else 4,
                        color=T.ACCENT if i == t else T.HAIRLINE)
 
+    def _candidate_for(self, address):
+        return next(
+            (cand for cand in self._visible_candidates() if cand.get("address") == address),
+            None,
+        )
+
+    def _status_line(self, selected, candidate):
+        status = getattr(self.state, "speaker_pairing_status", "") if self.state else ""
+        message = str(getattr(self.state, "pairing_message", "") or "").strip()
+        if status == "done":
+            return (message or "ADDED", T.STATUS_OK)
+        if status == "connect":
+            return (message or "CONNECTING", T.ACCENT)
+        if status == "error":
+            return (message or "ERROR", T.WARN)
+        if candidate and candidate.get("trusted_output"):
+            return ("ADDED", T.STATUS_OK)
+        if selected and candidate:
+            return (candidate.get("label") or selected, T.MUTED)
+        return ("", T.FAINT)
+
+    def _center_text(self, draw, rect, label, font, fill):
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        x = rect[0] + (rect[2] - rect[0] - text_w) // 2 - bbox[0]
+        y = rect[1] + (rect[3] - rect[1] - text_h) // 2 - bbox[1]
+        draw.text((x, y), label, font=font, fill=fill)
+
     def render(self, img, regions):
-        # [CLAUDE 2026-06-03] МИНИМАЛИЗМ по приказу: только живой индикатор + список устройств
-        # (имя + MAC). Ни заголовков, ни статусов, ни подсказок, ни пометок. Сканер открыт =
-        # режим сопряжения открыт; Back закрывает оба.
+        # Add In is a passive pairing surface: no inquiry rows, just a live
+        # indicator that Car Thing is advertising/connectable for the source.
+        # Add Out is the active scanner and shows selectable output candidates.
         draw = ImageDraw.Draw(img)
         X0, X1 = self.X0, self.X1
         w = X1 - X0
         draw.rectangle([0, 0, T.W, T.H], fill=T.BG)            # чёрный фон
         self._scan_indicator(draw, (X0 + X1) // 2, 32)         # «шевелится» = скан активен
+        if getattr(self.state, "pairing_role", "") == "input":
+            label = "ADD IN" if T.THEME == "terminal" else "IN"
+            f = T.font(T.SZ_TITLE)
+            tw = int(draw.textlength(label, font=f))
+            draw.text(((X0 + X1 - tw) // 2, 128), label, font=f, fill=T.MUTED)
+            return
 
-        # СТАБИЛЬНЫЙ порядок появления (не по RSSI — он скачет и строки бы прыгали).
-        # Список ленивый/накопительный: новые устройства добавляются снизу, не мелькают.
-        # [CLAUDE 2026-06-03] УНИВЕРСАЛЬНЫЙ сканер: тапается ЛЮБОЕ устройство (enroll решает, что
-        # это — колонка или источник). СТАБИЛЬНЫЙ порядок по АДРЕСУ (детерминированный) — строки
-        # НЕ прыгают при сканировании/тапах (раньше прыгали из-за нестабильного порядка).
-        candidates = sorted(list(getattr(self.state, "speaker_candidates", []) or []),
-                            key=lambda c: str(c.get("address") or ""))
-        y = 72
+        candidates = self._visible_candidates()
+        list_bottom = self._list_bottom()
+        max_y = max(0, len(candidates) * self.ROW_H2 - (list_bottom - 72))
+        self.scroll_y = max(0.0, min(float(max_y), self.scroll_y))
+        selected = getattr(self.state, "selected_speaker_candidate", "") or ""
+        selected_candidate = self._candidate_for(selected)
+        status = getattr(self.state, "speaker_pairing_status", "")
+        pairing_busy = status in ("connect", "done")
+        y = 72 - int(self.scroll_y)
         for cand in candidates:
-            if y + self.ROW_H2 > T.H:
+            if y >= list_bottom:
                 break
+            if y + self.ROW_H2 < 72:
+                y += self.ROW_H2
+                continue
             name = cand.get("label") or cand.get("address") or "Device"
             addr = cand.get("address") or "—"
             trusted = bool(cand.get("trusted"))
             rect = (X0, y, X1, y + self.ROW_H2 - 8)
+            if addr == selected:
+                draw.rounded_rectangle(rect, radius=8, outline=T.ACCENT, width=2)
             draw.text((X0 + 12, y + 4), C.truncate(draw, name, T.font(T.SZ_BODY), w - 24),
                       font=T.font(T.SZ_BODY), fill=(T.STATUS_OK if trusted else T.FG))
             draw.text((X0 + 12, y + 34), C.truncate(draw, addr, T.font(18), w - 24),
                       font=T.font(18), fill=T.FAINT)
             regions.add(rect, "speaker_pair_select", payload=cand.get("address"))
             y += self.ROW_H2
+
+        button = (X0, T.H - self.CONFIRM_H, X1, T.H - 10)
+        status_text, status_color = self._status_line(selected, selected_candidate)
+        if status_text:
+            status_font = T.font(T.SZ_SMALL)
+            C.text_centered(
+                draw,
+                C.truncate(draw, status_text, status_font, w - 24),
+                status_font,
+                status_color,
+                button[1] - self.STATUS_H + 2,
+                cx=(X0 + X1) // 2,
+            )
+
+        active = bool(selected) and not pairing_busy and not (
+            selected_candidate and selected_candidate.get("trusted_output")
+        )
+        outline = T.ACCENT if active else T.HAIRLINE
+        fill = T.SURFACE_SEL if active else T.BG
+        draw.rounded_rectangle(button, radius=8, fill=fill, outline=outline, width=2)
+        label = "ADDED" if (status == "done" or (
+            selected_candidate and selected_candidate.get("trusted_output")
+        )) else "LNK"
+        f = T.font(T.SZ_BODY)
+        self._center_text(draw, button, label, f, (T.FG if active else T.FAINT))
+        if regions is not None and active:
+            regions.add(button, "speaker_pair_confirm", payload=selected)

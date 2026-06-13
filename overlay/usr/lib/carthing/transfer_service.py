@@ -126,16 +126,21 @@ class TransferService:
     async def pair_speaker(self, address):
         normalized = normalize_address(address)
         try:
-            # Speaker enrollment is a replacement operation: drop any stale bond/ACL first
-            # so the new pairing starts from a clean classic state.
-            self.bridge.state.remove_trusted(normalized)
-        except Exception:
-            pass
-        try:
-            await self.bridge.forget_peer_key(normalized)
+            existing = next(
+                (d for d in getattr(self.bridge.state, "trusted", [])
+                 if normalize_address(d.get("address")) == normalized),
+                None,
+            )
+            is_existing_input = bool(existing and (
+                existing.get("role") == "source"
+                or "audio_input" in set(existing.get("capabilities") or [])
+                or any(e.get("direction") == "input" for e in existing.get("endpoints") or [])
+            ))
+            if not is_existing_input:
+                await self.bridge.forget_peer_key(normalized)
         except Exception as e:
             logger.warning("speaker forget key before pairing failed: %s", e)
-        stale_connection = self.bridge._speaker_connections.pop(normalized, None)
+        stale_connection = self.bridge._speaker_connection(normalized)
         if stale_connection is not None:
             try:
                 await stale_connection.disconnect()
@@ -160,7 +165,8 @@ class TransferService:
                 self.bridge.state.enroll_trusted_device(
                     normalized, name=candidate.get("label") or normalized,
                     class_of_device=candidate.get("class_of_device"),
-                    capabilities=["audio_input", "metadata_input", "control_output"])
+                    capabilities=["audio_input", "metadata_input", "control_output"],
+                    metadata={"enrolled_from": "classic_inquiry", "input_enrolled": True})
                 self.bridge.state.save_trusted()
                 self.bridge.state.speaker_pairing_status = "done"
                 self.bridge.state.pairing_message = (candidate.get("label") or normalized) + " добавлен (источник)"
@@ -181,11 +187,16 @@ class TransferService:
             await self.bridge.pair_speaker(normalized)
             if getattr(self.bridge.state, "speaker_pairing_status", "") == "done":
                 ok = True
-                await asyncio.sleep(1.2)
-                # закрываем сканер, но СОЕДИНЕНИЕ ДЕРЖИМ (как настоящая ОС): set_speaker_connected
-                # уже выставлен в True в bridge.pair_speaker, соединение лежит в _speaker_connections.
+                if not getattr(self.bridge.state, "pairing_message", ""):
+                    self.bridge.state.pairing_message = (candidate.get("label") or normalized) + " добавлен"
+                    self._sync()
+                await asyncio.sleep(2.4)
+                # закрываем сканер, но СОЕДИНЕНИЕ ДЕРЖИМ (как настоящая ОС):
+                # set_speaker_connected уже выставлен в True в bridge.pair_speaker,
+                # соединение живёт в per-device SpeakerRuntime.
                 self.bridge.state.pairing_mode = False
                 self.bridge.state.speaker_pairing_status = "idle"
+                self.bridge.state.pairing_message = ""
         except Exception as e:
             logger.warning("speaker pair failed: %s", e)
             try:
@@ -198,12 +209,7 @@ class TransferService:
             # а обёртка тут же РВАЛА линк -> Fosi возвращалась в мигание (режим пары). Теперь
             # рвём ТОЛЬКО при неудаче (очистка); при успехе держим ACL/AVDTP — колонка
             # перестаёт мигать и показывается подключённой (зелёной) в Routes.
-            paired_connection = self.bridge._speaker_connections.pop(normalized, None)
-            if paired_connection is not None:
-                try:
-                    await paired_connection.disconnect()
-                except Exception:
-                    pass
+            await self.bridge.forget_speaker_runtime(normalized)
             try:
                 self.bridge.state.set_speaker_connected(normalized, False)
             except Exception:
@@ -211,14 +217,21 @@ class TransferService:
         self._sync()
 
     async def forget_trusted(self, address):
+        normalized = normalize_address(address)
         try:
-            await self.bridge.forget_peer_key(address)
+            await self.bridge.forget_speaker_runtime(normalized)
+        except Exception as e:
+            logger.warning("speaker runtime forget failed: %s", e)
+        try:
+            removed = self.bridge.state.remove_trusted(normalized)
+            if removed:
+                self.bridge.state.save_trusted()
+        except Exception as e:
+            logger.warning("speaker registry forget failed: %s", e)
+        try:
+            await self.bridge.forget_peer_key(normalized)
         except Exception as e:
             logger.warning("speaker forget key failed: %s", e)
-        try:
-            self.bridge.state.clear_connected_speakers()
-        except Exception:
-            pass
         self._sync()
 
     # ── активация Transfer (вручную из Routes-view, runtime-contract) ────────
@@ -269,7 +282,7 @@ class TransferService:
 
     async def select(self, address):
         try:
-            self.bridge.state.select_default_speaker(address)
+            self.bridge.state.select_route_speaker(address)
             self.bridge.state.transfer_status = "standby"
             await self.bridge.ensure_trusted_speakers_connected()
         except Exception as e:
@@ -287,16 +300,14 @@ class TransferService:
         self._sync()
 
     def _sync(self):
-        ready = getattr(self.bridge, "receiver_rtp_channel", None) is not None
-        standby = [
-            speaker for speaker in self.bridge.state.trusted_speakers
-            if speaker.get("connected")
-        ]
-        self.model.speaker_connected = bool(ready or standby)
-        self.model.speaker_name = (
-            getattr(self.bridge, "receiver_address", None)
-            or (standby[0].get("address") if standby else None)
-        )
+        statuses = self.bridge.speaker_statuses()
+        self.model.speakers = statuses
+        active = next((speaker for speaker in statuses if speaker.get("active")), None)
+        standby = next((speaker for speaker in statuses if speaker.get("standby")), None)
+        visible = active or standby or next((speaker for speaker in statuses if speaker.get("connected")), None)
+        ready = bool(active and active.get("standby"))
+        self.model.speaker_connected = bool(visible and visible.get("connected"))
+        self.model.speaker_name = visible.get("address") if visible else None
         status = getattr(self.bridge.state, "transfer_status", "")
         if status:
             self.model.mode_status = status if not ready else "transfer connected"
