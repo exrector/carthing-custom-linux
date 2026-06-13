@@ -13,18 +13,21 @@ import os
 W, H = 800, 480
 
 # ─── palette ──────────────────────────────────────────────────────────────────
-BG       = (0, 0, 0)
-SURFACE  = (22, 22, 22)        # raised row / card
-SURFACE_SEL = (34, 34, 34)     # selected row, neutral highlight
-FG       = (255, 255, 255)
-MUTED    = (165, 165, 165)
-FAINT    = (95, 95, 95)
-HAIRLINE = (40, 40, 40)
-ACCENT   = (0, 200, 120)
-WARN     = (220, 90, 60)
-STATUS_OK   = (40, 200, 90)    # connected — зелёный
-STATUS_WARN = (235, 195, 40)   # online — жёлтый
-STATUS_OFF  = (220, 70, 60)    # offline — красный
+# [CLAUDE 2026-06-13] ЕДИНСТВЕННАЯ тема — «Терминал» (палитра exrector.com).
+# Решение владельца: тёмная тема удалена совсем, выбора тем нет. Это убирает и
+# класс багов «ui_theme читал state.json и молча откатывался» — палитра захардкожена.
+BG          = (3, 9, 6)        # --bg: не чёрный, зелёный подтон
+SURFACE     = (7, 22, 13)
+SURFACE_SEL = (26, 138, 71)    # inverse-video: выделение заливкой фосфора
+FG          = (51, 255, 136)   # --p
+MUTED       = (26, 138, 71)    # --p-dim — ОСНОВНАЯ масса текста
+FAINT       = (13, 61, 32)     # --p-faint
+HAIRLINE    = (13, 61, 32)
+ACCENT      = (51, 255, 136)
+WARN        = (255, 102, 68)   # .err сайта
+STATUS_OK   = (51, 255, 136)
+STATUS_WARN = (255, 170, 0)    # янтарь сайта
+STATUS_OFF  = (255, 68, 68)
 
 # ─── spacing / layout tokens ──────────────────────────────────────────────────
 MARGIN     = 40          # outer side margin
@@ -81,31 +84,11 @@ _FONT_CANDIDATES = [
     "/System/Library/Fonts/Helvetica.ttc",
 ]
 
-# ─── themes ───────────────────────────────────────────────────────────────────
-# Тема выбирается ОДИН РАЗ при импорте (= старте runtime): icon_* захватывают
-# цвета в default-аргументах, живая подмена палитры невозможна. Смена темы в
-# Настройках персистит settings.ui_theme и перезапускает runtime (супервизор).
-#
-# "terminal" — ретро-терминал в палитре exrector.com (--p/--p-dim/--p-faint/--bg):
-# иерархия яркости как на сайте — основной текст dim, полный фосфор только у
-# ключевых элементов. Идея владельца 2026-06-11 (мейнфреймы 60–70-х).
-
-def _settings_theme():
-    name = os.environ.get("CARTHING_UI_THEME", "")
-    if name:
-        return name
-    import json
-    state_file = os.path.join(
-        os.environ.get("CARTHING_STATE_ROOT", "/run/carthing-state"),
-        "carthing", "state.json")
-    try:
-        with open(state_file) as fh:
-            return json.load(fh).get("settings", {}).get("ui_theme", "dark")
-    except Exception:
-        return "dark"
-
-
-THEME = _settings_theme()
+# ─── theme (единственная: «Терминал») ────────────────────────────────────────
+# Палитра задана выше напрямую. THEME оставлен константой для совместимости с
+# кодом, который ветвился по T.THEME (теперь всегда "terminal"). Тёмная тема и
+# выбор тем удалены (решение владельца 2026-06-13).
+THEME = "terminal"
 
 _MONO_CANDIDATES = [
     "/usr/share/fonts/truetype/IBMPlexMono-Regular.ttf",   # device (как на сайте)
@@ -113,24 +96,10 @@ _MONO_CANDIDATES = [
                  "fonts", "truetype", "IBMPlexMono-Regular.ttf"),  # dev Mac (overlay)
     "/System/Library/Fonts/Menlo.ttc",                      # dev Mac fallback
 ]
+_FONT_CANDIDATES[1:1] = _MONO_CANDIDATES   # IBM Plex Mono — основной шрифт
 
-if THEME == "terminal":
-    BG          = (3, 9, 6)        # --bg: не чёрный, зелёный подтон
-    SURFACE     = (7, 22, 13)
-    SURFACE_SEL = (26, 138, 71)    # inverse-video: выделение заливкой фосфора
-    FG          = (51, 255, 136)   # --p
-    MUTED       = (26, 138, 71)    # --p-dim — ОСНОВНАЯ масса текста
-    FAINT       = (13, 61, 32)     # --p-faint
-    HAIRLINE    = (13, 61, 32)
-    ACCENT      = (51, 255, 136)
-    WARN        = (255, 102, 68)   # .err сайта
-    STATUS_OK   = (51, 255, 136)
-    STATUS_WARN = (255, 170, 0)    # янтарь сайта
-    STATUS_OFF  = (255, 68, 68)
-    _FONT_CANDIDATES[1:1] = _MONO_CANDIDATES
-
-# CRT-постэффекты (сканлайны + виньетка) — только terminal, выключаются env.
-_POSTFX = THEME == "terminal" and os.environ.get("CARTHING_CRT_FX", "1") != "0"
+# CRT-постэффекты (сканлайны + виньетка) — всегда вкл; выключаются CARTHING_CRT_FX=0.
+_POSTFX = os.environ.get("CARTHING_CRT_FX", "1") != "0"
 _fx_mask = None
 
 
