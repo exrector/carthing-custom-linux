@@ -143,7 +143,7 @@ class Dispatcher:
         elif key in ("sessions", "modes", "routes"):
             # [CLAUDE 2026-06-02] режимы удалены — пункт ведёт на маршрутный экран (ВХОД/ВЫХОД)
             self.state.active_desktop = self.state.ROUTER
-        elif key in ("brightness", "theme", "sleep", "off_timeout", "notif_blink"):
+        elif key in ("brightness", "sleep", "off_timeout", "notif_blink"):
             # [CLAUDE 2026-06-11] press энкодера по строке = шаг "+" (единый паттерн −/+)
             self._display_adjust(key, "+")
         # trusted / display / about: handled by UI navigation later
@@ -235,11 +235,6 @@ class Dispatcher:
             i = max(0, min(len(presets) - 1, i + (1 if direction == "+" else -1)))
             self.state.screen_brightness = presets[i]   # оптимистично для UI
             self.on_set_brightness(presets[i])          # runtime: power + персист
-        elif key == "theme":
-            cur = getattr(self.state, "ui_theme", "dark")
-            new = "terminal" if cur != "terminal" else "dark"
-            self.state.ui_theme = new
-            self.on_set_theme(new)                      # runtime: персист + рестарт
         elif key == "sleep":
             # [CLAUDE 2026-06-11] ЕДИНАЯ шкала сна: Выкл → 1..10 мин → 20..60 мин.
             # Объединяет бывшие «Сон Вкл/Выкл» + «Гашение N с» (слово отклонено владельцем).

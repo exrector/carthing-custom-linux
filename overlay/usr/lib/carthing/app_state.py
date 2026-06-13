@@ -27,6 +27,65 @@ def normalize_address(address) -> str:
     return text.split("/", 1)[0]
 
 
+def _dedupe_registry(devices):
+    """[CLAUDE 2026-06-13] УНИВЕРСАЛЬНАЯ картотека: одна карточка на одно устройство.
+
+    Принцип владельца: нашли устройство -> сверились с картотекой по ИДЕНТИЧНОСТИ ->
+    дописали свойства (merge), а не плодим новую карточку. Ключевой урок «трёх
+    айфонов»: BLE-источник при каждом пересопряжении даёт НОВЫЙ адрес бонда (iOS
+    вращает адреса / новый IRK), и раньше каждый бонд становился отдельной карточкой.
+
+    Идентичность:
+      • source (телефон): рантайм моделирует РОВНО один источник (один a.iphone) ->
+        все source-карточки сливаются в ОДНУ. Канон = подключённая, иначе самая
+        полная (есть label/endpoints), иначе первая. Адрес кануна = подключённый.
+      • output (колонка): classic-MAC стабилен (не вращается) -> дедуп по адресу.
+    Свойства (capabilities/endpoints/metadata/label) объединяются по всем дублям.
+    """
+    def merge_into(dst, src):
+        dst["capabilities"] = _merge_unique_strings(dst.get("capabilities"), src.get("capabilities"))
+        dst["endpoints"] = _merge_endpoints(dst.get("endpoints"), src.get("endpoints"))
+        dst["constraints"] = _merge_unique_strings(dst.get("constraints"), src.get("constraints"))
+        md = dict(dst.get("metadata") or {}); md.update(src.get("metadata") or {}); dst["metadata"] = md
+        # label: предпочитаем осмысленный (не равный адресу)
+        if (not dst.get("label") or dst.get("label") == dst.get("address")) and src.get("label"):
+            dst["label"] = src["label"]
+        dst["online"] = bool(dst.get("online") or src.get("online"))
+        dst["connected"] = bool(dst.get("connected") or src.get("connected"))
+        return dst
+
+    sources, others, out, seen_addr = [], [], [], {}
+    for d in devices:
+        if d.get("role") == "source":
+            sources.append(d)
+        else:
+            others.append(d)
+    # источники -> одна карточка
+    if sources:
+        def score(d):
+            return (2 if d.get("connected") else 0) + (1 if (d.get("label") and d.get("label") != d.get("address")) else 0) + (1 if d.get("endpoints") else 0)
+        canon = max(sources, key=score)
+        for d in sources:
+            if d is not canon:
+                merge_into(canon, d)
+        # адрес кануна = подключённого источника, если есть
+        conn = next((d for d in sources if d.get("connected") and d.get("address")), None)
+        if conn:
+            canon["address"] = conn["address"]
+        canon["key"] = "source:" + normalize_address(canon.get("address") or "") if canon.get("address") else (canon.get("key") or "source")
+        out.append(canon)
+    # выходы/прочее -> дедуп по адресу
+    for d in others:
+        addr = normalize_address(d.get("address"))
+        if addr and addr in seen_addr:
+            merge_into(seen_addr[addr], d)
+            continue
+        out.append(d)
+        if addr:
+            seen_addr[addr] = d
+    return out
+
+
 def _bonded_source_rows(keystore_path=None):
     """BLE bonds from Bumble keystore are trusted sources even before reconnect."""
     keystore_path = Path(keystore_path or os.environ.get("CAR_THING_KEYSTORE", DEFAULT_KEYSTORE_PATH))
@@ -607,6 +666,7 @@ class AppState:
                 # Иначе route_planner не найдёт endpoints → RoutePlanError → кнопка красная.
                 if not had_address or not had_endpoints:
                     new_bond = True
+        devices = _dedupe_registry(devices)   # [CLAUDE 2026-06-13] одна карточка на устройство
         self.trusted = devices
         loaded_route_input = next(
             (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),

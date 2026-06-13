@@ -97,7 +97,22 @@ def read_state() -> dict:
             data = json.loads(STATE_FILE.read_text() or "{}")
             return data if isinstance(data, dict) else {}
     except Exception as e:
-        _log.warning("read_state failed: %s", e)
+        # [CLAUDE 2026-06-13] СУЩЕСТВУЮЩИЙ state.json не читается = повреждение
+        # (а не первый старт). Раньше тихо уходили в дефолт -> «настройки/тема
+        # просто пропали». Теперь ГРОМКО (ERROR) + пробуем последний бэкап рядом,
+        # прежде чем отдать пустой стейт. Хранилище теперь ext4+atomic -> такого
+        # быть не должно; это индикатор, что что-то пошло не так.
+        _log.error("read_state: EXISTING state.json unreadable (corruption?): %s", e)
+        try:
+            import glob
+            bks = sorted(glob.glob(str(STATE_FILE.parent / "backup-*" / "state.json")))
+            if bks:
+                data = json.loads(open(bks[-1]).read() or "{}")
+                if isinstance(data, dict):
+                    _log.error("read_state: recovered registry from backup %s", bks[-1])
+                    return data
+        except Exception as be:
+            _log.error("read_state: backup recovery failed: %s", be)
     # миграция из старых отдельных файлов
     data: dict = {}
     try:
