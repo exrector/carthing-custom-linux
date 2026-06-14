@@ -1039,6 +1039,860 @@ connect(L2CAP client): No route to host
 connect(RFCOMM client): No route to host
 ```
 
+## 2026-05-20: `0x4E` priming narrowed to the minimal challenge-side event
+
+The remaining auth-chip ambiguity was no longer "does `0x4E` ever work?".
+That part was already proven. The missing piece was much narrower:
+
+- what is the *minimal* event that makes the historical `0x4E` path usable
+- what clears that state again without a full reboot
+
+New probe commands added for this pass:
+
+- `carthing-mfi-probe raw-prime-21-challenge-only <challenge_hex>`
+- `carthing-mfi-probe raw-prime-start-only`
+- `carthing-mfi-probe raw-prime-21-start-no-poll <challenge_hex>`
+- `carthing-mfi-probe raw-prime-21-start-poll-once <challenge_hex>`
+- `carthing-mfi-probe raw-prime-21-start-sleep <challenge_hex> <sleep_ms>`
+
+### Minimal priming result
+
+Reboot-isolated scenarios showed:
+
+1. `0x21 challenge write` **alone** is already enough to make the next `0x4E`
+   sign attempt succeed.
+2. `0x10=0x01` **without** a preceding `0x21` challenge write does **not** prime
+   `0x4E`.
+3. `0x21 + 0x10=0x01` with no poll, with a single poll, and with a short sleep
+   all also prime `0x4E`, but they are no longer the minimal trigger.
+
+This is the decisive correction to the earlier hypothesis. `0x4E` does **not**
+need a full successful completion of the canonical sign flow before it becomes
+usable. The minimal enabling event is already on the challenge side.
+
+### Reboot-isolated proofs
+
+1. Clean boot -> `raw-prime-21-challenge-only` -> `raw-sign-trace-4e`
+
+- `0x4E` succeeds:
+  - `poll[1]=nack`
+  - `poll[2]=0x10`
+  - `error_code=0x00`
+  - `siglen=0x0040`
+  - `ready=yes`
+
+2. Clean boot -> `raw-prime-start-only` -> `raw-sign-trace-4e`
+
+- `0x4E` fails exactly like the old cold-boot path:
+  - repeated `poll[*]=0x80`
+  - `error_code=0x05`
+  - `siglen=0x0000`
+  - `ready=no`
+
+Meaning:
+
+- `0x10=0x01` is **not** the hidden enabling event
+- the hidden enabling event sits at or before the canonical `0x21` challenge
+  write
+
+### What does *not* clear the primed state immediately
+
+Clean boot -> `raw-prime-21-challenge-only` -> `raw-prime-start-only` ->
+`raw-sign-trace-4e`
+
+- `0x4E` still succeeds
+
+Clean boot -> `raw-prime-21-challenge-only` -> `raw-info` ->
+`raw-sign-trace-4e`
+
+- `0x4E` still succeeds
+
+Meaning:
+
+- a later bare start command does not undo the primed state
+- a plain prepare/info walk (`0x00`, `0x01`, simple reads) does not undo it
+
+### What *does* clear the primed state
+
+Clean boot -> `raw-prime-21-challenge-only` -> `raw-cert-trace` ->
+`raw-sign-trace-4e`
+
+- `0x4E` falls back to the cold-boot failure path:
+  - repeated `poll[*]=0x80`
+  - `error_code=0x05`
+  - `siglen=0x0000`
+  - `ready=no`
+
+The same reset behavior also appears after a *full* canonical sign-side prime:
+
+Clean boot -> `raw-prime-21-no-readout` -> `raw-cert-trace` ->
+`raw-sign-trace-4e`
+
+- `0x4E` again fails with `0x80 / error=0x05 / siglen=0x0000`
+
+Meaning:
+
+- the certificate path is not just orthogonal to the compatibility window
+- it actively clears or reinitializes the hidden state that makes `0x4E`
+  usable
+
+### The primed `0x4E` window is temporary
+
+Clean boot -> `raw-prime-21-challenge-only` -> `sleep 1` ->
+`raw-sign-trace-4e`
+
+- success
+
+Clean boot -> `raw-prime-21-challenge-only` -> `sleep 2` ->
+`raw-sign-trace-4e`
+
+- success
+
+Clean boot -> `raw-prime-21-challenge-only` -> `sleep 5` ->
+`raw-sign-trace-4e`
+
+- failure (`0x80 / error=0x05 / siglen=0x0000`)
+
+The same timeout behavior also holds after the stronger canonical prime:
+
+Clean boot -> `raw-prime-21-no-readout` -> `sleep 5` ->
+`raw-sign-trace-4e`
+
+- failure (`0x80 / error=0x05 / siglen=0x0000`)
+
+Meaning:
+
+- the `0x4E` compatibility window persists for at least a short interval
+- it survives 1-2 seconds
+- it does **not** survive an idle gap of 5 seconds
+- the window is therefore transient even after a stronger sign-side prepare
+
+### Updated low-level contract
+
+The current best clean-room model is now:
+
+- canonical sign path:
+  - write challenge to `0x21`
+  - start with `0x10 0x01`
+  - poll `0x10`
+  - read `0x11/0x12`
+- historical `0x4E` path:
+  - not a canonical primary backend
+  - not a purely completion-dependent alias
+  - a **challenge-side, transient, state-dependent compatibility window**
+  - cleared by cert-path activity
+  - cleared by idle timeout somewhere between 2 and 5 seconds
+
+Practical implication for the project:
+
+- never build higher layers assuming `0x4E` is the stable backend
+- treat `0x21` as the real primitive we control
+- if compatibility with historical `0x4E` is ever needed, it must be modeled as
+  an ephemeral side effect, not as the main contract
+
+This is important for the broader user goal: making the auth chip stop being a
+project blocker. The path to that is not "make `0x4E` reliable". The path is to
+fully own the canonical `0x21` contract and treat everything else as legacy or
+compatibility behavior layered on top of it.
+
+## 2026-05-20: `0x4E` does not sign its own challenge, it signs the last latched `0x21` challenge
+
+The next unresolved question was subtle but critical:
+
+- after `raw-prime-21-challenge-only`, does a later `0x4E` operation sign the
+  new bytes written through `0x4E`
+- or does it keep using challenge material latched earlier by `0x21`
+
+Reboot-isolated challenge-binding tests answered this decisively.
+
+### Test A: prime with challenge `A`, then ask `0x4E` to sign challenge `B`
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-sign-trace-4e B`
+
+Observed result:
+
+- `0x4E` succeeds
+- returned signature verifies against `A`
+- returned signature does **not** verify against `B`
+
+Meaning:
+
+- the `0x4E` write bytes are not the real message being signed here
+- the meaningful challenge payload is already latched by the earlier canonical
+  `0x21` write
+
+### Test B: one prime, then two consecutive `0x4E` signatures
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-sign-trace-4e A`
+- `raw-sign-trace-4e B`
+
+Observed result:
+
+- first `0x4E` succeeds and verifies against `A`
+- second `0x4E` also succeeds
+- second `0x4E` still verifies against `A`, not `B`
+
+Meaning:
+
+- one compatibility window can serve more than one `0x4E` request
+- the window is not single-use
+- the challenge latch survives at least one successful `0x4E` sign
+
+### Test C: reuse after delay inside the same window
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-sign-trace-4e A`
+- `sleep 1`
+- `raw-sign-trace-4e B`
+
+Observed result:
+
+- the second `0x4E` still succeeds
+- its signature still verifies against `A`, not `B`
+
+Meaning:
+
+- the challenge latch is persistent for the life of the compatibility window
+- it is not rewritten by successful `0x4E` traffic itself
+
+### Test D: replace the latch with a second canonical `0x21` write
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-prime-21-challenge-only B`
+- `raw-sign-trace-4e C`
+
+Observed result:
+
+- `0x4E` succeeds
+- signature verifies against `B`
+- signature does **not** verify against `A` or `C`
+
+The same replacement also works after an intermediate successful `0x4E` sign:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-sign-trace-4e A`
+- `raw-prime-21-challenge-only B`
+- `raw-sign-trace-4e C`
+
+Observed result:
+
+- final `0x4E` succeeds
+- final signature verifies against `B`
+
+Meaning:
+
+- the active compatibility challenge is always the **most recent canonical
+  `0x21` challenge write**
+- a new `0x21` write refreshes the window and replaces the latched payload
+- `0x4E` is therefore not an independent sign command at all on this image; it
+  behaves like a state-dependent accessor into a pre-latched canonical challenge
+
+### Timeout boundary narrowed further
+
+The first timeout pass only proved:
+
+- success after 1-2 seconds
+- failure after 5 seconds
+
+The tighter boundary tests now show:
+
+- success after 3 seconds
+- failure after 4 seconds
+
+So on the current working image, the `0x4E` compatibility window expires
+somewhere between **3 and 4 seconds** after the last relevant `0x21` priming
+write.
+
+### Updated best model of `0x4E`
+
+The current clean-room model is now much sharper:
+
+- `0x21` is the canonical challenge ingress
+- that write latches the challenge payload into internal auth state
+- for a short period after that, `0x4E` can trigger signature production
+  against the **latched** canonical challenge
+- `0x4E` input bytes are not authoritative challenge material on this image
+- the compatibility window:
+  - can be reused more than once
+  - can be refreshed/replaced by a new `0x21` challenge write
+  - expires between 3 and 4 seconds
+  - is cleared by cert-path activity
+
+This changes the practical interpretation again:
+
+- `0x4E` is not merely "a weaker sign path"
+- it is closer to a transient compatibility trigger over already-latched
+  canonical state
+- any future stable backend must therefore be designed around `0x21`, with
+  `0x4E` treated as an implementation curiosity or legacy shim rather than a
+  supported primitive
+
+## 2026-05-20: canonical `0x21` path bottomed further — same challenge latch, same timeout class, refresh on successful sign
+
+After the `0x4E` contract became clear, the next question was whether the
+canonical `0x21` path was actually much more durable, or whether it shared the
+same hidden state machine and timeout rules.
+
+For this pass, the probe gained one more narrow mode:
+
+- `carthing-mfi-probe raw-start-readout`
+
+This mode does **not** write a new challenge. It only:
+
+- performs the usual `0x00` / `0x01` prepare
+- writes `0x10 0x01`
+- polls `0x10`
+- reads `0x11` and `0x12`
+
+That makes it possible to test the already-latched canonical challenge state
+without rewriting `0x21`.
+
+### Canonical challenge latch is real
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-start-readout`
+
+Observed result:
+
+- success
+- returned signature verifies against `A`
+
+Meaning:
+
+- the canonical challenge payload really is latched by `0x21`
+- a later start/readout can consume that latched state without rewriting the
+  challenge first
+
+### Canonical latch lifetime without refresh
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `sleep 3`
+- `raw-start-readout`
+
+Observed result:
+
+- success
+- signature verifies against `A`
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `sleep 4`
+- `raw-start-readout`
+
+Observed result:
+
+- failure:
+  - repeated `poll[*]=0x80`
+  - `error_code=0x05`
+  - `siglen=0x0000`
+  - `ready=no`
+
+The looser 5-second and 15-second tests also fail the same way.
+
+Meaning:
+
+- the canonical latched challenge is also transient
+- with no further successful sign-side activity, it expires between **3 and 4
+  seconds**
+- this is the same timeout class already observed around the `0x4E`
+  compatibility window
+
+### Canonical path is reusable inside the window
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-start-readout`
+- `raw-start-readout`
+
+Observed result:
+
+- both sign attempts succeed
+- both signatures verify against `A`
+
+Meaning:
+
+- canonical start/readout is not single-use
+- one latched challenge can drive multiple canonical signatures while the window
+  remains active
+
+### Successful sign activity refreshes the canonical window
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `sleep 3`
+- `raw-start-readout`
+- `sleep 1`
+- `raw-start-readout`
+
+Observed result:
+
+- the final sign still succeeds
+- final signature still verifies against `A`
+
+This matters because without refresh, the same overall age would already be past
+the failure boundary found above.
+
+Meaning:
+
+- a successful canonical sign does not merely consume the latch
+- it refreshes or extends the active sign-side window while preserving the same
+  latched challenge payload
+
+### `0x4E` also preserves and refreshes the canonical sign state
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `sleep 3`
+- `raw-sign-trace-4e A`
+- `sleep 1`
+- `raw-start-readout`
+
+Observed result:
+
+- final canonical start/readout succeeds
+- final signature verifies against `A`
+
+Meaning:
+
+- a successful `0x4E` operation does not consume or corrupt canonical `0x21`
+  state
+- it appears to refresh the same underlying transient sign window
+
+### cert-path clears canonical sign state too
+
+Flow:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-cert-trace`
+- `raw-start-readout`
+
+Observed result:
+
+- failure (`0x80 / error=0x05 / siglen=0x0000`)
+
+The same reset happens after a full successful canonical sign:
+
+- clean boot
+- `raw-prime-21-challenge-only A`
+- `raw-start-readout`
+- `raw-cert-trace`
+- `raw-start-readout`
+
+Observed result:
+
+- failure again (`0x80 / error=0x05 / siglen=0x0000`)
+
+Meaning:
+
+- cert-path does not just clear the `0x4E` compatibility view
+- it clears the underlying canonical sign-side state itself
+
+### Updated best model of the auth chip
+
+The current clean-room model is now:
+
+- `0x21` writes the authoritative challenge into internal sign state
+- that challenge remains latched for a short idle window
+- `0x10 0x01` is the canonical trigger that turns the latched challenge into a
+  signature
+- successful sign-side activity can refresh the active window without replacing
+  the latched challenge
+- `0x4E` rides on top of the same underlying latched sign state
+- cert-path reinitializes or clears that sign state
+
+### Practical consequence for making the chip non-blocking
+
+This is the most important architectural consequence so far:
+
+- the chip is no longer a mystery device with multiple equally plausible paths
+- it now looks like one canonical sign state machine with:
+  - one authoritative challenge ingress (`0x21`)
+  - one canonical trigger (`0x10 0x01`)
+  - one transient active window (roughly 3-4 seconds of idle lifetime)
+  - one reset/clear path (cert-side activity)
+  - one historical compatibility trigger layered on top (`0x4E`)
+
+That is close to the level needed for a real reusable backend. The remaining
+work is no longer "what does the chip basically do?" but "how do we wrap this
+state machine into a helper/service so upper layers never need to care about the
+timing/reset quirks again?"
+
+## Implementation handoff for the next agent
+
+This section is intentionally written as a practical handoff for an implementation
+agent. The goal is **not** to continue archaeology. The goal is to build a
+reusable backend/helper so upper layers stop depending on raw chip quirks.
+
+### What is already stable enough to treat as the contract
+
+For the current working image, the following should be treated as the source of
+truth:
+
+- the auth chip is reachable over:
+  - `/dev/i2c-3`
+  - slave address `0x10`
+- the only production-worthy challenge ingress is:
+  - `0x21`
+- the only production-worthy sign trigger is:
+  - write `0x10 0x01`
+- the only production-worthy sign readout is:
+  - status from `0x10`
+  - length from `0x11`
+  - signature bytes from `0x12`
+- the certificate path is:
+  - prepare
+  - `0x31`
+  - read 16-byte chunks
+
+### What must *not* be treated as the contract
+
+Do **not** build a new backend around any of the following:
+
+- `0x4E` as a primary sign path
+- old `/dev/apple_mfi` ioctl behavior as the active contract on this image
+- SMBus byte/word probes as authoritative post-command state
+- persistence of sign state across long idle gaps
+- coexistence of cert reads and sign state without reset handling
+
+`0x4E` is now best understood as a temporary compatibility trigger over state
+already latched by canonical `0x21`. It is useful for reverse engineering and
+comparative diagnostics. It is **not** the backend another agent should
+implement.
+
+### Canonical sign transaction the next agent should implement
+
+Recommended unit of work: **one self-contained sign transaction per request**.
+
+For each sign request:
+
+1. Open `/dev/i2c-3`
+2. Select address `0x10`
+3. Run prepare:
+   - short write `0x00`
+   - short write `0x01`
+4. Write the 32-byte challenge through:
+   - `0x21 + digest32`
+5. Trigger signing through:
+   - `0x10 0x01`
+6. Poll `0x10` until it becomes `0x10`
+   - early `nack` is normal
+7. Read:
+   - `0x05` error code, expect `0x00`
+   - `0x11` signature length, expect `0x0040`
+   - `0x12` 64-byte signature
+8. Close the fd
+
+Important implementation note:
+
+- the signed input is the already prepared **32-byte SHA-256 digest**
+- verification succeeds as **ECDSA over prehashed SHA-256**
+- do **not** hash the 32-byte challenge again when validating behavior
+
+### Canonical cert transaction the next agent should implement
+
+Recommended unit of work: **one self-contained cert transaction per request**.
+
+For each cert request:
+
+1. Open `/dev/i2c-3`
+2. Select address `0x10`
+3. Run prepare:
+   - short write `0x00`
+   - short write `0x01`
+4. Start cert streaming with:
+   - short write `0x31`
+5. Read the first 16-byte chunk
+6. Parse ASN.1 total length and round to the known 16-byte chunking
+7. Continue reading until the whole PKCS#7 blob is collected
+8. Close the fd
+
+### State rules the implementation agent must internalize
+
+1. `0x21` latches the authoritative challenge payload.
+2. A later canonical start/readout can use that latch without rewriting
+   challenge.
+3. The sign-side state has a transient idle window:
+   - success at 3 seconds
+   - failure at 4 seconds
+4. Successful sign-side activity refreshes that window.
+5. cert-path clears the sign-side state.
+6. `0x4E` uses the same underlying state but should be treated as diagnostic-only.
+
+### The most important implementation consequence
+
+The backend does **not** need to keep this sign state alive.
+
+The safest architecture is:
+
+- always rewrite `0x21` on every sign request
+- always run the full canonical transaction from scratch
+- never assume any previously latched state is still valid
+
+In other words, the discovered 3-4 second window is important for understanding
+the chip, but a robust backend should make that window almost irrelevant by
+treating requests as fresh transactions.
+
+### Recovery rules that are already proven
+
+The implementation agent can rely on the following recovery behavior:
+
+- after idle-timeout failure (`0x80 / error=0x05 / siglen=0x0000`), a fresh
+  canonical `0x21` challenge write followed by canonical start/readout recovers
+  without reboot
+- after `raw-prime-start-only` / bad start-side state, a fresh canonical
+  transaction recovers without reboot
+- after cold `0x4E` failure, a fresh canonical transaction recovers without
+  reboot
+- after cert-path reset, a fresh canonical transaction recovers without reboot
+- after cert-path reset *following a successful sign*, a fresh canonical
+  transaction still recovers without reboot
+
+This is the critical reason the chip is now close to becoming non-blocking for
+other project work: even though the state machine is timing-sensitive, it is not
+reboot-fragile. A helper can recover from all known failure/reset modes by
+starting a new canonical transaction.
+
+### Concurrency and process model
+
+Another agent implementing the backend should assume:
+
+- chip access must be serialized
+- cert and sign operations share mutable internal chip state
+- cert reads and sign operations must not overlap
+
+Recommended backend shape:
+
+- one helper process or one library object with a mutex
+- request types:
+  - `read_cert() -> pkcs7`
+  - `sign_digest(digest32) -> sig64`
+- no shared long-lived sign latch exposed to callers
+- no caller-visible `prime` concept
+- no caller-visible `0x4E`
+
+### Suggested error-handling policy
+
+On sign:
+
+- if poll/readout does not converge to:
+  - `status=0x10`
+  - `error=0x00`
+  - `siglen=0x0040`
+- discard that transaction
+- close fd
+- retry from the beginning with a fresh canonical transaction
+
+If the retry still fails, surface a real error instead of pretending the chip is
+fine.
+
+On cert:
+
+- if the stream is malformed or truncated, discard that transaction and retry
+  from scratch
+
+No broad silent fallbacks should be used.
+
+### Acceptance checks for the implementation agent
+
+A new backend/helper should not be considered done until it can reproduce all of
+the following:
+
+1. `read_cert()` returns the live PKCS#7 blob and wraps cleanly into `AA01`.
+2. `sign_digest(A)` returns a 64-byte signature verifying against the live leaf
+   public key.
+3. Repeated `sign_digest(A)` calls succeed even if there is more than 4 seconds
+   between calls, because each call rewrites `0x21` and runs a fresh transaction.
+4. A cert request between two sign requests does not break the next sign request,
+   because the next sign request rewrites challenge and restarts canonical flow.
+5. No production path depends on `0x4E`.
+
+### Files and artifacts the implementation agent should read first
+
+Project source of truth:
+
+- `buildroot-external/package/carthing-mfi-probe/src/carthing-mfi-probe.c`
+- this document: `docs/mfi-low-level-probe-2026-05-18.md`
+
+Useful preserved artifacts from this session:
+
+- `.../files/signature-lab/pubkey.pem`
+- `.../files/signature-lab/raw-sign-repeats.txt`
+- `.../files/priming-lab/`
+
+The artifact directory is useful for verifying the exact timeout/recovery traces,
+but the implementation should be based on the canonical contract above rather
+than on replaying the experimental `0x4E` paths.
+
+## 2026-05-20: second-device classic trust and accepted iAP2 path now prove the blocker is above auth
+
+The next live round moved deliberately off the main working device and onto a
+second identical unit so aggressive tests would not interfere with the primary
+development flow.
+
+The user also made the iPhone side much more cooperative:
+
+- phone unlocked
+- Apple Music available for live triggering
+- willing to accept pairing/trust prompts and report exact UI behavior
+
+### Classic trust/key was the real gate before higher iAP2 progress
+
+With a unique classic test identity:
+
+- `CarThing Test iAP2`
+
+the iPhone saw the device in Bluetooth settings, the user tapped it, approved
+the trust/access prompt, and the accessory entered the trusted list as
+`not connected`.
+
+That action created the first reusable BR/EDR link key on the device:
+
+```text
+10:A2:D3:83:82:50 a2344284cc3f706300d935f7cb57b904 04
+```
+
+Before that trust event, the daemon always produced:
+
+- `LINK_KEY_REQ -> negative`
+- `AUTH COMPLETE status=0x05`
+
+After the trust event, the daemon could answer:
+
+- `LINK_KEY_REQ -> cached reply type=0x04`
+- `AUTH COMPLETE status=0x00`
+
+Meaning:
+
+- the next real blocker above the auth chip was classic trust/key state
+- once that existed, the clean-room iAP2 path could finally move past SSP/auth
+
+### Full stack with live helper now reaches AA auth and Identification start
+
+After deploying both:
+
+- `carthing-iap2-mini`
+- `carthing-mfi-probe` via `CARTHING_MFI_HELPER`
+
+the active classic path reached:
+
+- `AA00`
+- `AA02`
+- `AA05`
+- `1D00`
+
+This is the first direct live proof on the second device that:
+
+- the classic path can authenticate end-to-end with the real iPhone
+- the clean-room stack can carry real iAP2 control traffic above MFi auth
+
+### Non-empty `0x0006/0x0007` are now proven to cause live `1D03`
+
+When `IdentificationInformation` advertised:
+
+- `0x0006 = { 0x40C8, 0x40C9 }`
+- `0x0007 = { 0x4800 }`
+
+the iPhone rejected identification with:
+
+```text
+1D03 rejected param id=0x0006
+```
+
+This is important because the preserved notes had already suggested that
+`SupportedMessageIDs` should be empty. The new live run now proves it in the
+fully authenticated path on the second device.
+
+### Empty `0x0006/0x0007` plus omitted `0x000A` produce the first clean accepted path
+
+When the daemon switched to:
+
+- omit `0x000A`
+- empty `0x0006`
+- empty `0x0007`
+
+the iPhone accepted:
+
+```text
+AA00 -> AA02 -> AA05 -> 1D00 -> 1D02
+```
+
+and the daemon successfully sent:
+
+- `0x6800 StartHID`
+- `0x40C8 StartNowPlayingUpdates`
+
+This is now the best clean-room accepted identification path observed live on
+the second device.
+
+### Apple Music still does not yield `0x4800`
+
+After that accepted path was up, the user triggered Apple Music playback change
+(`play/pause`).
+
+Observed result:
+
+- no `0x4800 NowPlayingUpdate`
+- no additional useful incoming iAP2 control message beyond the already accepted
+  path
+
+This continues to match the earlier preserved note:
+
+- Apple Music may accept `StartNowPlayingUpdates`
+- but it still does not actually emit `0x4800` in this iAP2 path
+
+### Updated current blocker for Codex / implementation work
+
+The current frontier is now sharply narrowed:
+
+- not the MFi auth chip
+- not classic trust, once the BR/EDR link key exists
+- not AA auth
+- not `1D00`
+- not `0x000A`, once omitted
+
+The current blocker is now specifically:
+
+- accepted `IdentificationInformation` semantics above auth
+- especially the fact that non-empty `0x0006/0x0007` trigger `1D03`
+- and the fact that even on the accepted path, Apple Music still does not
+  provide `0x4800`
+
+So the new search space is much smaller:
+
+- refine post-`1D02` contract
+- determine what useful traffic is actually available on this path
+- stop treating the auth chip as the active blocker for current iAP2 work
+
 The client sockets were then upgraded to `BT_SECURITY_HIGH`, but the result
 did not change.
 
@@ -1151,3 +2005,397 @@ the same visible name as the working BLE/HID runtime:
 
 So future integrated classic tests should no longer create an obviously separate
 human-facing Bluetooth identity just because the transport path is different.
+
+## 2026-05-20: dedicated chip-trace commands added and run on the live auth chip
+
+The next low-level step was to stop relying on one successful `raw-sign` path and
+add explicit chip-side trace modes to `carthing-mfi-probe`:
+
+- `raw-cert-trace`
+- `raw-sign-trace <challenge_hex>`
+
+These new modes stay below iAP2/session logic and print the chip's low-level
+state transitions directly from `/dev/i2c-3`.
+
+What the live `raw-cert-trace` run showed on the current working image:
+
+```text
+[initial]
+smbus_reg00=na
+...
+plain_reg00_4=07010300
+plain_reg10=00
+rdwr_reg10=00
+plain_reg11=0000
+rdwr_reg11=0000
+short_0x00=ok
+[after_short_00]
+smbus_reg00=0x07
+...
+smbus_reg30w=0x0107
+short_0x01=ok
+[after_short_01]
+smbus_reg00=0x01
+...
+smbus_reg30w=0x0301
+short_0x31=ok
+cert_chunk0=3082025c06092a864886f70d010702a0
+cert_total_len=608
+[after_cert_chunk0]
+smbus_reg00=0x30
+...
+smbus_reg30w=0x8230
+plain_reg00_4=07010300
+```
+
+Meaning:
+
+- before explicit prepare, the SMBus byte/word helpers are not a reliable view of
+  the chip state yet, but the plain `write(reg) + read()` transport already
+  returns the stable identity tuple `07 01 03 00`
+- after short writes `0x00` and `0x01`, the SMBus byte/word helpers mirror the
+  visible phase bytes we already knew
+- after the cert command `0x31`, the SMBus helpers mostly reflect the last
+  command latch (`0x30` / `0x8230`), while the plain transport still reports the
+  stable chip identity tuple
+
+This is a concrete new boundary:
+
+- the plain `open/write/read` path is the authoritative low-level transport for
+  chip-state inspection
+- SMBus byte/word reads are useful as a coarse phase probe, but they are not a
+  trustworthy semantic register view after command-style operations
+
+What the live `raw-sign-trace` run showed for challenge `00..1f`:
+
+```text
+[initial]
+smbus_reg00=0x00
+...
+plain_reg00_4=07010300
+short_0x00=ok
+[after_short_00]
+smbus_reg00=0x07
+...
+short_0x01=ok
+[after_short_01]
+smbus_reg00=0x01
+...
+write_0x21_challenge=ok
+[after_challenge_write]
+smbus_reg00=0x00
+...
+write_0x10_0x01=ok
+poll[1]=nack
+poll[2]=nack
+poll[3]=0x10
+[after_poll]
+smbus_reg00=0x10
+plain_reg10=10
+rdwr_reg10=10
+plain_reg11=0040
+rdwr_reg11=0040
+error_code=0x00
+siglen_raw=0040
+siglen=0x0040
+signature=<64-byte value>
+ready=yes
+```
+
+Meaning:
+
+- after the contiguous challenge write to `0x21`, the coarse SMBus view drops
+  back to `0x00` until the explicit start command is issued
+- the actual sign readiness still follows the same working sequence:
+  - write `0x21 + 32 challenge bytes`
+  - write `0x10 0x01`
+  - tolerate `nack` during the early poll window
+  - wait for status `0x10`
+  - then read `0x11` / `0x12`
+- once the chip reaches the ready state, both read transports agree on the
+  important post-prepare registers:
+  - plain `write(reg)+read`
+  - repeated-start `I2C_RDWR`
+
+This sharpens the low-level conclusion again:
+
+- repeated-start reads are not universally "wrong"
+- the real issue was earlier in the command-style wake/arming sequence
+- after the chip is properly armed, repeated-start reads of `0x10` and `0x11`
+  match the plain transport on the live device
+
+Updated auth-chip frontier after these traces:
+
+- live cert path is proven
+- live sign path is proven
+- wake/prepare transitions are now instrumented directly in our own helper
+- the plain transport vs SMBus-helper distinction is now explicit instead of
+  inferred
+- the remaining auth-chip work is now mostly polish and targeted edge-case
+  mapping, not basic register-family ambiguity anymore
+
+## 2026-05-20: old `/dev/apple_mfi` contract and live raw-I2C contract are now explicitly separated
+
+The next useful comparison was not another live trace, but a cross-check against
+the preserved older reverse-engineering notes and public-facing project mirrors.
+
+Those older materials consistently describe the historical kernel-driver view as:
+
+- cert length at `0x30`
+- cert data at `0x31`
+- challenge write at `0x4E`
+- signature read at `0x12`
+- sleep handling hidden behind the old `/dev/apple_mfi` ioctl path
+
+That older picture still matters, but after the current live traces it should no
+longer be treated as the same thing as the active direct-I2C path on the custom
+image.
+
+What the current low-level evidence now supports:
+
+- the old kernel/ioctl contract may well have written challenge data through
+  `0x4E`
+- but the live direct `/dev/i2c-3` path that actually works on the current image
+  signs through:
+  - contiguous write `0x21 + 32 challenge bytes`
+  - contiguous write `0x10 0x01`
+  - tolerate early poll `nack`
+  - wait for status `0x10`
+  - read `0x11` / `0x12`
+
+So the clean-room rule is now sharper:
+
+- do not collapse "old `/dev/apple_mfi` semantics" and "current raw-I2C chip
+  semantics" into one assumed register contract
+- preserve `0x4E` as a historical driver-side fact
+- preserve `0x21 + 0x10` as the proven live direct-I2C sign path on the current
+  image
+
+Practical implication for future work:
+
+- if `/dev/apple_mfi` is ever restored, it should be treated as a separate
+  compatibility backend with its own documented semantics
+- the clean-room backend should continue to treat the raw-I2C path as the source
+  of truth for the live custom image unless new evidence proves that the old
+  `0x4E` path can also be made to work directly on this chip without the missing
+  kernel-side translation layer
+
+## 2026-05-20: direct `0x4E` path is real but state-dependent on the live raw-I2C backend
+
+The next isolated experiment added a second low-level sign trace mode:
+
+```text
+carthing-mfi-probe raw-sign-trace-4e <challenge_hex>
+```
+
+This uses the same direct-I2C trace harness as `raw-sign-trace`, but writes the
+32-byte challenge to `0x4E` instead of `0x21`.
+
+Two live runs against the same challenge exposed a much narrower result than the
+old binary distinction of "works" vs "does not work".
+
+### Run A: `0x21` first, then `0x4E`
+
+Observed result:
+
+- `0x21` path reached the known-good ready state:
+  - early poll `nack`
+  - then status `0x10`
+  - `error_code=0x00`
+  - `siglen=0x0040`
+  - non-zero 64-byte signature
+- the later `0x4E` run in the same overall session also reached:
+  - status `0x10`
+  - `error_code=0x00`
+  - `siglen=0x0040`
+  - non-zero 64-byte signature
+
+### Run B: `0x4E` first from a clean initial state
+
+Observed result:
+
+- after `0x4E` challenge write, plain status moved to `0x80`
+- after start `0x10 0x01`, the chip stayed at:
+  - `poll[*]=0x80`
+  - `error_code=0x05`
+  - `siglen=0x0000`
+  - zero-padded signature buffer
+- a following `0x21` run immediately restored the known-good path and reached:
+  - status `0x10`
+  - `error_code=0x00`
+  - `siglen=0x0040`
+  - valid non-zero signature output
+
+Meaning:
+
+- the direct `0x4E` path is not simply "wrong" on the live chip
+- but it is also not a standalone reliable replacement for the proven `0x21`
+  path on the current custom image
+- the currently observed behavior is:
+  - `0x21` is the only direct raw-I2C path proven reliable from a clean state
+  - `0x4E` can produce a success-shaped result only in some prior-state
+    conditions
+  - from a clean state, `0x4E` still reproduces the older failure signature:
+    `0x80` + `error_code=0x05`
+
+So the clean-room conclusion is now more precise:
+
+- keep `0x21 + 0x10` as the canonical direct-I2C sign path
+- keep `0x4E` as a historically meaningful register that may reflect the old
+  kernel-driver contract or an alternate internal mode
+- do not yet promote `0x4E` to a supported raw-I2C signing backend on the custom
+  image
+
+Updated frontier:
+
+- the remaining low-level question is no longer "does `0x4E` exist at all?"
+- it is now:
+  - what hidden state makes `0x4E` sometimes succeed after a prior successful
+    sign flow
+  - whether that state came from the old kernel translation layer, a latched chip
+    mode, or a transport-side sequencing difference we still have not isolated
+
+## 2026-05-20: direct-I2C signatures are valid but not deterministic
+
+The next deep check moved past transport behavior and tested the signatures
+cryptographically against the live chip certificate.
+
+Method:
+
+- read `AA01` live from the chip
+- extract the embedded leaf certificate and public key
+- collect five repeated direct-I2C `raw-sign` results for the same challenge
+- verify each raw 64-byte `r||s` signature against the challenge using the leaf
+  public key
+
+Observed result:
+
+- all five repeated `0x21`-path signatures were different
+- all five verified successfully as:
+  - ECDSA over a prehashed 32-byte SHA-256 digest
+- the same signatures did **not** verify as "hash the 32-byte challenge again
+  with SHA-256 first"
+
+Practical meaning:
+
+- the chip is not producing a deterministic signature for the same challenge on
+  the direct-I2C path
+- but the signatures are still cryptographically valid for the same leaf key
+- so a "different signature for the same challenge" is not, by itself, evidence
+  of a bad path on this chip
+
+This removes one earlier ambiguity:
+
+- the fact that a later `0x4E` success-shaped run returned a different signature
+  than a preceding `0x21` run is not suspicious by itself
+- the correct test is validity against the chip certificate, not byte-for-byte
+  equality
+
+## 2026-05-20: reboot-isolated proof that `0x4E` is primed by sign flow, not by cert flow
+
+The remaining question after the state-dependent `0x4E` result was:
+
+- does `0x4E` become usable after any auth-chip activity?
+- or only after a successful direct sign flow?
+
+To isolate that, three reboot-separated scenarios were run. After each reboot,
+the probe binary was re-uploaded and only one preparation path was allowed before
+`raw-sign-trace-4e`.
+
+### Scenario A: clean boot -> `0x4E`
+
+Observed result:
+
+- `ready=no`
+- `error=0x05`
+- `poll[*]=0x80`
+- no valid signature
+
+### Scenario B: clean boot -> `AA01` / cert read -> `0x4E`
+
+Observed result:
+
+- `ready=no`
+- `error=0x05`
+- `poll[*]=0x80`
+- no valid signature
+
+### Scenario C: clean boot -> one successful `0x21` sign -> `0x4E`
+
+Observed result:
+
+- `ready=yes`
+- `error=0x00`
+- status reached `0x10` after three polls
+- the resulting `0x4E` signature verified correctly against the live leaf key
+
+Meaning:
+
+- cert-path activity alone does **not** prime the live direct-I2C `0x4E` path
+- one successful `0x21` sign flow **does** prime it
+- the hidden state required by `0x4E` is therefore tied to the sign-side state
+  machine, not just to generic wake-up or certificate access
+
+Updated low-level rule:
+
+- canonical direct-I2C sign path remains:
+  - `0x21 + 32-byte challenge`
+  - `0x10 0x01`
+  - poll for `0x10`
+  - read `0x11` / `0x12`
+- `0x4E` is now best treated as a secondary, sign-state-dependent path that only
+  becomes usable after the canonical sign path has already completed at least once
+
+## 2026-05-20: `0x4E` priming does not require reading the signature buffer
+
+The next remaining ambiguity was whether `0x4E` becomes usable only after a full
+successful sign transaction, or whether the decisive step is earlier in the sign
+engine state machine.
+
+To isolate that, one more reboot-separated scenario was added:
+
+### Scenario D: clean boot -> `raw-prime-21` -> `0x4E`
+
+`raw-prime-21` drives the canonical `0x21` path to the ready state and reads
+`0x11`, but still does not read `0x12`.
+
+Observed result:
+
+- the following `0x4E` run succeeded
+- it reached `ready=yes`
+- `error=0x00`
+- returned a signature that verified correctly against the live leaf key
+
+### Scenario E: clean boot -> `raw-prime-21-no-readout` -> `0x4E`
+
+`raw-prime-21-no-readout` goes one step lower:
+
+- write `0x21 + challenge`
+- write `0x10 0x01`
+- poll until the chip reaches the ready state
+- do **not** read `0x11`
+- do **not** read `0x12`
+
+Observed result:
+
+- the following `0x4E` run still succeeded
+- it reached `ready=yes`
+- `error=0x00`
+- status reached `0x10` after two polls
+- the resulting `0x4E` signature again verified correctly against the live leaf
+  key
+
+Meaning:
+
+- the priming event happens before signature-buffer readout
+- reading `0x11` is not required
+- reading `0x12` is not required
+- the decisive state transition is the canonical `0x21` sign engine reaching its
+  ready/complete state
+
+This narrows the remaining low-level question further:
+
+- `0x4E` is not gated by "certificate was read"
+- `0x4E` is not gated by "signature bytes were read back"
+- `0x4E` is gated by the underlying sign-side state machine having already been
+  armed successfully through the canonical `0x21` path

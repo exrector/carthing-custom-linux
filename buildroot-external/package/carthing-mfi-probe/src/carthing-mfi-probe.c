@@ -165,6 +165,41 @@ static void hex_write(FILE *out, const uint8_t *buf, size_t len) {
     fputc('\n', out);
 }
 
+static void print_named_hex(const char *name, const uint8_t *buf, size_t len) {
+    printf("%s=", name);
+    {
+        size_t i;
+        for (i = 0; i < len; i++) {
+            printf("%02x", buf[i]);
+        }
+    }
+    putchar('\n');
+}
+
+static void print_named_u8(const char *name, int ok, uint8_t value) {
+    if (!ok) {
+        printf("%s=na\n", name);
+        return;
+    }
+    printf("%s=0x%02x\n", name, value);
+}
+
+static void print_named_u16(const char *name, int ok, uint16_t value) {
+    if (!ok) {
+        printf("%s=na\n", name);
+        return;
+    }
+    printf("%s=0x%04x\n", name, value);
+}
+
+static void print_named_rc(const char *name, int rc, int saved_errno) {
+    if (rc == 0) {
+        printf("%s=ok\n", name);
+        return;
+    }
+    printf("%s=err(%d)\n", name, saved_errno);
+}
+
 static int write_all_stdout(const uint8_t *buf, size_t len) {
     size_t off = 0;
     while (off < len) {
@@ -175,6 +210,77 @@ static int write_all_stdout(const uint8_t *buf, size_t len) {
         off += (size_t)written;
     }
     return 0;
+}
+
+static int acp3_open_live(void) {
+    int fd = open(MFI_I2C_DEVICE, O_RDWR);
+    if (fd < 0) {
+        return -1;
+    }
+    if (i2c_select_addr(fd) < 0) {
+        int saved_errno = errno;
+        close(fd);
+        errno = saved_errno;
+        return -1;
+    }
+    return fd;
+}
+
+static void dump_raw_snapshot(int fd, const char *label) {
+    uint8_t bytev = 0;
+    uint16_t wordv = 0;
+    uint8_t buf[64];
+    int rc;
+
+    printf("[%s]\n", label);
+
+    rc = i2c_read_byte_data(fd, 0x00, &bytev);
+    print_named_u8("smbus_reg00", rc == 0, bytev);
+    rc = i2c_read_byte_data(fd, 0x05, &bytev);
+    print_named_u8("smbus_reg05", rc == 0, bytev);
+    rc = i2c_read_byte_data(fd, 0x10, &bytev);
+    print_named_u8("smbus_reg10", rc == 0, bytev);
+    rc = i2c_read_byte_data(fd, 0x20, &bytev);
+    print_named_u8("smbus_reg20", rc == 0, bytev);
+    rc = i2c_read_byte_data(fd, 0x21, &bytev);
+    print_named_u8("smbus_reg21", rc == 0, bytev);
+    rc = i2c_read_word_data(fd, 0x30, &wordv);
+    print_named_u16("smbus_reg30w", rc == 0, wordv);
+
+    rc = acp_reg_read(fd, 0x00, buf, 4);
+    if (rc == 0) {
+        print_named_hex("plain_reg00_4", buf, 4);
+    } else {
+        printf("plain_reg00_4=na\n");
+    }
+
+    rc = acp_reg_read(fd, 0x10, buf, 1);
+    if (rc == 0) {
+        print_named_hex("plain_reg10", buf, 1);
+    } else {
+        printf("plain_reg10=na\n");
+    }
+
+    rc = i2c_reg_read(fd, 0x10, buf, 1);
+    if (rc == 0) {
+        print_named_hex("rdwr_reg10", buf, 1);
+    } else {
+        printf("rdwr_reg10=na\n");
+    }
+
+    rc = acp_reg_read(fd, 0x11, buf, 2);
+    if (rc == 0) {
+        print_named_hex("plain_reg11", buf, 2);
+    } else {
+        printf("plain_reg11=na\n");
+    }
+
+    rc = i2c_reg_read(fd, 0x11, buf, 2);
+    if (rc == 0) {
+        print_named_hex("rdwr_reg11", buf, 2);
+    } else {
+        printf("rdwr_reg11=na\n");
+    }
 }
 
 static int read_exact_fd(int fd, uint8_t *buf, size_t len) {
@@ -600,6 +706,265 @@ static int acp3_sign_challenge_live(const uint8_t challenge[32], uint8_t signatu
     return 0;
 }
 
+static int raw_sign_trace_live(const uint8_t challenge[32], uint8_t challenge_reg) {
+    int fd;
+    uint8_t signature[64];
+    uint8_t challenge_cmd[33];
+    uint8_t start_cmd[2] = {0x10, 0x01};
+    uint8_t status = 0;
+    uint8_t err_code = 0;
+    uint8_t siglen_buf[2] = {0, 0};
+    uint16_t siglen = 0;
+    int attempt;
+    int saved_errno = 0;
+
+    fd = acp3_open_live();
+    if (fd < 0) {
+        perror("open/select live chip");
+        return 1;
+    }
+
+    print_named_hex("challenge", challenge, 32);
+    print_named_u8("challenge_reg", 1, challenge_reg);
+    dump_raw_snapshot(fd, "initial");
+
+    errno = 0;
+    if (i2c_short_write(fd, 0x00) < 0) {
+        saved_errno = errno;
+        print_named_rc("short_0x00", -1, saved_errno);
+    } else {
+        print_named_rc("short_0x00", 0, 0);
+    }
+    dump_raw_snapshot(fd, "after_short_00");
+
+    errno = 0;
+    if (i2c_short_write(fd, 0x01) < 0) {
+        saved_errno = errno;
+        print_named_rc("short_0x01", -1, saved_errno);
+    } else {
+        print_named_rc("short_0x01", 0, 0);
+    }
+    dump_raw_snapshot(fd, "after_short_01");
+
+    challenge_cmd[0] = challenge_reg;
+    memcpy(challenge_cmd + 1, challenge, 32);
+    errno = 0;
+    if (acp_write(fd, challenge_cmd, sizeof(challenge_cmd)) < 0) {
+        saved_errno = errno;
+        if (challenge_reg == 0x21) {
+            print_named_rc("write_0x21_challenge", -1, saved_errno);
+        } else if (challenge_reg == 0x4e) {
+            print_named_rc("write_0x4e_challenge", -1, saved_errno);
+        } else {
+            print_named_rc("write_challenge", -1, saved_errno);
+        }
+        close(fd);
+        return 1;
+    }
+    if (challenge_reg == 0x21) {
+        print_named_rc("write_0x21_challenge", 0, 0);
+    } else if (challenge_reg == 0x4e) {
+        print_named_rc("write_0x4e_challenge", 0, 0);
+    } else {
+        print_named_rc("write_challenge", 0, 0);
+    }
+    dump_raw_snapshot(fd, "after_challenge_write");
+
+    errno = 0;
+    if (acp_write(fd, start_cmd, sizeof(start_cmd)) < 0) {
+        saved_errno = errno;
+        print_named_rc("write_0x10_0x01", -1, saved_errno);
+        close(fd);
+        return 1;
+    }
+    print_named_rc("write_0x10_0x01", 0, 0);
+
+    for (attempt = 0; attempt < 30; attempt++) {
+        usleep(200 * 1000);
+        if (acp_reg_read(fd, 0x10, &status, 1) == 0) {
+            printf("poll[%d]=0x%02x\n", attempt + 1, status);
+            if (status == 0x10) {
+                break;
+            }
+        } else {
+            printf("poll[%d]=nack\n", attempt + 1);
+        }
+    }
+
+    dump_raw_snapshot(fd, "after_poll");
+
+    if (acp_reg_read(fd, 0x05, &err_code, 1) == 0) {
+        print_named_u8("error_code", 1, err_code);
+    } else {
+        print_named_u8("error_code", 0, 0);
+    }
+
+    if (acp_reg_read(fd, 0x11, siglen_buf, sizeof(siglen_buf)) == 0) {
+        siglen = (uint16_t)((siglen_buf[0] << 8) | siglen_buf[1]);
+        print_named_hex("siglen_raw", siglen_buf, sizeof(siglen_buf));
+        print_named_u16("siglen", 1, siglen);
+    } else {
+        printf("siglen_raw=na\n");
+        print_named_u16("siglen", 0, 0);
+    }
+
+    memset(signature, 0, sizeof(signature));
+    if (acp_reg_read(fd, 0x12, signature, sizeof(signature)) == 0) {
+        print_named_hex("signature", signature, sizeof(signature));
+    } else {
+        printf("signature=na\n");
+    }
+
+    printf("ready=%s\n", (status == 0x10 && siglen == 0x0040) ? "yes" : "no");
+    close(fd);
+    return 0;
+}
+
+static int raw_stage_trace_live(const uint8_t challenge[32], uint8_t challenge_reg,
+                                int write_challenge, int write_start,
+                                unsigned int start_sleep_ms, int poll_limit,
+                                int read_siglen, int read_signature) {
+    int fd;
+    uint8_t challenge_cmd[33];
+    uint8_t start_cmd[2] = {0x10, 0x01};
+    uint8_t signature[64];
+    uint8_t status = 0;
+    uint8_t err_code = 0;
+    uint8_t siglen_buf[2] = {0, 0};
+    uint16_t siglen = 0;
+    int attempt;
+    int saved_errno = 0;
+
+    fd = acp3_open_live();
+    if (fd < 0) {
+        perror("open/select live chip");
+        return 1;
+    }
+
+    if (write_challenge) {
+        print_named_hex("challenge", challenge, 32);
+    } else {
+        printf("challenge=skipped\n");
+    }
+    print_named_u8("challenge_reg", 1, challenge_reg);
+    dump_raw_snapshot(fd, "initial");
+
+    errno = 0;
+    if (i2c_short_write(fd, 0x00) < 0) {
+        saved_errno = errno;
+        print_named_rc("short_0x00", -1, saved_errno);
+    } else {
+        print_named_rc("short_0x00", 0, 0);
+    }
+    dump_raw_snapshot(fd, "after_short_00");
+
+    errno = 0;
+    if (i2c_short_write(fd, 0x01) < 0) {
+        saved_errno = errno;
+        print_named_rc("short_0x01", -1, saved_errno);
+    } else {
+        print_named_rc("short_0x01", 0, 0);
+    }
+    dump_raw_snapshot(fd, "after_short_01");
+
+    if (write_challenge) {
+        challenge_cmd[0] = challenge_reg;
+        memcpy(challenge_cmd + 1, challenge, 32);
+        errno = 0;
+        if (acp_write(fd, challenge_cmd, sizeof(challenge_cmd)) < 0) {
+            saved_errno = errno;
+            print_named_rc("write_challenge", -1, saved_errno);
+            close(fd);
+            return 1;
+        }
+        print_named_rc("write_challenge", 0, 0);
+        dump_raw_snapshot(fd, "after_challenge_write");
+    } else {
+        printf("write_challenge=skipped\n");
+    }
+
+    if (write_start) {
+        errno = 0;
+        if (acp_write(fd, start_cmd, sizeof(start_cmd)) < 0) {
+            saved_errno = errno;
+            print_named_rc("write_0x10_0x01", -1, saved_errno);
+            close(fd);
+            return 1;
+        }
+        print_named_rc("write_0x10_0x01", 0, 0);
+        if (start_sleep_ms > 0) {
+            printf("post_start_sleep_ms=%u\n", start_sleep_ms);
+            usleep(start_sleep_ms * 1000);
+        } else {
+            printf("post_start_sleep_ms=0\n");
+        }
+    } else {
+        printf("write_0x10_0x01=skipped\n");
+        printf("post_start_sleep_ms=0\n");
+    }
+
+    if (poll_limit > 0) {
+        for (attempt = 0; attempt < poll_limit; attempt++) {
+            usleep(200 * 1000);
+            if (acp_reg_read(fd, 0x10, &status, 1) == 0) {
+                printf("poll[%d]=0x%02x\n", attempt + 1, status);
+                if (status == 0x10) {
+                    break;
+                }
+            } else {
+                printf("poll[%d]=nack\n", attempt + 1);
+            }
+        }
+    } else {
+        printf("poll=skipped\n");
+    }
+
+    dump_raw_snapshot(fd, poll_limit > 0 ? "after_poll" : "after_stage");
+
+    if (acp_reg_read(fd, 0x05, &err_code, 1) == 0) {
+        print_named_u8("error_code", 1, err_code);
+    } else {
+        print_named_u8("error_code", 0, 0);
+    }
+
+    if (read_siglen) {
+        if (acp_reg_read(fd, 0x11, siglen_buf, sizeof(siglen_buf)) == 0) {
+            siglen = (uint16_t)((siglen_buf[0] << 8) | siglen_buf[1]);
+            print_named_hex("siglen_raw", siglen_buf, sizeof(siglen_buf));
+            print_named_u16("siglen", 1, siglen);
+        } else {
+            printf("siglen_raw=na\n");
+            print_named_u16("siglen", 0, 0);
+        }
+    } else {
+        printf("siglen_raw=skipped\n");
+        printf("siglen=skipped\n");
+    }
+
+    if (read_signature) {
+        memset(signature, 0, sizeof(signature));
+        if (acp_reg_read(fd, 0x12, signature, sizeof(signature)) == 0) {
+            print_named_hex("signature", signature, sizeof(signature));
+        } else {
+            printf("signature=na\n");
+        }
+    } else {
+        printf("signature=skipped\n");
+    }
+
+    if (read_siglen) {
+        printf("ready=%s\n", (status == 0x10 && siglen == 0x0040) ? "yes" : "no");
+    } else {
+        printf("ready=%s\n", (status == 0x10) ? "yes" : "no");
+    }
+    close(fd);
+    return 0;
+}
+
+static int raw_prime_trace_live(const uint8_t challenge[32], uint8_t challenge_reg, int read_siglen) {
+    return raw_stage_trace_live(challenge, challenge_reg, 1, 1, 0, 30, read_siglen, 0);
+}
+
 static int hex_parse_32(const char *hex, uint8_t out[32]) {
     size_t hex_len = strlen(hex);
     size_t i;
@@ -627,6 +992,17 @@ static void usage(FILE *out) {
         "  carthing-mfi-probe sign <challenge_hex>\n"
         "  carthing-mfi-probe raw-info\n"
         "  carthing-mfi-probe raw-sign <challenge_hex>\n"
+        "  carthing-mfi-probe raw-cert-trace\n"
+        "  carthing-mfi-probe raw-sign-trace <challenge_hex>\n"
+        "  carthing-mfi-probe raw-sign-trace-4e <challenge_hex>\n"
+        "  carthing-mfi-probe raw-prime-21 <challenge_hex>\n"
+        "  carthing-mfi-probe raw-prime-21-no-readout <challenge_hex>\n"
+        "  carthing-mfi-probe raw-prime-21-challenge-only <challenge_hex>\n"
+        "  carthing-mfi-probe raw-prime-start-only\n"
+        "  carthing-mfi-probe raw-start-readout\n"
+        "  carthing-mfi-probe raw-prime-21-start-no-poll <challenge_hex>\n"
+        "  carthing-mfi-probe raw-prime-21-start-poll-once <challenge_hex>\n"
+        "  carthing-mfi-probe raw-prime-21-start-sleep <challenge_hex> <sleep_ms>\n"
         "  carthing-mfi-probe aa01-live\n"
         "  carthing-mfi-probe aa01-file <pkcs7.bin>\n"
         "  carthing-mfi-probe aa03-file <sig64.bin>\n"
@@ -639,6 +1015,17 @@ static void usage(FILE *out) {
         "  - response writes raw ioctl nr5 bytes to stdout\n"
         "  - sign accepts up to 32 challenge bytes as hex and pads to 32\n"
         "  - raw-sign is experimental and reports ACP3-style sign state\n"
+        "  - raw-cert-trace prints wake/cert-path diagnostics to stdout\n"
+        "  - raw-sign-trace prints wake/sign-path diagnostics to stdout\n"
+        "  - raw-sign-trace-4e prints the historical 0x4E direct-I2C path trace\n"
+        "  - raw-prime-21 drives the 0x21 sign path up to ready state without reading signature\n"
+        "  - raw-prime-21-no-readout stops before reading 0x11/0x12\n"
+        "  - raw-prime-21-challenge-only writes only the 0x21 challenge stage\n"
+        "  - raw-prime-start-only writes only 0x10=0x01 without a challenge\n"
+        "  - raw-start-readout writes only 0x10=0x01, then polls and reads 0x11/0x12\n"
+        "  - raw-prime-21-start-no-poll writes challenge+start and exits immediately\n"
+        "  - raw-prime-21-start-poll-once writes challenge+start and polls 0x10 once\n"
+        "  - raw-prime-21-start-sleep writes challenge+start, sleeps, then exits\n"
         "  - aa01-live reads PKCS#7 directly from the live auth chip over %s\n"
         "  - aa01-file and aa03-file write raw iAP2 control-session payload bytes\n"
         "  - aa03 signs through the live ACP3 path and wraps result as iAP2 AA03\n"
@@ -752,6 +1139,222 @@ int main(int argc, char **argv) {
         }
         hex_write(stdout, signature, sizeof(signature));
         return 0;
+    }
+
+    if (strcmp(argv[1], "raw-cert-trace") == 0) {
+        uint8_t first_chunk[16];
+        size_t total_len = 0;
+        int saved_errno = 0;
+
+        if (argc != 2) {
+            usage(stderr);
+            return 2;
+        }
+
+        fd = acp3_open_live();
+        if (fd < 0) {
+            perror("open/select live chip");
+            return 1;
+        }
+
+        dump_raw_snapshot(fd, "initial");
+
+        errno = 0;
+        if (i2c_short_write(fd, 0x00) < 0) {
+            saved_errno = errno;
+            print_named_rc("short_0x00", -1, saved_errno);
+        } else {
+            print_named_rc("short_0x00", 0, 0);
+        }
+        dump_raw_snapshot(fd, "after_short_00");
+
+        errno = 0;
+        if (i2c_short_write(fd, 0x01) < 0) {
+            saved_errno = errno;
+            print_named_rc("short_0x01", -1, saved_errno);
+        } else {
+            print_named_rc("short_0x01", 0, 0);
+        }
+        dump_raw_snapshot(fd, "after_short_01");
+
+        errno = 0;
+        if (i2c_short_write(fd, 0x31) < 0) {
+            saved_errno = errno;
+            print_named_rc("short_0x31", -1, saved_errno);
+            close(fd);
+            return 1;
+        }
+        print_named_rc("short_0x31", 0, 0);
+
+        if (i2c_raw_read(fd, first_chunk, sizeof(first_chunk)) < 0) {
+            perror("raw cert first chunk");
+            close(fd);
+            return 1;
+        }
+        print_named_hex("cert_chunk0", first_chunk, sizeof(first_chunk));
+        total_len = asn1_total_rounded16(first_chunk, sizeof(first_chunk));
+        printf("cert_total_len=%zu\n", total_len);
+        dump_raw_snapshot(fd, "after_cert_chunk0");
+        close(fd);
+        return 0;
+    }
+
+    if (strcmp(argv[1], "raw-sign-trace") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_sign_trace_live(challenge, 0x21);
+    }
+
+    if (strcmp(argv[1], "raw-sign-trace-4e") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_sign_trace_live(challenge, 0x4e);
+    }
+
+    if (strcmp(argv[1], "raw-prime-21") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_prime_trace_live(challenge, 0x21, 1);
+    }
+
+    if (strcmp(argv[1], "raw-prime-21-no-readout") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_prime_trace_live(challenge, 0x21, 0);
+    }
+
+    if (strcmp(argv[1], "raw-prime-21-challenge-only") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_stage_trace_live(challenge, 0x21, 1, 0, 0, 0, 0, 0);
+    }
+
+    if (strcmp(argv[1], "raw-prime-start-only") == 0) {
+        uint8_t challenge[32];
+
+        if (argc != 2) {
+            usage(stderr);
+            return 2;
+        }
+        memset(challenge, 0, sizeof(challenge));
+        return raw_stage_trace_live(challenge, 0x21, 0, 1, 0, 0, 0, 0);
+    }
+
+    if (strcmp(argv[1], "raw-start-readout") == 0) {
+        uint8_t challenge[32];
+
+        if (argc != 2) {
+            usage(stderr);
+            return 2;
+        }
+        memset(challenge, 0, sizeof(challenge));
+        return raw_stage_trace_live(challenge, 0x21, 0, 1, 0, 30, 1, 1);
+    }
+
+    if (strcmp(argv[1], "raw-prime-21-start-no-poll") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_stage_trace_live(challenge, 0x21, 1, 1, 0, 0, 0, 0);
+    }
+
+    if (strcmp(argv[1], "raw-prime-21-start-poll-once") == 0) {
+        uint8_t challenge[32];
+        int nbytes;
+
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        return raw_stage_trace_live(challenge, 0x21, 1, 1, 0, 1, 0, 0);
+    }
+
+    if (strcmp(argv[1], "raw-prime-21-start-sleep") == 0) {
+        uint8_t challenge[32];
+        char *endptr = NULL;
+        unsigned long sleep_ms = 0;
+        int nbytes;
+
+        if (argc != 4) {
+            usage(stderr);
+            return 2;
+        }
+        nbytes = hex_parse_32(argv[2], challenge);
+        if (nbytes < 0) {
+            fprintf(stderr, "invalid challenge hex\n");
+            return 2;
+        }
+        errno = 0;
+        sleep_ms = strtoul(argv[3], &endptr, 10);
+        if (errno != 0 || !endptr || *endptr != '\0' || sleep_ms > 60000ul) {
+            fprintf(stderr, "invalid sleep_ms\n");
+            return 2;
+        }
+        return raw_stage_trace_live(challenge, 0x21, 1, 1, (unsigned int)sleep_ms, 0, 0, 0);
     }
 
     if (strcmp(argv[1], "aa01-file") == 0) {
