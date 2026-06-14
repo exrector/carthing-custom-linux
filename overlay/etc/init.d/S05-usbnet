@@ -51,12 +51,16 @@ list_usb_candidates() {
 
 configure_usb_if() {
     iface=$1
-    ip link set "$iface" up 2>/dev/null || true
-    if ! ip addr show dev "$iface" 2>/dev/null | grep -q "inet ${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}\\b"; then
-        ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+    if command -v ip >/dev/null 2>&1; then
+        ip link set "$iface" up 2>/dev/null || true
+        if ! ip addr show dev "$iface" 2>/dev/null | grep -q "inet ${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}\\b"; then
+            ip addr add "${CARTHING_USB_IP}/${CARTHING_USB_PREFIX}" dev "$iface" 2>/dev/null || true
+        fi
     fi
     if command -v ifconfig >/dev/null 2>&1; then
-        ifconfig "$iface" up 2>/dev/null || true
+        ifconfig "$iface" "$CARTHING_USB_IP" netmask 255.255.255.0 up 2>/dev/null \
+            || ifconfig "$iface" up 2>/dev/null \
+            || true
     fi
     mkdir -p /run/carthing
     printf '%s\n' "$iface" > /run/carthing/usb-iface
@@ -95,21 +99,23 @@ retry_usb_config() {
 
 configured_ifs=
 
-if command -v ip >/dev/null 2>&1; then
-    configured_ifs=$(configure_all_usb_ifs || true)
-    if [ -z "$configured_ifs" ]; then
-        echo "[S05-usbnet] no USB network interface found, retrying in background"
-        (
-            configured=$(retry_usb_config 2>/dev/null || true)
-            if [ -n "$configured" ]; then
-                printf '%s\n' "$configured" >/run/carthing/usb-ifaces
-            fi
-        ) &
-    else
-        printf '%s\n' "$configured_ifs" >/run/carthing/usb-ifaces
-    fi
+configured_ifs=$(configure_all_usb_ifs || true)
+if [ -z "$configured_ifs" ]; then
+    echo "[S05-usbnet] no USB network interface found, retrying in background"
+    (
+        configured=$(retry_usb_config 2>/dev/null || true)
+        if [ -n "$configured" ]; then
+            printf '%s\n' "$configured" >/run/carthing/usb-ifaces
+        fi
+    ) &
 else
-    echo "[S05-usbnet] ip command not available"
+    printf '%s\n' "$configured_ifs" >/run/carthing/usb-ifaces
+    (
+        configured=$(retry_usb_config 2>/dev/null || true)
+        if [ -n "$configured" ]; then
+            printf '%s\n' "$configured" >/run/carthing/usb-ifaces
+        fi
+    ) &
 fi
 
 if [ "${CARTHING_USB_ENABLE_DHCP}" = "1" ] && command -v dnsmasq >/dev/null 2>&1; then
