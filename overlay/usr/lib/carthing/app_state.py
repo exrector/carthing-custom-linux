@@ -448,12 +448,15 @@ class AppState:
         self.route_warnings = []
         self.route_cables = []
         self._active_session = "remote"
+        self.operation_mode = "commutator"   # [CLAUDE 2026-06-13] playnow|commutator|reserved; рантайм сидит из settings
         self.power_tier = "boot"
         self.sleep_on_idle = True       # [CLAUDE] сон/гашение экрана (тумблер в Settings)
         self.screen_off_sec = 150       # [CLAUDE] тайм-аут полного гашения (настройка ± в Settings)
         self.notif_blink = True         # [CLAUDE] моргание кружка уведомлений под энкодером (тумблер)
         self.screen_brightness = 100    # [CLAUDE 2026-06-10] яркость экрана, % (цикл в Settings)
         self.ui_theme = "dark"          # [CLAUDE 2026-06-11] тема UI (dark|terminal); применяется рестартом runtime
+        self.power_unplug_status = "idle"   # idle|preparing|ready|error
+        self.power_unplug_message = ""
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False

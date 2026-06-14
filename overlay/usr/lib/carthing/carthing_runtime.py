@@ -59,11 +59,47 @@ link_manager = None      # LinkManager
 hci_gate = None          # HciOperationGate
 route_patchbay = None    # VirtualRoutePatchBay
 _classic_probe_done = set()
+_input_pairing_blocked_le_peers = set()
+_input_pairing_until = 0.0
+_input_pairing_rearm_not_before = 0.0
 ACTIVE_ROUTE_PROTOCOLS = {
     Protocol.CLASSIC_A2DP_SINK,
     Protocol.CLASSIC_A2DP_SOURCE,
     Protocol.CLASSIC_AVRCP,
 }
+
+
+def _input_pairing_active() -> bool:
+    return time.monotonic() < _input_pairing_until
+
+
+def _clear_input_pairing_window():
+    global _input_pairing_until, _input_pairing_rearm_not_before
+    _input_pairing_until = 0.0
+    _input_pairing_rearm_not_before = 0.0
+    _input_pairing_blocked_le_peers.clear()
+
+
+async def _reject_blocked_input_pairing_reconnect(connection, peer_text: str) -> bool:
+    """During IN+ keep the old phone from stealing the BLE advertising surface."""
+    global _input_pairing_rearm_not_before
+    if not _input_pairing_active() or peer_text not in _input_pairing_blocked_le_peers:
+        return False
+    logger.info("Input pairing mode: reject sticky LE reconnect from %s", peer_text)
+    try:
+        await connection.disconnect()
+    except Exception as e:
+        logger.warning("input pairing sticky reconnect disconnect ignored: %s", e)
+    if gui is not None:
+        gui.set_pairing_mode(True, role="input")
+    if power is not None:
+        power.set_pairing(True)
+    now = time.monotonic()
+    if orch is not None and now >= _input_pairing_rearm_not_before:
+        _input_pairing_rearm_not_before = now + 2.5
+        await asyncio.sleep(0.8)
+        await orch.apply_visibility()
+    return True
 
 
 
@@ -211,18 +247,25 @@ async def _post_pair_classic_probe(address, reason="post-pair"):
 
 
 def _on_pairing(enabled, role="source"):
+    global _input_pairing_until, _input_pairing_rearm_not_before
     role = role or "source"
     if power is not None:
         power.set_pairing(bool(enabled))
     if role in ("input", "source"):
         async def _run_input_pairing():
+            global _input_pairing_until, _input_pairing_rearm_not_before
             if enabled:
+                _input_pairing_until = time.monotonic() + 90.0
+                _input_pairing_rearm_not_before = 0.0
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
                 if orch is not None:
+                    blocked = await orch.disconnect_le_connections_for_pairing()
+                    _input_pairing_blocked_le_peers.update(blocked or set())
                     await orch.arm_pairing(True, disconnect_current=False,
                                            classic_discoverable=False)
             else:
+                _clear_input_pairing_window()
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
                 if orch is not None:
@@ -588,6 +631,17 @@ async def _activate_selected_route_output():
         return
     ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
     self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+    selected_address = ""
+    try:
+        for speaker in getattr(gui.app_state, "trusted_speakers", []):
+            if ro in {speaker.get("key"), speaker.get("address")}:
+                selected_address = speaker.get("address") or ""
+                break
+    except Exception:
+        selected_address = ""
+    preempt = getattr(transfer.bridge, "preempt_background_receivers_for_route", None)
+    if callable(preempt):
+        await preempt(selected_address)
     await _apply_route_output(ro)
     # [CLAUDE 2026-06-11] СЕРИАЛИЗАЦИЯ page: если колонка ещё дозванивается,
     # ждём её таск — контроллер делает только один page за раз, параллельный
@@ -623,6 +677,52 @@ def _on_toggle_notif_blink(on):
     # (render читает app_state.notif_blink сразу); здесь только персистим в settings.
     if settings is not None:
         settings.set("notif_blink", bool(on))
+
+
+def _on_power_off():
+    # Product power action: prepare state for physical USB removal.
+    # Do not use Linux poweroff/halt/sysrq on this hardware.
+    import power_control
+    app_state = gui.app_state if gui is not None else None
+    if getattr(app_state, "power_unplug_status", "") == "preparing":
+        logger.warning("safe unplug already preparing")
+        return
+    if app_state is not None:
+        app_state.power_unplug_status = "preparing"
+        app_state.power_unplug_message = "Готовим..."
+    logger.warning("safe unplug requested")
+    asyncio.ensure_future(
+        power_control.prepare_for_usb_unplug(
+            transfer=transfer,
+            power=power,
+            state=app_state,
+        )
+    )
+
+
+def _on_set_mode(new):
+    # [CLAUDE 2026-06-13] Выбрать КОНКРЕТНЫЙ режим из подпунктов настроек.
+    # Персист + применить (поднять/погасить коммутатор без рестарта).
+    import operation_mode as _opmode
+    if new not in _opmode.ALL:
+        return
+    if gui is not None:
+        gui.app_state.operation_mode = new
+    if settings is not None:
+        settings.set("operation_mode", new)
+    logger.info("operation mode -> %s", new)
+    async def _apply():
+        if transfer is None or getattr(transfer, "bridge", None) is None:
+            return
+        if new == _opmode.COMMUTATOR:
+            transfer.bridge.start_standby_loop()
+        else:
+            # гасим коммутатор: стоп standby + поток, остаёмся в Play Now (BLE-пульт)
+            task = getattr(transfer.bridge, "_standby_task", None)
+            if task is not None and not task.done():
+                task.cancel()
+            await transfer.bridge.stop_receiver_stream()
+    asyncio.ensure_future(_apply())
 
 
 def _on_set_theme(name):
@@ -705,6 +805,7 @@ def _is_classic(connection) -> bool:
 async def _on_connection(connection):
     global _iphone
     classic = _is_classic(connection)
+    peer_text = str(getattr(connection, "peer_address", "") or "")
     logger.info("connected: %s classic=%s encrypted=%s",
                 getattr(connection, "peer_address", "?"), classic,
                 getattr(connection, "is_encrypted", False))
@@ -733,6 +834,9 @@ async def _on_connection(connection):
                 logger.info("classic-first CTKD skipped for trusted speaker %s", peer_addr)
             else:
                 asyncio.create_task(_complete_classic_first_ctkd(connection))
+        return
+
+    if await _reject_blocked_input_pairing_reconnect(connection, peer_text):
         return
 
     if orch is not None:
@@ -789,6 +893,12 @@ async def _on_connection(connection):
                 logger.warning("trusted source sync after AMS failed: %s", e)
         if orch is not None:
             await orch.on_bonded()
+        if _input_pairing_active():
+            _clear_input_pairing_window()
+            if gui is not None:
+                gui.set_pairing_mode(False)
+            if power is not None:
+                power.set_pairing(False)
         probe_address = peer or _best_bonded_source_address()
         if probe_address:
             asyncio.create_task(_post_pair_classic_probe(probe_address, reason=why))
@@ -863,9 +973,9 @@ async def _on_connection(connection):
     connection.on("connection_encryption_change",
                   lambda *_: asyncio.ensure_future(_start_ams("encryption")))
 
-    if gui is not None:
+    if gui is not None and not _input_pairing_active():
         gui.set_pairing_mode(False)   # авто-закрыть pairing-модалку на коннекте
-    if power is not None:
+    if power is not None and not _input_pairing_active():
         power.set_pairing(False)
 
     if getattr(connection, "is_encrypted", False):
@@ -1265,7 +1375,9 @@ async def main():
                                 on_set_off_timeout=_on_set_off_timeout,
                                 on_toggle_notif_blink=_on_toggle_notif_blink,
                                 on_set_brightness=_on_set_brightness,
-                                on_set_theme=_on_set_theme)
+                                on_set_theme=_on_set_theme,
+                                on_power_off=_on_power_off,
+                                on_set_mode=_on_set_mode)
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
             # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма
@@ -1310,6 +1422,9 @@ async def main():
                 from app_state import AppState
                 app_state = AppState()
                 _select_boot_play_now(app_state)
+            import operation_mode as _opmode
+            app_state.operation_mode = _opmode.current(settings)  # [CLAUDE 2026-06-13] режим из settings ДО старта циклов
+            logger.info("operation mode: %s", app_state.operation_mode)
             transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
             backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
             # Кнопки колонки -> backchannel -> активный источник (finding A2:

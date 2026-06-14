@@ -61,8 +61,15 @@ class TransferService:
             self.bridge.state.transfer_active = True
         except Exception:
             pass
-        # Standby держит выбранный динамик с загрузки (звонит только спаренным колонкам).
-        self.bridge.start_standby_loop()
+        # [CLAUDE 2026-06-13] Standby/пейджинг колонок — ТОЛЬКО в режиме коммутатора.
+        # В Play Now устройство не гоняет радио по кругу (нет «PAGE_TIMEOUT в цикле»).
+        import operation_mode
+        _mode = getattr(self.bridge.state, "operation_mode", operation_mode.DEFAULT)
+        if _mode == operation_mode.COMMUTATOR:
+            self.bridge.start_standby_loop()
+            logger.info("transfer: commutator mode -> standby loop started")
+        else:
+            logger.info("transfer: play-now mode -> commutator/standby NOT started")
         await self.orch.on_a2dp_state(True)
 
     async def start_speaker_enrollment(self):
