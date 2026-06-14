@@ -67,7 +67,7 @@ Recipe:
 
 Notes:
 - Keystore is **persistent**: `/run/carthing-state/carthing/keys.json` on the
-  vfat partition `/dev/mmcblk0p1` (mounted by `S11-runtime-state`). Survives reboot.
+  ext4 state partition `/dev/mmcblk0p3` (mounted by `S11-runtime-state`). Survives reboot.
 - `CARTHING_BT_INIT_BACKEND=attach` (btattach builds `hci0` from `ttyS1`, **no**
   `.hcd` fwload) is a committed pivot (`8d6c279`), not a fault. BLE works.
 

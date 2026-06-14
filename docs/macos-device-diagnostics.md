@@ -52,6 +52,10 @@ routes win.
 
 ## NORMAL BOOT: WHAT COUNTS AS PROOF
 
+The device display is not a reliable mode indicator during recovery. Do not
+classify the board from the old visual distinction between `1+4`, `4`, splash,
+or no splash. Classify the USB layer with direct probes first.
+
 These states mean different things and must not be collapsed together:
 
 - `NCM Gadget` absent in `ioreg`
@@ -80,6 +84,10 @@ These states mean different things and must not be collapsed together:
 ## BURN MODE: WHAT COUNTS AS PROOF
 
 DO NOT use `adb devices` as the source of truth for Burn Mode either.
+DO NOT use a single `system_profiler` miss or a missing `NCM Gadget` line as
+proof that the device is absent. For recovery flashing, call
+`superbird_device.find_device()` and distinguish `usb`, `usb-burn`, `normal`,
+and `not-found`.
 
 `scripts/flash-device1-rootfs-only.py` talks to the Amlogic burn device over direct USB via `pyusb`.
 

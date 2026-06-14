@@ -49,8 +49,9 @@
   mode negotiation: counter UNACCEPTABLE_PARAMETERS вместо abort), hci
   (Write_Automatic_Flush_Timeout), smp/pairing (CT2). Защищено чекером.
 
-**Устройство**: rootfs RO на eMMC; `/run/carthing-state` (vfat p1) =
-keys.json + state.json — переживает прошивку rootfs и ребут; `/run/carthing/`
+**Устройство**: rootfs RO на eMMC; `/run/carthing-state` (ext4 p3 с журналом) =
+keys.json + state.json — переживает прошивку rootfs и ребут; p1 остаётся boot FAT
+и монтируется read-only как `/run/carthing-boot`; `/run/carthing/`
 = логи. Dev-итерации: tar overlay → `/run/carthing-dual-mode-lab` (см. ниже).
 
 ## Как запускать / dev-цикл

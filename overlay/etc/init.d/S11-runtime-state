@@ -3,16 +3,48 @@ set -eu
 
 . /etc/default/carthing
 
-state_device=${CARTHING_STATE_DEVICE:-/dev/mmcblk0p1}
+state_device=${CARTHING_STATE_DEVICE:-/dev/mmcblk0p3}
+state_fstype=${CARTHING_STATE_FS_TYPE:-ext4}
 state_mount=${CARTHING_STATE_MOUNT:-/run/carthing-state}
+boot_device=${CARTHING_BOOT_DEVICE:-/dev/mmcblk0p1}
+boot_mount=${CARTHING_BOOT_MOUNT:-/run/carthing-boot}
 keys_file=${CARTHING_RUNTIME_KEYS:-$state_mount/carthing/keys.json}
 keys_dir=$(dirname "$keys_file")
 profile_dir=${CARTHING_PROFILE_DIR:-$state_mount/carthing/profiles}
 
-mkdir -p "$state_mount"
+mkdir -p "$state_mount" "$boot_mount"
+
+if [ "$state_device" = "$boot_device" ]; then
+    echo "[S11-runtime-state] ERROR: state device must not be boot FAT device: $state_device"
+    exit 1
+fi
+
+if ! awk -v target="$boot_mount" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
+    mount -t vfat -o ro "$boot_device" "$boot_mount" || {
+        echo "[S11-runtime-state] WARN: boot partition mount failed: $boot_device -> $boot_mount"
+    }
+fi
 
 if ! awk -v target="$state_mount" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
-    mount "$state_device" "$state_mount"   # [CLAUDE 2026-06-13] автоопределение ФС: p1 теперь ext4 (журнал), но fallback на старый vfat
+    if [ ! -b "$state_device" ]; then
+        echo "[S11-runtime-state] ERROR: state device missing: $state_device"
+        exit 1
+    fi
+    mount -t "$state_fstype" "$state_device" "$state_mount" || {
+        echo "[S11-runtime-state] ERROR: state mount failed: $state_device as $state_fstype"
+        exit 1
+    }
+fi
+
+actual_fstype=$(awk -v target="$state_mount" '$2 == target { print $3; exit }' /proc/mounts)
+if [ "$actual_fstype" != "$state_fstype" ]; then
+    echo "[S11-runtime-state] ERROR: state fstype mismatch: got $actual_fstype expected $state_fstype"
+    exit 1
+fi
+actual_device=$(awk -v target="$state_mount" '$2 == target { print $1; exit }' /proc/mounts)
+if [ "$actual_device" = "$boot_device" ]; then
+    echo "[S11-runtime-state] ERROR: refusing boot FAT as persistent state"
+    exit 1
 fi
 
 mkdir -p "$keys_dir" "$profile_dir" /run/carthing
@@ -27,4 +59,4 @@ for domain in bt audio sensor debug; do
     fi
 done
 
-echo "[S11-runtime-state] state mounted on $state_mount, keys at $keys_file"
+echo "[S11-runtime-state] state mounted on $state_mount ($actual_fstype), keys at $keys_file"

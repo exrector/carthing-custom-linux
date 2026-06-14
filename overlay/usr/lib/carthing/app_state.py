@@ -455,6 +455,8 @@ class AppState:
         self.notif_blink = True         # [CLAUDE] моргание кружка уведомлений под энкодером (тумблер)
         self.screen_brightness = 100    # [CLAUDE 2026-06-10] яркость экрана, % (цикл в Settings)
         self.ui_theme = "dark"          # [CLAUDE 2026-06-11] тема UI (dark|terminal); применяется рестартом runtime
+        self.power_unplug_status = "idle"   # idle|preparing|ready|error
+        self.power_unplug_message = ""
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False

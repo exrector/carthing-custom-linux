@@ -1,0 +1,209 @@
+#!/bin/sh
+# One-time live migration: move persistent state from the FAT boot partition
+# (/dev/mmcblk0p1) to a real ext4 partition in the free gap before rootfs.
+#
+# Default mode is dry-run. Use --apply only after reading the printed plan.
+set -eu
+
+HOST="${CARTHING_SSH_HOST:-root@172.16.42.77}"
+SSH="ssh -o BatchMode=yes -o ConnectTimeout=8 $HOST"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+START_LBA=${CARTHING_STATE_P3_START:-73728}
+SECTORS=${CARTHING_STATE_P3_SECTORS:-262144} # 128 MiB
+STATE_DEV=${CARTHING_STATE_DEVICE:-/dev/mmcblk0p3}
+ARTIFACT_DIR=${CARTHING_STATE_MIGRATION_DIR:-artifacts/state-p3-migration-$(date +%Y%m%d-%H%M%S)}
+APPLY=0
+
+if [ "${1:-}" = "--apply" ]; then
+    APPLY=1
+elif [ "${1:-}" != "" ]; then
+    echo "usage: $0 [--apply]" >&2
+    exit 2
+fi
+
+command -v mke2fs >/dev/null 2>&1 || {
+    echo "mke2fs not found on host; install e2fsprogs or set PATH" >&2
+    exit 1
+}
+
+mkdir -p "$ARTIFACT_DIR"
+
+echo "== current target layout =="
+$SSH 'set -eu
+fdisk -l /dev/mmcblk0
+echo "--- mounts ---"
+cat /proc/mounts | grep -E "carthing-state|mmcblk0p[123]" || true
+echo "--- state files ---"
+find /run/carthing-state -maxdepth 2 -type f -printf "%p %s bytes\n" 2>/dev/null | sort || true
+'
+
+echo "== planned migration =="
+cat <<EOF
+Create partition:
+  device: /dev/mmcblk0p3
+  start:  $START_LBA
+  size:   $SECTORS sectors (128 MiB)
+  type:   0x83 Linux
+
+Then:
+  1. backup /run/carthing-state/carthing to $ARTIFACT_DIR/state-backup.tar
+  2. stop runtime/supervisor
+  3. write only the empty p3 MBR entry; p1/p2 LBAs are validated and left untouched
+  4. partprobe
+  5. stream a host-created ext4+journal image to $STATE_DEV
+  6. mount $STATE_DEV on /run/carthing-state and restore carthing/
+  7. archive old FAT carthing/ copy so it cannot be used as live state
+  8. deploy the new boot/state contract and switch live mounts to p3
+
+EOF
+
+if [ "$APPLY" != "1" ]; then
+    echo "dry-run only; rerun with --apply to write the partition table"
+    exit 0
+fi
+
+echo "== backing up state =="
+$SSH 'tar -C /run/carthing-state -cf - carthing' > "$ARTIFACT_DIR/state-backup.tar"
+ls -lh "$ARTIFACT_DIR/state-backup.tar"
+
+IMG="$ARTIFACT_DIR/state-p3.ext4"
+dd if=/dev/zero of="$IMG" bs=1m count=128 >/dev/null 2>&1
+mke2fs -t ext4 -F -b 1024 -m 0 -L CTSTATE \
+    -O '^64bit,^metadata_csum,^orphan_file' \
+    "$IMG" > "$ARTIFACT_DIR/mke2fs.log" 2>&1
+
+echo "== stopping runtime and writing p3 entry =="
+$SSH START_LBA="$START_LBA" SECTORS="$SECTORS" 'python3 - <<'"'"'PY'"'"'
+import os
+import signal
+import struct
+import subprocess
+import time
+
+start = int(os.environ["START_LBA"])
+sectors = int(os.environ["SECTORS"])
+disk = "/dev/mmcblk0"
+
+def sh(cmd):
+    return subprocess.call(cmd, shell=True)
+
+def read_pid(path):
+    try:
+        return int(open(path).read().strip())
+    except Exception:
+        return None
+
+sup = read_pid("/run/carthing/media-remote-supervisor.pid")
+if sup:
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.kill(sup, sig)
+        except ProcessLookupError:
+            pass
+        except Exception as exc:
+            print(f"warn: kill supervisor {sup}: {exc}")
+        time.sleep(0.2)
+
+for line in os.popen("ps w").read().splitlines():
+    if "carthing_runtime.py" in line and "grep" not in line:
+        try:
+            os.kill(int(line.split()[0]), signal.SIGTERM)
+        except Exception:
+            pass
+time.sleep(0.8)
+for line in os.popen("ps w").read().splitlines():
+    if "carthing_runtime.py" in line and "grep" not in line:
+        try:
+            os.kill(int(line.split()[0]), signal.SIGKILL)
+        except Exception:
+            pass
+
+with open(disk, "r+b") as fp:
+    mbr = bytearray(fp.read(512))
+    if mbr[510:512] != b"\x55\xaa":
+        raise SystemExit("MBR signature mismatch")
+
+    def entry(idx):
+        off = 446 + idx * 16
+        raw = bytes(mbr[off:off + 16])
+        return raw, raw[4], struct.unpack_from("<I", raw, 8)[0], struct.unpack_from("<I", raw, 12)[0]
+
+    e1 = entry(0)
+    e2 = entry(1)
+    e3 = entry(2)
+    if (e1[2], e1[3], e1[1]) != (8192, 65536, 0x0C):
+        raise SystemExit(f"unexpected p1 entry: type={e1[1]:02x} start={e1[2]} size={e1[3]}")
+    if (e2[2], e2[1]) != (352256, 0x83):
+        raise SystemExit(f"unexpected p2 entry: type={e2[1]:02x} start={e2[2]} size={e2[3]}")
+    if e3[1] != 0 or e3[2] != 0 or e3[3] != 0:
+        if (e3[1], e3[2], e3[3]) == (0x83, start, sectors):
+            print("p3 already present")
+        else:
+            raise SystemExit(f"p3 already occupied: type={e3[1]:02x} start={e3[2]} size={e3[3]}")
+    else:
+        if start <= e1[2] + e1[3] - 1:
+            raise SystemExit("p3 overlaps p1")
+        if start + sectors - 1 >= e2[2]:
+            raise SystemExit("p3 overlaps p2")
+        p3 = bytes([0x00, 0xFE, 0xFF, 0xFF, 0x83, 0xFE, 0xFF, 0xFF])
+        p3 += struct.pack("<II", start, sectors)
+        mbr[446 + 2 * 16:446 + 3 * 16] = p3
+        fp.seek(0)
+        fp.write(mbr)
+        fp.flush()
+        os.fsync(fp.fileno())
+        print(f"wrote p3 start={start} sectors={sectors}")
+
+sh("partprobe /dev/mmcblk0 2>/dev/null || true")
+for _ in range(20):
+    if os.path.exists("/dev/mmcblk0p3"):
+        print("p3 device visible")
+        break
+    time.sleep(0.25)
+else:
+    raise SystemExit("p3 not visible after partprobe; reboot required before continuing")
+PY'
+
+echo "== writing ext4 image to $STATE_DEV =="
+cat "$IMG" | $SSH "cat > '$STATE_DEV'; sync"
+
+echo "== restoring state on p3 =="
+cat "$ARTIFACT_DIR/state-backup.tar" | $SSH 'set -eu
+mkdir -p /run/carthing-state-new
+mount -t ext4 /dev/mmcblk0p3 /run/carthing-state-new
+tar -C /run/carthing-state-new -xf -
+test -f /run/carthing-state-new/carthing/state.json
+test -f /run/carthing-state-new/carthing/keys.json
+sync
+umount /run/carthing-state-new
+rmdir /run/carthing-state-new
+'
+
+echo "== archiving old FAT state copy =="
+$SSH 'set -eu
+if [ -d /run/carthing-state/carthing ]; then
+    rm -rf /run/carthing-state/carthing.migrated-to-p3
+    mv /run/carthing-state/carthing /run/carthing-state/carthing.migrated-to-p3
+fi
+printf "%s\n" "Persistent state moved to /dev/mmcblk0p3 ext4. Do not write runtime state to this FAT boot partition." > /run/carthing-state/STATE_MOVED_TO_P3.txt
+sync
+'
+
+echo "== deploying enforced p3 state contract =="
+CARTHING_SSH_HOST="$HOST" "$SCRIPT_DIR/deploy" \
+    etc/default/carthing \
+    etc/init.d/S11-runtime-state \
+    usr/lib/carthing/power_control.py \
+    usr/lib/carthing/safe_unplug_helper.py
+
+echo "== switching live mounts to p3 and restarting runtime =="
+$SSH 'set -eu
+mkdir -p /run/carthing-boot /run/carthing-state
+umount /run/carthing-state 2>/dev/null || true
+mount -t vfat -o ro /dev/mmcblk0p1 /run/carthing-boot
+mount -t ext4 /dev/mmcblk0p3 /run/carthing-state
+test "$(awk '"'"'$2 == "/run/carthing-state" { print $3; exit }'"'"' /proc/mounts)" = ext4
+/etc/init.d/disabled-S50-carthing-remote
+'
+
+echo "migration complete; /run/carthing-state is now /dev/mmcblk0p3 ext4"

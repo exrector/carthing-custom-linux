@@ -98,7 +98,7 @@ existing_usb_network_active() {
         name=${netdir##*/}
         [ "$name" = "lo" ] && continue
         case "$name" in
-            usb*|eth*|en*|ncm*|rndis*)
+            usb*|ncm*|rndis*)
                 log "existing USB network candidate: $name"
                 return 0
                 ;;

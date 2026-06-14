@@ -132,7 +132,7 @@ class Dispatcher:
         if key == "power_off_confirm":          # [CLAUDE 2026-06-13] подтверждённое мягкое выключение
             self.on_power_off()
             return
-        if key == "power_off_noop":             # строка-предупреждение — не действие
+        if key in ("power_off_noop", "power_off_status"):
             return
         if key.startswith("set_mode:"):         # [CLAUDE 2026-06-13] выбор конкретного режима
             self.on_set_mode(key.split(":", 1)[1])

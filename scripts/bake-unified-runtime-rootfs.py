@@ -311,10 +311,10 @@ def verify_image(image: Path) -> None:
             raise SystemExit(f"profile tooling missing from rootfs: {missing_exec}")
 
         required_init = [
-            "/etc/init.d/S03-runtime-state",
             "/etc/init.d/S04-usbgadget",
             "/etc/init.d/S05-usbnet",
             "/etc/init.d/S06-ssh",
+            "/etc/init.d/S11-runtime-state",
         ]
         missing_init = [path for path in required_init if not e2path_exists(image, path)]
         if missing_init:

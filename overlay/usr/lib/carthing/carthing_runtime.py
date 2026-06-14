@@ -680,10 +680,24 @@ def _on_toggle_notif_blink(on):
 
 
 def _on_power_off():
-    # [CLAUDE 2026-06-13] Мягкое выключение: ласково гасим всё и снимаем питание.
+    # Product power action: prepare state for physical USB removal.
+    # Do not use Linux poweroff/halt/sysrq on this hardware.
     import power_control
-    logger.info("power off requested (graceful)")
-    asyncio.ensure_future(power_control.graceful_shutdown(transfer=transfer, power=power, halt=True))
+    app_state = gui.app_state if gui is not None else None
+    if getattr(app_state, "power_unplug_status", "") == "preparing":
+        logger.warning("safe unplug already preparing")
+        return
+    if app_state is not None:
+        app_state.power_unplug_status = "preparing"
+        app_state.power_unplug_message = "Готовим..."
+    logger.warning("safe unplug requested")
+    asyncio.ensure_future(
+        power_control.prepare_for_usb_unplug(
+            transfer=transfer,
+            power=power,
+            state=app_state,
+        )
+    )
 
 
 def _on_set_mode(new):

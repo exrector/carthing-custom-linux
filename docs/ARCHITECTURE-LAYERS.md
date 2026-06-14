@@ -30,7 +30,7 @@ Bumble (Python, vendored 0.0.229)← ВЕСЬ Bluetooth-host: HCI/L2CAP/SMP/SDP/
 4. **CTKD в SMP**: h6/h7-деривация связывает LE LTK и classic link key в одну
    запись keystore. Направление важно: LE-пара РАЗДАЁТ link key; SMP поверх
    BR/EDR — выводит LTK ИЗ link key и не смеет раздавать link key обратно.
-5. **Keystore/state на vfat p1** — переживают прошивку rootfs и ребут.
+5. **Keystore/state на ext4 p3** — переживают прошивку rootfs и ребут. p1 остаётся только boot FAT.
 
 ## Трассировка сценариев
 

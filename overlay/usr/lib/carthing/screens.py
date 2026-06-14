@@ -405,7 +405,7 @@ class SettingsScreen(Screen):
                 ("brightness", "Яркость"),
             ]},
             {"key": "mode", "label": "Режим", "children": []},
-            {"key": "power_off", "label": "Выключение", "children": []},
+            {"key": "power_off", "label": "Отключение USB", "children": []},
             {"key": "about", "label": "О системе"},
         ]
         self.expanded = set()
@@ -515,11 +515,22 @@ class SettingsScreen(Screen):
                 mark = "● " if m == cur else "○ "
                 rows.append(("set_mode:" + m, mark + _om.label(m)))
             return rows
-        if it["key"] == "power_off":    # [CLAUDE 2026-06-13] предупреждение перед выключением
-            return [
-                ("power_off_noop", "Устройство выключится!"),
-                ("power_off_confirm", "⏻ Да, выключить"),
-            ]
+        if it["key"] == "power_off":    # Safe unplug: sync + read-only state + suspend.
+            status = getattr(self.state, "power_unplug_status", "idle") if self.state else "idle"
+            message = getattr(self.state, "power_unplug_message", "") if self.state else ""
+            rows = []
+            if status == "preparing":
+                rows.append(("power_off_status", message or "Готовим...", T.STATUS_WARN))
+                rows.append(("power_off_confirm", "⏻ Ждать"))
+                return rows
+            if status == "ready":
+                rows.append(("power_off_status", message or "Готово", T.STATUS_OK))
+            elif status == "error":
+                rows.append(("power_off_status", message or "Ошибка подготовки", T.WARN))
+                rows.append(("power_off_confirm", "⏻ Повторить"))
+                return rows
+            rows.append(("power_off_confirm", "⏻ Подготовить"))
+            return rows
         return it.get("children", [])
 
     def _visible(self):
