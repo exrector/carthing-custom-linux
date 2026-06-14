@@ -47,13 +47,14 @@ ensure_early_mounts
 
 log "stage-2 entry"
 
+run_early_service /etc/init.d/S03-runtime-state
+run_early_service /etc/init.d/S04-usbgadget
 run_early_service /etc/init.d/S05-usbnet
 run_early_service /etc/init.d/S06-ssh
 run_early_service /etc/init.d/S07-debug-http
 run_early_service /etc/init.d/S08-debug-telnet
 run_early_service /etc/init.d/S09-reverse-agent
 run_early_service /etc/init.d/S10-firmware-stage
-run_early_service /etc/init.d/S11-runtime-state
 run_early_service /etc/init.d/S20-bt-init
 run_early_service /etc/init.d/S45-input-links
 run_early_service /etc/init.d/S50-carthing-remote

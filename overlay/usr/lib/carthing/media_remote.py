@@ -2,22 +2,26 @@
 
 import asyncio
 import logging
+import os
 import struct
 import time
 from runtime_paths import ensure_runtime_paths
 
 ensure_runtime_paths()
 
-from bumble.core import UUID
+from bumble.core import BT_BR_EDR_TRANSPORT, UUID
 from bumble.device import AdvertisingData, AdvertisingType, Connection, Device, OwnAddressType
 from bumble.gatt import Characteristic, Descriptor, Service
 from bumble.smp import PairingConfig
 
+from a2dp_bridge import A2DPBridge, COD_AUDIO_LOUDSPEAKER
 from ams_client import AMSClient, MediaState
 from ancs_client import ANCSClient, NotificationState
 from ble_transport import init_ble
 from drm_display import DRMDisplay
 from input_handler import start as start_input
+from system_menu import SystemModeMenu
+from trusted_devices import TrustedDevices
 
 try:
     from now_playing_ui import NowPlayingUI
@@ -42,6 +46,14 @@ _reconnect_fallback_task: asyncio.Task | None = None
 _notification_clear_task: asyncio.Task | None = None
 _ams_starting: set[int] = set()
 _ancs_starting: set[int] = set()
+_service_start_tasks: dict[int, asyncio.Task] = {}
+_a2dp_bridge: A2DPBridge | None = None
+_trusted_devices: TrustedDevices | None = None
+_system_menu = SystemModeMenu(logger)
+_system_menu_open = False
+_runtime_restart_task: asyncio.Task | None = None
+
+RUNTIME_RESTART_EXIT_CODE = int(os.environ.get("CARTHING_RUNTIME_RESTART_EXIT_CODE", "75"))
 
 GATT_SERVICE_UUID = UUID.from_16_bits(0x1801)
 BATTERY_SERVICE_UUID = UUID.from_16_bits(0x180F)
@@ -79,6 +91,18 @@ HID_REPORT_MAP = bytes(
     ]
 )
 HID_INFORMATION = struct.pack("<HBB", 0x0111, 0x00, 0x03)
+
+
+def is_classic_connection(connection: Connection) -> bool:
+    return getattr(connection, "transport", None) == BT_BR_EDR_TRANSPORT
+
+
+def is_media_remote_connection(connection: Connection) -> bool:
+    return not is_classic_connection(connection)
+
+
+def bluetooth_name() -> str:
+    return os.environ.get("CARTHING_BT_ALIAS") or os.environ.get("CARTHING_A2DP_NAME") or "CarThing"
 
 
 def install_hid_pairing_profile(device: Device):
@@ -147,6 +171,19 @@ def install_hid_pairing_profile(device: Device):
     logger.info("HID pairing profile installed")
 
 
+def configure_runtime_device(device: Device):
+    install_hid_pairing_profile(device)
+    if os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "0") == "1":
+        device.classic_enabled = True
+        device.classic_ssp_enabled = True
+        device.classic_sc_enabled = True
+        device.connectable = True
+        device.discoverable = True
+        device.class_of_device = COD_AUDIO_LOUDSPEAKER
+        device.name = bluetooth_name()
+        logger.info("Classic runtime support enabled before power_on")
+
+
 def on_state_update(s: MediaState):
     global _last_activity
     _last_activity = time.monotonic()
@@ -167,10 +204,14 @@ def on_notification_update(notification: NotificationState):
     _last_activity = time.monotonic()
     _active_notification = notification
     logger.info(
-        "ANCS display: app=%s title=%r message=%r",
+        "ANCS display: app=%s app_id=%s title=%r message=%r flags=%s date=%s actions=%s",
         notification.app_name,
+        notification.app_identifier or "-",
         notification.headline,
         notification.body,
+        ",".join(notification.flag_names) or "none",
+        notification.date_display or "-",
+        notification.action_hint or "-",
     )
     _render_ui()
     _schedule_notification_clear(notification.uid)
@@ -185,16 +226,145 @@ def on_notification_removed(uid: int):
         _render_ui()
 
 
+async def on_notification_negative_action(notification: NotificationState):
+    global _last_activity
+    _last_activity = time.monotonic()
+    if ancs is None:
+        logger.warning("ANCS negative action requested with no active client")
+        return
+    if not notification.has_negative_action:
+        logger.info(
+            "ANCS negative action ignored: uid=%d app=%s flags=%s",
+            notification.uid,
+            notification.app_name,
+            ",".join(notification.flag_names) or "none",
+        )
+        return
+    logger.info(
+        "ANCS negative action requested: uid=%d app=%s app_id=%s title=%r",
+        notification.uid,
+        notification.app_name,
+        notification.app_identifier or "-",
+        notification.headline,
+    )
+    await ancs.perform_negative_action(notification.uid)
+
+
+async def on_notification_positive_action(notification: NotificationState):
+    global _last_activity
+    _last_activity = time.monotonic()
+    if ancs is None:
+        logger.warning("ANCS positive action requested with no active client")
+        return
+    if not notification.has_positive_action:
+        logger.info(
+            "ANCS positive action ignored: uid=%d app=%s flags=%s",
+            notification.uid,
+            notification.app_name,
+            ",".join(notification.flag_names) or "none",
+        )
+        return
+    logger.info(
+        "ANCS positive action requested: uid=%d app=%s app_id=%s title=%r",
+        notification.uid,
+        notification.app_name,
+        notification.app_identifier or "-",
+        notification.headline,
+    )
+    await ancs.perform_positive_action(notification.uid)
+
+
 def _render_ui():
     if not ui:
         return
     try:
-        if _active_notification:
+        if _system_menu_open and hasattr(ui, "render_mode_menu"):
+            ui.render_mode_menu(_system_menu.snapshot())
+        elif _active_notification:
             ui.render_notification(_active_notification, state)
+        elif hasattr(ui, "render_idle") and not (state.title or state.artist or state.duration > 0):
+            ui.render_idle(_system_menu.status_lines())
         else:
             ui.render(state)
     except Exception as e:
         logger.error("UI render error: %s", e)
+
+
+def is_system_menu_open() -> bool:
+    return _system_menu_open
+
+
+async def open_system_menu():
+    global _system_menu_open, _active_notification
+    _system_menu_open = True
+    _active_notification = None
+    _cancel_notification_clear()
+    logger.info("System menu opened")
+    _render_ui()
+
+
+async def close_system_menu():
+    global _system_menu_open
+    _system_menu_open = False
+    logger.info("System menu closed")
+    _render_ui()
+
+
+async def rotate_system_menu(delta):
+    if not _system_menu_open:
+        return
+    _system_menu.move(delta)
+    _render_ui()
+
+
+async def select_system_menu():
+    if not _system_menu_open:
+        return
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, _system_menu.select)
+    _render_ui()
+    if result.get("restart"):
+        schedule_runtime_restart()
+
+
+def schedule_runtime_restart(delay=1.2):
+    global _runtime_restart_task
+    if _runtime_restart_task is not None and not _runtime_restart_task.done():
+        return
+
+    async def restart_later():
+        logger.warning("Runtime restart requested from local system menu")
+        await asyncio.sleep(delay)
+        logging.shutdown()
+        os._exit(RUNTIME_RESTART_EXIT_CODE)
+
+    _runtime_restart_task = asyncio.create_task(restart_later())
+
+
+def on_a2dp_source_start(peer_address):
+    logger.info("A2DP source selected Car Thing as audio output: %s", peer_address)
+    if not ui:
+        return
+    speakers = _a2dp_bridge.speaker_statuses() if _a2dp_bridge is not None else []
+    try:
+        if hasattr(ui, "render_transfer_mode"):
+            ui.render_transfer_mode(speakers, scanning=True)
+            asyncio.create_task(scan_speakers_for_transfer_ui())
+        else:
+            logger.info("Transfer mode UI requested, but current UI has no transfer desktop")
+    except Exception as e:
+        logger.error("Transfer mode UI render error: %s", e)
+
+
+async def scan_speakers_for_transfer_ui():
+    if ui is None or _a2dp_bridge is None:
+        return
+    try:
+        speakers = await _a2dp_bridge.scan_trusted_speakers()
+        if hasattr(ui, "render_transfer_mode"):
+            ui.render_transfer_mode(speakers, scanning=False)
+    except Exception as e:
+        logger.error("Transfer speaker scan failed: %s", e)
 
 
 def _cancel_notification_clear():
@@ -225,6 +395,19 @@ def _schedule_notification_clear(uid: int, delay: float = 8.0):
 async def on_connection(connection: Connection):
     global _last_activity, _last_peer_address, _reconnect_fallback_task
     _last_activity = time.monotonic()
+    connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
+
+    if is_classic_connection(connection):
+        logger.info(
+            "Classic/A2DP peer connected: %s handle=%d encrypted=%s",
+            connection.peer_address,
+            connection.handle,
+            connection.is_encrypted,
+        )
+        if _a2dp_bridge is not None:
+            await _a2dp_bridge.handle_classic_connection(connection)
+        return
+
     _last_peer_address = connection.peer_address
     if _reconnect_fallback_task is not None:
         _reconnect_fallback_task.cancel()
@@ -239,34 +422,90 @@ async def on_connection(connection: Connection):
     connection.on("pairing", lambda keys: on_pairing(connection, keys))
     connection.on("pairing_failure", lambda reason: logger.error("SMP: pairing failed handle=%d reason=%s", connection.handle, reason))
     connection.on("connection_encryption_change", lambda: on_connection_encryption_change(connection))
-    connection.on("disconnection", lambda reason: asyncio.ensure_future(on_disconnection(connection, reason)))
 
     if connection.is_encrypted:
-        await maybe_start_ancs(connection, "connected-encrypted")
-        await maybe_start_ams(connection, "connected-encrypted")
+        await start_post_pair_services(connection, "connected-encrypted")
     else:
         logger.info("Requesting pairing for handle=%d", connection.handle)
         connection.request_pairing()
 
 
+def schedule_post_pair_services(connection: Connection, reason: str):
+    existing = _service_start_tasks.get(connection.handle)
+    if existing is not None and not existing.done():
+        logger.info(
+            "Post-pair services already scheduled: handle=%d reason=%s",
+            connection.handle,
+            reason,
+        )
+        return
+    logger.info("Scheduling post-pair services: handle=%d reason=%s", connection.handle, reason)
+    task = asyncio.create_task(start_post_pair_services(connection, reason))
+    _service_start_tasks[connection.handle] = task
+
+
+async def start_post_pair_services(connection: Connection, reason: str):
+    try:
+        logger.info(
+            "Post-pair services start: handle=%d reason=%s encrypted=%s",
+            connection.handle,
+            reason,
+            connection.is_encrypted,
+        )
+        await maybe_start_ancs(connection, reason)
+        if ancs is not None:
+            for attempt in range(10):
+                if ancs.is_idle():
+                    break
+                logger.info(
+                    "Waiting for ANCS startup traffic: handle=%d attempt=%d pending=%s queued=%d draining=%s",
+                    connection.handle,
+                    attempt + 1,
+                    ancs._pending_uid,
+                    len(ancs._queue),
+                    ancs._draining,
+                )
+                await asyncio.sleep(0.2)
+        await maybe_start_ams(connection, reason)
+    except Exception as exc:
+        logger.error(
+            "Post-pair services failed: handle=%d reason=%s error=%s",
+            connection.handle,
+            reason,
+            exc,
+        )
+        raise
+    finally:
+        current = _service_start_tasks.get(connection.handle)
+        if current is asyncio.current_task():
+            _service_start_tasks.pop(connection.handle, None)
+
+
 def on_pairing(connection: Connection, keys):
+    if not is_media_remote_connection(connection):
+        return
     logger.info("SMP: bonding complete handle=%d keys=%s", connection.handle, keys)
     if _device:
         asyncio.create_task(refresh_accept_list(_device))
     if connection.is_encrypted:
-        asyncio.create_task(maybe_start_ancs(connection, "pairing-complete"))
-        asyncio.create_task(maybe_start_ams(connection, "pairing-complete"))
+        schedule_post_pair_services(connection, "pairing-complete")
 
 
 def on_connection_encryption_change(connection: Connection):
+    if not is_media_remote_connection(connection):
+        logger.info(
+            "Classic encryption change handle=%d encrypted=%s",
+            connection.handle,
+            connection.is_encrypted,
+        )
+        return
     logger.info(
         "Encryption change handle=%d encrypted=%s",
         connection.handle,
         connection.is_encrypted,
     )
     if connection.is_encrypted:
-        asyncio.create_task(maybe_start_ancs(connection, "link-encrypted"))
-        asyncio.create_task(maybe_start_ams(connection, "link-encrypted"))
+        schedule_post_pair_services(connection, "link-encrypted")
 
 
 async def maybe_start_ams(connection: Connection, reason: str):
@@ -325,11 +564,18 @@ async def maybe_start_ancs(connection: Connection, reason: str):
 async def on_disconnection(connection: Connection, reason: int):
     global ams, ancs, _active_conn, _active_notification
     logger.warning("Отключился: %s (reason 0x%02x)", connection.peer_address, reason)
+    if not is_media_remote_connection(connection):
+        logger.info("Classic/A2DP disconnection ignored by media remote state machine")
+        return
+
     ams = None
     ancs = None
     _active_conn = None
     _active_notification = None
     _cancel_notification_clear()
+    task = _service_start_tasks.pop(connection.handle, None)
+    if task is not None and not task.done():
+        task.cancel()
     state.title = "Lost Contact"
     state.artist = "Awaiting Deep Space Relay"
     state.album = ""
@@ -346,6 +592,7 @@ async def on_disconnection(connection: Connection, reason: int):
 
 
 async def start_advertising(device: Device):
+    name = bluetooth_name().encode("utf-8")
     device.advertising_data = bytes(
         AdvertisingData(
             [
@@ -355,7 +602,7 @@ async def start_advertising(device: Device):
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
                     struct.pack("<H", 0x1812),
                 ),
-                (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+                (AdvertisingData.COMPLETE_LOCAL_NAME, name),
             ]
         )
     )
@@ -375,6 +622,7 @@ async def refresh_accept_list(device: Device):
 
 
 async def start_bonded_only_advertising(device: Device):
+    name = bluetooth_name().encode("utf-8")
     device.advertising_data = bytes(
         AdvertisingData(
             [
@@ -384,7 +632,7 @@ async def start_bonded_only_advertising(device: Device):
                     AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
                     struct.pack("<H", 0x1812),
                 ),
-                (AdvertisingData.COMPLETE_LOCAL_NAME, b"CarThing"),
+                (AdvertisingData.COMPLETE_LOCAL_NAME, name),
             ]
         )
     )
@@ -503,11 +751,27 @@ def _last_activity_bump():
 
 
 async def main():
-    global ui, _device
-    device, _transport = await init_ble(configure_device=install_hid_pairing_profile)
+    global ui, _device, _a2dp_bridge, _trusted_devices
+    device, _transport = await init_ble(configure_device=configure_runtime_device)
     _device = device
     device.pairing_config_factory = lambda conn: PairingConfig(sc=True, mitm=False, bonding=True)
     device.on("connection", lambda conn: asyncio.ensure_future(on_connection(conn)))
+
+    if os.environ.get("CARTHING_A2DP_BRIDGE_ENABLE", "0") == "1":
+        _trusted_devices = TrustedDevices()
+        _a2dp_bridge = A2DPBridge(
+            device,
+            receiver_address=os.environ.get("CARTHING_A2DP_RECEIVER"),
+            bt_name=os.environ.get("CARTHING_A2DP_NAME", os.environ.get("CARTHING_BT_ALIAS", "Car Thing Audio")),
+            autoconnect=os.environ.get("CARTHING_A2DP_AUTOCONNECT", "1") == "1",
+            trusted_devices=_trusted_devices,
+            on_source_start=on_a2dp_source_start,
+            logger=logger,
+        )
+        _a2dp_bridge.install_sdp_records()
+        _a2dp_bridge.install_safe_link_key_provider()
+        await _a2dp_bridge.start()
+
     await start_advertising(device)
     logger.info("Car Thing Media Remote запущен.")
 
@@ -524,13 +788,22 @@ async def main():
     try:
         ui = await loop.run_in_executor(None, _init_display)
         logger.info("DRM display ready")
-        if state.title or state.artist:
-            _render_ui()
+        _render_ui()
     except Exception as e:
         logger.error("Display/UI init failed, continuing headless: %s", e)
         ui = None
 
-    await start_input(lambda: ams)
+    await start_input(
+        lambda: ams,
+        get_notification=lambda: _active_notification,
+        on_notification_negative_action=on_notification_negative_action,
+        on_notification_positive_action=on_notification_positive_action,
+        is_system_menu_open=is_system_menu_open,
+        on_system_menu_open=open_system_menu,
+        on_system_menu_close=close_system_menu,
+        on_system_menu_select=select_system_menu,
+        on_system_menu_rotate=rotate_system_menu,
+    )
     await asyncio.get_event_loop().create_future()
 
 

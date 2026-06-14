@@ -12,13 +12,15 @@ stage_dir=${3:-${TMPDIR:-/tmp}/carthing-rootfs-stage}
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 target_dir="$output_dir/target"
-fakeroot_bin="$output_dir/host/bin/fakeroot"
+fakeroot_bin=${FAKEROOT_BIN:-"$output_dir/host/bin/fakeroot"}
+fakeroot_args=${FAKEROOT_ARGS:-}
 mke2fs_bin=${MKE2FS_BIN:-$(command -v mke2fs || true)}
 rootfs_size=${CARTHING_ROOTFS_SIZE:-60M}
 fake_root_ownership=${CARTHING_FAKE_ROOT_OWNERSHIP:-0}
 rootfs_block_size=${CARTHING_ROOTFS_BLOCK_SIZE:-1024}
 rootfs_fs_type=${CARTHING_ROOTFS_FS_TYPE:-ext4}
 rootfs_feature_flags=${CARTHING_ROOTFS_FEATURE_FLAGS:-^64bit}
+rootfs_extended_options=${CARTHING_ROOTFS_EXTENDED_OPTIONS:-root_owner=0:0}
 
 if [ ! -d "$target_dir" ]; then
     echo "missing target dir: $target_dir" >&2
@@ -97,6 +99,11 @@ if [ -e "$stage_dir/bin/busybox" ]; then
 fi
 
 build_image() {
+    extended_args=
+    if [ -n "$rootfs_extended_options" ]; then
+        extended_args="-E $rootfs_extended_options"
+    fi
+    # shellcheck disable=SC2086
     "$mke2fs_bin" \
         -q \
         -t "$rootfs_fs_type" \
@@ -105,13 +112,15 @@ build_image() {
         -L rootfs \
         -m 0 \
         -O "$rootfs_feature_flags" \
+        $extended_args \
         -F \
         -d "$1" \
         "$2"
 }
 
 if [ "$fake_root_ownership" = "1" ]; then
-    STAGE_DIR=$stage_dir ROOTFS_IMG=$rootfs_img MKE2FS_BIN=$mke2fs_bin "$fakeroot_bin" sh -eu <<'EOF'
+    # shellcheck disable=SC2086
+    STAGE_DIR=$stage_dir ROOTFS_IMG=$rootfs_img MKE2FS_BIN=$mke2fs_bin "$fakeroot_bin" $fakeroot_args sh -eu <<'EOF'
 chown -hR 0:0 "$STAGE_DIR"
 "$MKE2FS_BIN" \
     -q \
@@ -121,6 +130,7 @@ chown -hR 0:0 "$STAGE_DIR"
     -L rootfs \
     -m 0 \
     -O "${CARTHING_ROOTFS_FEATURE_FLAGS:-^64bit}" \
+    -E "${CARTHING_ROOTFS_EXTENDED_OPTIONS:-root_owner=0:0}" \
     -F \
     -d "$STAGE_DIR" \
     "$ROOTFS_IMG"
@@ -135,5 +145,5 @@ echo "  target: $target_dir"
 echo "  stage:  $stage_dir"
 echo "  image:  $rootfs_img"
 if [ "$fake_root_ownership" != "1" ]; then
-    echo "  ownership: host uid/gid preserved in image"
+    echo "  ownership: ${rootfs_extended_options:-host uid/gid preserved in image}"
 fi

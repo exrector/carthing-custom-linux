@@ -22,10 +22,26 @@ EVENT_ADDED = 0
 EVENT_MODIFIED = 1
 EVENT_REMOVED = 2
 
+COMMAND_GET_NOTIFICATION_ATTRIBUTES = 0x00
+COMMAND_PERFORM_NOTIFICATION_ACTION = 0x02
+
+FLAG_SILENT = 1 << 0
+FLAG_IMPORTANT = 1 << 1
+FLAG_PREEXISTING = 1 << 2
+FLAG_POSITIVE_ACTION = 1 << 3
+FLAG_NEGATIVE_ACTION = 1 << 4
+
+ACTION_POSITIVE = 0x00
+ACTION_NEGATIVE = 0x01
+
 ATTRIBUTE_APP_IDENTIFIER = 0
 ATTRIBUTE_TITLE = 1
 ATTRIBUTE_SUBTITLE = 2
 ATTRIBUTE_MESSAGE = 3
+ATTRIBUTE_MESSAGE_SIZE = 4
+ATTRIBUTE_DATE = 5
+ATTRIBUTE_POSITIVE_ACTION_LABEL = 6
+ATTRIBUTE_NEGATIVE_ACTION_LABEL = 7
 
 _EXPECTED_ATTRIBUTE_IDS = {
     ATTRIBUTE_APP_IDENTIFIER,
@@ -46,6 +62,7 @@ _CATEGORY_NAMES = {
     9: "Business",
     10: "Location",
     11: "Entertainment",
+    12: "Active Call",
 }
 
 _APP_NAME_OVERRIDES = {
@@ -56,6 +73,14 @@ _APP_NAME_OVERRIDES = {
     "com.apple.Preferences": "Settings",
     "com.apple.reminders": "Reminders",
 }
+
+_FLAG_NAMES = (
+    (FLAG_SILENT, "silent"),
+    (FLAG_IMPORTANT, "important"),
+    (FLAG_PREEXISTING, "preexisting"),
+    (FLAG_POSITIVE_ACTION, "positive-action"),
+    (FLAG_NEGATIVE_ACTION, "negative-action"),
+)
 
 
 @dataclass
@@ -69,6 +94,10 @@ class NotificationState:
     title: str = ""
     subtitle: str = ""
     message: str = ""
+    message_size: str = ""
+    date: str = ""
+    positive_action_label: str = ""
+    negative_action_label: str = ""
     received_monotonic: float = field(default_factory=time.monotonic)
 
     @property
@@ -95,6 +124,49 @@ class NotificationState:
             return self.message
         return self.subtitle
 
+    @property
+    def date_display(self) -> str:
+        if len(self.date) == 15 and self.date[8] == "T":
+            return f"{self.date[0:4]}-{self.date[4:6]}-{self.date[6:8]} {self.date[9:11]}:{self.date[11:13]}:{self.date[13:15]}"
+        return self.date
+
+    @property
+    def is_silent(self) -> bool:
+        return bool(self.event_flags & FLAG_SILENT)
+
+    @property
+    def is_important(self) -> bool:
+        return bool(self.event_flags & FLAG_IMPORTANT)
+
+    @property
+    def is_preexisting(self) -> bool:
+        return bool(self.event_flags & FLAG_PREEXISTING)
+
+    @property
+    def has_positive_action(self) -> bool:
+        return bool(self.event_flags & FLAG_POSITIVE_ACTION)
+
+    @property
+    def has_negative_action(self) -> bool:
+        return bool(self.event_flags & FLAG_NEGATIVE_ACTION)
+
+    @property
+    def has_actions(self) -> bool:
+        return self.has_positive_action or self.has_negative_action
+
+    @property
+    def flag_names(self) -> list[str]:
+        return [name for bit, name in _FLAG_NAMES if self.event_flags & bit]
+
+    @property
+    def action_hint(self) -> str:
+        parts = []
+        if self.has_positive_action:
+            parts.append(f"Press:{self.positive_action_label or 'Positive'}")
+        if self.has_negative_action:
+            parts.append(f"Back:{self.negative_action_label or 'Negative'}")
+        return " | ".join(parts)
+
 
 class ANCSClient:
     def __init__(self, on_notification=None, on_removed=None):
@@ -114,6 +186,11 @@ class ANCSClient:
         if self._client is None:
             self._client = Client(connection)
             connection.gatt_client = self._client
+        logger.info(
+            "ANCS: using client id=%s on %s",
+            hex(id(self._client)),
+            connection.peer_address,
+        )
 
         logger.info("ANCS: discovering services on %s", connection.peer_address)
         await self._client.discover_service(ANCS_SERVICE_UUID)
@@ -134,10 +211,19 @@ class ANCSClient:
             return False
 
         self._control_point_char = control_point
-        await notification_source.subscribe(self._handle_notification_source)
         await data_source.subscribe(self._handle_data_source)
-        logger.info("ANCS: subscribed to Notification Source and Data Source")
+        await notification_source.subscribe(self._handle_notification_source)
+        logger.info(
+            "ANCS: subscribed data=0x%04X source=0x%04X client=%s handles=%s",
+            data_source.handle,
+            notification_source.handle,
+            hex(id(self._client)),
+            [f"0x{handle:04X}" for handle in sorted(self._client.notification_subscribers)],
+        )
         return True
+
+    def is_idle(self) -> bool:
+        return self._pending_uid is None and not self._queue and not self._draining
 
     def _handle_notification_source(self, value):
         if len(value) < 8:
@@ -151,12 +237,19 @@ class ANCSClient:
         uid = int.from_bytes(value[4:8], "little")
 
         logger.info(
-            "ANCS source: event=%d category=%d count=%d uid=%d flags=0x%02x",
+            "ANCS source: event=%d category=%d count=%d uid=%d flags=0x%02x (%s)",
             event_id,
             category_id,
             category_count,
             uid,
             event_flags,
+            ", ".join(name for name in NotificationState(
+                uid=uid,
+                event_id=event_id,
+                event_flags=event_flags,
+                category_id=category_id,
+                category_count=category_count,
+            ).flag_names) or "none",
         )
 
         if event_id == EVENT_REMOVED:
@@ -207,13 +300,21 @@ class ANCSClient:
         notification.title = parsed.get(ATTRIBUTE_TITLE, "")
         notification.subtitle = parsed.get(ATTRIBUTE_SUBTITLE, "")
         notification.message = parsed.get(ATTRIBUTE_MESSAGE, "")
+        notification.message_size = parsed.get(ATTRIBUTE_MESSAGE_SIZE, "")
+        notification.date = parsed.get(ATTRIBUTE_DATE, "")
+        notification.positive_action_label = parsed.get(ATTRIBUTE_POSITIVE_ACTION_LABEL, "")
+        notification.negative_action_label = parsed.get(ATTRIBUTE_NEGATIVE_ACTION_LABEL, "")
         self._notifications_by_uid[notification.uid] = notification
 
         logger.info(
-            "ANCS notification ready: app=%s title=%r message=%r",
+            "ANCS notification ready: app=%s app_id=%s title=%r message=%r flags=%s date=%s actions=%s",
             notification.app_name,
+            notification.app_identifier or "-",
             notification.headline,
             notification.body,
+            ",".join(notification.flag_names) or "none",
+            notification.date_display or "-",
+            notification.action_hint or "-",
         )
 
         self._pending_uid = None
@@ -249,7 +350,7 @@ class ANCSClient:
         self._pending_uid = uid
         self._pending_buffer.clear()
 
-        request = bytearray([0x00])
+        request = bytearray([COMMAND_GET_NOTIFICATION_ATTRIBUTES])
         request.extend(uid.to_bytes(4, "little"))
         request.append(ATTRIBUTE_APP_IDENTIFIER)
         request.append(ATTRIBUTE_TITLE)
@@ -258,9 +359,38 @@ class ANCSClient:
         request.extend((64).to_bytes(2, "little"))
         request.append(ATTRIBUTE_MESSAGE)
         request.extend((192).to_bytes(2, "little"))
+        request.append(ATTRIBUTE_MESSAGE_SIZE)
+        request.append(ATTRIBUTE_DATE)
+        request.append(ATTRIBUTE_POSITIVE_ACTION_LABEL)
+        request.extend((48).to_bytes(2, "little"))
+        request.append(ATTRIBUTE_NEGATIVE_ACTION_LABEL)
+        request.extend((48).to_bytes(2, "little"))
 
         logger.info("ANCS request attributes for uid=%d", uid)
         await self._control_point_char.write_value(bytes(request), with_response=True)
+
+    async def perform_notification_action(self, uid: int, action_id: int):
+        if self._control_point_char is None:
+            raise RuntimeError("ANCS control point unavailable")
+        if action_id not in (ACTION_POSITIVE, ACTION_NEGATIVE):
+            raise ValueError(f"Unsupported ANCS action id: {action_id}")
+
+        request = bytearray([COMMAND_PERFORM_NOTIFICATION_ACTION])
+        request.extend(uid.to_bytes(4, "little"))
+        request.append(action_id)
+
+        logger.info(
+            "ANCS perform action: uid=%d action=%s",
+            uid,
+            "positive" if action_id == ACTION_POSITIVE else "negative",
+        )
+        await self._control_point_char.write_value(bytes(request), with_response=True)
+
+    async def perform_positive_action(self, uid: int):
+        await self.perform_notification_action(uid, ACTION_POSITIVE)
+
+    async def perform_negative_action(self, uid: int):
+        await self.perform_notification_action(uid, ACTION_NEGATIVE)
 
     def _try_parse_pending_attributes(self):
         if self._pending_uid is None:

@@ -778,7 +778,12 @@ class Client:
         # Call all subscribers
         subscribers = self.notification_subscribers.get(notification.attribute_handle, [])
         if not subscribers:
-            logger.warning('!!! received notification with no subscriber')
+            logger.warning(
+                '!!! received notification with no subscriber: client=%s handle=0x%04X known=%s',
+                hex(id(self)),
+                notification.attribute_handle,
+                [f'0x{handle:04X}' for handle in sorted(self.notification_subscribers)],
+            )
         for subscriber in subscribers:
             if callable(subscriber):
                 subscriber(notification.attribute_value)

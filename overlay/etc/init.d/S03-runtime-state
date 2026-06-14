@@ -7,6 +7,7 @@ state_device=${CARTHING_STATE_DEVICE:-/dev/mmcblk0p1}
 state_mount=${CARTHING_STATE_MOUNT:-/run/carthing-state}
 keys_file=${CARTHING_RUNTIME_KEYS:-$state_mount/carthing/keys.json}
 keys_dir=$(dirname "$keys_file")
+profile_dir=${CARTHING_PROFILE_DIR:-$state_mount/carthing/profiles}
 
 mkdir -p "$state_mount"
 
@@ -14,10 +15,16 @@ if ! awk -v target="$state_mount" '$2 == target { found = 1 } END { exit(found ?
     mount -t vfat "$state_device" "$state_mount"
 fi
 
-mkdir -p "$keys_dir"
+mkdir -p "$keys_dir" "$profile_dir" /run/carthing
 
 if [ ! -f "$keys_file" ]; then
     printf '{}\n' > "$keys_file"
 fi
 
-echo "[S11-runtime-state] state mounted on $state_mount, keys at $keys_file"
+for domain in bt audio sensor debug; do
+    if [ -x /usr/libexec/carthing/profilectl ]; then
+        /usr/libexec/carthing/profilectl "$domain" apply 2>/run/carthing/profilectl-"$domain".log || true
+    fi
+done
+
+echo "[S03-runtime-state] state mounted on $state_mount, keys at $keys_file"

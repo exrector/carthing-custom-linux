@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from runtime_paths import BD_ADDRESS, KEYSTORE_PATH, TRANSPORT
 from bumble.device import Device
 from bumble.host import Host
@@ -13,8 +14,10 @@ async def init_ble(configure_device=None, on_ready=None):
     logger.info("Opening transport %s", TRANSPORT)
     transport = await open_transport_or_link(TRANSPORT)
 
+    device_name = os.environ.get("CARTHING_BT_ALIAS") or os.environ.get("CARTHING_A2DP_NAME") or "CarThing"
+
     device = Device(
-        name="CarThing",
+        name=device_name,
         address=BD_ADDRESS,
         host=Host(
             controller_source=transport.source,

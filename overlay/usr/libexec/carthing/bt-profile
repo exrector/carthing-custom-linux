@@ -1,0 +1,90 @@
+#!/bin/sh
+set -eu
+
+[ -r /etc/default/carthing ] && . /etc/default/carthing
+
+profile_file=${CARTHING_BT_PROFILE_FILE:-/run/carthing/bt-profile}
+runtime_file=${CARTHING_BT_RUNTIME_PROFILE:-/run/carthing/bt-runtime.env}
+
+usage() {
+    echo "usage: bt-profile get|set <profile>|apply|list|status" >&2
+    exit 2
+}
+
+ensure_dirs() {
+    mkdir -p "$(dirname "$profile_file")" "$(dirname "$runtime_file")"
+}
+
+write_runtime() {
+    ensure_dirs
+    profile=$1
+    case "$profile" in
+        remote)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_BT_ROLE=remote
+CARTHING_A2DP_BRIDGE_ENABLE=0
+EOF
+            ;;
+        transfer)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_BT_ROLE=transfer
+CARTHING_A2DP_BRIDGE_ENABLE=1
+EOF
+            ;;
+        mac)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_BT_ROLE=mac
+CARTHING_A2DP_BRIDGE_ENABLE=0
+EOF
+            ;;
+        all)
+            cat >"$runtime_file" <<'EOF'
+CARTHING_BT_ROLE=all
+CARTHING_A2DP_BRIDGE_ENABLE=1
+EOF
+            ;;
+        *)
+            echo "unsupported bt profile: $profile" >&2
+            exit 1
+            ;;
+    esac
+}
+
+current_profile() {
+    if [ -r "$profile_file" ]; then
+        head -n 1 "$profile_file"
+    else
+        echo "${CARTHING_BT_ROLE:-remote}"
+    fi
+}
+
+case "${1:-}" in
+    get)
+        current_profile
+        ;;
+    set)
+        [ $# -eq 2 ] || usage
+        ensure_dirs
+        printf '%s\n' "$2" >"$profile_file"
+        write_runtime "$2"
+        ;;
+    apply)
+        profile="${2:-$(current_profile)}"
+        write_runtime "$profile"
+        ;;
+    list)
+        cat <<'EOF'
+remote
+transfer
+mac
+all
+EOF
+        ;;
+    status)
+        echo "profile=$(current_profile)"
+        [ -r "$runtime_file" ] && cat "$runtime_file"
+        ;;
+    *)
+        usage
+        ;;
+esac

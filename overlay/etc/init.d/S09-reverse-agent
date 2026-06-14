@@ -2,6 +2,7 @@
 set -eu
 
 . /etc/default/carthing
+[ -r "${CARTHING_DEBUG_RUNTIME_PROFILE:-/run/carthing/debug-runtime.env}" ] && . "${CARTHING_DEBUG_RUNTIME_PROFILE:-/run/carthing/debug-runtime.env}"
 
 [ "${CARTHING_REVERSE_AGENT_ENABLE:-0}" = "1" ] || exit 0
 

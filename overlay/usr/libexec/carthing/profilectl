@@ -1,0 +1,54 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    echo "usage: profilectl list|status|<domain> <command> [args]" >&2
+    echo "domains: usb bt audio sensor debug" >&2
+    exit 2
+}
+
+tool_for_domain() {
+    case "$1" in
+        usb) echo /usr/libexec/carthing/usb-profile ;;
+        bt|bluetooth) echo /usr/libexec/carthing/bt-profile ;;
+        audio) echo /usr/libexec/carthing/audio-profile ;;
+        sensor|sensors) echo /usr/libexec/carthing/sensor-profile ;;
+        debug) echo /usr/libexec/carthing/debug-profile ;;
+        *) return 1 ;;
+    esac
+}
+
+run_domain() {
+    domain=$1
+    shift
+    tool=$(tool_for_domain "$domain") || usage
+    [ -x "$tool" ] || {
+        echo "profile manager missing: $tool" >&2
+        exit 1
+    }
+    "$tool" "$@"
+}
+
+case "${1:-}" in
+    list)
+        for domain in usb bt audio sensor debug; do
+            echo "[$domain]"
+            run_domain "$domain" list
+        done
+        ;;
+    status)
+        for domain in usb bt audio sensor debug; do
+            echo "[$domain]"
+            run_domain "$domain" status 2>/dev/null || run_domain "$domain" get
+        done
+        ;;
+    usb|bt|bluetooth|audio|sensor|sensors|debug)
+        domain=$1
+        shift
+        [ $# -gt 0 ] || usage
+        run_domain "$domain" "$@"
+        ;;
+    *)
+        usage
+        ;;
+esac

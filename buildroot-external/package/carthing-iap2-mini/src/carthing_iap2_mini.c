@@ -240,6 +240,14 @@ static const uint8_t EIR_UUID_CAFF_LE[16] = {
     0xff, 0xca, 0xca, 0xde, 0xaf, 0xde, 0xca, 0xde,
     0xde, 0xfa, 0xca, 0xde, 0x00, 0x00, 0x00, 0x00
 };
+static const uint8_t OBEX_TARGET_PBAP[16] = {
+    0x79, 0x61, 0x35, 0xF0, 0xF0, 0xC5, 0x11, 0xD8,
+    0x09, 0x66, 0x08, 0x00, 0x20, 0x0C, 0x9A, 0x66
+};
+static const uint8_t OBEX_TARGET_MAP_MAS[16] = {
+    0xBB, 0x58, 0x2B, 0x40, 0x42, 0x0C, 0x11, 0xDB,
+    0xB0, 0xDE, 0x08, 0x00, 0x20, 0x0C, 0x9A, 0x66
+};
 
 static const uint8_t kHidConsumerDesc[] = {
     0x05, 0x0C,
@@ -257,7 +265,98 @@ static const uint8_t kHidConsumerDesc[] = {
 
 static const uint8_t SDP_ATTR_HANDLE[] = { 0x0A, 0x00, 0x01, 0x00, 0x00 };
 
+struct named_sdp_uuid16 {
+    const char *name;
+    uint16_t uuid16;
+};
+
+static const struct named_sdp_uuid16 kNamedSdpUuid16[] = {
+    {"hfp_ag", 0x111F},
+    {"hfp_hf", 0x111E},
+    {"pbap_pse", 0x112F},
+    {"pbap", 0x1130},
+    {"map_mas", 0x1132},
+    {"map", 0x1134},
+    {"avrcp_target", 0x110C},
+    {"avrcp", 0x110E},
+    {"avrcp_controller", 0x110F},
+    {"a2dp", 0x110D},
+    {"audio_source", 0x110A},
+};
+
 static int env_u8(const char *name, int defv, int minv, int maxv);
+static int open_service_rfcomm_session(int hci_dev, const char *addr_str, const char *service_spec,
+                                       int watch_timeout, pid_t *watch_pid_out, int *fd_out,
+                                       int *channel_out);
+
+static int folded_spec_char(int ch) {
+    if (ch == '-') {
+        ch = '_';
+    }
+    return tolower((unsigned char)ch);
+}
+
+static int spec_name_equal(const char *a, const char *b) {
+    while (*a && *b) {
+        if (folded_spec_char(*a) != folded_spec_char(*b)) {
+            return 0;
+        }
+        ++a;
+        ++b;
+    }
+    return *a == '\0' && *b == '\0';
+}
+
+static int sdp_named_uuid16_lookup(const char *spec, uint16_t *uuid16_out) {
+    size_t i;
+
+    for (i = 0; i < sizeof(kNamedSdpUuid16) / sizeof(kNamedSdpUuid16[0]); ++i) {
+        if (spec_name_equal(spec, kNamedSdpUuid16[i].name)) {
+            *uuid16_out = kNamedSdpUuid16[i].uuid16;
+            return 0;
+        }
+    }
+    errno = EINVAL;
+    return -1;
+}
+
+static int sdp_build_uuid_search_element(const char *spec, uint8_t *uuid_de, size_t *uuid_de_len) {
+    uint16_t uuid16;
+    char *end = NULL;
+    unsigned long n;
+
+    if (spec_name_equal(spec, "cafe")) {
+        uuid_de[0] = 0x1C;
+        memcpy(uuid_de + 1, SDP_UUID_CAFE, sizeof(SDP_UUID_CAFE));
+        *uuid_de_len = 1 + sizeof(SDP_UUID_CAFE);
+        return 0;
+    }
+    if (spec_name_equal(spec, "caff")) {
+        uuid_de[0] = 0x1C;
+        memcpy(uuid_de + 1, SDP_UUID_CAFF, sizeof(SDP_UUID_CAFF));
+        *uuid_de_len = 1 + sizeof(SDP_UUID_CAFF);
+        return 0;
+    }
+    if (sdp_named_uuid16_lookup(spec, &uuid16) == 0) {
+        uuid_de[0] = 0x19;
+        uuid_de[1] = (uint8_t)(uuid16 >> 8);
+        uuid_de[2] = (uint8_t)(uuid16 & 0xff);
+        *uuid_de_len = 3;
+        return 0;
+    }
+
+    n = strtoul(spec, &end, 0);
+    if (end && *end == '\0' && n <= 0xfffful) {
+        uuid_de[0] = 0x19;
+        uuid_de[1] = (uint8_t)(n >> 8);
+        uuid_de[2] = (uint8_t)(n & 0xff);
+        *uuid_de_len = 3;
+        return 0;
+    }
+
+    errno = EINVAL;
+    return -1;
+}
 
 static int open_input_event(const char *path) {
     if (!path || !*path) {
@@ -2314,6 +2413,11 @@ static void read_file_str(const char *path, char *buf, size_t maxlen, const char
 }
 
 static void read_serial(char *buf, size_t maxlen) {
+    const char *override = getenv("CARTHING_IAP2_SERIAL");
+    if (override && override[0]) {
+        snprintf(buf, maxlen, "%s", override);
+        return;
+    }
     read_file_str("/run/carthing-state/serial_number", buf, maxlen, "");
     if (!buf[0]) {
         read_file_str("/var/etc/serial_number", buf, maxlen, "");
@@ -2404,6 +2508,11 @@ static const char *app_launch_bundle_id(void) {
     return (v && v[0]) ? v : NULL;
 }
 
+static const char *env_or_default(const char *name, const char *defv) {
+    const char *v = getenv(name);
+    return (v && v[0]) ? v : defv;
+}
+
 static int parse_message_id_list_env(const char *name, uint8_t *buf, size_t maxlen,
                                      size_t *out_len, int *was_set) {
     const char *v = getenv(name);
@@ -2453,6 +2562,26 @@ static int parse_message_id_list_env(const char *name, uint8_t *buf, size_t maxl
     return 0;
 }
 
+static int parse_optional_uint_env(const char *name, unsigned long maxv,
+                                   unsigned long *out, int *was_set) {
+    const char *v = getenv(name);
+    char *end = NULL;
+    unsigned long n;
+
+    *was_set = 0;
+    if (!v || !*v) {
+        return 0;
+    }
+    errno = 0;
+    n = strtoul(v, &end, 0);
+    if (end == v || errno != 0 || *end != '\0' || n > maxv) {
+        return -1;
+    }
+    *out = n;
+    *was_set = 1;
+    return 0;
+}
+
 static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_len) {
     size_t off = 0;
     size_t btc_off = 0;
@@ -2469,9 +2598,16 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
     size_t recv_ids_custom_len = 0;
     int sent_ids_custom_set = 0;
     int recv_ids_custom_set = 0;
+    unsigned long ea_protocol_id_ul = 0;
+    unsigned long ea_native_tc_id_ul = 0;
+    int ea_protocol_id_set = 0;
+    int ea_native_tc_id_set = 0;
     enum identification_msgset msgset = identification_msgset();
     const char *protocol = ea_protocol_name();
     const char *bundle_seed = preferred_bundle_seed_identifier();
+    const char *accessory_name = env_or_default("CARTHING_IAP2_ACCESSORY_NAME", "Spotify Car Thing");
+    const char *accessory_model = env_or_default("CARTHING_IAP2_ACCESSORY_MODEL", "Car Thing");
+    const char *accessory_manufacturer = env_or_default("CARTHING_IAP2_ACCESSORY_MANUFACTURER", "Spotify USA Inc.");
 
     read_serial(serial, sizeof(serial));
     if (parse_message_id_list_env("CARTHING_IAP2_ID_MSGSET_SENT_IDS",
@@ -2486,10 +2622,20 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
         perror("parse CARTHING_IAP2_ID_MSGSET_RECV_IDS");
         return -1;
     }
+    if (parse_optional_uint_env("CARTHING_IAP2_EA_PROTOCOL_ID", 255,
+                                &ea_protocol_id_ul, &ea_protocol_id_set) < 0) {
+        perror("parse CARTHING_IAP2_EA_PROTOCOL_ID");
+        return -1;
+    }
+    if (parse_optional_uint_env("CARTHING_IAP2_EA_NATIVE_TC_ID", 0xffff,
+                                &ea_native_tc_id_ul, &ea_native_tc_id_set) < 0) {
+        perror("parse CARTHING_IAP2_EA_NATIVE_TC_ID");
+        return -1;
+    }
 
-    if (append_tlv_cstr(buf, maxlen, &off, 0x0000, "Spotify Car Thing") < 0) return -1;
-    if (append_tlv_cstr(buf, maxlen, &off, 0x0001, "Car Thing") < 0) return -1;
-    if (append_tlv_cstr(buf, maxlen, &off, 0x0002, "Spotify USA Inc.") < 0) return -1;
+    if (append_tlv_cstr(buf, maxlen, &off, 0x0000, accessory_name) < 0) return -1;
+    if (append_tlv_cstr(buf, maxlen, &off, 0x0001, accessory_model) < 0) return -1;
+    if (append_tlv_cstr(buf, maxlen, &off, 0x0002, accessory_manufacturer) < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0003, serial) < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0004, "1.0.0") < 0) return -1;
     if (append_tlv_cstr(buf, maxlen, &off, 0x0005, "1.0") < 0) return -1;
@@ -2553,12 +2699,18 @@ static int build_identification_params(uint8_t *buf, size_t maxlen, size_t *out_
     if (protocol && protocol[0]) {
         uint8_t eap[256];
         size_t eap_off = 0;
-        uint8_t protocol_id = 0x00;
+        uint8_t protocol_id = (uint8_t)(ea_protocol_id_set ? ea_protocol_id_ul : 0x00);
         uint8_t match_action = (uint8_t)env_u8("CARTHING_IAP2_EA_MATCH_ACTION", 1, 0, 2);
+        uint8_t native_tc_id[2];
 
         if (append_tlv(eap, sizeof(eap), &eap_off, 0x0000, &protocol_id, sizeof(protocol_id)) < 0) return -1;
         if (append_tlv_cstr(eap, sizeof(eap), &eap_off, 0x0001, protocol) < 0) return -1;
         if (append_tlv(eap, sizeof(eap), &eap_off, 0x0002, &match_action, sizeof(match_action)) < 0) return -1;
+        if (ea_native_tc_id_set) {
+            native_tc_id[0] = (uint8_t)((ea_native_tc_id_ul >> 8) & 0xff);
+            native_tc_id[1] = (uint8_t)(ea_native_tc_id_ul & 0xff);
+            if (append_tlv(eap, sizeof(eap), &eap_off, 0x0003, native_tc_id, sizeof(native_tc_id)) < 0) return -1;
+        }
         if (append_tlv(buf, maxlen, &off, 0x000A, eap, eap_off) < 0) return -1;
     }
     if (bundle_seed && bundle_seed[0]) {
@@ -3894,7 +4046,39 @@ static int sdp_extract_rfcomm_channel_from_pdl(const uint8_t *value, size_t valu
     return -1;
 }
 
-static int sdp_extract_rfcomm_channel_from_attr_list(const uint8_t *attr_list, size_t attr_list_len) {
+static int sdp_extract_rfcomm_channel_from_additional_pdl_list(const uint8_t *value,
+                                                               size_t value_len) {
+    uint8_t type;
+    size_t hdr_len;
+    size_t val_len;
+    size_t off;
+
+    if (sdp_de_parse_header(value, value_len, &type, &hdr_len, &val_len) < 0 || type != 6) {
+        return -1;
+    }
+    off = hdr_len;
+    while (off < hdr_len + val_len) {
+        const uint8_t *elem = value + off;
+        size_t remain = hdr_len + val_len - off;
+        uint8_t et;
+        size_t eh;
+        size_t ev;
+        int channel;
+
+        if (sdp_de_parse_header(elem, remain, &et, &eh, &ev) < 0 || et != 6) {
+            return -1;
+        }
+        channel = sdp_extract_rfcomm_channel_from_pdl(elem, eh + ev);
+        if (channel > 0) {
+            return channel;
+        }
+        off += eh + ev;
+    }
+    return -1;
+}
+
+static int sdp_extract_rfcomm_channel_from_single_attr_list(const uint8_t *attr_list,
+                                                            size_t attr_list_len) {
     uint8_t type;
     size_t hdr_len;
     size_t val_len;
@@ -3932,12 +4116,68 @@ static int sdp_extract_rfcomm_channel_from_attr_list(const uint8_t *attr_list, s
         if (attr_id == 0x0004) {
             return sdp_extract_rfcomm_channel_from_pdl(value_de, value_hdr + value_val);
         }
+        if (attr_id == 0x000D) {
+            return sdp_extract_rfcomm_channel_from_additional_pdl_list(value_de,
+                                                                       value_hdr + value_val);
+        }
         off += value_hdr + value_val;
     }
     return -1;
 }
 
-static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[16]) {
+static int sdp_extract_rfcomm_channel_from_attr_list(const uint8_t *attr_list, size_t attr_list_len) {
+    uint8_t type;
+    size_t hdr_len;
+    size_t val_len;
+    size_t off;
+    const uint8_t *first_elem;
+    size_t remain;
+    uint8_t first_type;
+    size_t first_hdr;
+    size_t first_val;
+
+    if (sdp_de_parse_header(attr_list, attr_list_len, &type, &hdr_len, &val_len) < 0 || type != 6) {
+        return -1;
+    }
+    if (hdr_len + val_len <= hdr_len) {
+        return -1;
+    }
+
+    first_elem = attr_list + hdr_len;
+    remain = val_len;
+    if (sdp_de_parse_header(first_elem, remain, &first_type, &first_hdr, &first_val) < 0) {
+        return -1;
+    }
+
+    if (first_type == 1 && first_val == 2) {
+        return sdp_extract_rfcomm_channel_from_single_attr_list(attr_list, attr_list_len);
+    }
+
+    off = hdr_len;
+    while (off < hdr_len + val_len) {
+        const uint8_t *elem = attr_list + off;
+        size_t elem_remain = hdr_len + val_len - off;
+        uint8_t et;
+        size_t eh;
+        size_t ev;
+        int channel;
+
+        if (sdp_de_parse_header(elem, elem_remain, &et, &eh, &ev) < 0 || et != 6) {
+            return -1;
+        }
+        channel = sdp_extract_rfcomm_channel_from_single_attr_list(elem, eh + ev);
+        if (channel > 0) {
+            return channel;
+        }
+        off += eh + ev;
+    }
+    return -1;
+}
+
+static int sdp_discover_rfcomm_channel_by_search(const char *addr_str,
+                                                 const uint8_t *uuid_de,
+                                                 size_t uuid_de_len,
+                                                 const char *label) {
     int fd;
     uint8_t req[64];
     uint8_t rsp[2048];
@@ -3946,6 +4186,7 @@ static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[
     uint16_t param_len;
     uint16_t attr_bytes;
     int channel = -1;
+    char preview[193];
 
     fd = l2cap_client_connect(addr_str, L2CAP_PSM_SDP);
     if (fd < 0) {
@@ -3957,11 +4198,16 @@ static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[
     req[req_len++] = (uint8_t)(txn_id & 0xff);
     req_len += 2;
 
+    if (uuid_de_len == 0 || uuid_de_len > 17) {
+        close(fd);
+        errno = EINVAL;
+        perror("invalid SDP search uuid");
+        return -1;
+    }
     req[req_len++] = 0x35;
-    req[req_len++] = 0x11;
-    req[req_len++] = 0x1C;
-    memcpy(req + req_len, uuid, 16);
-    req_len += 16;
+    req[req_len++] = (uint8_t)uuid_de_len;
+    memcpy(req + req_len, uuid_de, uuid_de_len);
+    req_len += uuid_de_len;
     req[req_len++] = 0x02;
     req[req_len++] = 0x00;
     req[req_len++] = 0x35;
@@ -4036,8 +4282,820 @@ static int sdp_discover_rfcomm_channel(const char *addr_str, const uint8_t uuid[
         return -1;
     }
     channel = sdp_extract_rfcomm_channel_from_attr_list(rsp + 2, attr_bytes);
-    fprintf(stderr, "[iap2-mini] SDP discovered RFCOMM channel=%d for peer=%s\n", channel, addr_str);
+    fprintf(stderr, "[iap2-mini] SDP discovered RFCOMM channel=%d for service=%s peer=%s\n",
+            channel, label ? label : "<uuid>", addr_str);
+    if (channel <= 0) {
+        size_t preview_len = attr_bytes < 96 ? attr_bytes : 96;
+        hex_preview_bytes(rsp + 2, preview_len, preview, sizeof(preview));
+        fprintf(stderr, "[iap2-mini] SDP attr bytes=%u preview=%s\n",
+                attr_bytes, preview_len > 0 ? preview : "<empty>");
+    }
     return channel;
+}
+
+static int sdp_discover_rfcomm_channel_uuid128(const char *addr_str,
+                                               const uint8_t uuid[16],
+                                               const char *label) {
+    uint8_t uuid_de[17];
+
+    uuid_de[0] = 0x1C;
+    memcpy(uuid_de + 1, uuid, 16);
+    return sdp_discover_rfcomm_channel_by_search(addr_str, uuid_de, sizeof(uuid_de), label);
+}
+
+static int run_sdp_rfcomm_probe(int hci_dev, const char *addr_str, const char *service_spec) {
+    uint8_t uuid_de[17];
+    size_t uuid_de_len = 0;
+    uint16_t handle = 0;
+    pid_t watch_pid = -1;
+    int channel;
+
+    if (sdp_build_uuid_search_element(service_spec, uuid_de, &uuid_de_len) != 0) {
+        fprintf(stderr, "[iap2-mini] unsupported SDP service spec=%s\n", service_spec);
+        return 1;
+    }
+
+    if (getenv("CARTHING_IAP2_SKIP_ACL_CREATE") == NULL) {
+        if (hci_create_acl_link(hci_dev, addr_str, &handle) != 0) {
+            return 1;
+        }
+        fprintf(stderr, "[iap2-mini] waiting for classic ACL settle peer=%s handle=0x%04x\n",
+                addr_str, handle);
+        sleep(2);
+    }
+    watch_pid = hci_spawn_peer_watch(hci_dev, addr_str, handle, 8);
+
+    channel = sdp_discover_rfcomm_channel_by_search(addr_str, uuid_de, uuid_de_len, service_spec);
+    if (watch_pid > 0) {
+        kill(watch_pid, SIGTERM);
+        waitpid(watch_pid, NULL, 0);
+    }
+    if (channel <= 0) {
+        return 1;
+    }
+    printf("%d\n", channel);
+    return 0;
+}
+
+static int rfcomm_probe_exchange(int fd, const uint8_t *tx, size_t tx_len, int read_timeout_ms) {
+    struct pollfd pfd;
+    uint8_t buf[512];
+    int saw_rx = 0;
+
+    if (tx && tx_len > 0) {
+        if (write_all_fd(fd, tx, tx_len) < 0) {
+            perror("write RFCOMM probe");
+            return 1;
+        }
+    }
+
+    for (;;) {
+        int rc;
+
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        rc = poll(&pfd, 1, read_timeout_ms);
+        if (rc == 0) {
+            return saw_rx ? 0 : 1;
+        }
+        if (rc < 0) {
+            perror("poll(RFCOMM probe)");
+            return 1;
+        }
+        if (pfd.revents & POLLIN) {
+            ssize_t n = read(fd, buf, sizeof(buf));
+            if (n < 0) {
+                perror("read RFCOMM probe");
+                return 1;
+            }
+            if (n == 0) {
+                return saw_rx ? 0 : 1;
+            }
+            saw_rx = 1;
+            if (write_all_fd(STDOUT_FILENO, buf, (size_t)n) < 0) {
+                perror("write STDOUT RFCOMM probe");
+                return 1;
+            }
+            continue;
+        }
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            return saw_rx ? 0 : 1;
+        }
+    }
+}
+
+static int read_exact_timeout_fd(int fd, uint8_t *buf, size_t len, int timeout_ms) {
+    size_t off = 0;
+
+    while (off < len) {
+        struct pollfd pfd;
+        int rc;
+        ssize_t n;
+
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        rc = poll(&pfd, 1, timeout_ms);
+        if (rc == 0) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+        if (rc < 0) {
+            return -1;
+        }
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            errno = ECONNRESET;
+            return -1;
+        }
+        if (!(pfd.revents & POLLIN)) {
+            continue;
+        }
+        n = read(fd, buf + off, len - off);
+        if (n < 0) {
+            return -1;
+        }
+        if (n == 0) {
+            errno = ECONNRESET;
+            return -1;
+        }
+        off += (size_t)n;
+    }
+
+    return 0;
+}
+
+static int read_obex_packet(int fd, uint8_t *buf, size_t cap, size_t *len_out, int timeout_ms) {
+    uint8_t hdr[3];
+    uint16_t packet_len;
+
+    if (read_exact_timeout_fd(fd, hdr, sizeof(hdr), timeout_ms) != 0) {
+        perror("read OBEX header");
+        return -1;
+    }
+    packet_len = (uint16_t)((hdr[1] << 8) | hdr[2]);
+    if (packet_len < sizeof(hdr) || packet_len > cap) {
+        errno = EPROTO;
+        perror("invalid OBEX packet size");
+        return -1;
+    }
+    memcpy(buf, hdr, sizeof(hdr));
+    if (packet_len > sizeof(hdr) &&
+        read_exact_timeout_fd(fd, buf + sizeof(hdr), packet_len - sizeof(hdr), timeout_ms) != 0) {
+        perror("read OBEX body");
+        return -1;
+    }
+    *len_out = packet_len;
+    return 0;
+}
+
+static int build_obex_connect_with_target(uint8_t *buf, size_t cap, size_t *len_out,
+                                          const uint8_t target_uuid[16]) {
+    size_t off = 0;
+    uint16_t packet_len;
+
+    if (append_u8(buf, cap, &off, 0x80) != 0 ||
+        append_be16(buf, cap, &off, 0) != 0 ||
+        append_u8(buf, cap, &off, 0x10) != 0 ||
+        append_u8(buf, cap, &off, 0x00) != 0 ||
+        append_be16(buf, cap, &off, 0x0400) != 0 ||
+        append_u8(buf, cap, &off, 0x46) != 0 ||
+        append_be16(buf, cap, &off, 19) != 0 ||
+        append_buf(buf, cap, &off, target_uuid, 16) != 0) {
+        return -1;
+    }
+    packet_len = (uint16_t)off;
+    buf[1] = (uint8_t)(packet_len >> 8);
+    buf[2] = (uint8_t)(packet_len & 0xff);
+    *len_out = off;
+    return 0;
+}
+
+static int build_pbap_obex_connect(uint8_t *buf, size_t cap, size_t *len_out) {
+    return build_obex_connect_with_target(buf, cap, len_out, OBEX_TARGET_PBAP);
+}
+
+static int build_map_obex_connect(uint8_t *buf, size_t cap, size_t *len_out) {
+    return build_obex_connect_with_target(buf, cap, len_out, OBEX_TARGET_MAP_MAS);
+}
+
+static int append_obex_bytes_header(uint8_t *buf, size_t cap, size_t *off, uint8_t header_id,
+                                    const void *value, size_t value_len) {
+    size_t start = *off;
+
+    if (append_u8(buf, cap, off, header_id) != 0 ||
+        append_be16(buf, cap, off, 0) != 0 ||
+        append_buf(buf, cap, off, value, value_len) != 0) {
+        return -1;
+    }
+    buf[start + 1] = (uint8_t)((*off - start) >> 8);
+    buf[start + 2] = (uint8_t)((*off - start) & 0xff);
+    return 0;
+}
+
+static int append_obex_unicode_header_ascii(uint8_t *buf, size_t cap, size_t *off, uint8_t header_id,
+                                            const char *value) {
+    size_t start = *off;
+    size_t i;
+
+    if (append_u8(buf, cap, off, header_id) != 0 ||
+        append_be16(buf, cap, off, 0) != 0) {
+        return -1;
+    }
+    for (i = 0; value[i] != '\0'; ++i) {
+        if (append_u8(buf, cap, off, 0x00) != 0 ||
+            append_u8(buf, cap, off, (uint8_t)value[i]) != 0) {
+            return -1;
+        }
+    }
+    if (append_be16(buf, cap, off, 0x0000) != 0) {
+        return -1;
+    }
+    buf[start + 1] = (uint8_t)((*off - start) >> 8);
+    buf[start + 2] = (uint8_t)((*off - start) & 0xff);
+    return 0;
+}
+
+static int append_obex_u32_header(uint8_t *buf, size_t cap, size_t *off, uint8_t header_id,
+                                  uint32_t value) {
+    return append_u8(buf, cap, off, header_id) == 0 &&
+           append_be32(buf, cap, off, value) == 0 ? 0 : -1;
+}
+
+static int build_obex_get_continue(uint8_t *buf, size_t cap, size_t *len_out) {
+    size_t off = 0;
+
+    if (append_u8(buf, cap, &off, 0x83) != 0 ||
+        append_be16(buf, cap, &off, 3) != 0) {
+        return -1;
+    }
+    *len_out = off;
+    return 0;
+}
+
+static int build_pbap_pull_phonebook_request(uint8_t *buf, size_t cap, size_t *len_out,
+                                             uint32_t connection_id, const char *name,
+                                             uint16_t max_list_count, uint16_t list_start_offset,
+                                             uint8_t format) {
+    static const char pbap_type[] = "x-bt/phonebook";
+    uint8_t app_params[32];
+    size_t app_params_len = 0;
+    size_t off = 0;
+
+    if (append_u8(app_params, sizeof(app_params), &app_params_len, 0x04) != 0 ||
+        append_u8(app_params, sizeof(app_params), &app_params_len, 2) != 0 ||
+        append_be16(app_params, sizeof(app_params), &app_params_len, max_list_count) != 0 ||
+        append_u8(app_params, sizeof(app_params), &app_params_len, 0x05) != 0 ||
+        append_u8(app_params, sizeof(app_params), &app_params_len, 2) != 0 ||
+        append_be16(app_params, sizeof(app_params), &app_params_len, list_start_offset) != 0 ||
+        append_u8(app_params, sizeof(app_params), &app_params_len, 0x07) != 0 ||
+        append_u8(app_params, sizeof(app_params), &app_params_len, 1) != 0 ||
+        append_u8(app_params, sizeof(app_params), &app_params_len, format) != 0) {
+        return -1;
+    }
+
+    if (append_u8(buf, cap, &off, 0x83) != 0 ||
+        append_be16(buf, cap, &off, 0) != 0 ||
+        append_obex_u32_header(buf, cap, &off, 0xCB, connection_id) != 0 ||
+        append_obex_bytes_header(buf, cap, &off, 0x42, pbap_type, sizeof(pbap_type)) != 0 ||
+        append_obex_unicode_header_ascii(buf, cap, &off, 0x01, name) != 0 ||
+        append_obex_bytes_header(buf, cap, &off, 0x4C, app_params, app_params_len) != 0) {
+        return -1;
+    }
+    buf[1] = (uint8_t)(off >> 8);
+    buf[2] = (uint8_t)(off & 0xff);
+    *len_out = off;
+    return 0;
+}
+
+static int obex_next_header(const uint8_t *packet, size_t len, size_t *off_inout,
+                            uint8_t *header_id_out, const uint8_t **value_out,
+                            size_t *value_len_out) {
+    size_t off = *off_inout;
+    uint8_t header_id;
+
+    if (off >= len) {
+        return 0;
+    }
+    header_id = packet[off];
+    if ((header_id & 0xC0) == 0x00 || (header_id & 0xC0) == 0x40) {
+        uint16_t header_len;
+        if (off + 3 > len) {
+            errno = EPROTO;
+            return -1;
+        }
+        header_len = (uint16_t)((packet[off + 1] << 8) | packet[off + 2]);
+        if (header_len < 3 || off + header_len > len) {
+            errno = EPROTO;
+            return -1;
+        }
+        *header_id_out = header_id;
+        *value_out = packet + off + 3;
+        *value_len_out = header_len - 3;
+        *off_inout = off + header_len;
+        return 1;
+    }
+    if ((header_id & 0xC0) == 0x80) {
+        if (off + 2 > len) {
+            errno = EPROTO;
+            return -1;
+        }
+        *header_id_out = header_id;
+        *value_out = packet + off + 1;
+        *value_len_out = 1;
+        *off_inout = off + 2;
+        return 1;
+    }
+    if (off + 5 > len) {
+        errno = EPROTO;
+        return -1;
+    }
+    *header_id_out = header_id;
+    *value_out = packet + off + 1;
+    *value_len_out = 4;
+    *off_inout = off + 5;
+    return 1;
+}
+
+static int obex_find_connection_id(const uint8_t *packet, size_t len, uint32_t *connection_id_out) {
+    size_t off = 7;
+
+    if (len < 7) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    while (off < len) {
+        uint8_t header_id;
+        const uint8_t *value;
+        size_t value_len;
+        int rc = obex_next_header(packet, len, &off, &header_id, &value, &value_len);
+
+        if (rc < 0) {
+            return -1;
+        }
+        if (rc == 0) {
+            break;
+        }
+        if (header_id == 0xCB) {
+            if (value_len != 4) {
+                errno = EPROTO;
+                return -1;
+            }
+            *connection_id_out = ((uint32_t)value[0] << 24) |
+                                 ((uint32_t)value[1] << 16) |
+                                 ((uint32_t)value[2] << 8) |
+                                 (uint32_t)value[3];
+            return 0;
+        }
+    }
+
+    errno = ENOENT;
+    return -1;
+}
+
+static int obex_parse_app_parameters(const uint8_t *value, size_t value_len,
+                                     int *phonebook_size_out, int *new_missed_out) {
+    size_t off = 0;
+
+    while (off + 2 <= value_len) {
+        uint8_t tag = value[off++];
+        uint8_t len = value[off++];
+        if (off + len > value_len) {
+            errno = EPROTO;
+            return -1;
+        }
+        if (tag == 0x08 && len == 2 && phonebook_size_out) {
+            *phonebook_size_out = (value[off] << 8) | value[off + 1];
+        } else if (tag == 0x09 && len == 1 && new_missed_out) {
+            *new_missed_out = value[off];
+        }
+        off += len;
+    }
+    if (off != value_len) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
+static int obex_collect_response_payload(const uint8_t *packet, size_t packet_len,
+                                         uint8_t *body_buf, size_t body_cap, size_t *body_len_inout,
+                                         int *phonebook_size_inout, int *new_missed_inout) {
+    size_t off = 3;
+
+    if (packet_len == 3) {
+        return 0;
+    }
+    if (packet_len < 3) {
+        errno = EPROTO;
+        return -1;
+    }
+    while (off < packet_len) {
+        uint8_t header_id;
+        const uint8_t *value;
+        size_t value_len;
+        int rc = obex_next_header(packet, packet_len, &off, &header_id, &value, &value_len);
+
+        if (rc <= 0) {
+            return rc;
+        }
+        if (header_id == 0x48 || header_id == 0x49) {
+            if (*body_len_inout + value_len > body_cap) {
+                errno = ENOSPC;
+                return -1;
+            }
+            memcpy(body_buf + *body_len_inout, value, value_len);
+            *body_len_inout += value_len;
+        } else if (header_id == 0x4C) {
+            if (obex_parse_app_parameters(value, value_len, phonebook_size_inout, new_missed_inout) != 0) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int open_obex_session(int hci_dev, const char *addr_str, const char *service_spec,
+                             const char *log_label,
+                             int (*build_connect)(uint8_t *buf, size_t cap, size_t *len_out),
+                             pid_t *watch_pid_out, int *fd_out, int *channel_out,
+                             uint32_t *connection_id_out, uint16_t *max_rx_out) {
+    int read_timeout_ms;
+    uint8_t req[64];
+    size_t req_len = 0;
+    uint8_t rsp[512];
+    size_t rsp_len = 0;
+    char preview[3 * 48];
+    uint32_t connection_id = 0;
+
+    if (open_service_rfcomm_session(hci_dev, addr_str, service_spec, 20,
+                                    watch_pid_out, fd_out, channel_out) != 0) {
+        return -1;
+    }
+    if (build_connect(req, sizeof(req), &req_len) != 0) {
+        perror("build OBEX connect");
+        return -1;
+    }
+    fprintf(stderr, "[iap2-mini] %s tx OBEX CONNECT peer=%s ch=%d len=%zu\n",
+            log_label, addr_str, channel_out ? *channel_out : -1, req_len);
+    if (write_all_fd(*fd_out, req, req_len) < 0) {
+        perror("write OBEX CONNECT");
+        return -1;
+    }
+
+    read_timeout_ms = env_u8("CARTHING_IAP2_RFCOMM_READ_TIMEOUT", 3, 1, 30) * 1000;
+    if (read_obex_packet(*fd_out, rsp, sizeof(rsp), &rsp_len, read_timeout_ms) != 0) {
+        return -1;
+    }
+
+    hex_preview_bytes(rsp, rsp_len < 48 ? rsp_len : 48, preview, sizeof(preview));
+    fprintf(stderr, "[iap2-mini] %s rx opcode=0x%02x len=%zu preview=%s\n",
+            log_label, rsp[0], rsp_len, preview[0] ? preview : "<empty>");
+    if (rsp[0] != 0xA0) {
+        fprintf(stderr, "[iap2-mini] %s OBEX CONNECT did not succeed (opcode=0x%02x)\n",
+                log_label, rsp[0]);
+        errno = EPROTO;
+        return -1;
+    }
+    if (rsp_len < 7) {
+        errno = EPROTO;
+        perror("short OBEX response");
+        return -1;
+    }
+    if (obex_find_connection_id(rsp, rsp_len, &connection_id) != 0) {
+        if (errno != ENOENT) {
+            perror("parse OBEX connection-id");
+            return -1;
+        }
+        connection_id = 0;
+    } else {
+        fprintf(stderr, "[iap2-mini] %s connection-id=0x%08x\n", log_label, connection_id);
+    }
+    if (connection_id_out) {
+        *connection_id_out = connection_id;
+    }
+    if (max_rx_out) {
+        *max_rx_out = (uint16_t)((rsp[5] << 8) | rsp[6]);
+    }
+    return 0;
+}
+
+static int open_pbap_obex_session(int hci_dev, const char *addr_str, pid_t *watch_pid_out, int *fd_out,
+                                  int *channel_out, uint32_t *connection_id_out,
+                                  uint16_t *max_rx_out) {
+    return open_obex_session(hci_dev, addr_str, "pbap_pse", "PBAP", build_pbap_obex_connect,
+                             watch_pid_out, fd_out, channel_out, connection_id_out, max_rx_out);
+}
+
+static int open_map_obex_session(int hci_dev, const char *addr_str, pid_t *watch_pid_out, int *fd_out,
+                                 int *channel_out, uint32_t *connection_id_out,
+                                 uint16_t *max_rx_out) {
+    return open_obex_session(hci_dev, addr_str, "map_mas", "MAP", build_map_obex_connect,
+                             watch_pid_out, fd_out, channel_out, connection_id_out, max_rx_out);
+}
+
+static int open_service_rfcomm_session(int hci_dev, const char *addr_str, const char *service_spec,
+                                       int watch_timeout, pid_t *watch_pid_out, int *fd_out,
+                                       int *channel_out) {
+    uint8_t uuid_de[17];
+    size_t uuid_de_len = 0;
+    uint16_t handle = 0;
+    int channel;
+    int fd = -1;
+
+    if (watch_pid_out) {
+        *watch_pid_out = -1;
+    }
+    if (fd_out) {
+        *fd_out = -1;
+    }
+    if (channel_out) {
+        *channel_out = -1;
+    }
+
+    if (sdp_build_uuid_search_element(service_spec, uuid_de, &uuid_de_len) != 0) {
+        fprintf(stderr, "[iap2-mini] failed to build SDP search element for %s\n", service_spec);
+        return -1;
+    }
+
+    if (getenv("CARTHING_IAP2_SKIP_ACL_CREATE") == NULL) {
+        if (hci_create_acl_link(hci_dev, addr_str, &handle) != 0) {
+            return -1;
+        }
+        fprintf(stderr, "[iap2-mini] waiting for classic ACL settle peer=%s handle=0x%04x\n",
+                addr_str, handle);
+        sleep(2);
+    }
+    if (watch_pid_out) {
+        *watch_pid_out = hci_spawn_peer_watch(hci_dev, addr_str, handle, watch_timeout);
+    }
+
+    channel = sdp_discover_rfcomm_channel_by_search(addr_str, uuid_de, uuid_de_len, service_spec);
+    if (channel <= 0) {
+        return -1;
+    }
+
+    fd = rfcomm_client_connect(addr_str, channel);
+    if (fd < 0) {
+        return -1;
+    }
+    fprintf(stderr, "[iap2-mini] RFCOMM connected peer=%s ch=%d for service=%s\n",
+            addr_str, channel, service_spec);
+    if (fd_out) {
+        *fd_out = fd;
+    }
+    if (channel_out) {
+        *channel_out = channel;
+    }
+    return 0;
+}
+
+static int open_hfp_rfcomm_session(int hci_dev, const char *addr_str, int watch_timeout,
+                                   pid_t *watch_pid_out, int *fd_out, int *channel_out) {
+    return open_service_rfcomm_session(hci_dev, addr_str, "hfp_ag", watch_timeout,
+                                       watch_pid_out, fd_out, channel_out);
+}
+
+static void close_rfcomm_session(int fd, pid_t watch_pid) {
+    if (fd >= 0) {
+        close(fd);
+    }
+    if (watch_pid > 0) {
+        kill(watch_pid, SIGTERM);
+        waitpid(watch_pid, NULL, 0);
+    }
+}
+
+static int run_hfp_at_probe(int hci_dev, const char *addr_str, const char *at_command) {
+    pid_t watch_pid = -1;
+    int fd = -1;
+    int rc;
+    int read_timeout_ms;
+    uint8_t tx[256];
+    size_t tx_len = 0;
+    size_t cmd_len;
+
+    if (open_hfp_rfcomm_session(hci_dev, addr_str, 10, &watch_pid, &fd, NULL) != 0) {
+        rc = 1;
+        goto out;
+    }
+
+    cmd_len = strlen(at_command);
+    if (cmd_len + 1 > sizeof(tx)) {
+        errno = EOVERFLOW;
+        perror("HFP AT command too long");
+        rc = 1;
+        goto out;
+    }
+    memcpy(tx, at_command, cmd_len);
+    tx[cmd_len++] = '\r';
+    tx_len = cmd_len;
+
+    read_timeout_ms = env_u8("CARTHING_IAP2_RFCOMM_READ_TIMEOUT", 3, 1, 30) * 1000;
+    rc = rfcomm_probe_exchange(fd, tx, tx_len, read_timeout_ms);
+
+out:
+    close_rfcomm_session(fd, watch_pid);
+    return rc;
+}
+
+static int run_hfp_slc_probe(int hci_dev, const char *addr_str) {
+    static const char *const commands[] = {
+        "AT+BRSF=2072",
+        "AT+CIND=?",
+        "AT+CIND?",
+        "AT+CMER=3,0,0,1",
+    };
+    pid_t watch_pid = -1;
+    int fd = -1;
+    int rc = 0;
+    int read_timeout_ms;
+    int linger_ms;
+    size_t i;
+
+    if (open_hfp_rfcomm_session(hci_dev, addr_str, 20, &watch_pid, &fd, NULL) != 0) {
+        rc = 1;
+        goto out;
+    }
+
+    read_timeout_ms = env_u8("CARTHING_IAP2_RFCOMM_READ_TIMEOUT", 3, 1, 30) * 1000;
+    linger_ms = env_u8("CARTHING_IAP2_HFP_LINGER", 5, 0, 120) * 1000;
+
+    for (i = 0; i < sizeof(commands) / sizeof(commands[0]); ++i) {
+        uint8_t tx[256];
+        size_t cmd_len = strlen(commands[i]);
+
+        if (cmd_len + 1 > sizeof(tx)) {
+            errno = EOVERFLOW;
+            perror("HFP SLC command too long");
+            rc = 1;
+            goto out;
+        }
+        fprintf(stderr, "[iap2-mini] HFP tx %s\n", commands[i]);
+        memcpy(tx, commands[i], cmd_len);
+        tx[cmd_len++] = '\r';
+        rc = rfcomm_probe_exchange(fd, tx, cmd_len, read_timeout_ms);
+        if (rc != 0) {
+            goto out;
+        }
+    }
+
+    if (linger_ms > 0) {
+        fprintf(stderr, "[iap2-mini] HFP linger %dms for unsolicited indicators\n", linger_ms);
+        (void)rfcomm_probe_exchange(fd, NULL, 0, linger_ms);
+    }
+
+out:
+    close_rfcomm_session(fd, watch_pid);
+    return rc;
+}
+
+static int run_pbap_connect_probe(int hci_dev, const char *addr_str) {
+    pid_t watch_pid = -1;
+    int fd = -1;
+    int channel = -1;
+    int rc = 1;
+    uint32_t connection_id = 0;
+    uint16_t max_rx = 0;
+
+    if (open_pbap_obex_session(hci_dev, addr_str, &watch_pid, &fd, &channel, &connection_id, &max_rx) != 0) {
+        goto out;
+    }
+    printf("opcode=0xa0 version=0x10 flags=0x00 max_rx=%u channel=%d",
+           (unsigned)max_rx, channel);
+    if (connection_id != 0) {
+        printf(" connection_id=0x%08x", connection_id);
+    }
+    printf("\n");
+    rc = 0;
+
+out:
+    close_rfcomm_session(fd, watch_pid);
+    return rc;
+}
+
+static int run_map_connect_probe(int hci_dev, const char *addr_str) {
+    pid_t watch_pid = -1;
+    int fd = -1;
+    int channel = -1;
+    int rc = 1;
+    uint32_t connection_id = 0;
+    uint16_t max_rx = 0;
+
+    if (open_map_obex_session(hci_dev, addr_str, &watch_pid, &fd, &channel, &connection_id, &max_rx) != 0) {
+        goto out;
+    }
+    printf("opcode=0xa0 version=0x10 flags=0x00 max_rx=%u channel=%d",
+           (unsigned)max_rx, channel);
+    if (connection_id != 0) {
+        printf(" connection_id=0x%08x", connection_id);
+    }
+    printf("\n");
+    rc = 0;
+
+out:
+    close_rfcomm_session(fd, watch_pid);
+    return rc;
+}
+
+static int run_pbap_pull_phonebook_probe(int hci_dev, const char *addr_str, const char *name) {
+    pid_t watch_pid = -1;
+    int fd = -1;
+    int channel = -1;
+    int rc = 1;
+    int read_timeout_ms;
+    uint32_t connection_id = 0;
+    uint16_t max_rx = 0;
+    uint8_t req[256];
+    size_t req_len = 0;
+    uint8_t rsp[4096];
+    size_t rsp_len = 0;
+    uint8_t continue_req[3];
+    size_t continue_req_len = 0;
+    uint8_t body[16384];
+    size_t body_len = 0;
+    int phonebook_size = -1;
+    int new_missed = -1;
+    int max_list_count;
+    int list_start_offset;
+    int format;
+    char preview[3 * 48];
+
+    if (open_pbap_obex_session(hci_dev, addr_str, &watch_pid, &fd, &channel, &connection_id, &max_rx) != 0) {
+        goto out;
+    }
+    if (connection_id == 0) {
+        fprintf(stderr, "[iap2-mini] PBAP pull requires Connection ID but none was returned\n");
+        goto out;
+    }
+
+    max_list_count = env_u8("CARTHING_IAP2_PBAP_MAX_LIST_COUNT", 1, 0, 255);
+    list_start_offset = env_u8("CARTHING_IAP2_PBAP_LIST_OFFSET", 0, 0, 255);
+    format = env_u8("CARTHING_IAP2_PBAP_FORMAT", 0, 0, 1);
+    if (build_pbap_pull_phonebook_request(req, sizeof(req), &req_len, connection_id, name,
+                                          (uint16_t)max_list_count, (uint16_t)list_start_offset,
+                                          (uint8_t)format) != 0) {
+        perror("build PBAP PullPhoneBook");
+        goto out;
+    }
+    if (build_obex_get_continue(continue_req, sizeof(continue_req), &continue_req_len) != 0) {
+        perror("build OBEX GET continue");
+        goto out;
+    }
+
+    fprintf(stderr,
+            "[iap2-mini] PBAP tx PullPhoneBook peer=%s ch=%d name=%s conn_id=0x%08x max_list=%d offset=%d format=%d len=%zu\n",
+            addr_str, channel, name, connection_id, max_list_count, list_start_offset, format, req_len);
+    if (write_all_fd(fd, req, req_len) < 0) {
+        perror("write PBAP PullPhoneBook");
+        goto out;
+    }
+
+    read_timeout_ms = env_u8("CARTHING_IAP2_RFCOMM_READ_TIMEOUT", 3, 1, 30) * 1000;
+    for (;;) {
+        if (read_obex_packet(fd, rsp, sizeof(rsp), &rsp_len, read_timeout_ms) != 0) {
+            goto out;
+        }
+        hex_preview_bytes(rsp, rsp_len < 48 ? rsp_len : 48, preview, sizeof(preview));
+        fprintf(stderr, "[iap2-mini] PBAP pull rx opcode=0x%02x len=%zu preview=%s\n",
+                rsp[0], rsp_len, preview[0] ? preview : "<empty>");
+        if (obex_collect_response_payload(rsp, rsp_len, body, sizeof(body), &body_len,
+                                          &phonebook_size, &new_missed) != 0) {
+            perror("parse PBAP response payload");
+            goto out;
+        }
+        if (rsp[0] == 0x90) {
+            if (write_all_fd(fd, continue_req, continue_req_len) < 0) {
+                perror("write OBEX GET continue");
+                goto out;
+            }
+            continue;
+        }
+        if (rsp[0] != 0xA0) {
+            fprintf(stderr, "[iap2-mini] PBAP PullPhoneBook failed opcode=0x%02x\n", rsp[0]);
+            goto out;
+        }
+        break;
+    }
+
+    fprintf(stderr, "[iap2-mini] PBAP pull complete body_len=%zu", body_len);
+    if (phonebook_size >= 0) {
+        fprintf(stderr, " phonebook_size=%d", phonebook_size);
+    }
+    if (new_missed >= 0) {
+        fprintf(stderr, " new_missed=%d", new_missed);
+    }
+    fprintf(stderr, "\n");
+    if (body_len > 0 && write_all_fd(STDOUT_FILENO, body, body_len) < 0) {
+        perror("write PBAP body");
+        goto out;
+    }
+    rc = 0;
+
+out:
+    close_rfcomm_session(fd, watch_pid);
+    return rc;
 }
 
 static int run_cafe_connect(int hci_dev, const char *addr_str) {
@@ -4056,10 +5114,10 @@ static int run_cafe_connect(int hci_dev, const char *addr_str) {
     }
     watch_pid = hci_spawn_peer_watch(hci_dev, addr_str, handle, 12);
 
-    channel = sdp_discover_rfcomm_channel(addr_str, SDP_UUID_CAFE);
+    channel = sdp_discover_rfcomm_channel_uuid128(addr_str, SDP_UUID_CAFE, "cafe");
     if (channel <= 0) {
         fprintf(stderr, "[iap2-mini] CAFE discovery failed, trying CAFF fallback\n");
-        channel = sdp_discover_rfcomm_channel(addr_str, SDP_UUID_CAFF);
+        channel = sdp_discover_rfcomm_channel_uuid128(addr_str, SDP_UUID_CAFF, "caff");
     }
     if (channel <= 0) {
         channel = 1;
@@ -4387,6 +5445,12 @@ static void usage(FILE *out) {
         "  carthing-iap2-mini rfcomm-listen\n"
         "  carthing-iap2-mini sdp-listen\n"
         "  carthing-iap2-mini cafe-connect <AA:BB:CC:DD:EE:FF>\n"
+        "  carthing-iap2-mini sdp-rfcomm <AA:BB:CC:DD:EE:FF> <service>\n"
+        "  carthing-iap2-mini hfp-at <AA:BB:CC:DD:EE:FF> <AT...>\n"
+        "  carthing-iap2-mini hfp-slc <AA:BB:CC:DD:EE:FF>\n"
+        "  carthing-iap2-mini pbap-connect <AA:BB:CC:DD:EE:FF>\n"
+        "  carthing-iap2-mini pbap-pull <AA:BB:CC:DD:EE:FF> <name>\n"
+        "  carthing-iap2-mini map-connect <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini transport-daemon\n"
         "  carthing-iap2-mini transport-active <AA:BB:CC:DD:EE:FF>\n"
         "  carthing-iap2-mini hci-read-bdaddr\n"
@@ -4411,14 +5475,27 @@ static void usage(FILE *out) {
         "  CARTHING_IAP2_CLASS_OF_DEVICE=0x240420\n"
         "  CARTHING_IAP2_SKIP_ACL_CREATE=1\n"
         "  CARTHING_IAP2_ID_MSGSET_SENT_IDS='0xEA02,0x40C8'\n"
-        "  CARTHING_IAP2_ID_MSGSET_RECV_IDS='0xEA00,0x4800'\n");
+        "  CARTHING_IAP2_ID_MSGSET_RECV_IDS='0xEA00,0x4800'\n"
+        "  CARTHING_IAP2_EA_PROTOCOL_ID=0\n"
+        "  CARTHING_IAP2_EA_NATIVE_TC_ID=1\n"
+        "\n"
+        "sdp service aliases:\n"
+        "  hfp_ag hfp_hf pbap_pse pbap map_mas map avrcp_target avrcp\n"
+        "  avrcp_controller a2dp audio_source cafe caff or 0xNNNN\n"
+        "\n"
+        "probe env:\n"
+        "  CARTHING_IAP2_RFCOMM_READ_TIMEOUT=3\n"
+        "  CARTHING_IAP2_HFP_LINGER=5\n"
+        "  CARTHING_IAP2_PBAP_MAX_LIST_COUNT=1\n"
+        "  CARTHING_IAP2_PBAP_LIST_OFFSET=0\n"
+        "  CARTHING_IAP2_PBAP_FORMAT=0\n");
 }
 
 int main(int argc, char **argv) {
     int hci_dev = env_u8("CARTHING_IAP2_HCI_DEV", HCI_DEV_DEFAULT, 0, 255);
     signal(SIGPIPE, SIG_IGN);
 
-    if (argc < 2 || argc > 3) {
+    if (argc < 2 || argc > 4) {
         usage(stderr);
         return 2;
     }
@@ -4455,6 +5532,54 @@ int main(int argc, char **argv) {
             return 2;
         }
         return run_cafe_connect(hci_dev, argv[2]);
+    }
+
+    if (strcmp(argv[1], "sdp-rfcomm") == 0) {
+        if (argc != 4) {
+            usage(stderr);
+            return 2;
+        }
+        return run_sdp_rfcomm_probe(hci_dev, argv[2], argv[3]);
+    }
+
+    if (strcmp(argv[1], "hfp-at") == 0) {
+        if (argc != 4) {
+            usage(stderr);
+            return 2;
+        }
+        return run_hfp_at_probe(hci_dev, argv[2], argv[3]);
+    }
+
+    if (strcmp(argv[1], "hfp-slc") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return run_hfp_slc_probe(hci_dev, argv[2]);
+    }
+
+    if (strcmp(argv[1], "pbap-connect") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return run_pbap_connect_probe(hci_dev, argv[2]);
+    }
+
+    if (strcmp(argv[1], "pbap-pull") == 0) {
+        if (argc != 4) {
+            usage(stderr);
+            return 2;
+        }
+        return run_pbap_pull_phonebook_probe(hci_dev, argv[2], argv[3]);
+    }
+
+    if (strcmp(argv[1], "map-connect") == 0) {
+        if (argc != 3) {
+            usage(stderr);
+            return 2;
+        }
+        return run_map_connect_probe(hci_dev, argv[2]);
     }
 
     if (strcmp(argv[1], "transport-daemon") == 0) {

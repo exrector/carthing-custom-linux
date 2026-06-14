@@ -10,7 +10,7 @@ AMS RemoteCommand values:
   0x05 = VolumeUp
   0x06 = VolumeDown
 """
-import asyncio, struct, os, logging
+import asyncio, struct, os, logging, time
 
 log = logging.getLogger(__name__)
 
@@ -43,6 +43,8 @@ CMD_PREV      = 0x04
 CMD_VOL_UP    = 0x05
 CMD_VOL_DOWN  = 0x06
 
+MENU_LONG_PRESS_SECONDS = float(os.environ.get("CARTHING_MENU_LONG_PRESS_SECONDS", "1.0"))
+
 
 async def _read_events(path, callback):
     fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
@@ -62,12 +64,51 @@ async def _read_events(path, callback):
     log.info("Input: watching %s", path)
 
 
-async def start(get_ams):
-    """Start reading encoder + buttons. get_ams() returns current AMSClient or None."""
+async def start(
+    get_ams,
+    get_notification=None,
+    on_notification_negative_action=None,
+    on_notification_positive_action=None,
+    is_system_menu_open=None,
+    on_system_menu_open=None,
+    on_system_menu_close=None,
+    on_system_menu_select=None,
+    on_system_menu_rotate=None,
+):
+    """Start reading encoder + buttons.
+
+    get_ams() returns current AMSClient or None.
+    get_notification() returns the currently displayed notification or None.
+    on_notification_negative_action(notification) triggers the ANCS negative action.
+    on_notification_positive_action(notification) triggers the ANCS positive action.
+    """
+    key_down_at = {}
+
+    def menu_is_open():
+        return bool(is_system_menu_open and is_system_menu_open())
+
+    async def open_menu():
+        if on_system_menu_open is not None:
+            await on_system_menu_open()
+
+    async def close_menu():
+        if on_system_menu_close is not None:
+            await on_system_menu_close()
+
+    async def rotate_menu(delta):
+        if on_system_menu_rotate is not None:
+            await on_system_menu_rotate(delta)
+
+    async def select_menu():
+        if on_system_menu_select is not None:
+            await on_system_menu_select()
 
     async def on_encoder(ev):
         _, _, evtype, code, value = ev
         if evtype == EV_REL and code == REL_HWHEEL:
+            if menu_is_open():
+                await rotate_menu(value)
+                return
             ams = get_ams()
             if not ams:
                 return
@@ -77,23 +118,87 @@ async def start(get_ams):
 
     async def on_buttons(ev):
         _, _, evtype, code, value = ev
-        if evtype != EV_KEY or value != KEY_DOWN:
+        if evtype != EV_KEY:
             return
-        ams = get_ams()
-        if not ams:
-            return
-        if code == KEY_ENTER:
-            log.info("Encoder press → TogglePlayPause")
-            await ams.send_command(CMD_TOGGLE)
-        elif code == KEY_1:
-            log.info("Button 1 → PreviousTrack")
-            await ams.send_command(CMD_PREV)
-        elif code == KEY_2:
-            log.info("Button 2 → NextTrack")
-            await ams.send_command(CMD_NEXT)
-        elif code in (KEY_3, KEY_4):
-            log.info("Button %d → TogglePlayPause", code)
-            await ams.send_command(CMD_TOGGLE)
+        if value == KEY_DOWN:
+            key_down_at[code] = time.monotonic()
 
-    await _read_events('/dev/input/event1', on_encoder)
-    await _read_events('/dev/input/event0', on_buttons)
+            if menu_is_open():
+                if code == KEY_ESC:
+                    await close_menu()
+                elif code == KEY_ENTER:
+                    await select_menu()
+                elif code == KEY_1:
+                    await rotate_menu(-1)
+                elif code == KEY_2:
+                    await rotate_menu(1)
+                elif code == KEY_4:
+                    await close_menu()
+                return
+
+            if code == KEY_ESC:
+                return
+
+            notification = get_notification() if get_notification else None
+            if (
+                code == KEY_ENTER
+                and notification is not None
+                and notification.has_positive_action
+                and on_notification_positive_action is not None
+            ):
+                log.info(
+                    "Encoder press → ANCS positive action uid=%d app=%s",
+                    notification.uid,
+                    notification.app_name,
+                )
+                await on_notification_positive_action(notification)
+                return
+
+            ams = get_ams()
+            if not ams and code == KEY_ENTER and on_system_menu_open is not None:
+                log.info("Encoder press with no AMS -> open system menu")
+                await open_menu()
+                return
+            if not ams:
+                return
+            if code == KEY_ENTER:
+                log.info("Encoder press → TogglePlayPause")
+                await ams.send_command(CMD_TOGGLE)
+            elif code == KEY_1:
+                log.info("Button 1 → PreviousTrack")
+                await ams.send_command(CMD_PREV)
+            elif code == KEY_2:
+                log.info("Button 2 → NextTrack")
+                await ams.send_command(CMD_NEXT)
+            elif code in (KEY_3, KEY_4):
+                log.info("Button %d → TogglePlayPause", code)
+                await ams.send_command(CMD_TOGGLE)
+            return
+
+        if value != KEY_UP:
+            return
+
+        down_at = key_down_at.pop(code, None)
+        held_for = 0.0 if down_at is None else time.monotonic() - down_at
+        if code == KEY_ESC and held_for >= MENU_LONG_PRESS_SECONDS:
+            log.info("Back held %.1fs -> open system menu", held_for)
+            await open_menu()
+            return
+
+        notification = get_notification() if get_notification else None
+        if (
+            code == KEY_ESC
+            and notification is not None
+            and notification.has_negative_action
+            and on_notification_negative_action is not None
+        ):
+            log.info(
+                "Back button → ANCS negative action uid=%d app=%s",
+                notification.uid,
+                notification.app_name,
+            )
+            await on_notification_negative_action(notification)
+            return
+
+    await _read_events(os.environ.get("CARTHING_INPUT_ROTARY", "/dev/input/event1"), on_encoder)
+    await _read_events(os.environ.get("CARTHING_INPUT_BUTTONS", "/dev/input/event0"), on_buttons)

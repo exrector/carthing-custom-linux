@@ -63,6 +63,7 @@ class AMSClient:
             self._client = Client(connection)
             connection.gatt_client = self._client  # route GATT PDUs to this client
         logger.info("AMS: discovering services on %s", connection.peer_address)
+        logger.info("AMS: using client id=%s", hex(id(self._client)))
 
         await self._client.discover_service(AMS_SERVICE_UUID)
         services = self._client.get_services_by_uuid(AMS_SERVICE_UUID)
