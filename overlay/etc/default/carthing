@@ -25,8 +25,14 @@ CARTHING_BT_ATTACH_ARGS=
 CARTHING_BT_BUMBLE_TRANSPORT=hci-socket:0
 CARTHING_BT_ALIAS="Car Thing"
 
-CARTHING_STATE_DEVICE=/dev/mmcblk0p1
+# State живёт на журналируемом ext4-rootfs (p2) и пробрасывается в
+# $CARTHING_STATE_MOUNT через bind — crash-safe. FAT на p1 НЕ был crash-safe:
+# обрыв питания при записи рвал state.json -> ГУИ не стартовал. p1 теперь
+# только загрузочный (ядро/initrd/dtb/bootargs для U-Boot).
+CARTHING_STATE_BACKING=/var/lib/carthing-state
 CARTHING_STATE_MOUNT=/run/carthing-state
+CARTHING_BOOT_DEVICE=/dev/mmcblk0p1
+CARTHING_BOOT_MOUNT=/run/carthing-boot
 
 CARTHING_RUNTIME_ROOT=/usr/lib/carthing
 CARTHING_RUNTIME_ENTRY=/usr/lib/carthing/carthing_runtime.py
@@ -80,7 +86,7 @@ CARTHING_REVERSE_AGENT_POLL_INTERVAL=2
 CARTHING_REVERSE_AGENT_COMMAND_TIMEOUT=45
 CARTHING_REVERSE_AGENT_MAX_OUTPUT=65536
 
-# [CLAUDE 2026-06-13] Тема UI принудительно: state.json на vfat-разделе бывает
-# повреждён (битая цепочка кластеров -> чтение падает -> откат на dark).
-# Env имеет приоритет над state.json в ui_theme._settings_theme.
+# [CLAUDE 2026-06-15] Тема UI принудительно через env (приоритет над state.json в
+# ui_theme._settings_theme). State переехал на журналируемый ext4-p2 (crash-safe),
+# прежняя порча state.json на vfat больше не грозит — env оставлен как страховка.
 export CARTHING_UI_THEME=terminal

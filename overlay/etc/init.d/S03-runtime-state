@@ -3,16 +3,27 @@ set -eu
 
 . /etc/default/carthing
 
-state_device=${CARTHING_STATE_DEVICE:-/dev/mmcblk0p1}
+state_backing=${CARTHING_STATE_BACKING:-/var/lib/carthing-state}
 state_mount=${CARTHING_STATE_MOUNT:-/run/carthing-state}
+boot_device=${CARTHING_BOOT_DEVICE:-/dev/mmcblk0p1}
+boot_mount=${CARTHING_BOOT_MOUNT:-/run/carthing-boot}
 keys_file=${CARTHING_RUNTIME_KEYS:-$state_mount/carthing/keys.json}
 keys_dir=$(dirname "$keys_file")
 profile_dir=${CARTHING_PROFILE_DIR:-$state_mount/carthing/profiles}
 
-mkdir -p "$state_mount"
-
+# Persistent state живёт на журналируемом ext4-rootfs (p2) и пробрасывается в
+# $state_mount через bind: crash-safe (FAT на p1 рвал state.json при обрыве питания),
+# при этом проверка персистентности в рантайме (os.path.ismount) проходит.
+mkdir -p "$state_backing" "$state_mount"
 if ! awk -v target="$state_mount" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
-    mount -t vfat "$state_device" "$state_mount"
+    mount -o bind "$state_backing" "$state_mount"
+fi
+
+# p1 (FAT) — только загрузочный: ядро/initrd/dtb/bootargs для U-Boot. Монтируем
+# read-only для инспекции; runtime-state сюда больше не пишется.
+mkdir -p "$boot_mount"
+if ! awk -v target="$boot_mount" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
+    mount -t vfat -o ro "$boot_device" "$boot_mount" 2>/dev/null || true
 fi
 
 mkdir -p "$keys_dir" "$profile_dir" /run/carthing
