@@ -18,8 +18,7 @@ class Dispatcher:
                  on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None,
                  on_set_off_timeout=None, on_toggle_notif_blink=None,
-                 on_set_brightness=None, on_set_theme=None,
-                 on_power_off=None, on_set_mode=None):
+                 on_set_brightness=None, on_set_theme=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
@@ -36,8 +35,6 @@ class Dispatcher:
         self.on_toggle_notif_blink = on_toggle_notif_blink
         self.on_set_brightness = on_set_brightness or (lambda pct: None)  # [CLAUDE 2026-06-10] яркость
         self.on_set_theme = on_set_theme or (lambda name: None)  # [CLAUDE 2026-06-11] тема UI
-        self.on_power_off = on_power_off or (lambda: None)      # [CLAUDE 2026-06-13] мягкое выключение
-        self.on_set_mode = on_set_mode or (lambda mode: None)   # [CLAUDE 2026-06-13] выбор режима
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -129,14 +126,6 @@ class Dispatcher:
 
     # ── settings ───────────────────────────────────────────────────────────────
     def _settings(self, key):
-        if key == "power_off_confirm":          # [CLAUDE 2026-06-13] подтверждённое мягкое выключение
-            self.on_power_off()
-            return
-        if key in ("power_off_noop", "power_off_status"):
-            return
-        if key.startswith("set_mode:"):         # [CLAUDE 2026-06-13] выбор конкретного режима
-            self.on_set_mode(key.split(":", 1)[1])
-            return
         if key in ("pairing_input", "pairing_source"):
             self.state.pairing_role = "input"
             self.state.pairing_mode = True

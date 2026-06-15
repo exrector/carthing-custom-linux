@@ -388,37 +388,6 @@ class AccessoryOrchestrator:
                 break
             await asyncio.sleep(0.2)
 
-    async def disconnect_le_connections_for_pairing(self):
-        """Free BLE advertising for adding another input without dropping Classic outputs."""
-        disconnected = set()
-        try:
-            from bumble.core import BT_BR_EDR_TRANSPORT
-            raw_connections = self.device.connections
-            connections = list(raw_connections.values() if hasattr(raw_connections, "values") else raw_connections)
-        except Exception:
-            connections = []
-            BT_BR_EDR_TRANSPORT = object()
-        for connection in connections:
-            if getattr(connection, "transport", None) == BT_BR_EDR_TRANSPORT:
-                continue
-            try:
-                peer = getattr(connection, "peer_address", connection)
-                disconnected.add(str(peer))
-                logger.info("Input pairing mode: disconnect current LE peer %s", peer)
-                await connection.disconnect()
-            except Exception as e:
-                logger.warning("input pairing LE disconnect ignored: %s", e)
-        for _ in range(10):
-            try:
-                raw_connections = self.device.connections
-                current = list(raw_connections.values() if hasattr(raw_connections, "values") else raw_connections)
-                if not any(getattr(c, "transport", None) != BT_BR_EDR_TRANSPORT for c in current):
-                    break
-            except Exception:
-                break
-            await asyncio.sleep(0.2)
-        return disconnected
-
     async def _disable_resolution_for_pairing(self):
         try:
             from bumble.hci import (HCI_LE_Set_Address_Resolution_Enable_Command,

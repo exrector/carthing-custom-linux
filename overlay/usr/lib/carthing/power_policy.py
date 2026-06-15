@@ -179,14 +179,6 @@ class IdlePowerController:
                         percent, self._active_brightness, self._max_brightness,
                         self._display_state)
 
-    def blank_for_shutdown(self) -> None:
-        """[CLAUDE 2026-06-13] Полное гашение экрана при мягком выключении."""
-        try:
-            self._write_brightness(0)
-            self._write_int("bl_power", 4)
-        except Exception:
-            pass
-
     def set_idle_sleep(self, on: bool) -> None:
         """[CLAUDE 2026-06-01] Рантайм-переключатель сна экрана из Settings. off -> экран ВСЕГДА
         включён на полной яркости (для отладки); при enabled=False tick/dim/_set_display_state no-op."""

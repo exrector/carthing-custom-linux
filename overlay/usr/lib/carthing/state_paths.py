@@ -100,9 +100,8 @@ def read_state() -> dict:
         # [CLAUDE 2026-06-13] СУЩЕСТВУЮЩИЙ state.json не читается = повреждение
         # (а не первый старт). Раньше тихо уходили в дефолт -> «настройки/тема
         # просто пропали». Теперь ГРОМКО (ERROR) + пробуем последний бэкап рядом,
-        # прежде чем отдать пустой стейт. На vfat (p1) повреждение state.json при
-        # жёстком обрыве питания ВОЗМОЖНО; атомарная запись (temp+fsync+rename)
-        # снижает риск, но не исключает — поэтому backup-recovery здесь актуален.
+        # прежде чем отдать пустой стейт. Хранилище теперь ext4+atomic -> такого
+        # быть не должно; это индикатор, что что-то пошло не так.
         _log.error("read_state: EXISTING state.json unreadable (corruption?): %s", e)
         try:
             import glob
@@ -111,16 +110,6 @@ def read_state() -> dict:
                 data = json.loads(open(bks[-1]).read() or "{}")
                 if isinstance(data, dict):
                     _log.error("read_state: recovered registry from backup %s", bks[-1])
-                    # [CLAUDE 2026-06-15] самолечение: сразу переписать испорченный
-                    # основной восстановленными данными, чтобы файл не висел битым.
-                    try:
-                        _atomic_write_text(
-                            STATE_FILE,
-                            json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True),
-                        )
-                        _log.error("read_state: healed primary state.json from backup")
-                    except Exception as he:
-                        _log.warning("read_state: heal write failed: %s", he)
                     return data
         except Exception as be:
             _log.error("read_state: backup recovery failed: %s", be)
@@ -147,38 +136,6 @@ def read_state() -> dict:
     return data
 
 
-def _atomic_write_text(path: Path, payload: str) -> None:
-    """Атомарная запись: tmp + fsync + rename. На vfat окно порчи меньше, но не
-    нулевое — поэтому держим валидный бэкап рядом (см. _rotate_state_backup)."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(payload)
-    try:
-        fd = os.open(str(tmp), os.O_RDONLY)
-        os.fsync(fd); os.close(fd)
-    except Exception:
-        pass
-    os.replace(str(tmp), str(path))
-
-
-def _rotate_state_backup(payload: str, keep: int = 3) -> None:
-    """[CLAUDE 2026-06-15] Создание бэкапов, без которых read_state-recovery был
-    мёртв. Пишем валидный снимок state.json в backup-<ts>/ ДО основного файла:
-    если обрыв питания испортит основной — read_state поднимет это из backup-*.
-    Держим последние keep снимков."""
-    import glob
-    import shutil
-    import time
-    try:
-        bdir = STATE_DIR / ("backup-%010d" % int(time.time()))
-        bdir.mkdir(parents=True, exist_ok=True)
-        _atomic_write_text(bdir / "state.json", payload)
-        existing = sorted(glob.glob(str(STATE_DIR / "backup-*")))
-        for old in existing[:-keep]:
-            shutil.rmtree(old, ignore_errors=True)
-    except Exception as e:
-        _log.warning("state backup rotate failed: %s", e)
-
-
 def write_state(updates: dict) -> None:
     """Слить updates в state.json и атомарно записать (read-modify-write — секции не затирают
     друг друга). На устройстве — при живом mount; на Mac dev — через ALLOW_NONMOUNT."""
@@ -190,7 +147,11 @@ def write_state(updates: dict) -> None:
     data = read_state()
     data.update(updates or {})
     payload = json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True)
-    # Сначала валидный бэкап (страховка от порчи основного при обрыве записи),
-    # затем основной файл. При порче основного read_state восстановится из backup-*.
-    _rotate_state_backup(payload)
-    _atomic_write_text(STATE_FILE, payload)
+    tmp = STATE_FILE.with_suffix(".tmp")
+    tmp.write_text(payload)
+    try:
+        fd = os.open(str(tmp), os.O_RDONLY)
+        os.fsync(fd); os.close(fd)
+    except Exception:
+        pass
+    os.replace(str(tmp), str(STATE_FILE))
