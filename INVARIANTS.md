@@ -9,6 +9,7 @@
    - p1 `vfat → ext4` (коммит `a7f691e` + миграция state на p3) — держим **vfat**.
    - реальный Linux `poweroff`/`halt` — уводит плату в Amlogic **burn mode**. Допустимо только «безопасное отключение» (suspend-to-RAM + remount-ro), без реального poweroff.
 3. Реставрация недостающих фич идёт в каноничный образ **`carthing_full_real`**, поверх baseline, без единого ext4-файла.
+4. **ОДНА папка.** Вся разработка — в `carthing-release-integration` (+ `carthing_full_real` под чистый релиз). НЕ заводить новые папки в `~/Documents/ПРОЕКТЫ/` или `/tmp` под Car Thing: ни worktree-папок под ветки, ни `*-staging-*`/`*-backup`/`preservation-*`. Новая работа = новая **ВЕТКА**; изоляция от чужого дерева = коммит/stash; сохранение = коммит/bundle. Не folder.
 
 ---
 
