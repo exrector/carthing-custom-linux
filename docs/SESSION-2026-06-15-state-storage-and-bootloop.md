@@ -68,3 +68,26 @@ AVB/boot-try-мину: устройство теперь чистый касто
 - `state-on-p2` (имя историческое) = чистая линия: vfat-restore + откат p2-правки + backup-recovery + доки.
 - `release-integration` = архив Codex-p3-WIP.
 - Тег `base-pono-2136ace` = точка невозврата (база устройства).
+
+---
+
+## ✅ КОРЕНЬ УСТАНОВЛЕН — апдейт 2026-06-16 (Claude/Sonnet)
+
+**pstore проверен:** после восстановления SSH подтверждён пустой `/sys/fs/pstore` → kernel panic
+НЕ было → U-Boot так и не передал управление ядру во время бутлупа.
+
+**Подтверждённый механизм:** агент записал в p1-FAT (`echo CORRUPTED > state.json`, `sync`,
+создавал `backup-*` файлы/директории) — **без `umount` / корректной инициализации fsync всей FAT**.
+FAT-метаданные (FAT-таблица, директорные записи) не были синхронно сброшены в правильном
+порядке → при следующей монтировании под ядром: `FAT-fs (mmcblk0p1): Volume was not properly
+unmounted. Some data may be corrupt.` → FAT остался в состоянии «dirty». Линуксовый FAT-драйвер
+это переживает с предупреждением; **U-Boot FAT-драйвер менее устойчив и падал**, не найдя `Image`.
+SoC делал hardware reset → цикл без ядра → бутлуп.
+
+**Что починило:** прошивка backup-bootfs с чистым FAT (`c3b76667`, из
+`device-full-backup-20260615-QN19/bootfs-region-0to352255.bin.gz`). После этого p1 монтируется
+без предупреждений, U-Boot читает `Image`/`initrd`/`superbird.dtb` нормально.
+
+**Статус всех правил:** зафиксированы в INVARIANTS.md (правило 5, коммит `fa59a88`). Рабочий
+bootfs `c3b76667` теперь является каноничным в `carthing_full_real/image/bootfs.bin`
+(коммит `31d0630`).
