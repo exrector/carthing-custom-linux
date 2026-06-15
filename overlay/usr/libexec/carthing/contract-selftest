@@ -41,7 +41,7 @@ check_path "$CARTHING_RUNTIME_LIB/bumble/pairing.py"
 check_path "$CARTHING_RUNTIME_LIB/bumble/host.py"
 check_path "$CARTHING_RUNTIME_LIB/bumble/transport/hci_socket.py"
 check_path "$CARTHING_FONT_PATH"
-check_path "$CARTHING_BOOT_DEVICE"
+check_path "$CARTHING_STATE_DEVICE"
 check_path /root/.ssh/authorized_keys
 check_path /etc/shadow
 
