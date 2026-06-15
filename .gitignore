@@ -9,3 +9,10 @@ __pycache__/
 ._*
 reference/apple-adg/*.pdf
 bootfs.bin
+
+# вложенные репозитории (перенесены внутрь 2026-06-15, не часть этого репо).
+# ВНИМАНИЕ: carthing-custom-linux/.git — это git-движок самого release-integration.
+# НЕ удалять и НЕ запускать здесь `git clean -fdx`.
+/carthing-custom-linux/
+/carthing-device-backups/
+/carthing-release-architecture/
