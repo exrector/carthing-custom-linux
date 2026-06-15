@@ -159,6 +159,14 @@ class IdlePowerController:
             logger.info("Power: wake by %s", reason)
         self._set_display_state("active")
 
+    def blank_for_shutdown(self) -> None:
+        """[CLAUDE 2026-06-13] Полное гашение экрана при мягком выключении."""
+        try:
+            self._write_brightness(0)
+            self._write_int("bl_power", 4)
+        except Exception:
+            pass
+
     def set_pairing(self, armed: bool) -> None:
         armed = bool(armed)
         if armed == self._pairing_armed:

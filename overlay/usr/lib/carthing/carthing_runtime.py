@@ -644,6 +644,51 @@ def _on_set_brightness(pct):
         settings.set("screen_brightness_pct", pct)
 
 
+def _on_power_off():
+    # Product power action: prepare state for physical USB removal.
+    # Do not use Linux poweroff/halt/sysrq on this hardware.
+    import power_control
+    app_state = gui.app_state if gui is not None else None
+    if getattr(app_state, "power_unplug_status", "") == "preparing":
+        logger.warning("safe unplug already preparing")
+        return
+    if app_state is not None:
+        app_state.power_unplug_status = "preparing"
+        app_state.power_unplug_message = "Готовим..."
+    logger.warning("safe unplug requested")
+    asyncio.ensure_future(
+        power_control.prepare_for_usb_unplug(
+            transfer=transfer,
+            power=power,
+            state=app_state,
+        )
+    )
+
+
+def _on_set_mode(new):
+    # [CLAUDE 2026-06-13] Выбрать КОНКРЕТНЫЙ режим из подпунктов настроек.
+    # Персист + применить (поднять/погасить коммутатор без рестарта).
+    import operation_mode as _opmode
+    if new not in _opmode.ALL:
+        return
+    if gui is not None:
+        gui.app_state.operation_mode = new
+    if settings is not None:
+        settings.set("operation_mode", new)
+    logger.info("operation mode -> %s", new)
+    async def _apply():
+        if transfer is None or getattr(transfer, "bridge", None) is None:
+            return
+        if new == _opmode.COMMUTATOR:
+            transfer.bridge.start_standby_loop()
+        else:
+            task = getattr(transfer.bridge, "_standby_task", None)
+            if task is not None and not task.done():
+                task.cancel()
+            await transfer.bridge.stop_receiver_stream()
+    asyncio.ensure_future(_apply())
+
+
 def _on_set_off_timeout(sec):
     # [CLAUDE 2026-06-01] ±тайм-аут полного гашения из Settings: применяем к power + персистим.
     sec = int(sec)
@@ -1265,7 +1310,9 @@ async def main():
                                 on_set_off_timeout=_on_set_off_timeout,
                                 on_toggle_notif_blink=_on_toggle_notif_blink,
                                 on_set_brightness=_on_set_brightness,
-                                on_set_theme=_on_set_theme)
+                                on_set_theme=_on_set_theme,
+                                on_power_off=_on_power_off,
+                                on_set_mode=_on_set_mode)
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
             # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма
@@ -1310,6 +1357,9 @@ async def main():
                 from app_state import AppState
                 app_state = AppState()
                 _select_boot_play_now(app_state)
+            import operation_mode as _opmode
+            app_state.operation_mode = _opmode.current(settings)  # [CLAUDE 2026-06-13] режим из settings ДО старта циклов
+            logger.info("operation mode: %s", app_state.operation_mode)
             transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
             backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
             # Кнопки колонки -> backchannel -> активный источник (finding A2:
