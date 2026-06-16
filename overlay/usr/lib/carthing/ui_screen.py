@@ -439,18 +439,22 @@ class Compositor:
         return canvas
 
     def _draw_dots(self, draw):
-        # [CLAUDE 2026-06-02] индикатор горизонтальной навигации: по точке на вью из nav_order
-        # (если задан), иначе по всем экранам. Текущий — ACCENT, остальные — FAINT.
         order = self.nav_order if self.nav_order else list(range(len(self.screens)))
         n = len(order)
         if n <= 1:
             return
-        gap = 22
-        x0 = T.W // 2 - (n - 1) * gap // 2
-        y = T.STATUSBAR_TOP + 16
-        for i, idx in enumerate(order):
-            col = T.ACCENT if idx == self.active else T.FAINT
-            T.icon_dot(draw, x0 + i * gap, y, 4, color=col)
+        try:
+            cur = order.index(self.active) + 1
+        except ValueError:
+            cur = 1
+        f = T.font(T.SZ_SMALL)
+        label = f"< {cur}/{n} >"
+        tw = int(draw.textlength(label, font=f))
+        x = T.W // 2 - tw // 2
+        y = T.STATUSBAR_TOP + 5   # top-left; SZ_SMALL=22 → visual center at +16
+        draw.text((x, y), label, font=f, fill=T.HAIRLINE)
+        x_num = x + int(draw.textlength("< ", font=f))
+        draw.text((x_num, y), str(cur), font=f, fill=T.ACCENT)
 
     def _draw_modal(self, img):
         # полноэкранный модал сам заливает чёрный фон; иначе — затемняем подложку

@@ -292,8 +292,20 @@ def encoder_arc(draw, level=None, color=FAINT, width=2):
     a0, a1 = ENCODER_ARC_A0, ENCODER_ARC_A1
 
     if level is None:
-        bbox = [cx - R, cy - R, cx + R, cy + R]
-        draw.arc(bbox, start=a0, end=a1, fill=color, width=width)   # visible left arc
+        # Phosphorescent notches: 18 radial tick marks along the arc
+        # (фосфорные насечки вместо сплошной линии — терминальный стиль)
+        span = a1 - a0
+        N_notch = 18
+        for i in range(N_notch):
+            a_deg = a0 + span * i / (N_notch - 1)
+            a_rad = math.radians(a_deg)
+            cos_a, sin_a = math.cos(a_rad), math.sin(a_rad)
+            r1, r2 = R - 3, R + 7
+            draw.line(
+                [(cx + r1 * cos_a, cy + r1 * sin_a),
+                 (cx + r2 * cos_a, cy + r2 * sin_a)],
+                fill=color, width=1,
+            )
         return
 
     level = max(0.0, min(1.0, level))
