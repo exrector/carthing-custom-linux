@@ -838,3 +838,35 @@ freestanding тем же способом, что libsbc; helix-aac малень
   ПОНИЗИТЬ до fallback'а: источник шлёт лучшее, что умеет; конвертация — наша
   забота, не его.
 - Никаких per-device ручек в GUI. Решения — только из capabilities-карточек.
+
+---
+
+## Статус выполнения 2026-06-16 (Claude)
+
+### ✅ ЗАВЕРШЕНО:
+
+**Задача №1 (авто-ретрай)** — уже была реализована в строках 1090-1106 carthing_runtime.py (commit из прошлых сессий, 3 попытки: 0/3/8c).
+
+**Задача №4 (GUI ретро-проход, частично):**
+- ✅ Индикатор десктопов: точки → `< N/3 >` (ui_screen.py, commit 4f82e71)
+- ✅ Насечки энкодера: сплошная дуга → 18 фосфорных рисок (ui_theme.py, commit 4f82e71)
+- Осталось: модал сопряжения в terminal-стиле, блок-курсор (обсудить с владельцем)
+
+**Задача №5 (шаги 1+2):**
+- ✅ Шаг 1: actual_source_connected/streaming/receiver_addr в AppState; on_state_change обёрнут в a2dp_bridge (commit c89e8c3)
+- ✅ Шаг 2: ROUTE-строка в RouteBuilder terminal (commit c89e8c3)
+- Осталось: Шаг 3 (autoresume) — отдельное решение владельца
+
+**Реставрация (все файлы с прошлых сессий восстановлены):**
+- operation_mode.py, power_control.py, safe_unplug_helper.py (commit 64cdb5a/3949b79)
+- accessory_orchestrator disconnect_le (commit 60ee78d)
+- carthing_full_real полностью синхронизирован (commits 455a487, baabf4b, aed6d1f)
+
+### 🟠 БЛОКИРОВАНО:
+- **Задача №2 (bake):** defconfig содержит BR2_PACKAGE_GESFTPSERVER=y, ожидает сборочный том
+- **Задача №1 (тест-серия):** требует физического тестирования владельцем
+
+### ⏳ НЕ НАЧАТО:
+- Задача №5 шаг 3 (autoresume) — ждёт слова владельца
+- Задача №6 (мелочи GUI): dim значения Сон, превью-инструмент
+- Задача №7 (незакрытое из 2026-06-10)
