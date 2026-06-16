@@ -863,10 +863,47 @@ freestanding тем же способом, что libsbc; helix-aac малень
 - carthing_full_real полностью синхронизирован (commits 455a487, baabf4b, aed6d1f)
 
 ### 🟠 БЛОКИРОВАНО:
-- **Задача №2 (bake):** defconfig содержит BR2_PACKAGE_GESFTPSERVER=y, ожидает сборочный том
-- **Задача №1 (тест-серия):** требует физического тестирования владельцем
+- **Задача №1 (тест-серия):** требует физического тестирования владельцем с разными BT-устройствами
 
 ### ⏳ НЕ НАЧАТО:
 - Задача №5 шаг 3 (autoresume) — ждёт слова владельца
 - Задача №6 (мелочи GUI): dim значения Сон, превью-инструмент
 - Задача №7 (незакрытое из 2026-06-10)
+
+---
+
+## Дополнение 2026-06-16 (продолжение сессии): Bake → Flash → Verify завершён ✅
+
+### Задача №2 (BAKE) — ВЫПОЛНЕНА
+
+**Что сделано:**
+
+1. **gesftpserver скомпилирован** под aarch64-linux-gnu (GCC 15.2.0, Homebrew):
+   - источник: `http://www.greenend.org.uk/rjk/sftpserver/sftpserver-1.tar.gz`
+   - sha256 исходника: `4963b85787de3485085a5356c671c58b8b33125f528ff1b2fe8b534ed8a0c1bd`
+   - выход: ELF 64-bit LSB aarch64, динамически линкован (libpthread.so.0, libc.so.6), stripped, 68400 байт
+   - путь в overlay: `overlay/usr/bin/gesftpserver` (commit `82ad46c`)
+
+2. **bake-rootfs.py расширен** (commit `89b9aa7` в carthing_full_real):
+   - `copy_support_files()`: копирует binary → `/usr/bin/gesftpserver` (0755) и `/usr/libexec/sftp-server` (0755, оба пути — независимые копии, т.к. `e2ln -s` не работает на macOS e2tools)
+   - `verify_image()`: проверяет оба пути в образе
+   - `source/base-bundle/rootfs.img`: добавлен `id_carthing` (ED25519, без пароля) в `/root/.ssh/authorized_keys` — SSH из Claude Code теперь работает без ввода пароля
+
+3. **Bake запущен:** `python3 source/bake-rootfs.py` → bundle `flash-bake-unified-stable-20260616-175920/`, rootfs sha256 `786554d8a33d5d58a0067a9ee2e48bcff3c1e86f631ba4abc2f737afdf7e2625`
+
+4. **Flash на QN19:** `python3 tools/flash.py` из `carthing_full_real/` — полный flash: bootfs (172MB) + rootfs (512MB) + env + reset. Завершён без ошибок.
+
+5. **Верификация после boot:**
+   - `ssh carthing` → вход без пароля (id_carthing принят) ✅
+   - `/usr/bin/gesftpserver` — 68400 байт, rwxr-xr-x ✅
+   - `/usr/libexec/sftp-server` — 68400 байт, rwxr-xr-x ✅
+   - `sftp carthing` → `ls /usr/lib/carthing` → 52 файла ✅
+   - Runtime PID 528, AMS ready, 0 Traceback ✅
+
+**Известное ограничение:** `sshfs` (`carthing-mount`) не работает — macFUSE несовместим с macOS 26 / Darwin 27 (поддержка только до macOS 14). Прямой `sftp carthing` как замена.
+
+### Следующие шаги
+
+Приоритет #1: **Задача №1 — серия маршрутных тестов** (RUNBOOK §2). Прогнать 5 сценариев с живыми устройствами, писать в `docs/route-test-series-results.md`.
+
+*Только дополнять.*
