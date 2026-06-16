@@ -254,6 +254,13 @@ def copy_support_files(image: Path) -> None:
     if shadow_src.exists():
         e2copy_file(image, shadow_src, "/etc/shadow", mode="0640")
 
+    # Wipe BT pairing state — every freshly flashed device must start clean.
+    # /var/lib/carthing-state holds keys.json + state.json (bonded device MACs,
+    # trusted devices). If the base-bundle was extracted from a working device
+    # these files carry over and the new device "knows" someone else's BT peers.
+    e2rm_tree(image, "/var/lib/carthing-state")
+    e2mkdir_p(image, "/var/lib/carthing-state")
+
 
 def verify_image(image: Path) -> None:
     with tempfile.TemporaryDirectory(prefix="carthing-verify-") as tmp_s:

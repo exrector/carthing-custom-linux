@@ -53,6 +53,13 @@ dev.write(dev.ADDR_TMP, env_bytes)
 dev.bulkcmd(f"env import -t {hex(dev.ADDR_TMP)} {hex(len(env_bytes))}", ignore_timeout=True)
 dev.bulkcmd("saveenv", ignore_timeout=True)
 
+logo_path = IMAGE / "bootlogos.bin"
+if logo_path.exists():
+    print("=== bootlogos.bin -> sector 319488 (logo partition p7) ===", flush=True)
+    dev.restore_partition(319488, str(logo_path))
+else:
+    print("WARNING: bootlogos.bin not found in image/ — logo partition not updated", flush=True)
+
 print("=== reset ===", flush=True)
 dev.bulkcmd("reset", ignore_timeout=True)
 print("\nГОТОВО. Переткни USB-кабель БЕЗ кнопок — холодная загрузка.", flush=True)

@@ -10,6 +10,7 @@ __pycache__/
 reference/apple-adg/*.pdf
 # image/ — канонические образы прошивки (бинари gitignored, текст/хэши — в git)
 image/bootfs.bin
+image/bootlogos.bin
 image/boot/
 image/manual/
 # source/base-bundle — Buildroot baseline (бинари, не в git)

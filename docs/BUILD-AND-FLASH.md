@@ -82,14 +82,22 @@ carthing-release-integration/
 
 ---
 
-## Текущие образы (canonical, 2026-06-16)
+## Текущие образы (canonical, 2026-06-17)
 
 SHA256SUMS (актуальные):
 ```
-971a79105c88e66466a0d981bda347f35dc06f099d159d89ba8f611a92d96004  bootfs.bin
+2ff2159a8733759576b4bda9c52e0bfc8cb02b1115766a8379e8f8d610dba76f  bootfs.bin
 f204ac3d535bbc639061c594af1a5f7eaa327ecc1d636a7a63b829a7bd3e1fc0  rootfs.img
 bee43a070ad18a764a7a0f97827e6213757976f6b7a8a3987331a9396c196cb9  env.txt
+40a74a8c3fa2d18480dcbc38ddc7f37209da2b1d071d23c8e3f23232aa6f2402  bootlogos.bin
 ```
+
+`bootfs.bin` обновлён 2026-06-17: ядро пересобрано с `CONFIG_AMLOGIC_MEDIA_GE2D=y` → `/dev/ge2d` доступен.
+Артефакт сборки: `carthing-device-backups/artifacts/kernel-build-ge2d-20260617/`
+Сборщик: Colima + builder контейнер + GCC 6.5.0 (тот же тулчейн что и оригинал).
+
+`bootlogos.bin` — кастомный загрузочный логотип (5 слотов: bootup/burn_mode/bad_charger/shell_mode/overheat).
+Прошивается автоматически в p7 (сектор 319488) как часть `flash.py`.
 
 Runtime tree SHA1 (Python-файлы в overlay): `880bd037b7f43df44ac203b3f6d5089a06ad0320`
 
@@ -115,8 +123,8 @@ python3 tools/flash.py
 # Время: ~15–25 минут. Пишет bootfs → rootfs → env → reset.
 
 # 3. Поднять USB-сеть на Mac
-scripts/bring-up-device1-normal-boot-macos.sh --bsd en14
-# (en14 — NCM-интерфейс; проверить: ioreg -r -n 'NCM Gadget' | grep BSD)
+scripts/bring-up-device1-normal-boot-macos.sh --bsd en18
+# (en18 — NCM-интерфейс на текущей машине; проверить: ifconfig | grep en; pyusb видит 0525:a4a1)
 
 # 4. SSH
 ssh-keygen -R 172.16.42.77      # обязательно после каждой перепрошивки
@@ -258,3 +266,12 @@ NCM Gadget (`0x0525:0xa4a1`) может быть виден в ioreg, но en14 
 ### shadow при перепрошивке
 `/etc/shadow` с хэшем пароля "carthing" включён в overlay и копируется при bake.
 До 2026-06-16 — не копировался, пароль терялся при перепрошивке.
+
+### BT state при перепрошивке
+`bake-rootfs.py` вычищает `/var/lib/carthing-state` при каждой сборке.
+До 2026-06-17 — base-bundle мог содержать BT bonds от исходного устройства,
+и все прошитые девайсы «знали» чужие MAC-адреса бондов.
+
+### bootlogos.bin отсутствует
+Если `image/bootlogos.bin` не найден, `flash.py` выводит WARNING и пропускает p7.
+Пересобрать: `sh tools/logo/build-and-flash-logo.sh --dry-run && cp /tmp/bootlogos.bin image/bootlogos.bin`
