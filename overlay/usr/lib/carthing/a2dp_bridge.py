@@ -333,7 +333,16 @@ class A2DPBridge:
         self.reconnect_interval = reconnect_interval
         self.connect_timeout = connect_timeout
         self.hci_gate = hci_gate
-        self.on_state_change = on_state_change or (lambda: None)
+        # Оборачиваем on_state_change: перед каждым вызовом синхронизируем
+        # поля фактического состояния трубы в AppState (RUNBOOK задача №5, шаг 1).
+        _raw_on_state_change = on_state_change or (lambda: None)
+        def _on_state_change_with_actuals():
+            if self.state is not None:
+                self.state.actual_source_connected = self._source_connection is not None
+                self.state.actual_source_streaming = bool(self.source_stream_active)
+                self.state.actual_receiver_addr = self.receiver_address or ""
+            _raw_on_state_change()
+        self.on_state_change = _on_state_change_with_actuals
         # Callback: on_visibility_request(connectable, discoverable) -> coroutine | None
         # Если задан — bridge НЕ трогает set_connectable/set_discoverable напрямую,
         # а делегирует решение оркестратору.

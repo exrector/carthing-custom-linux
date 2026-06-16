@@ -466,6 +466,11 @@ class AppState:
         self.operation_mode = "commutator"   # [CLAUDE 2026-06-13] playnow|commutator|reserved; рантайм берёт из settings
         self.power_unplug_status = "idle"   # idle|preparing|ready|error
         self.power_unplug_message = ""
+        # Фактическое состояние трубы (RUNBOOK задача №5, шаг 1):
+        # публикуется a2dp_bridge перед каждым on_state_change.
+        self.actual_source_connected = False   # classic-ACL к iPhone поднята
+        self.actual_source_streaming = False   # iPhone реально льёт поток
+        self.actual_receiver_addr = ""         # MAC колонки (если есть RTP-канал)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.load_trusted()
 

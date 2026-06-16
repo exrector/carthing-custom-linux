@@ -351,6 +351,33 @@ class RouteBuilderScreen(Screen):
                 if regions is not None and intent is not None:
                     regions.add((x - 10, cy - R, x + w + 10, cy + R), intent, payload=payload)
                 x += w + gap
+            # ROUTE status line (RUNBOOK задача №5, шаг 2): факт выше кнопок
+            src_conn = getattr(self.state, "actual_source_connected", False)
+            src_stream = getattr(self.state, "actual_source_streaming", False)
+            recv_addr = getattr(self.state, "actual_receiver_addr", "")
+            if src_conn and recv_addr:
+                # Имена: по выбранным ключам (упрощение: метки из inputs/outputs)
+                def _label(key, devs):
+                    for d in (devs or []):
+                        if (d.get("key") or d.get("address", "")) == key:
+                            return (d.get("label") or key or "?").upper()[:8]
+                    return (key or "?").upper()[:8]
+                src_lbl = _label(ri, getattr(self.state, "route_inputs", []))
+                spk_lbl = _label(ro, getattr(self.state, "route_outputs", []))
+                suffix = "►" if src_stream else "…"  # ▶ или …
+                route_text = f"ROUTE: {src_lbl}→{spk_lbl} {suffix}"
+                # Цвет: выбранный маршрут совпадает с фактом → STATUS_OK, иначе WARN
+                expected_match = (ri and ro and src_conn and recv_addr)
+                route_col = T.STATUS_OK if expected_match else T.WARN
+            elif src_conn:
+                route_text = "ROUTE: ←? …"
+                route_col = T.ACCENT
+            else:
+                route_text = "ROUTE: —"
+                route_col = T.HAIRLINE
+            fs = T.font(T.SZ_SMALL)
+            rtw = int(draw.textlength(route_text, font=fs))
+            draw.text((T.W // 2 - rtw // 2, bar_top + 8), route_text, font=fs, fill=route_col)
             return img
         total = n * 2 * R + (n - 1) * gap
         x = (T.W - total) // 2 + R
