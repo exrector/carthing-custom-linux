@@ -1,0 +1,9 @@
+config BR2_PACKAGE_CARTHING_IAP2_MINI
+	bool "carthing-iap2-mini"
+	select BR2_PACKAGE_CARTHING_MFI_PROBE
+	help
+	  Minimal clean-room iAP2 control/session helper for Car Thing.
+
+	  This keeps only AA00-AA05 auth forwarding plus 1D00 -> 1D01
+	  identification in a small standalone binary and does not pull
+	  any legacy Spotify userspace back into the image.

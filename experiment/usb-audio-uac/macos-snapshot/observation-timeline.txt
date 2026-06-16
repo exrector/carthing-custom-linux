@@ -1,0 +1,5 @@
+Observation timeline:
+16:21 — IPv4LL 169.254.125.16
+16:25 — Car Thing disappeared from ioreg
+16:26 — re-enumerate, new IPv4LL 169.254.108.80
+Conclusion: USB renumerate cycle without stable userspace

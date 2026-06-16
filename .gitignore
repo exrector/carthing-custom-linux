@@ -8,7 +8,15 @@ __pycache__/
 .DS_Store
 ._*
 reference/apple-adg/*.pdf
-bootfs.bin
+# image/ — канонические образы прошивки (бинари gitignored, текст/хэши — в git)
+image/bootfs.bin
+image/boot/
+image/manual/
+# source/base-bundle — Buildroot baseline (бинари, не в git)
+source/base-bundle/*.img
+source/base-bundle/bootfs.bin
+source/base-bundle/boot/
+source/base-bundle/manual/
 
 # вложенные репозитории (перенесены внутрь 2026-06-15, не часть этого репо).
 # ВНИМАНИЕ: carthing-custom-linux/.git — это git-движок самого release-integration.

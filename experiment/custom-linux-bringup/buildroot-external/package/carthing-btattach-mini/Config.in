@@ -1,0 +1,7 @@
+config BR2_PACKAGE_CARTHING_BTATTACH_MINI
+	bool "carthing-btattach-mini"
+	help
+	  Minimal Bluetooth HCI UART attach helper for Car Thing.
+
+	  This keeps the target-side attach path small and avoids a
+	  runtime dependency on BlueZ utilities.

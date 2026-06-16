@@ -1,0 +1,32 @@
+SPDX-License-Identifier: GPL-2.0-or-later
+
+This project is licensed under the GNU General Public License, version 2
+or (at your option) any later version.
+
+Full license text: https://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
+
+WHY GPL-2.0
+-----------
+The flashable image in `image/` bundles GPL-2.0 software — the Linux 4.9
+kernel, BusyBox, and a Buildroot-built userspace — so distribution of this
+repository is governed by the GPL-2.0. Our own scripts and project overlay
+are released under the same terms.
+
+ATTRIBUTION / UPSTREAMS
+----------------------
+- OS base (kernel + rootfs): frederic/superbird-buildroot — Buildroot,
+  GPL-2.0-or-later. https://github.com/frederic/superbird-buildroot
+- Flasher (`tools/_flasher.py`, `image/manual/superbird_device.py`):
+  adapted from the bishopdynamics/superbird-tool line; see that upstream
+  for its own terms. https://github.com/bishopdynamics/superbird-tool
+- Low-level USB Burn Mode work: frederic/superbird-bulkcmd,
+  frederic/amlogic-usbdl.
+- SoC platform: Amlogic G12A BSP.
+- Bootloader: stock Spotify/Amlogic — NOT modified and NOT redistributed
+  here (it already lives on the device's eMMC boot partitions).
+
+SOURCE FOR GPL COMPONENTS
+-------------------------
+Corresponding source for the GPL components shipped in `image/` is available
+through the upstream Buildroot project (frederic/superbird-buildroot) and the
+respective package upstreams. The project overlay sources are in `source/`.

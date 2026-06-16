@@ -1,0 +1,42 @@
+Routing tables
+
+Internet:
+Destination        Gateway            Flags               Netif Expire
+default            192.168.1.1        UGScg                 en0       
+1                  utun5              USc                 utun5       
+2/7                utun5              USc                 utun5       
+4/6                utun5              USc                 utun5       
+8/5                utun5              USc                 utun5       
+16/4               utun5              USc                 utun5       
+32/3               utun5              USc                 utun5       
+46.243.231.30      utun5              UHS                 utun5       
+46.243.231.31      utun5              UHS                 utun5       
+64/2               utun5              USc                 utun5       
+127                127.0.0.1          UCS                   lo0       
+127.0.0.1          127.0.0.1          UH                    lo0       
+127.1.1.1          172.16.209.2       UH                  utun5       
+128.0/2            utun5              USc                 utun5       
+169.254            link#14            UCS                   en0      !
+169.254            link#24            UCSI                 en18      !
+169.254.1.1        link#14            UHLSW                 en0      !
+169.254.42.77      link#14            UHLSW                 en0      !
+169.254.125.16/32  link#24            UCS                  en18      !
+169.254.255.255    link#14            UHLSW                 en0      !
+192.0.0/3          utun5              USc                 utun5       
+192.168.1          link#14            UCS                   en0      !
+192.168.1.1/32     link#14            UCS                   en0      !
+192.168.1.1        50:ff:20:9d:fe:c2  UHLWIir               en0   1195
+192.168.1.50       d4:90:9c:d2:f1:51  UHLWI                 en0   1020
+192.168.1.79       5e:11:c4:1b:3c:c6  UHLWI                 en0   1136
+192.168.1.89       cc:8d:a2:e0:70:88  UHLWI                 en0   1157
+192.168.1.117/32   link#14            UCS                   en0      !
+192.168.1.117      ea:b7:2a:ae:5e:5c  UHLWI                 lo0       
+192.168.1.128      98:6e:e8:2f:fa:2f  UHLWIi                en0   1169
+192.168.1.141      c4:5b:be:f7:a9:14  UHLWI                 en0   1199
+192.168.1.255      ff:ff:ff:ff:ff:ff  UHLWbI                en0      !
+224.0.0/4          link#14            UmCS                  en0      !
+224.0.0/4          link#24            UmCSI                en18      !
+224.0.0.251        1:0:5e:0:0:fb      UHmLWI                en0       
+239.255.255.250    1:0:5e:7f:ff:fa    UHmLWI                en0       
+255.255.255.255/32 link#14            UCS                   en0      !
+255.255.255.255/32 link#24            UCSI                 en18      !

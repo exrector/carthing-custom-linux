@@ -1,0 +1,227 @@
+Warning: Permanently added 'fe80::70eb:dff:fe28:4a54%en18' (RSA) to the list of known hosts.
+=== Car Thing live inventory snapshot ===
+hostname: (none)
+date: Thu Jan  1 00:04:17 UTC 2015
+uname: Linux (none) 4.9.113 #1-NixOS SMP PREEMPT Tue Jan 1 00:00:00 UTC 1980 aarch64 GNU/Linux
+usid: 8559RP88Q917
+
+=== UDC ===
+ff400000.dwc2_a
+--- /sys/class/udc/ff400000.dwc2_a ---
+DRIVER=configfs-gadget
+USB_UDC_NAME=dwc_otg_pcd
+USB_UDC_DRIVER=g1
+state: configured
+function: cat: can't open '/sys/class/udc/ff400000.dwc2_a/function': No such file or directory
+
+=== configfs gadget current state ===
+g1
+--- gadget: /sys/kernel/config/usb_gadget/g1/ ---
+UDC=ff400000.dwc2_a
+idVendor=0x0525 idProduct=0xa4a1
+bcdDevice=0x0100 bcdUSB=0x0200
+strings dir: /sys/kernel/config/usb_gadget/g1//strings/0x409/
+  manufacturer=Spotify AB
+  product=Car Thing
+  serialnumber=8559RP88Q917
+functions:
+  ncm.usb0
+configs:
+  /sys/kernel/config/usb_gadget/g1//configs/c.1/
+    MaxPower
+    bmAttributes
+    ncm.usb0
+    strings
+
+=== ALSA cards ===
+ 0 [AMLAUGESOUND   ]: AML-AUGESOUND - AML-AUGESOUND
+                      AML-AUGESOUND
+--- pcm ---
+00-00: TDM-A-T9015-audio-hifi-alsaPORT-i2s T9015-audio-hifi-0 :  : playback 1 : capture 1
+00-01: PDM-dummy-alsaPORT-pdm dummy-1 :  : capture 1
+
+=== utilities present ===
+  aplay: MISSING
+  arecord: MISSING
+  alsaloop: MISSING
+  amixer: MISSING
+  alsactl: MISSING
+  tinyplay: MISSING
+  tinycap: MISSING
+  tinymix: MISSING
+  iperf3: MISSING
+  i2cdetect: /usr/sbin/i2cdetect
+  i2cget: /usr/sbin/i2cget
+  i2cdump: /usr/sbin/i2cdump
+  dmesg: /bin/dmesg
+  lsusb: /usr/bin/lsusb
+  lsof: /usr/bin/lsof
+
+=== profilectl status (read-only invocation) ===
+[usb]
+ncm
+[bt]
+profile=remote
+CARTHING_BT_ROLE=remote
+CARTHING_A2DP_BRIDGE_ENABLE=0
+[audio]
+profile=playback
+CARTHING_AUDIO_PLAYBACK=1
+CARTHING_AUDIO_CAPTURE=0
+CARTHING_AUDIO_BRIDGE=0
+[sensor]
+profile=basic
+CARTHING_SENSOR_ACCEL=0
+CARTHING_SENSOR_LIGHT=1
+CARTHING_SENSOR_TOUCH=1
+[debug]
+profile=normal
+CARTHING_DEBUG_HTTP_ENABLE=1
+CARTHING_DEBUG_TELNET_ENABLE=0
+CARTHING_DEBUG_BEACON_ENABLE=0
+CARTHING_REVERSE_AGENT_ENABLE=1
+
+=== S04-usbgadget log (last 80 lines) ===
+--- /run/carthing/S04-usbgadget.log ---
+[S04-usbgadget] start
+[S04-usbgadget] using UDC: ff400000.dwc2_a
+[S04-usbgadget] composite active: mode=ncm enabled=ncm udc=ff400000.dwc2_a
+[S04-usbgadget] done: gadget active
+[S04-usbgadget] end
+
+=== /run/carthing-state listing ===
+/run/carthing-state
+/run/carthing-state/Image
+/run/carthing-state/superbird.dtb
+/run/carthing-state/initrd
+/run/carthing-state/bootargs.txt
+/run/carthing-state/carthing
+/run/carthing-state/carthing/profiles
+/run/carthing-state/carthing/profiles/usb
+/run/carthing-state/carthing/profiles/bt
+/run/carthing-state/carthing/profiles/audio
+/run/carthing-state/carthing/profiles/debug
+/run/carthing-state/carthing/keys.json
+/run/carthing-state/._Image
+/run/carthing-state/._superbird.dtb
+/run/carthing-state/._initrd
+/run/carthing-state/._bootargs.txt
+--- current usb profile file ---
+ncm
+cat: can't open '/run/carthing/usb.env': No such file or directory
+
+=== running processes (head) ===
+PID   USER     COMMAND
+    1 root     /bin/busybox init
+    2 root     [kthreadd]
+    3 root     [ksoftirqd/0]
+    4 root     [kworker/0:0]
+    5 root     [kworker/0:0H]
+    6 root     [kworker/u8:0]
+    7 root     [rcu_preempt]
+    8 root     [rcu_sched]
+    9 root     [rcu_bh]
+   10 root     [migration/0]
+   11 root     [lru-add-drain]
+   12 root     [watchdog/0]
+   13 root     [cpuhp/0]
+   14 root     [cpuhp/1]
+   15 root     [watchdog/1]
+   16 root     [migration/1]
+   17 root     [ksoftirqd/1]
+   18 root     [kworker/1:0]
+   19 root     [kworker/1:0H]
+   20 root     [cpuhp/2]
+   21 root     [watchdog/2]
+   22 root     [migration/2]
+   23 root     [ksoftirqd/2]
+   24 root     [kworker/2:0]
+   25 root     [kworker/2:0H]
+   26 root     [cpuhp/3]
+   27 root     [watchdog/3]
+   28 root     [migration/3]
+   29 root     [ksoftirqd/3]
+   30 root     [kworker/3:0]
+   31 root     [kworker/3:0H]
+   32 root     [kdevtmpfs]
+   33 root     [netns]
+   34 root     [oom_reaper]
+   35 root     [writeback]
+   36 root     [kcompactd0]
+   37 root     [crypto]
+   38 root     [bioset]
+   39 root     [kblockd]
+   40 root     [devfreq_wq]
+   41 root     [lcd_work_queue]
+   42 root     [watchdogd]
+   43 root     [kworker/2:1]
+   44 root     [gp_pll]
+   45 root     [kworker/1:1]
+   59 root     [kswapd0]
+   60 root     [vmstat]
+   61 root     [SquashFS read w]
+   62 root     [ecryptfs-kthrea]
+   97 root     [hwrng]
+   98 root     [kworker/0:1]
+   99 root     [bioset]
+  100 root     [bioset]
+  101 root     [bioset]
+  102 root     [bioset]
+  103 root     [bioset]
+  104 root     [bioset]
+  105 root     [bioset]
+  106 root     [bioset]
+  107 root     [bioset]
+  108 root     [kworker/u8:1]
+  109 root     [irq/57-rotary-e]
+  110 root     [irq/58-rotary-e]
+  111 root     [dm_bufio_cache]
+  112 root     [cfinteractive]
+  113 root     [kworker/3:1]
+  125 root     [null]
+  126 root     [cpu_hogplug_thr]
+  127 root     [vmalloc_ion]
+  128 root     [codec_mm_ion]
+  129 root     [videosync]
+  130 root     [irq/49-meson-am]
+  131 root     [kworker/0:2]
+  132 root     [bioset]
+  133 root     [mmcqd/0]
+  134 root     [bioset]
+  135 root     [mmcqd/0boot0]
+  136 root     [bioset]
+  137 root     [mmcqd/0boot1]
+  138 root     [bioset]
+  139 root     [mmcqd/0rpmb]
+  140 root     [irq/23-meson-g1]
+  141 root     [cma_task0]
+  142 root     [cma_task1]
+  143 root     [cma_task2]
+  144 root     [cma_task3]
+  145 root     [ipv6_addrconf]
+  146 root     [krfcommd]
+  147 root     [kworker/2:2]
+  148 root     [kworker/u8:2]
+  149 root     [dwc_otg]
+  150 root     [tlsc6x_resume_w]
+  151 root     [tlsc6x_esd_help]
+  152 root     [tlsc6x_wq]
+  153 root     [bl_power_on_que]
+  154 root     [jbd2/mmcblk0p2-]
+  155 root     [ext4-rsv-conver]
+  246 root     [kworker/3:1H]
+  267 root     dropbear -F -E -p 22 -P /run/carthing/dropbear.pid -r /run/dropbear/dropbear_rsa_host_key
+  273 root     httpd -f -p 8080 -h /
+  279 root     python3 -B /usr/libexec/carthing/reverse-agent.py
+  294 root     /usr/bin/carthing-btattach-mini /dev/ttyS1 115200
+  296 root     [kworker/u9:0]
+  297 root     [hci0]
+  298 root     [hci0]
+  299 root     [kworker/u9:1]
+  300 root     [kworker/u9:2]
+  323 root     {run-media-remot} /bin/sh /usr/libexec/carthing/run-media-remote
+  325 root     python3 /usr/lib/carthing/media_remote.py
+  330 root     /sbin/getty -L ttyS0 115200 vt100
+  362 root     dropbear -F -E -p 22 -P /run/carthing/dropbear.pid -r /run/dropbear/dropbear_rsa_host_key
+  363 root     sh -s
+  432 root     ps -ef

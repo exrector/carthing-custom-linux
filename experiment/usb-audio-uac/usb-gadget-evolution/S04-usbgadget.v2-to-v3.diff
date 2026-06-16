@@ -1,0 +1,29 @@
+--- ~/Documents/ПРОЕКТЫ/claude-staging-for-codex-20260528/device-inventory-20260528/S04-usbgadget.v2-pre-storage.sh	2026-05-28 17:51:13
++++ ~/Documents/ПРОЕКТЫ/claude-staging-for-codex-20260528/device-inventory-20260528/S04-usbgadget.v3-storage.sh	2026-05-28 17:51:27
+@@ -168,15 +168,22 @@
+ 
+ add_storage() {
+     backing=${CARTHING_USB_STORAGE_FILE:-/run/carthing/usb-storage.img}
+-    [ -f "$backing" ] || {
+-        log "storage backing file missing: $backing"
++    # CLAUDE 2026-05-28: accept block devices as backing, not just regular
++    # files. Enables raw /dev/mmcblk0p1 passthrough for state-partition
++    # editing from macOS Finder. The caller is responsible for unmounting
++    # the partition on the Linux side before triggering this profile.
++    # See memory: carthing-claude-intervention-20260528 (storage section).
++    if [ ! -f "$backing" ] && [ ! -b "$backing" ]; then
++        log "storage backing missing or unsupported type: $backing"
+         return 1
+-    }
++    fi
+     link_function mass_storage.usb0 2>/dev/null || return 1
+     mkdir -p functions/mass_storage.usb0/lun.0 2>/dev/null || true
+     echo "$backing" > functions/mass_storage.usb0/lun.0/file 2>/dev/null || return 1
+     echo 1 > functions/mass_storage.usb0/lun.0/removable 2>/dev/null || true
+-    echo 0 > functions/mass_storage.usb0/lun.0/ro 2>/dev/null || true
++    # CLAUDE 2026-05-28: read-only by default if env says so. Lets safe
++    # demo go through Mac-side mount without write risk to mmcblk0p1.
++    echo "${CARTHING_USB_STORAGE_RO:-0}" > functions/mass_storage.usb0/lun.0/ro 2>/dev/null || true
+     echo storage
+     return 0
+ }

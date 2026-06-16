@@ -1,0 +1,757 @@
+Warning: Permanently added 'fe80::70eb:dff:fe28:4a54%en18' (RSA) to the list of known hosts.
+=== I2C scan ===
+--- i2c-0 ---
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- UU -- 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+--- i2c-2 ---
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- -- 
+10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- 35 -- -- -- UU -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+--- i2c-3 ---
+     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+00:          -- -- -- -- -- -- -- -- -- -- -- -- -- 
+10: 10 -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- 
+70: -- -- -- -- -- -- -- --                         
+
+=== IIO devices ===
+--- /sys/bus/iio/devices/iio:device0 ---
+name: tmd2772
+  in_intensity0_raw=33
+  in_intensity1_raw=15
+  in_proximity0_raw=0
+  in_illuminance0_input=0
+  in_illuminance0_target_input=150
+--- /sys/bus/iio/devices/iio:device1 ---
+name: meson-g12a-saradc
+  in_voltage0_mean_raw=2188
+  in_voltage0_raw=2186
+  in_voltage1_mean_raw=1336
+  in_voltage1_raw=1337
+  in_voltage2_mean_raw=2173
+  in_voltage2_raw=2176
+  in_voltage3_mean_raw=2186
+  in_voltage3_raw=2186
+  in_voltage4_mean_raw=2239
+  in_voltage4_raw=2247
+  in_voltage5_mean_raw=1823
+  in_voltage5_raw=1819
+  in_voltage6_mean_raw=1845
+  in_voltage6_raw=1863
+  in_voltage7_mean_raw=500
+  in_voltage7_raw=395
+  in_voltage0_input=546
+  in_voltage1_input=334
+  in_voltage2_input=543
+  in_voltage3_input=546
+  in_voltage4_input=559
+  in_voltage5_input=456
+  in_voltage6_input=459
+  in_voltage7_input=213
+  in_voltage_scale=439.453125000
+
+=== thermal zones ===
+  thermal_zone0 type=soc_thermal temp=29600
+  thermal_zone1 type=ddr_thermal temp=29800
+  thermal_zone2 type=bluetooth_thermal temp=24355
+  thermal_zone3 type=dram_thermal temp=24292
+  thermal_zone4 type=pcb_thermal temp=24292
+
+=== input devices ===
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name="gpio-keys"
+P: Phys=gpio-keys-polled/input0
+S: Sysfs=/devices/platform/gpio-keys/input/input0
+U: Uniq=
+H: Handlers=kbd event0 
+B: PROP=0
+B: EV=3
+B: KEY=400001000003e
+
+I: Bus=0019 Vendor=0000 Product=0000 Version=0000
+N: Name="rotary@0"
+P: Phys=
+S: Sysfs=/devices/platform/rotary@0/input/input1
+U: Uniq=
+H: Handlers=event1 
+B: PROP=0
+B: EV=5
+B: REL=40
+
+I: Bus=0000 Vendor=0001 Product=0001 Version=0100
+N: Name="aml_vkeypad"
+P: Phys=keypad/input0
+S: Sysfs=/devices/platform/rtc/input/input2
+U: Uniq=
+H: Handlers=kbd event2 
+B: PROP=0
+B: EV=3
+B: KEY=10000000000000 0
+
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name="tlsc6x_dbg"
+P: Phys=I2C
+S: Sysfs=/devices/platform/soc/ffd00000.cbus/ffd1f000.i2c/i2c-0/0-002e/input/input3
+U: Uniq=
+H: Handlers=event3 
+B: PROP=2
+B: EV=b
+B: KEY=400 0 0 0 0 0
+B: ABS=665800000000000
+
+
+=== DTB top-level compatible ===
+amlogic, g12a
+--- key subnodes ---
+/sys/firmware/devicetree/base/usb3phy@ffe09080
+/sys/firmware/devicetree/base/usb2phy@ffe09000
+/sys/firmware/devicetree/base/audio_data
+/sys/firmware/devicetree/base/soc/audiobus@0xff642000
+/sys/firmware/devicetree/base/aml_snd_iomap/audiolocker_base
+/sys/firmware/devicetree/base/aml_snd_iomap/audiobus_base
+/sys/firmware/devicetree/base/auge_sound/aml-audio-card,dai-link@0
+/sys/firmware/devicetree/base/pinctrl@ff800014/ao_i2c_pins1
+/sys/firmware/devicetree/base/pinctrl@ff800014/ao_i2c_pins2
+/sys/firmware/devicetree/base/pinctrl@ff800014/ao_i2c_slave_pins
+/sys/firmware/devicetree/base/pinctrl@ff634480/spotify_mfi_i2c_pins
+/sys/firmware/devicetree/base/pinctrl@ff634480/i2c0_pins2
+/sys/firmware/devicetree/base/pinctrl@ff634480/spicc1_pins
+/sys/firmware/devicetree/base/pinctrl@ff634480/spicc0_pins_x
+/sys/firmware/devicetree/base/pinctrl@ff634480/spicc0_pins_c
+/sys/firmware/devicetree/base/auge_sound
+/sys/firmware/devicetree/base/backlight
+/sys/firmware/devicetree/base/backlight/backlight_0
+/sys/firmware/devicetree/base/backlight/backlight_1
+/sys/firmware/devicetree/base/gpio-keys
+/sys/firmware/devicetree/base/rotary@0
+/sys/firmware/devicetree/base/pinctrl@ff634480/spotify_rotary
+
+=== /proc/config.gz availability ===
+PRESENT - IKCONFIG_PROC enabled
+CONFIG_IKCONFIG=y
+CONFIG_IKCONFIG_PROC=y
+CONFIG_SND_USB_AUDIO=y
+CONFIG_USB_CONFIGFS=y
+CONFIG_USB_CONFIGFS_ACM=y
+CONFIG_USB_CONFIGFS_ECM=y
+CONFIG_USB_CONFIGFS_ECM_SUBSET=y
+CONFIG_USB_CONFIGFS_EEM=y
+CONFIG_USB_CONFIGFS_F_ACC=y
+CONFIG_USB_CONFIGFS_F_AUDIO_SRC=y
+CONFIG_USB_CONFIGFS_F_FS=y
+CONFIG_USB_CONFIGFS_F_HID=y
+CONFIG_USB_CONFIGFS_F_MIDI=y
+CONFIG_USB_CONFIGFS_F_MTP=y
+CONFIG_USB_CONFIGFS_F_PTP=y
+CONFIG_USB_CONFIGFS_F_UAC1=y
+CONFIG_USB_CONFIGFS_F_UAC2=y
+CONFIG_USB_CONFIGFS_MASS_STORAGE=y
+CONFIG_USB_CONFIGFS_NCM=y
+CONFIG_USB_CONFIGFS_RNDIS=y
+CONFIG_USB_CONFIGFS_SERIAL=y
+CONFIG_USB_CONFIGFS_UEVENT=y
+CONFIG_USB_F_HID=y
+CONFIG_USB_F_NCM=y
+CONFIG_USB_F_UAC1=y
+CONFIG_USB_F_UAC2=y
+CONFIG_USB_G_NCM=m
+CONFIG_USB_LIBCOMPOSITE=y
+CONFIG_USB_MON=y
+CONFIG_USB_NET_CDCETHER=y
+CONFIG_USB_NET_CDC_NCM=y
+CONFIG_USB_NET_RNDIS_HOST=y
+CONFIG_USB_SERIAL=y
+CONFIG_USB_SERIAL_CH341=y
+CONFIG_USB_SERIAL_CP210X=y
+CONFIG_USB_SERIAL_FTDI_SIO=y
+CONFIG_USB_SERIAL_GENERIC=y
+CONFIG_USB_SERIAL_PL2303=y
+CONFIG_USB_STORAGE=y
+
+=== modules available in rootfs ===
+legacy
+--- g_ncm.ko presence ---
+/lib/modules/4.9.113/kernel/drivers/usb/gadget/legacy/g_ncm.ko
+--- loaded modules ---
+
+=== mounts and disk space ===
+/dev/root on / type ext4 (ro,relatime,data=ordered)
+devtmpfs on /dev type devtmpfs (rw,relatime,size=135572k,nr_inodes=33893,mode=755)
+proc on /proc type proc (rw,relatime)
+sysfs on /sys type sysfs (rw,relatime)
+devpts on /dev/pts type devpts (rw,relatime,mode=600,ptmxmode=000)
+tmpfs on /run type tmpfs (rw,nosuid,nodev,relatime,mode=755)
+/dev/mmcblk0p1 on /run/carthing-state type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)
+none on /sys/kernel/config type configfs (rw,relatime)
+tmpfs on /root/.ssh type tmpfs (rw,nosuid,nodev,relatime,mode=755)
+tmpfs on /lib/firmware/brcm type tmpfs (rw,nosuid,nodev,relatime,mode=755)
+Filesystem                Size      Used Available Use% Mounted on
+/dev/root               485.6M     50.4M    431.2M  10% /
+devtmpfs                132.4M         0    132.4M   0% /dev
+tmpfs                   243.7M    220.0K    243.5M   0% /run
+/dev/mmcblk0p1           31.9M     25.1M      6.8M  79% /run/carthing-state
+tmpfs                   243.7M    220.0K    243.5M   0% /root/.ssh
+tmpfs                   243.7M    220.0K    243.5M   0% /lib/firmware/brcm
+
+=== S04-usbgadget source (first 200 lines, read-only) ===
+#!/bin/sh
+set -u
+
+# Early USB gadget setup for the Car Thing rootfs.
+# Goal: expose one stable USB device.
+# Default boot mode is NCM-only for recovery/SSH. Optional functions such as
+# USB Audio are kernel/runtime capabilities, but must be explicitly enabled by
+# userspace later.
+
+LOG=/run/carthing/S04-usbgadget.log
+mkdir -p /run/carthing
+exec >>"$LOG" 2>&1
+
+[ -r /etc/default/carthing ] && . /etc/default/carthing
+
+UDC_NAME=${CARTHING_USB_UDC:-}
+PROFILE_FILE=${CARTHING_USB_PROFILE_FILE:-/run/carthing/usb-gadget-profile}
+GADGET_MODE=${1:-${CARTHING_USB_GADGET_MODE:-}}
+if [ -z "$GADGET_MODE" ] && [ -r "$PROFILE_FILE" ]; then
+    GADGET_MODE=$(head -n 1 "$PROFILE_FILE" 2>/dev/null || true)
+fi
+GADGET_MODE=${GADGET_MODE:-ncm}
+CONFIGFS=/sys/kernel/config
+GADGET_DIR=$CONFIGFS/usb_gadget/g1
+CONFIG_DIR=$GADGET_DIR/configs/c.1
+
+log() {
+    echo "[S04-usbgadget] $*"
+}
+
+unbind_if_bound() {
+    if [ -f "$GADGET_DIR/UDC" ]; then
+        bound=$(cat "$GADGET_DIR/UDC" 2>/dev/null || true)
+        if [ -n "$bound" ]; then
+            log "unbind existing UDC: $bound"
+            echo "" >"$GADGET_DIR/UDC" 2>/dev/null || true
+        fi
+    fi
+}
+
+remove_link() {
+    path=$1
+    [ -L "$path" ] && rm -f "$path"
+}
+
+link_function() {
+    name=$1
+    mkdir -p "$GADGET_DIR/functions/$name" || return 1
+    remove_link "$CONFIG_DIR/$name"
+    ln -s "$GADGET_DIR/functions/$name" "$CONFIG_DIR/$name"
+}
+
+prepare_configfs() {
+    [ -d "$CONFIGFS" ] || mkdir -p "$CONFIGFS"
+    if ! grep -q " $CONFIGFS " /proc/mounts 2>/dev/null; then
+        mount -t configfs none "$CONFIGFS" || return 1
+    fi
+    return 0
+}
+
+find_udc() {
+    if [ -n "$UDC_NAME" ] && [ -d "/sys/class/udc/$UDC_NAME" ]; then
+        echo "$UDC_NAME"
+        return 0
+    fi
+
+    for try in 1 2 3 4 5; do
+        for udc_path in /sys/class/udc/*; do
+            [ -e "$udc_path" ] || continue
+            basename "$udc_path"
+            return 0
+        done
+        log "waiting for UDC ($try/5)"
+        sleep 1
+    done
+
+    return 1
+}
+
+profile_has() {
+    token=$1
+    case ",$GADGET_MODE," in
+        *",$token,"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+profile_is_plain_ncm() {
+    case "$GADGET_MODE" in
+        ncm|legacy-ncm|rescue-ncm) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+existing_usb_network_active() {
+    for netdir in /sys/class/net/*; do
+        [ -e "$netdir" ] || continue
+        name=${netdir##*/}
+        [ "$name" = "lo" ] && continue
+        case "$name" in
+            usb*|eth*|en*|ncm*|rndis*)
+                log "existing USB network candidate: $name"
+                return 0
+                ;;
+        esac
+    done
+    return 1
+}
+
+add_audio() {
+    if link_function uac2.usb0 2>/dev/null; then
+        echo 3 > functions/uac2.usb0/p_chmask 2>/dev/null || true
+        echo 48000 > functions/uac2.usb0/p_srate 2>/dev/null || true
+        echo 2 > functions/uac2.usb0/p_ssize 2>/dev/null || true
+        echo 0 > functions/uac2.usb0/c_chmask 2>/dev/null || true
+        echo uac2
+        return 0
+    fi
+
+    if link_function uac1.usb0 2>/dev/null; then
+        echo 3 > functions/uac1.usb0/p_chmask 2>/dev/null || true
+        echo 48000 > functions/uac1.usb0/p_srate 2>/dev/null || true
+        echo 2 > functions/uac1.usb0/p_ssize 2>/dev/null || true
+        echo 0 > functions/uac1.usb0/c_chmask 2>/dev/null || true
+        echo uac1
+        return 0
+    fi
+
+    return 1
+}
+
+add_serial() {
+    if link_function acm.usb0 2>/dev/null; then
+        echo acm
+        return 0
+    fi
+    if link_function gser.usb0 2>/dev/null; then
+        echo serial
+        return 0
+    fi
+    return 1
+}
+
+add_hid() {
+    link_function hid.usb0 2>/dev/null || return 1
+    echo 1 > functions/hid.usb0/protocol 2>/dev/null || true
+    echo 1 > functions/hid.usb0/subclass 2>/dev/null || true
+    echo 8 > functions/hid.usb0/report_length 2>/dev/null || true
+    # Minimal boot keyboard report descriptor.
+    printf '\x05\x01\x09\x06\xa1\x01\x05\x07\x19\xe0\x29\xe7\x15\x00\x25\x01\x75\x01\x95\x08\x81\x02\x95\x01\x75\x08\x81\x01\x95\x05\x75\x01\x05\x08\x19\x01\x29\x05\x91\x02\x95\x01\x75\x03\x91\x01\x95\x06\x75\x08\x15\x00\x25\x65\x05\x07\x19\x00\x29\x65\x81\x00\xc0' > functions/hid.usb0/report_desc 2>/dev/null || true
+    echo hid
+    return 0
+}
+
+add_storage() {
+    backing=${CARTHING_USB_STORAGE_FILE:-/run/carthing/usb-storage.img}
+    [ -f "$backing" ] || {
+        log "storage backing file missing: $backing"
+        return 1
+    }
+    link_function mass_storage.usb0 2>/dev/null || return 1
+    mkdir -p functions/mass_storage.usb0/lun.0 2>/dev/null || true
+    echo "$backing" > functions/mass_storage.usb0/lun.0/file 2>/dev/null || return 1
+    echo 1 > functions/mass_storage.usb0/lun.0/removable 2>/dev/null || true
+    echo 0 > functions/mass_storage.usb0/lun.0/ro 2>/dev/null || true
+    echo storage
+    return 0
+}
+
+add_midi() {
+    link_function midi.usb0 2>/dev/null || return 1
+    echo midi
+    return 0
+}
+
+add_network_alt() {
+    kind=$1
+    case "$kind" in
+        ecm) link_function ecm.usb0 2>/dev/null || return 1; echo ecm ;;
+        eem) link_function eem.usb0 2>/dev/null || return 1; echo eem ;;
+        rndis) link_function rndis.usb0 2>/dev/null || return 1; echo rndis ;;
+        *) return 1 ;;
+    esac
+}
+
+build_composite() {
+    if profile_is_plain_ncm && existing_usb_network_active; then
+        log "plain NCM already active; leaving legacy/rescue gadget untouched"
+        return 0
+    fi
+
+    prepare_configfs || {
+        log "configfs mount failed"
+        return 1
+    }
+
+    active_udc=$(find_udc) || {
+        log "no UDC present"
+        return 1
+    }
+
+=== profilectl source (first 200 lines) ===
+#!/bin/sh
+set -eu
+
+usage() {
+    echo "usage: profilectl list|status|<domain> <command> [args]" >&2
+    echo "domains: usb bt audio sensor debug" >&2
+    exit 2
+}
+
+tool_for_domain() {
+    case "$1" in
+        usb) echo /usr/libexec/carthing/usb-profile ;;
+        bt|bluetooth) echo /usr/libexec/carthing/bt-profile ;;
+        audio) echo /usr/libexec/carthing/audio-profile ;;
+        sensor|sensors) echo /usr/libexec/carthing/sensor-profile ;;
+        debug) echo /usr/libexec/carthing/debug-profile ;;
+        *) return 1 ;;
+    esac
+}
+
+run_domain() {
+    domain=$1
+    shift
+    tool=$(tool_for_domain "$domain") || usage
+    [ -x "$tool" ] || {
+        echo "profile manager missing: $tool" >&2
+        exit 1
+    }
+    "$tool" "$@"
+}
+
+case "${1:-}" in
+    list)
+        for domain in usb bt audio sensor debug; do
+            echo "[$domain]"
+            run_domain "$domain" list
+        done
+        ;;
+    status)
+        for domain in usb bt audio sensor debug; do
+            echo "[$domain]"
+            run_domain "$domain" status 2>/dev/null || run_domain "$domain" get
+        done
+        ;;
+    usb|bt|bluetooth|audio|sensor|sensors|debug)
+        domain=$1
+        shift
+        [ $# -gt 0 ] || usage
+        run_domain "$domain" "$@"
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+=== dmesg early boot trace (head 200) ===
+[    0.000000@0] Booting Linux on physical CPU 0x0
+[    0.000000@0] Linux version 4.9.113 (nixbld1@c13d0a2824d4) (gcc version 6.5.0 (GCC) ) #1-NixOS SMP PREEMPT Tue Jan 1 00:00:00 UTC 1980
+[    0.000000@0] Boot CPU: AArch64 Processor [410fd034]
+[    0.000000@0] efi: Getting EFI parameters from FDT:
+[    0.000000@0] efi: UEFI not found.
+[    0.000000@0] OF: reserved mem: __reserved_mem_alloc_size, start:0x0000000005000000, end:0x0000000005400000, len:4 MiB
+[    0.000000@0] Reserved memory: created CMA memory pool at 0x0000000005000000, size 4 MiB
+[    0.000000@0] OF: reserved mem: initialized node linux,secmon, compatible id shared-dma-pool
+[    0.000000@0] OF: reserved mem: __reserved_mem_alloc_size, start:0x000000001f800000, end:0x0000000020000000, len:8 MiB
+[    0.000000@0] Reserved memory: created CMA memory pool at 0x000000001f800000, size 8 MiB
+[    0.000000@0] OF: reserved mem: initialized node linux,meson-fb, compatible id shared-dma-pool
+[    0.000000@0] Reserved memory: created CMA memory pool at 0x0000000017800000, size 128 MiB
+[    0.000000@0] OF: reserved mem: initialized node linux,ion-dev, compatible id shared-dma-pool
+[    0.000000@0] Reserved memory: created CMA memory pool at 0x0000000015000000, size 40 MiB
+[    0.000000@0] OF: reserved mem: initialized node linux,di_cma, compatible id shared-dma-pool
+[    0.000000@0] Reserved memory: created DMA memory pool at 0x0000000015000000, size 0 MiB
+[    0.000000@0] OF: reserved mem: initialized node linux,ppmgr, compatible id shared-dma-pool
+[    0.000000@0] OF: reserved mem: failed to allocate memory for node linux,codec_mm_cma, size:308 MB
+[    0.000000@0] OF: reserved mem: initialized node linux,codec_mm_reserved, compatible id amlogic, codec-mm-reserved
+[    0.000000@0] Reserved memory: created CMA memory pool at 0x0000000011c00000, size 32 MiB
+[    0.000000@0] OF: reserved mem: initialized node linux,vm0_cma, compatible id shared-dma-pool
+[    0.000000@0] cma: Reserved 8 MiB at 0x0000000014800000
+[    0.000000@0] On node 0 totalpages: 131072
+[    0.000000@0]   DMA zone: 2048 pages used for memmap
+[    0.000000@0]   DMA zone: 0 pages reserved
+[    0.000000@0]   DMA zone: 131072 pages, LIFO batch:31
+[    0.000000@0] psci: probing for conduit method from DT.
+[    0.000000@0] psci: PSCIv1.0 detected in firmware.
+[    0.000000@0] psci: Using standard PSCI v0.2 function IDs
+[    0.000000@0] psci: MIGRATE_INFO_TYPE not supported.
+[    0.000000@0] psci: SMC Calling Convention v1.1
+[    0.000000@0] percpu: Embedded 25 pages/cpu @ffffffc014726000 s64408 r8192 d29800 u102400
+[    0.000000@0] pcpu-alloc: s64408 r8192 d29800 u102400 alloc=25*4096
+[    0.000000@0] pcpu-alloc: [0] 0 [0] 1 [0] 2 [0] 3 
+[    0.000000@0] Detected VIPT I-cache on CPU0
+[    0.000000@0] CPU features: enabling workaround for ARM erratum 845719
+[    0.000000@0] Built 1 zonelists in Zone order, mobility grouping on.  Total pages: 129024
+[    0.000000@0] Kernel command line: ramoops.pstore_en=1 ramoops.record_size=0x8000 ramoops.console_size=0x4000 rootfstype=ext4 console=ttyS0,115200n8 no_console_suspend earlycon=aml-uart,0xff803000 root=/dev/mmcblk0p2 rootwait init=/bin/init reboot_mode_android=normal logo=osd0,loaded,0x1f800000 fb_width=480 fb_height=800 vout=panel,enable panel_type=lcd_8 frac_rate_policy=1 osd_reverse=0 video_reverse=0 irq_check_en=0 androidboot.selinux=enforcing androidboot.firstboot=0 jtag=disable uboot_version=v1.0-74-gfd61b37038 androidboot.hardware=amlogic androidboot.slot_suffix=_aÒ^z‹òY^:#¸TUë32ãâ×RÝ¾üUÄ¥@¶weÐ
+[    0.000000@0] fb: osd0
+[    0.000000@0] fb: loaded
+[    0.000000@0] fb: 0x1f800000
+[    0.000000@0] fb: logo_info.fb_width=480
+[    0.000000@0] fb: logo_info.fb_height=800
+[    0.000000@0] vout: panel
+[    0.000000@0] vout: enable: 1
+[    0.000000@0] lcd: panel_type: lcd_8
+[    0.000000@0] vpp_axis_reverse: bootargs is 0
+[    0.000000@0] phlock_phase_config: bootargs is 0.
+[    0.000000@0] PID hash table entries: 2048 (order: 2, 16384 bytes)
+[    0.000000@0] Dentry cache hash table entries: 65536 (order: 7, 524288 bytes)
+[    0.000000@0] Inode-cache hash table entries: 32768 (order: 6, 262144 bytes)
+[    0.000000@0] Memory: 271144K/524288K available (9212K kernel code, 1096K rwdata, 2720K rodata, 2624K init, 1183K bss, 27864K reserved, 225280K cma-reserved)
+[    0.000000@0] Virtual kernel memory layout:
+[    0.000000@0]     modules : 0xffffff8000000000 - 0xffffff8008000000   (   128 MB)
+[    0.000000@0]     vmalloc : 0xffffff8008000000 - 0xffffffbebfff0000   (   250 GB)
+[    0.000000@0]       .text : 0xffffff8009080000 - 0xffffff8009980000   (  9216 KB)
+[    0.000000@0]     .rodata : 0xffffff8009980000 - 0xffffff8009c30000   (  2752 KB)
+[    0.000000@0]       .init : 0xffffff8009c30000 - 0xffffff8009ec0000   (  2624 KB)
+[    0.000000@0]       .data : 0xffffff8009ec0000 - 0xffffff8009fd2200   (  1097 KB)
+[    0.000000@0]        .bss : 0xffffff8009fd2200 - 0xffffff800a0fa104   (  1184 KB)
+[    0.000000@0]     fixed   : 0xffffffbefe7fd000 - 0xffffffbefec00000   (  4108 KB)
+[    0.000000@0]     PCI I/O : 0xffffffbefee00000 - 0xffffffbeffe00000   (    16 MB)
+[    0.000000@0]     vmemmap : 0xffffffbf00000000 - 0xffffffc000000000   (     4 GB maximum)
+[    0.000000@0]               0xffffffbf00000000 - 0xffffffbf00800000   (     8 MB actual)
+[    0.000000@0]     memory  : 0xffffffc000000000 - 0xffffffc020000000   (   512 MB)
+[    0.000000@0] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=4, Nodes=1
+[    0.000000@0] Preemptible hierarchical RCU implementation.
+[    0.000000@0] 	Build-time adjustment of leaf fanout to 64.
+[    0.000000@0] 	RCU restricting CPUs from NR_CPUS=8 to nr_cpu_ids=4.
+[    0.000000@0] RCU: Adjusting geometry for rcu_fanout_leaf=64, nr_cpu_ids=4
+[    0.000000@0] NR_IRQS:64 nr_irqs:64 0
+[    0.000000@0] GPIO-INTC: support to detect double-edge trigger signal
+[    0.000000@0] g12a_aoclkc_init: register ao clk ok!
+[    0.000000@0] Meson chip version = RevC (28:C - 10:0)
+[    0.000000@0] meson_g12a_sdemmc_init: register amlogic sdemmc clk
+[    0.000000@0] meson_g12a_sdemmc_init: register amlogic sdemmc clk
+[    0.000000@0] meson_g12a_gpu_init: register meson gpu clk
+[    0.000000@0] meson_g12a_media_init: register meson media clk
+[    0.000000@0] meson_g12a_misc_init: register amlogic g12a misc clks
+[    0.000000@0] meson_g12a_misc_init: done.
+[    0.000000@0] g12a_clkc_init initialization complete
+[    0.000000@0] arm_arch_timer: Architected cp15 timer(s) running at 24.00MHz (phys).
+[    0.000000@0] clocksource: arch_sys_counter: mask: 0xffffffffffffff max_cycles: 0x588fe9dc0, max_idle_ns: 440795202592 ns
+[    0.000003@0] sched_clock: 56 bits at 24MHz, resolution 41ns, wraps every 4398046511097ns
+[    0.000027@0] meson_bc_timer: mclk->mux_reg =ffffff800800c190,mclk->reg =ffffff800800e194
+[    0.000457@0] Console: colour dummy device 80x25
+[    0.000471@0] Calibrating delay loop (skipped), value calculated using timer frequency.. 48.00 BogoMIPS (lpj=96000)
+[    0.000482@0] pid_max: default: 32768 minimum: 301
+[    0.000515@0] thread_stack_cache_init, vmap:ffffffc01142a000, bitmap:ffffffc01141b000, cache page:11440
+[    0.000522@0] thread_stack_cache_init, allocation vm area:ffffffc011426b80, addr:ffffff8020000000, size:20001000
+[    0.000529@0] cpu 0, vmap_stack:[ffffffc01472fa20-ffffffc014733a10]
+[    0.000533@0] cpu 0, irq_stack: [ffffffc014726060-ffffffc01472a050]
+[    0.000539@0] cpu 1, vmap_stack:[ffffffc014748a20-ffffffc01474ca10]
+[    0.000542@0] cpu 1, irq_stack: [ffffffc01473f060-ffffffc014743050]
+[    0.000545@0] cpu 2, vmap_stack:[ffffffc014761a20-ffffffc014765a10]
+[    0.000549@0] cpu 2, irq_stack: [ffffffc014758060-ffffffc01475c050]
+[    0.000552@0] cpu 3, vmap_stack:[ffffffc01477aa20-ffffffc01477ea10]
+[    0.000557@0] cpu 3, irq_stack: [ffffffc014771060-ffffffc014775050]
+[    0.000606@0] Security Framework initialized
+[    0.000613@0] SELinux:  Initializing.
+[    0.000643@0] SELinux:  Starting in permissive mode
+[    0.000665@0] Mount-cache hash table entries: 1024 (order: 1, 8192 bytes)
+[    0.000671@0] Mountpoint-cache hash table entries: 1024 (order: 1, 8192 bytes)
+[    0.001386@0] sched-energy: CPU device node has no sched-energy-costs
+[    0.001396@0] CPU0: update cpu_capacity 1024
+[    0.001411@0] ASID allocator initialised with 65536 entries
+[    0.032032@0] EFI services will not be available.
+[    0.080123@1] Detected VIPT I-cache on CPU1
+[    0.080160@1] CPU1: update cpu_capacity 1024
+[    0.080162@1] CPU1: Booted secondary processor [410fd034]
+[    0.112155@2] Detected VIPT I-cache on CPU2
+[    0.112178@2] CPU2: update cpu_capacity 1024
+[    0.112180@2] CPU2: Booted secondary processor [410fd034]
+[    0.144206@3] Detected VIPT I-cache on CPU3
+[    0.144226@3] CPU3: update cpu_capacity 1024
+[    0.144229@3] CPU3: Booted secondary processor [410fd034]
+[    0.144287@0] Brought up 4 CPUs
+[    0.144311@0] SMP: Total of 4 processors activated.
+[    0.144319@0] CPU features: detected feature: 32-bit EL0 Support
+[    0.144398@0] CPU: All CPU(s) started at EL2
+[    0.144417@0] alternatives: patching kernel code
+[    0.144768@0] addr:ffffff802008be10 is in kernel, size fix 4096->10, data:mode=0755
+[    0.144864@0] devtmpfs: initialized
+[    0.160767@0] DMI not present or invalid.
+[    0.160988@0] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+[    0.161004@0] futex hash table entries: 1024 (order: 4, 65536 bytes)
+[    0.164620@0] pinctrl core: initialized pinctrl subsystem
+[    0.165449@0] NET: Registered protocol family 16
+[    0.166223@2] schedtune: init normalization constants...
+[    0.166230@2] schedtune: no energy model data
+[    0.166235@2] schedtune: disabled!
+[    0.180247@2] cpuidle: using governor menu
+[    0.180295@2] register canvas platform driver
+[    0.180323@2] register rdma platform driver
+[    0.180347@2] aml_vdac_init: module init
+[    0.181065@2] vdso: 2 pages (1 code @ ffffff8009987000, 1 data @ ffffff8009ec5000)
+[    0.181081@2] hw-breakpoint: found 6 breakpoint and 4 watchpoint registers.
+[    0.181382@2] DMA: preallocated 256 KiB pool for atomic allocations
+[    0.181538@2] clkmsr: clkmsr: driver init
+[    0.181544@2] codec_mm_module_init
+[    0.181568@2] media_configs_system_init
+[    0.181745@2] aml_watch_point_probe, in, wp:4
+[    0.182576@2] pstore: using zlib compression
+[    0.183115@2] console [pstore-1] enabled
+[    0.183124@2] pstore: Registered ramoops as persistent store backend
+[    0.183132@2] ramoops: attached 0x100000@0x7400000, ecc: 0/0
+[    0.184729@2] aml_iomap: amlogic iomap probe done
+[    0.185131@2] vpu: driver version: v20190314(7-g12a)
+[    0.185140@2] vpu: load vpu_clk: 666666667Hz(7)
+[    0.185313@2] vpu: clktree_init
+[    0.185356@2] vpu: vpu_probe OK
+[    0.189456@2] clkmsr: msr_clk_reg0=ffffff80081bc004,msr_clk_reg2=ffffff80081be00c
+[    0.189477@2] clkmsr: msr_ring_reg0=ffffff80081c05fc
+[    0.192654@2] aml_vdac_probe:probe start.cpu_id:6,name:meson-g12ab-vdac
+[    0.192783@2] aml_vdac_probe: ok
+[    0.192906@2] canvas_probe reg=00000000ff638000,size=2000
+[    0.192924@2] canvas maped reg_base =ffffff80081c2000
+[    0.198645@2] rdma_probe,cpu_type:1, ver:0, len:8
+[    0.198788@2] rdma_register, rdma_table_addr ffffff80081e5000 rdma_table_addr_phy 14840000 reg_buf ffffffc011710000
+[    0.198799@2] rdma_register success, handle 1 table_size 32768
+[    0.198808@2] set_rdma_handle video rdma handle = 1.
+[    0.199187@2] aml_snd_reg_map[0], reg:ff640000, size:2000
+[    0.199207@2] aml_snd_reg_map[1], reg:ff642000, size:2000
+[    0.199228@2] aml_snd_reg_map[2], reg:ff64a000, size:2000
+[    0.199249@2] aml_snd_reg_map[3], reg:ff642800, size:1800
+[    0.199270@2] aml_snd_reg_map[4], reg:ffd01000, size:1000
+[    0.199280@2] amlogic auge_snd_iomap probe done
+[    0.202127@2] codec_mm_probe ok
+[    0.281331@2] SCSI subsystem initialized
+[    0.281511@2] usbcore: registered new interface driver usbfs
+[    0.281552@2] usbcore: registered new interface driver hub
+[    0.281616@2] usbcore: registered new device driver usb
+[    0.281690@2] Linux video capture interface: v2.00
+[    0.281717@2] pps_core: LinuxPPS API ver. 1 registered
+[    0.281725@2] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.281743@2] PTP clock support registered
+[    0.281824@2] dmi: Firmware registration failed.
+[    0.282047@2] secmon: reserve_mem_size:0x300000
+[    0.282145@2] secmon secmon: assigned reserved memory node linux,secmon
+[    0.282153@2] secmon: can't fine clear_range
+[    0.282277@2] secmon: get page:ffffffbf00140000, 5000
+[    0.282288@2] secmon: share in base: 0xffffffc0050fe000, share out base: 0xffffffc0050ff000
+[    0.282296@2] secmon: phy_in_base: 0x50fe000, phy_out_base: 0x50ff000
+[    0.282714@2] fb: osd_init_module
+[    0.283245@2] lcd: driver version: 20190308(5-g12a)
+[    0.283356@2] lcd: detect mode: tablet, fr_auto_policy: 0, key_valid: 0
+[    0.283558@2] lcd: lcd_clktree_probe
+[    0.283568@2] lcd: status: 3
+[    0.283578@2] vout: vout1: register server: lcd_vout_server
+[    0.283587@2] vout: vout2: register server: lcd_vout2_server
+[    0.283596@2] lcd: lcd_get_config from dts
+[    0.283618@2] lcd: no range_setting
+[    0.283674@2] lcd: ST7701S, mipi, 16bit, 480x800
+[    0.283690@2] lcd: pixel_clk = 27.918MHz, bit_rate = 670.032MHz
+[    0.284054@2] lcd: lcd_probe ok
+[    0.284313@2] vout: create vout attribute OK
+[    0.284412@2] vout: vout_fops_create OK
+[    0.284421@2] vout: vout1: register server: nulldisp_vout_server
+[    0.284455@2] lcd: clk_gate is already on
+[    0.284463@2] vout: init mode panel set ok
+
+=== dmesg recent (tail 80) ===
+[    4.392880@3] meson_cdev index: 2
+[    4.396079@3] thermal: read gpupp failed
+[    4.399990@3] meson_cdev index: 3
+[    4.403301@3] find tzd id: 0
+[    4.406193@3] find tzd id: 0
+[    4.409013@3] meson_cdev probe done
+[    4.412634@3] gxbb_pm: enter meson_pm_probe!
+[    4.416763@3] gxbb_pm: meson_pm_probe done
+[    4.421205@3] ALSA device list:
+[    4.423898@3]   #0: AML-AUGESOUND
+[    4.427373@3] meson_uart ff803000.serial: ttyS0 use xtal(24M) 24000000 change 115200 to 115200
+[    4.534746@3] prepare_namespace() wait 79
+[    4.540844@3] EXT4-fs (mmcblk0p2): mounted filesystem with ordered data mode. Opts: (null)
+[    4.543521@3] VFS: Mounted root (ext4 filesystem) readonly on device 179:2.
+[    4.550670@3] devtmpfs: mounted
+[    4.554656@3] Freeing unused kernel memory: 2624K
+[    4.608164@3] [init-wrapper] stage-2 entry
+[    4.608700@3] [init-wrapper] running early S03-runtime-state
+[    4.628772@3] FAT-fs (mmcblk0p1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck.
+[    4.717082@3] [init-wrapper] running early S04-usbgadget
+[    4.752717@3] using random self ethernet address
+[    4.752750@3] using random host ethernet address
+[    4.760388@3] usb0: HOST MAC 5e:09:0d:51:23:61
+[    4.760750@3] usb0: MAC 72:eb:0d:28:4a:54
+[    4.765537@3] [init-wrapper] running early S05-usbnet
+[    4.825372@3] IPv6: ADDRCONF(NETDEV_UP): usb0: link is not ready
+[    4.841057@3] [init-wrapper] running early S06-ssh
+[    4.868332@0] USB RESET
+[    4.918380@0] amlogic-new-usb2-v2 ffe09000.usb2phy: ---Set port(1) tuning for device cf(0xffffff8009611484)--
+[    4.932574@0] android_work: sent uevent USB_STATE=CONNECTED
+[    4.945577@0] configfs-gadget gadget: high-speed config #1: c
+[    4.945718@0] android_work: sent uevent USB_STATE=CONFIGURED
+[    5.215536@0] IPv6: ADDRCONF(NETDEV_CHANGE): usb0: link becomes ready
+[    7.074554@3] [init-wrapper] running early S07-debug-http
+[    7.087382@3] [init-wrapper] running early S08-debug-telnet
+[    7.091048@3] [init-wrapper] running early S09-reverse-agent
+[    7.111714@3] [init-wrapper] running early S10-firmware-stage
+[    7.147891@3] [init-wrapper] running early S20-bt-init
+[    7.575456@2] meson_uart ffd24000.serial: ttyS1 use xtal(24M) 24000000 change 0 to 9600
+[    7.577879@2] meson_uart ffd24000.serial: ttyS1 use xtal(24M) 24000000 change 9600 to 115200
+[    7.588941@2] meson_uart ffd24000.serial: ttyS1 use xtal(24M) 24000000 change 115200 to 3000000
+[    7.727820@2] Bluetooth: hci0: BCM: chip id 126
+[    7.728343@2] Bluetooth: hci0: BCM: features 0x2f
+[    7.732670@2] Bluetooth: hci0: BCM20703A2
+[    7.735388@2] Bluetooth: hci0: BCM20703A2 (001.002.011) build 0000
+[    7.777167@3] [init-wrapper] running early S45-input-links
+[    7.829674@3] [init-wrapper] running early S50-carthing-remote
+[    7.839057@3] [init-wrapper] execing busybox init
+[    7.843680@3] meson_uart ff803000.serial: ttyS0 use xtal(24M) 24000000 change 115200 to 115200
+[    8.254801@2] meson_uart ffd24000.serial: ttyS1 use xtal(24M) 24000000 change 3000000 to 115200
+[    8.259912@2] meson_uart ffd24000.serial: ttyS1 use xtal(24M) 24000000 change 115200 to 3000000
+[    8.399355@0] Bluetooth: hci0: BCM (001.002.011) build 0353
+[    9.341290@0] am_drm_lcd: am_lcd_connector_fill_modes 208
+[    9.341324@0] am_drm_lcd: am_lcd_connector_detect 177
+[    9.346118@0] ***************************************************
+[    9.352178@0] am_drm_lcd: am_lcd_connector_get_modes: lcd mode [panel] display size: 480 x 800
+[    9.360742@0] am_drm_lcd: am_lcd_connector_get_modes: drm mode [panel] display size: 480 x 800
+[    9.369328@0] am_drm_lcd: am_lcd_connector_get_modes: lcd config size: 480 x 800
+[    9.376681@0] am_drm_lcd: am_lcd_connector_get_modes 121
+[    9.381972@0] ***************************************************
+[    9.388037@0] am_drm_lcd: am_lcd_connector_mode_valid: mode [panel] display size: 480 x 800
+[    9.396355@0] am_drm_lcd: am_lcd_connector_mode_valid: lcd config size: 480 x 800
+[    9.403813@0] am_drm_lcd: am_lcd_connector_mode_valid 150: check mode OK
+[    9.410483@0] am_drm_lcd: am_lcd_connector_fill_modes 210: count=1
+[    9.420076@0] am_drm_lcd: am_lcd_connector_duplicate_state 233
+[    9.422450@0] am_drm_lcd: am_lcd_encoder_atomic_check 330
+[    9.427856@0] am_drm_lcd: am_lcd_encoder_mode_set 262
+[    9.432947@0] [drm] am_meson_crtc_enable
+[    9.436743@0] [drm] am_meson_crtc_enable: panel
+[    9.441353@0] [drm] am_lcd_encoder_enable
+[    9.445239@0] am_drm_lcd: am_lcd_encoder_enable 280
+[    9.450125@0] vlock: event MODE_CHANGE_PRE 0
+[    9.454337@0] lcd: lcd is already enabled
+[    9.458323@0] lcd: lcd interface is already enabled
+[    9.463178@0] lcd: clear mute
+[    9.466143@0] vlock: event MODE_CHANGE
+[    9.469848@0] am_drm_lcd: am_lcd_encoder_enable 301
+[    9.480814@0] am_drm_lcd: am_lcd_connector_destroy_state 242
+[    9.666731@0] bl: aml_bl_on_function: bl_level=100, state=0xb
+[   64.478765@2] mem_free_work, free memory: addr:0x800000
+
+=== lsusb (device-side view) ===
+Bus 001 Device 001: ID 1d6b:0002 Linux 4.9.113 xhci-hcd xHCI Host Controller
+Bus 002 Device 001: ID 1d6b:0003 Linux 4.9.113 xhci-hcd xHCI Host Controller

@@ -1,0 +1,6 @@
+config BR2_PACKAGE_CARTHING_BT_FWLOAD
+	bool "carthing-bt-fwload"
+	help
+	  Minimal Broadcom UART firmware loader for Car Thing.
+
+	  This replaces the target-side dependency on BlueZ tooling.

@@ -1,0 +1,70 @@
+--- ~/Documents/ПРОЕКТЫ/claude-staging-for-codex-20260528/device-inventory-20260528/S04-usbgadget.ORIGINAL.sh	2026-05-28 16:40:37
++++ ~/Documents/ПРОЕКТЫ/claude-staging-for-codex-20260528/device-inventory-20260528/S04-usbgadget.PATCHED.sh	2026-05-28 16:42:29
+@@ -109,10 +109,24 @@
+ 
+ add_audio() {
+     if link_function uac2.usb0 2>/dev/null; then
+-        echo 3 > functions/uac2.usb0/p_chmask 2>/dev/null || true
+-        echo 48000 > functions/uac2.usb0/p_srate 2>/dev/null || true
+-        echo 2 > functions/uac2.usb0/p_ssize 2>/dev/null || true
+-        echo 0 > functions/uac2.usb0/c_chmask 2>/dev/null || true
++        # CLAUDE 2026-05-28: extended for full-duplex class-compliant
++        # USB Audio Class 2 on macOS. Was: p_chmask=3, c_chmask=0 only.
++        # See memory: carthing-claude-intervention-20260528.
++        echo 3     > functions/uac2.usb0/p_chmask 2>/dev/null || true
++        echo 48000 > functions/uac2.usb0/p_srate  2>/dev/null || true
++        echo 2     > functions/uac2.usb0/p_ssize  2>/dev/null || true
++        echo 3     > functions/uac2.usb0/c_chmask 2>/dev/null || true
++        echo 48000 > functions/uac2.usb0/c_srate  2>/dev/null || true
++        echo 2     > functions/uac2.usb0/c_ssize  2>/dev/null || true
++        echo async > functions/uac2.usb0/c_sync   2>/dev/null || true
++        for d in c p; do
++            echo 1      > functions/uac2.usb0/${d}_mute_present   2>/dev/null || true
++            echo 1      > functions/uac2.usb0/${d}_volume_present 2>/dev/null || true
++            echo -12800 > functions/uac2.usb0/${d}_volume_min     2>/dev/null || true
++            echo 0      > functions/uac2.usb0/${d}_volume_max     2>/dev/null || true
++            echo 256    > functions/uac2.usb0/${d}_volume_res     2>/dev/null || true
++        done
++        echo "CarThingUAC2" > functions/uac2.usb0/function_name 2>/dev/null || true
+         echo uac2
+         return 0
+     fi
+@@ -184,10 +198,17 @@
+ }
+ 
+ build_composite() {
+-    if profile_is_plain_ncm && existing_usb_network_active; then
+-        log "plain NCM already active; leaving legacy/rescue gadget untouched"
+-        return 0
+-    fi
++    # CLAUDE 2026-05-28: removed early-exit "plain NCM already active"
++    # because it left stale function symlinks (e.g. uac2.usb0) in
++    # $CONFIG_DIR when downgrading from composite back to plain ncm,
++    # leaving Mac seeing a phantom UAC2 device. Now we always
++    # rebuild the composite. Cost: one USB renumerate even when the
++    # profile did not change. Original block was:
++    #     if profile_is_plain_ncm && existing_usb_network_active; then
++    #         log "plain NCM already active; leaving legacy/rescue gadget untouched"
++    #         return 0
++    #     fi
++    # See memory: carthing-claude-intervention-20260528.
+ 
+     prepare_configfs || {
+         log "configfs mount failed"
+@@ -205,6 +226,16 @@
+ 
+     unbind_if_bound
+ 
++    # CLAUDE 2026-05-28: purge stale function symlinks from $CONFIG_DIR
++    # so profile downgrades drop old function bindings (uac2, hid, ...)
++    # before the new set is linked. unbind_if_bound by itself only
++    # detaches UDC; symlinks in c.1/ would otherwise persist.
++    if [ -d "$CONFIG_DIR" ]; then
++        for link in "$CONFIG_DIR"/*; do
++            [ -L "$link" ] && rm -f "$link"
++        done
++    fi
++
+     # Keep the Linux Foundation NCM gadget identity for continuity with macOS
+     # network service matching. The interface set is expanded by configfs.
+     echo 0x0525 > idVendor || return 1

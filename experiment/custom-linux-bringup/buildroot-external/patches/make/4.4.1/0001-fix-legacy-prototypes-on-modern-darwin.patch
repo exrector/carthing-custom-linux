@@ -1,0 +1,36 @@
+diff -urN orig/lib/fnmatch.c new/lib/fnmatch.c
+--- orig/lib/fnmatch.c	2023-02-26 19:04:31
++++ new/lib/fnmatch.c	2026-05-04 11:21:33
+@@ -121,7 +121,7 @@
+    whose names are inconsistent.  */
+ 
+ # if !defined _LIBC && !defined getenv
+-extern char *getenv ();
++extern char *getenv (const char *);
+ # endif
+ 
+ # ifndef errno
+diff -urN orig/src/getopt.c new/src/getopt.c
+--- orig/src/getopt.c	2023-01-12 03:53:26
++++ new/src/getopt.c	2026-05-04 11:21:33
+@@ -202,7 +202,7 @@
+    whose names are inconsistent.  */
+ 
+ #ifndef getenv
+-extern char *getenv ();
++extern char *getenv (const char *);
+ #endif
+ 
+ static char *
+diff -urN orig/src/getopt.h new/src/getopt.h
+--- orig/src/getopt.h	2023-01-01 18:06:01
++++ new/src/getopt.h	2026-05-04 11:21:33
+@@ -102,7 +102,7 @@
+    errors, only prototype getopt for the GNU C library.  */
+ extern int getopt (int argc, char *const *argv, const char *shortopts);
+ #else /* not __GNU_LIBRARY__ */
+-extern int getopt ();
++extern int getopt (int argc, char *const *argv, const char *shortopts);
+ #endif /* __GNU_LIBRARY__ */
+ extern int getopt_long (int argc, char *const *argv, const char *shortopts,
+ 		        const struct option *longopts, int *longind);

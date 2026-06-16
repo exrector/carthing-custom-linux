@@ -4,17 +4,8 @@
 «изменение кода → пересборка → прошивка». Всё что здесь написано — проверено
 на железе (устройство QN19, сессия 2026-06-16).
 
----
-
-## Два репозитория, одна прошивка
-
-| Репозиторий | Назначение |
-|-------------|------------|
-| `carthing-release-integration/` | Разработка: Python-рантайм, документация, скрипты. Здесь вносятся изменения. |
-| `carthing_full_real/` | Публикация: готовые образы + инструмент прошивки. Отсюда прошивается устройство. |
-
-`overlay/` в обоих репозиториях **идентичен** (синхронизируется вручную при изменениях).
-Bake-инструмент читает overlay из `carthing_full_real/source/overlay/`.
+Один репозиторий: `carthing-release-integration/` содержит всё — код, образы,
+инструменты прошивки, документацию.
 
 ---
 
@@ -50,7 +41,7 @@ stock BL33 (U-Boot)
 
 - Linux 4.9.113, собран с GCC 6.5.0 в NixOS-окружении (JoeyEamigh/nixos-superbird).
 - `CONFIG_EXT4_FS=y`, `CONFIG_MMC=y` — встроены в ядро, модули при загрузке не нужны.
-- Лежит внутри `carthing_full_real/image/bootfs.bin` (FAT-образ).
+- Лежит внутри `image/bootfs.bin` (FAT-образ, в git не хранится — только SHA256SUMS).
 - **Пересборка ядра без NixOS-окружения невозможна.** Не пересобирать без причины.
 
 ### Python-рантайм
@@ -60,15 +51,38 @@ stock BL33 (U-Boot)
 
 ---
 
-## Текущие образы (canonical, 2026-06-16)
+## Структура репозитория
 
 ```
-carthing_full_real/image/
-├── bootfs.bin   # FAT-образ p1: ядро + DTB + env
-├── rootfs.img   # ext4 512MB p2: Buildroot + overlay
-├── env.txt      # U-Boot переменные окружения
-└── SHA256SUMS
+carthing-release-integration/
+├── image/                     готовые образы к прошивке (бинари gitignored)
+│   ├── bootfs.bin             FAT-образ p1: ядро + DTB + env
+│   ├── rootfs.img             ext4 512MB p2: Buildroot + overlay
+│   ├── env.txt                U-Boot переменные окружения
+│   └── SHA256SUMS             хэши всех трёх файлов
+├── source/
+│   └── base-bundle/           Buildroot baseline rootfs (бинари gitignored)
+├── overlay/                   наш userspace overlay (Python + init + etc)
+│   └── usr/lib/carthing/      Python-рантайм (*.py — единственное что правим)
+├── tools/
+│   ├── flash.py               ← ПРОШИВКА: python3 tools/flash.py
+│   ├── bake-rootfs.py         ← СБОРКА: python3 tools/bake-rootfs.py
+│   ├── _flasher.py            низкоуровневый Amlogic-флешер
+│   ├── check-device.sh        статус устройства по VID:PID
+│   ├── finish-env.py          дописать только env (без перепрошивки образов)
+│   ├── deploy                 горячий деплой файлов без перепрошивки
+│   └── screenshot.py          снимок экрана с устройства
+├── scripts/
+│   ├── bring-up-device1-normal-boot-macos.sh   поднять USB-сеть после загрузки
+│   ├── check-device1-normal-boot-macos.sh      найти BSD-интерфейс NCM
+│   └── reverse-control-server.py               экстренный доступ без SSH
+└── docs/
+    └── BUILD-AND-FLASH.md     этот файл
 ```
+
+---
+
+## Текущие образы (canonical, 2026-06-16)
 
 SHA256SUMS (актуальные):
 ```
@@ -79,25 +93,30 @@ bee43a070ad18a764a7a0f97827e6213757976f6b7a8a3987331a9396c196cb9  env.txt
 
 Runtime tree SHA1 (Python-файлы в overlay): `880bd037b7f43df44ac203b3f6d5089a06ad0320`
 
+Проверить что у тебя именно эти образы:
+```sh
+cd (local repo root)
+shasum -a 256 image/bootfs.bin image/rootfs.img image/env.txt | sed 's|image/||g'
+# должно совпасть с image/SHA256SUMS
+```
+
 ---
 
 ## ПРОШИВКА (быстрый путь)
 
-Если образы уже актуальны (хэши совпадают) — просто флешишь:
-
 ```sh
-# 1. Войти в Maskrom: зажми кнопки 1+4, воткни USB, держи 2 сек, отпусти.
-sh carthing_full_real/tools/check-device.sh    # -> MASKROM/BURN (1b8e:c003)
+cd (local repo root)
 
-# 2. Флешим
-cd ~/Documents/ПРОЕКТЫ/carthing_full_real
+# 1. Войти в Maskrom: зажми кнопки 1+4, воткни USB, держи 2 сек, отпусти.
+sh tools/check-device.sh       # -> MASKROM/BURN (1b8e:c003)
+
+# 2. Прошивка
 python3 tools/flash.py
 # Время: ~15–25 минут. Пишет bootfs → rootfs → env → reset.
 
-# 3. После первой загрузки — поднять USB-сеть на Mac
-cd (local repo root)
+# 3. Поднять USB-сеть на Mac
 scripts/bring-up-device1-normal-boot-macos.sh --bsd en14
-# (en14 — это NCM-интерфейс; проверить через: ifconfig | grep en)
+# (en14 — NCM-интерфейс; проверить: ioreg -r -n 'NCM Gadget' | grep BSD)
 
 # 4. SSH
 ssh-keygen -R 172.16.42.77      # обязательно после каждой перепрошивки
@@ -108,23 +127,11 @@ ssh root@172.16.42.77            # ключ id_carthing; пароль: carthing
 
 ## ПЕРЕСБОРКА ROOTFS (если изменялся Python-код)
 
-Пересборка = заменить `rootfs.img` в `carthing_full_real/image/`, сохранив `bootfs.bin`.
+Пересборка = заменить `image/rootfs.img`, сохранив `image/bootfs.bin`.
 
-### Шаг 1. Синхронизировать overlay
-
-Если изменения вносились в `carthing-release-integration/overlay/` — синхронизировать
-в `carthing_full_real/source/overlay/`:
+### Шаг 1. Обновить runtime SHA1 (если менялся Python-код)
 
 ```sh
-rsync -av --delete \
-  overlay/ \
-  ~/Documents/ПРОЕКТЫ/carthing_full_real/source/overlay/
-```
-
-### Шаг 2. Обновить runtime SHA1 (если менялся Python-код)
-
-```python
-# В картинге carthing_full_real/source/overlay/usr/lib/carthing/:
 python3 << 'EOF'
 import hashlib
 from pathlib import Path
@@ -133,7 +140,7 @@ RETIRED = {
     "classic_profile_probe.py", "hid_pair.py", "media_remote.py",
     "media_remote_v3.py", "now_playing_ui.py", "system_menu.py", "trusted_devices.py"
 }
-d = Path("~/Documents/ПРОЕКТЫ/carthing_full_real/source/overlay/usr/lib/carthing")
+d = Path("overlay/usr/lib/carthing")
 lines = []
 for path in sorted(d.glob("*.py")):
     if path.name in RETIRED:
@@ -144,24 +151,22 @@ print(hashlib.sha1("".join(lines).encode()).hexdigest())
 EOF
 ```
 
-Скопировать вывод → вставить в `EXPECTED_RUNTIME_TREE_SHA1` в `bake-rootfs.py`.
+Скопировать вывод → вставить в `EXPECTED_RUNTIME_TREE_SHA1` в `tools/bake-rootfs.py`.
 
-### Шаг 3. Запечь rootfs
+### Шаг 2. Запечь rootfs
 
 ```sh
-cd ~/Documents/ПРОЕКТЫ/carthing_full_real
-
 # Зависимости (однократно): brew install e2tools e2fsprogs
-python3 source/bake-rootfs.py
-# Создаст: flash-bake-unified-stable-YYYYMMDD-HHMMSS/
+python3 tools/bake-rootfs.py
+# Создаст: flash-bake-unified-stable-YYYYMMDD-HHMMSS/ (gitignored)
 # Автоматически:
-#   - копирует base-bundle/rootfs.img
+#   - копирует source/base-bundle/rootfs.img
 #   - вносит overlay (Python, vendor/bumble, init-скрипты, gesftpserver, shadow)
 #   - запускает e2fsck (исправляет checksums ext4 — без этого загрузка занимает 10 мин)
 #   - верифицирует результат
 ```
 
-### Шаг 4. Переложить rootfs в image/ и обновить хэши
+### Шаг 3. Переложить rootfs в image/ и обновить хэши
 
 ```sh
 BUNDLE=$(ls -d flash-bake-unified-stable-* | sort | tail -1)
@@ -171,7 +176,7 @@ shasum -a 256 image/bootfs.bin image/rootfs.img image/env.txt | \
 cat image/SHA256SUMS
 ```
 
-### Шаг 5. Флешить (см. «ПРОШИВКА» выше)
+### Шаг 4. Флешить (см. «ПРОШИВКА» выше)
 
 ---
 
@@ -208,15 +213,15 @@ tools/deploy overlay/usr/lib/carthing/app_state.py --restart
 
 После перепрошивки: `ssh-keygen -R 172.16.42.77` (меняется host key).
 
-Если SSH не отвечает — сначала проверить USB-сеть:
+Если SSH не отвечает — сначала поднять USB-сеть:
 ```sh
 scripts/bring-up-device1-normal-boot-macos.sh --bsd en14
 ```
 
 Экстренный доступ (если SSH совсем недоступен):
 ```sh
-scripts/reverse-control-server.py         # Mac side, порт 8099
-scripts/reverse-agent-enqueue.sh '<cmd>' device1   # команда через USB-канал
+scripts/reverse-control-server.py                      # Mac side, порт 8099
+scripts/reverse-agent-enqueue.sh '<cmd>' device1       # команда через USB-канал
 ```
 
 ---
@@ -230,7 +235,7 @@ scripts/reverse-agent-enqueue.sh '<cmd>' device1   # команда через U
 | U-Boot | Стоковый ThingLabs; fastboot unlock запрещён |
 | DTB | Стоковый Amlogic S905D2 |
 
-Единственное, что меняем в штатной разработке: **Python-файлы в overlay/usr/lib/carthing/**.
+Единственное, что меняем в штатной разработке: **Python-файлы в `overlay/usr/lib/carthing/`**.
 
 ---
 
@@ -248,7 +253,7 @@ NCM Gadget (`0x0525:0xa4a1`) может быть виден в ioreg, но en14 
 ### e2cp без e2fsck
 `e2cp` не обновляет block group descriptor checksums → ext4-журнал откатывается при
 каждой загрузке → загрузка занимает 10+ минут. Решение: `e2fsck -f -y rootfs.img`
-(или `bake-rootfs.py` делает это автоматически).
+(или `tools/bake-rootfs.py` делает это автоматически).
 
 ### shadow при перепрошивке
 `/etc/shadow` с хэшем пароля "carthing" включён в overlay и копируется при bake.

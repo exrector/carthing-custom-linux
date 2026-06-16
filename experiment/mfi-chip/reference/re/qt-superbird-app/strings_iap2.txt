@@ -1,0 +1,192 @@
+8EADB
+h[h[EA
+h[h[EA
+h[h[EA
+ O\EA
++tEA
+;rEA
+FrEAD
+BEAF
+BEAF
+BEAF
+../vendor/iap2_link/iAP2Link/iAP2Link.c
+../vendor/iap2_link/iAP2Link/iAP2LinkRunLoop.c
+BOOLEAN
+../phone-iap2/iAP2Manager.cpp
+N8nlohmann6detail23output_adapter_protocolIcEE
+%s:%d Older protocol Version detected (%d->%d)
+open(&h, vsdk->config_.audio_device.c_str(), SND_PCM_STREAM_CAPTURE, 0)
+hw_params_set_access(h, p, SND_PCM_ACCESS_RW_INTERLEAVED)
+ENCODER=Spotify vSDK 1.4.81
+Hey_Spotify
+Ok_Spotify
+../phone-iap2/iAP2LogImpl.cpp
+../vendor/iap2_link/iAP2Link/iAP2LinkAccessory.c
+../vendor/iap2_link/iAP2Utility/iAP2FSM.c
+Accessory:ResendSYN
+Accessory:ResendData
+Accessory:ResendMissing
+HIDP
+HumanInterfaceDeviceService (HID)
+iAP2LinkHandleSuspend
+00000000-DECA-FADE-DECA-DEAFDECACAFE
+org.bluez.LEAdvertisingManager1
+Advertising iAP2
+00000000-DECA-FADE-DECA-DEAFDECACAFF
+258EAFA5-E914-47DA-95CA-C5AB0DC85B11
+N4asio6detail23reactive_socket_serviceINS_5local15stream_protocolEEE
+N4asio6detail30execution_context_service_baseINS0_23reactive_socket_serviceINS_5local15stream_protocolEEEEE
+Pretending to be Spotify due to paused %d recurring %d spotify has been active %d pause counter %d app bundle %s override %d
+../phone-iap2/iAP2MediaToWamp.cpp
+../phone-iap2/iAP2Utilities.cpp
+iAP2BtSocketTransport::onConnected %u
+../phone-iap2/iAP2BtSocketTransport.cpp
+iAP2BtSocketTransport::onConnected wrong state: %d
+iAP2BtSocketTransport::readPhysical when about to be destructed
+iAP2BtSocketTransport read %d bytes, sending to iAP2 LL for processing
+*Z22_iAP2TimeCallbackAfterEUlvE_
+iAP2SocketTransport::onEAConnected %u
+iAP2BtSocketTransport::onEAConnected when not BT connected
+iAP2SocketTransport::onEADisconnected %u
+iAP2BtSocketTransport::onEADisconnected when not EA connected
+iAP2BtSocketTransport::recvProcessed New message size %u bytes available %zd
+iAP2BtSocketTransport::recvProcessed Complete message read, size %d
+iAP2BtSocketTransport::recvProcessed attempt when socket is closed, ignore
+tried to set iAP2 runloop arg with bad runloop ptr %p/link %p
+iAP2 runloop timer triggered but runloop or timer is NULL
+iAP2BtSocketTransport::sendPhysical attempt to write on closed socket, ignore
+Sending StopNowPlayingUpdates
+Sending StopHID
+iAP2MediaToWamp::clear()
+iAP2BtSocketTransport::onSocketErrorOccurred %s
+iAP2BtSocketTransport::onDisconnected %u connected %d
+iAP2BtSocketTransport::onDisconnected when not BT connected
+iAP2BtSocketTransport::onSocketErrorOccured when about to be destructed
+iAP2BtSocketTransport %u destroying
+*ZZN7spotify9superbird11iAP2ManagerC4ERKSt10shared_ptrINS0_12IEventBrokerEERKS2_INS0_7storage8SettingsEERKS2_INS0_3log10LogManagerEERKS2_INS0_19RemoteConfigManagerEERKS2_INS0_11VsdkManagerEEENKUlbtE_clEbtEUlvE_
+*ZN7spotify9superbird11iAP2ManagerC4ERKSt10shared_ptrINS0_12IEventBrokerEERKS2_INS0_7storage8SettingsEERKS2_INS0_3log10LogManagerEERKS2_INS0_19RemoteConfigManagerEERKS2_INS0_11VsdkManagerEEEUlbtE_
+*ZN7spotify9superbird11iAP2Manager16requestAppLaunchERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbEUlvE_
+*ZN7spotify9superbird11iAP2Manager31requestSpotifyFallbackAppLaunchERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbEUlvE_
+*ZN7spotify9superbird11iAP2Manager20handleControlMessageERKSt6vectorIhSaIhEEEUlvE_
+*ZN7spotify9superbird11iAP2Manager8attachedEbEUlP18iAP2LinkRunLoop_stPvE_
+*ZN7spotify9superbird11iAP2Manager8attachedEbEUlvE0_
+*ZN7spotify9superbird11iAP2Manager8detachedEvEUlvE_
+N7spotify9superbird12CountedClassINS0_21iAP2BtSocketTransportEEE
+N7spotify9superbird21iAP2BtSocketTransportE
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKSt10error_codeE_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKNS0_18ITransportDelegate17SocketErrorActionEE0_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKSt6vectorIhSaIhEEE1_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKSt6vectorIhSaIhEEE2_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlbtE3_
+iAP2 parsed incomplete packet, bailing
+../vendor/iap2_link/iAP2Link/iAP2Packet.c
+iAP2 consumed %d bytes, recv buffer now %zd
+iAP2 packet complete, handled
+Sending %d (%d) bytes on protocol %d EA session %d iAP2 session ID %d
+Trying to send on EA session when not up!
+Sending StartNowPlayingUpdates
+Sending StopExternalAccessoryProtocolSession
+AccessoryFSM
+iAP2Manager %p created runloop, context = %p link = %p%s
+Sending StatusExternalAccessoryProtocolSession protocol handle %d open %d
+failed to deserialize iAP2 message
+iAP2 Start identification requested
+SupportedExternalAccessoryProtocol %s
+iAP2 Identification accepted
+iAP2 probe mode, detaching
+Sending StartHID
+iAP2 Identification rejected, IDs: %s
+iAP2 X.509 serial requested
+iAP2 Authentication challenge response requested
+iAP2 Authentication failed
+iAP2 Authentication succeeded
+iAP2 EA start without protocol/session
+iAP2 EA protocol %s session up, session ID %d!
+iAP2 EA start session w/ unrecognized protocol id %d
+iAP2 EA protocol %s session down
+NowPlayingUpdate
+DeviceHIDReport
+iAP2 Control message id %04x
+iAP2 X.509 cert requested
+Sending AccessoryHIDReport 0x%x
+Spotify USA Inc.
+Spotify Car Thing
+N7spotify9superbird11iAP2ManagerE
+iAP2 FSM error detected! PANIC! Detaching and upairing from phone
+no recv handler for protocol %s
+Acting on intent %s when non-Spotify app is playing
+OnAnalytics: utterance_id empty for non-Spotify session, generated %s
+Generic protocol violation
+The WebSocket protocol version in use does not support this feature
+Error parsing subprotocol header
+Invalid subprotocol
+Selected subprotocol was not requested by the client
+N8nlohmann6detail23output_adapter_protocolIhEE
+../interapp/iAP2WrapperWampSession.cpp
+iAP2WrapperWampSession onBinaryData
+iAP2WrapperWampSession::onSocketErrorOccured
+iAP2WrapperWampSession::onSocketDisconnected
+iAP2WrapperWampSession::onConnected
+iAP2WrapperWampSession onWampEvent topic %s
+iAP2WrapperWampSession::onWampEvent cached EVENT topic %s
+iAP2WrapperWampSession::onSendError
+Destroying iAP2WrapperWampSession instance id %u
+iAP2WrapperWampSession::onServiceDisconnected
+Created new iAP2WrapperWampSession %u
+N7spotify9superbird4wamp33iAP2WrapperSocketTransportFactoryE
+St23_Sp_counted_ptr_inplaceIN7spotify9superbird4wamp33iAP2WrapperSocketTransportFactoryESaIS3_ELN9__gnu_cxx12_Lock_policyE2EE
+N7spotify9superbird12CountedClassINS0_4wamp22iAP2WrapperWampSessionEEE
+N7spotify9superbird4wamp22iAP2WrapperWampSessionE
+*ZN7spotify9superbird4wamp22iAP2WrapperWampSessionC4EPNS1_20IWampSessionDelegateERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt10shared_ptrINS0_17ITransportFactoryEERKSD_INS0_11iAP2ManagerEEbEUlSC_SC_E_
+*ZN7spotify9superbird4wamp22iAP2WrapperWampSessionC4EPNS1_20IWampSessionDelegateERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt10shared_ptrINS0_17ITransportFactoryEERKSD_INS0_11iAP2ManagerEEbEUlRKSt7variantIJSA_St6vectorIhSaIhEEEEjNS0_11ComponentIdEE0_
+protocol_version
+N7spotify9superbird28iAP2BtSocketTransportFactoryE
+Create iAP2BtSocketTransport
+../phone-iap2/iAP2BtSocketTransport.h
+Using existing fd %d to create iAP2BtSocketTransport
+iAP2BtSocketTransport fd %d is invalid, will not attempt to create transport
+Opening iAP2BtSocketTransport instance id %u to %s channel %d%s
+Failed to create iAP2BtSocketTransport (bad fd?)
+iAP2BtSocketTransportFactory %s %d %d%s
+Created new iAP2 transport factory (addr %s channel now %d rssi %d)
+Create new iAP2 transport factory (fd %d)
+iAP2 connection probe = %d
+App changed to Spotify, publishing cached subscriptions
+Create iAP2WrapperSocketTransport
+../interapp/iAP2WrapperWampSession.h
+REMOTE_CONTROL_CALL_STREAM
+BT_DEVICE_DISAPPEARED
+IAP2_STOP_EA_SESSION
+N7spotify9superbird4wamp26iAP2WrapperSocketTransportE
+Spotify Superbird Application: {}
+HEAD-v0.48.2-g7c44b7c3
+Spotify Superbird Application: %s
+b'HEAD'-v1.4.81-g6bde786f
+St23_Sp_counted_ptr_inplaceIN7spotify9superbird11iAP2ManagerESaIS2_ELN9__gnu_cxx12_Lock_policyE2EE
+NOT_THREADED
+THREADED
+MODIFYING SEARCH TO USE NEW PHONEMES:
+CREATE continuous adaptation object:
+UPDATING SEARCH!
+Error: only MFCC, PMVDR, FBANK, and MODFEATURE are supported
+Error: only MFCC, PMVDR, FBANK, MODFEATURE supported
+ADAPT_FEATURE_TYPE
+ADAPT_PHNREC_BEAM
+ADAPT_ABSBEAM
+ADAPT_LEARN_RATE_ACROSS
+ADAPT_LEARN_RATE_WITHIN
+ADAPT_LEARN_DECAY
+ADAPT_LEARN_RATE_MIN
+ADAPT_NNSV_LEARN_RATE
+ADAPT_NNSV_D_LEARN_RATE
+ADAPT_ENABLE_THREADS
+ADAPT_NUM_THREADS
+ADAPT_CA_INIT_SEARCH_OFFSET
+SEG SEARCH : END
+MODIFYING SEARCH DURATIONS
+============== SPEAKER INDEX %d =================
+AWE_SEARCH_PATH=
+AWE_SEARCH_PATH
+-----BEGIN BREAKPAD MICRODUMP-----
+-----END BREAKPAD MICRODUMP-----
+Copyright (c) 2008, Sensory, Inc., This property of Sensory, Inc., is licensed to Spotify PL              . yyylJEmnw80000  

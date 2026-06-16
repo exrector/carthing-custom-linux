@@ -1,0 +1,35 @@
+--- ~/Documents/ПРОЕКТЫ/claude-staging-for-codex-20260528/device-inventory-20260528/run-media-remote.ORIGINAL.sh	2026-05-28 17:48:09
++++ ~/Documents/ПРОЕКТЫ/claude-staging-for-codex-20260528/device-inventory-20260528/run-media-remote.PATCHED.sh	2026-05-28 17:48:25
+@@ -43,9 +43,29 @@
+     python3 "$CARTHING_RUNTIME_ENTRY"
+     rc=$?
+     if [ "$rc" = "$restart_code" ]; then
+-        echo "[run-media-remote] runtime requested restart"
+-        sleep 1
++        # CLAUDE 2026-05-28: extended sleep + extra resilience.
++        # Original had sleep 1, but in observation the previous python
++        # process can still be holding /dev/dri/card0 momentarily after
++        # os._exit(75), causing the new process to crash on DRM open and
++        # the supervisor to exit. With sleep 3 the kernel has time to
++        # release the DRM master handle, and we retry up to 3 times.
++        # Root fix belongs in media_remote.py (graceful drm_display.close()
++        # before _exit). See memory: carthing-claude-intervention-20260528.
++        echo "[run-media-remote] runtime requested restart; sleeping 3s"
++        sleep 3
+         continue
+     fi
+-    exit "$rc"
++    # CLAUDE 2026-05-28: don't die on transient runtime crash. Was:
++    #     exit "$rc"
++    # The original behavior killed the supervisor on any non-restart
++    # exit, leaving the user with a permanent black screen until reboot.
++    # Now: log and keep retrying with backoff. Max 3 fast retries before
++    # giving up to avoid hot-spin if the runtime is structurally broken.
++    echo "[run-media-remote] runtime exited rc=$rc; retrying after 5s"
++    sleep 5
++    fail_count=$((${fail_count:-0} + 1))
++    if [ "$fail_count" -ge 5 ]; then
++        echo "[run-media-remote] giving up after $fail_count consecutive failures"
++        exit "$rc"
++    fi
+ done

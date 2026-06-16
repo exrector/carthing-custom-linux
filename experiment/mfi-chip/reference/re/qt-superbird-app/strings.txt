@@ -1,0 +1,124 @@
+%d not an MFI command
+*Z22_iAP2TimeCallbackAfterEUlvE_
+*ZN7spotify9superbird11iAP2Manager16requestAppLaunchERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbEUlvE_
+*ZN7spotify9superbird11iAP2Manager20handleControlMessageERKSt6vectorIhSaIhEEEUlvE_
+*ZN7spotify9superbird11iAP2Manager31requestSpotifyFallbackAppLaunchERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEbEUlvE_
+*ZN7spotify9superbird11iAP2Manager8attachedEbEUlP18iAP2LinkRunLoop_stPvE_
+*ZN7spotify9superbird11iAP2Manager8attachedEbEUlvE0_
+*ZN7spotify9superbird11iAP2Manager8detachedEvEUlvE_
+*ZN7spotify9superbird11iAP2ManagerC4ERKSt10shared_ptrINS0_12IEventBrokerEERKS2_INS0_7storage8SettingsEERKS2_INS0_3log10LogManagerEERKS2_INS0_19RemoteConfigManagerEERKS2_INS0_11VsdkManagerEEEUlbtE_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKNS0_18ITransportDelegate17SocketErrorActionEE0_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKSt10error_codeE_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKSt6vectorIhSaIhEEE1_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlRKSt6vectorIhSaIhEEE2_
+*ZN7spotify9superbird21iAP2BtSocketTransport5setupEvEUlbtE3_
+*ZN7spotify9superbird4wamp22iAP2WrapperWampSessionC4EPNS1_20IWampSessionDelegateERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt10shared_ptrINS0_17ITransportFactoryEERKSD_INS0_11iAP2ManagerEEbEUlRKSt7variantIJSA_St6vectorIhSaIhEEEEjNS0_11ComponentIdEE0_
+*ZN7spotify9superbird4wamp22iAP2WrapperWampSessionC4EPNS1_20IWampSessionDelegateERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt10shared_ptrINS0_17ITransportFactoryEERKSD_INS0_11iAP2ManagerEEbEUlSC_SC_E_
+*ZZN7spotify9superbird11iAP2ManagerC4ERKSt10shared_ptrINS0_12IEventBrokerEERKS2_INS0_7storage8SettingsEERKS2_INS0_3log10LogManagerEERKS2_INS0_19RemoteConfigManagerEERKS2_INS0_11VsdkManagerEEENKUlbtE_clEbtEUlvE_
+../interapp/iAP2WrapperWampSession.cpp
+../interapp/iAP2WrapperWampSession.h
+../phone-bt/Iap2Profile.cpp
+../phone-iap2/MFiWrapperLibrary.cpp
+../phone-iap2/iAP2BtSocketTransport.cpp
+../phone-iap2/iAP2BtSocketTransport.h
+../phone-iap2/iAP2LogImpl.cpp
+../phone-iap2/iAP2Manager.cpp
+../phone-iap2/iAP2MediaToWamp.cpp
+../phone-iap2/iAP2Utilities.cpp
+../vendor/iap2_link/iAP2Link/iAP2Link.c
+../vendor/iap2_link/iAP2Link/iAP2LinkAccessory.c
+../vendor/iap2_link/iAP2Link/iAP2LinkRunLoop.c
+../vendor/iap2_link/iAP2Link/iAP2Packet.c
+../vendor/iap2_link/iAP2Utility/iAP2FSM.c
+/dev/apple_mfi
+Accessory:ResendData
+Accessory:ResendMissing
+Accessory:ResendSYN
+AccessoryFSM
+Advertising iAP2
+Create iAP2BtSocketTransport
+Create iAP2WrapperSocketTransport
+Create new iAP2 transport factory (fd %d)
+CreateInputStream: streamFromFileName
+Created new iAP2 transport factory (addr %s channel now %d rssi %d)
+Created new iAP2WrapperWampSession %u
+Destroying iAP2WrapperWampSession instance id %u
+Failed to close iap2 fd: %d
+Failed to create iAP2BtSocketTransport (bad fd?)
+IAP2_APP_LAUNCH_FAILED
+IAP2_CONNECTION_PROBE
+IAP2_STOP_EA_SESSION
+N7spotify9superbird11Iap2ProfileE
+N7spotify9superbird11iAP2ManagerE
+N7spotify9superbird12CountedClassINS0_21iAP2BtSocketTransportEEE
+N7spotify9superbird12CountedClassINS0_4wamp22iAP2WrapperWampSessionEEE
+N7spotify9superbird21iAP2BtSocketTransportE
+N7spotify9superbird28iAP2BtSocketTransportFactoryE
+N7spotify9superbird4wamp22iAP2WrapperWampSessionE
+N7spotify9superbird4wamp26iAP2WrapperSocketTransportE
+N7spotify9superbird4wamp33iAP2WrapperSocketTransportFactoryE
+Opening iAP2BtSocketTransport instance id %u to %s channel %d%s
+Sending %d (%d) bytes on protocol %d EA session %d iAP2 session ID %d
+Sending AccessoryHIDReport 0x%x
+Sending StatusExternalAccessoryProtocolSession protocol handle %d open %d
+Sending StopExternalAccessoryProtocolSession
+St23_Sp_counted_ptr_inplaceIN7spotify9superbird11Iap2ProfileESaIS2_ELN9__gnu_cxx12_Lock_policyE2EE
+St23_Sp_counted_ptr_inplaceIN7spotify9superbird11iAP2ManagerESaIS2_ELN9__gnu_cxx12_Lock_policyE2EE
+St23_Sp_counted_ptr_inplaceIN7spotify9superbird4wamp33iAP2WrapperSocketTransportFactoryESaIS3_ELN9__gnu_cxx12_Lock_policyE2EE
+St23enable_shared_from_thisIN7spotify9superbird11Iap2ProfileEE
+SupportedExternalAccessoryProtocol %s
+Using existing fd %d to create iAP2BtSocketTransport
+WAMP session reset, BT MAC "%s" host IP "%s" type %d mfi %d nonsp_ios %d nonsp_and %d probe %d iap2 fd %d
+failed to deserialize iAP2 message
+iAP2 Authentication challenge response requested
+iAP2 Authentication failed
+iAP2 Authentication succeeded
+iAP2 Control message id %04x
+iAP2 EA protocol %s session down
+iAP2 EA protocol %s session up, session ID %d!
+iAP2 EA start session w/ unrecognized protocol id %d
+iAP2 EA start without protocol/session
+iAP2 FSM error detected! PANIC! Detaching and upairing from phone
+iAP2 Identification accepted
+iAP2 Identification rejected, IDs: %s
+iAP2 Start identification requested
+iAP2 X.509 cert requested
+iAP2 X.509 serial requested
+iAP2 connection probe = %d
+iAP2 consumed %d bytes, recv buffer now %zd
+iAP2 packet complete, handled
+iAP2 parsed incomplete packet, bailing
+iAP2 probe mode, detaching
+iAP2 runloop timer triggered but runloop or timer is NULL
+iAP2BtSocketTransport %u destroying
+iAP2BtSocketTransport fd %d is invalid, will not attempt to create transport
+iAP2BtSocketTransport read %d bytes, sending to iAP2 LL for processing
+iAP2BtSocketTransport::onConnected %u
+iAP2BtSocketTransport::onConnected wrong state: %d
+iAP2BtSocketTransport::onDisconnected %u connected %d
+iAP2BtSocketTransport::onDisconnected when not BT connected
+iAP2BtSocketTransport::onEAConnected when not BT connected
+iAP2BtSocketTransport::onEADisconnected when not EA connected
+iAP2BtSocketTransport::onSocketErrorOccured when about to be destructed
+iAP2BtSocketTransport::onSocketErrorOccurred %s
+iAP2BtSocketTransport::readPhysical when about to be destructed
+iAP2BtSocketTransport::recvProcessed Complete message read, size %d
+iAP2BtSocketTransport::recvProcessed New message size %u bytes available %zd
+iAP2BtSocketTransport::recvProcessed attempt when socket is closed, ignore
+iAP2BtSocketTransport::sendPhysical attempt to write on closed socket, ignore
+iAP2BtSocketTransportFactory %s %d %d%s
+iAP2LinkHandleSuspend
+iAP2Manager %p created runloop, context = %p link = %p%s
+iAP2MediaToWamp::clear()
+iAP2SocketTransport::onEAConnected %u
+iAP2SocketTransport::onEADisconnected %u
+iAP2WrapperWampSession onBinaryData
+iAP2WrapperWampSession onWampEvent topic %s
+iAP2WrapperWampSession::onConnected
+iAP2WrapperWampSession::onSendError
+iAP2WrapperWampSession::onServiceDisconnected
+iAP2WrapperWampSession::onSocketDisconnected
+iAP2WrapperWampSession::onSocketErrorOccured
+iAP2WrapperWampSession::onWampEvent cached EVENT topic %s
+sFMFIh
+tried to set iAP2 runloop arg with bad runloop ptr %p/link %p

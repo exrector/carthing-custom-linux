@@ -1,0 +1,30 @@
+# Flash image — Car Thing (Superbird)
+
+Готовый к прошивке образ кастомного Linux (Buildroot) для Car Thing — открытая система, а не модифицированный сток.
+
+- тема «Терминал», `p1` = vfat, владелец файлов root, без retired-мусора
+- runtime + GUI (modular Compositor), BT-стек, транскод/line-out
+- **логин: `root` / пароль `carthing`** (SSH-ключей нет — добавь свой в `/root/.ssh/authorized_keys` при желании)
+- hardware baseline: stock-plus rescue/profile kernel, 512M rootfs, rescue NCM (`CONFIG_USB_G_NCM=y`) для SSH после каждой загрузки
+- runtime tree sha1: `3b143635c005fd1a80a32ce440f17d1fa2764bc0`
+
+## Включение в репозиторий
+
+Образы **включены в git-репозиторий** по требованию пользователя — чтобы репо было полностью автономным и не зависело от внешних источников бинарников.
+
+- `image/rootfs.img` (512 MB) — готовый к прошивке rootfs
+- `image/bootfs.bin` (172 MB) — boot partition с ядром/DTB
+- Если нужно исключить — см. `../.gitignore`
+
+## Содержимое
+
+| Файл | Назначение |
+|---|---|
+| `bootfs.bin` | пишется на sector 0 (MBR + vfat p1: Image, initrd, superbird.dtb, bootargs.txt) |
+| `rootfs.img` | пишется на sector 352256 |
+| `env.txt` | U-Boot env |
+| `meta.json` | манифест шагов |
+| `boot/` | bl2 + bootloader для входа в USB Burn Mode |
+| `manual/` | self-contained superbird-флешер |
+
+Прошивка — см. [`../README.md`](../README.md): `python3 tools/flash.py`.

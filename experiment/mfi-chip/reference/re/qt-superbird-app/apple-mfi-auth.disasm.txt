@@ -1,0 +1,690 @@
+
+extracted/lib/modules/4.9.113/extra/apple-mfi-auth.ko:	file format elf64-littleaarch64
+
+Disassembly of section .text:
+
+0000000000000000 <apple_mfi_open>:
+       0: a9be7bfd     	stp	x29, x30, [sp, #-0x20]!
+       4: 910003fd     	mov	x29, sp
+       8: a90153f3     	stp	x19, x20, [sp, #0x10]
+       c: aa0003f4     	mov	x20, x0
+      10: 58000140     	ldr	x0, 0x38 <apple_mfi_open+0x38>
+      14: aa0103f3     	mov	x19, x1
+      18: 94000000     	bl	0x18 <apple_mfi_open+0x18>
+      1c: f9410a82     	ldr	x2, [x20, #0x210]
+      20: 52800000     	mov	w0, #0x0                // =0
+      24: d1002042     	sub	x2, x2, #0x8
+      28: f9006a62     	str	x2, [x19, #0xd0]
+      2c: a94153f3     	ldp	x19, x20, [sp, #0x10]
+      30: a8c27bfd     	ldp	x29, x30, [sp], #0x20
+      34: d65f03c0     	ret
+      38: 00 00 00 00  	.word	0x00000000
+      3c: 00 00 00 00  	.word	0x00000000
+
+0000000000000040 <apple_mfi_release>:
+      40: a9bf7bfd     	stp	x29, x30, [sp, #-0x10]!
+      44: 910003fd     	mov	x29, sp
+      48: 580000c0     	ldr	x0, 0x60 <apple_mfi_release+0x20>
+      4c: 94000000     	bl	0x4c <apple_mfi_release+0xc>
+      50: 52800000     	mov	w0, #0x0                // =0
+      54: a8c17bfd     	ldp	x29, x30, [sp], #0x10
+      58: d65f03c0     	ret
+      5c: d503201f     	nop
+      60: 00 00 00 00  	.word	0x00000000
+      64: 00 00 00 00  	.word	0x00000000
+
+0000000000000068 <apple_mfi_auth_remove>:
+      68: a9be7bfd     	stp	x29, x30, [sp, #-0x20]!
+      6c: 910003fd     	mov	x29, sp
+      70: a90153f3     	stp	x19, x20, [sp, #0x10]
+      74: aa0003f3     	mov	x19, x0
+      78: aa0003f4     	mov	x20, x0
+      7c: 580001e1     	ldr	x1, 0xb8 <apple_mfi_auth_remove+0x50>
+      80: f8408660     	ldr	x0, [x19], #0x8
+      84: 94000000     	bl	0x84 <apple_mfi_auth_remove+0x1c>
+      88: aa1303e0     	mov	x0, x19
+      8c: 94000000     	bl	0x8c <apple_mfi_auth_remove+0x24>
+      90: 58000180     	ldr	x0, 0xc0 <apple_mfi_auth_remove+0x58>
+      94: 52800021     	mov	w1, #0x1                // =1
+      98: b9400000     	ldr	w0, [x0]
+      9c: 94000000     	bl	0x9c <apple_mfi_auth_remove+0x34>
+      a0: aa1403e0     	mov	x0, x20
+      a4: 94000000     	bl	0xa4 <apple_mfi_auth_remove+0x3c>
+      a8: 52800000     	mov	w0, #0x0                // =0
+      ac: a94153f3     	ldp	x19, x20, [sp, #0x10]
+      b0: a8c27bfd     	ldp	x29, x30, [sp], #0x20
+      b4: d65f03c0     	ret
+      b8: 00 00 00 00  	.word	0x00000000
+      bc: 00 00 00 00  	.word	0x00000000
+      c0: 00 00 00 00  	.word	0x00000000
+      c4: 00 00 00 00  	.word	0x00000000
+
+00000000000000c8 <apple_mfi_ioctl>:
+      c8: d3483c23     	ubfx	x3, x1, #8, #8
+      cc: 7101dc7f     	cmp	w3, #0x77
+      d0: 540021c1     	b.ne	0x508 <apple_mfi_ioctl+0x440>
+      d4: 12001c23     	and	w3, w1, #0xff
+      d8: 7100207f     	cmp	w3, #0x8
+      dc: 54002168     	b.hi	0x508 <apple_mfi_ioctl+0x440>
+      e0: 37f801c1     	tbnz	w1, #0x1f, 0x118 <apple_mfi_ioctl+0x50>
+      e4: 37f001a1     	tbnz	w1, #0x1e, 0x118 <apple_mfi_ioctl+0x50>
+      e8: d5384103     	mrs	x3, SP_EL0
+      ec: aa0203e4     	mov	x4, x2
+      f0: f9400463     	ldr	x3, [x3, #0x8]
+      f4: b1004084     	adds	x4, x4, #0x10
+      f8: 9a8383e3     	csel	x3, xzr, x3, hi
+      fc: da9f3084     	csinv	x4, x4, xzr, lo
+     100: fa03009f     	sbcs	xzr, x4, x3
+     104: 9a9f87e4     	cset	x4, ls
+     108: b5000244     	cbnz	x4, 0x150 <apple_mfi_ioctl+0x88>
+     10c: 928001a0     	mov	x0, #-0xe               // =-14
+     110: d65f03c0     	ret
+     114: d503201f     	nop
+     118: d5384103     	mrs	x3, SP_EL0
+     11c: d3507425     	ubfx	x5, x1, #16, #14
+     120: aa0203e4     	mov	x4, x2
+     124: f9400463     	ldr	x3, [x3, #0x8]
+     128: ab050084     	adds	x4, x4, x5
+     12c: 9a8383e3     	csel	x3, xzr, x3, hi
+     130: da9f3084     	csinv	x4, x4, xzr, lo
+     134: fa03009f     	sbcs	xzr, x4, x3
+     138: 9a9f87e4     	cset	x4, ls
+     13c: f100009f     	cmp	x4, #0x0
+     140: 1a9f17e3     	cset	w3, eq
+     144: 34fffd23     	cbz	w3, 0xe8 <apple_mfi_ioctl+0x20>
+     148: 17fffff1     	b	0x10c <apple_mfi_ioctl+0x44>
+     14c: d503201f     	nop
+     150: a9b97bfd     	stp	x29, x30, [sp, #-0x70]!
+     154: aa0203e3     	mov	x3, x2
+     158: d2800202     	mov	x2, #0x10               // =16
+     15c: 910003fd     	mov	x29, sp
+     160: a90153f3     	stp	x19, x20, [sp, #0x10]
+     164: 2a0103f3     	mov	w19, w1
+     168: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     16c: aa0303e1     	mov	x1, x3
+     170: a90363f7     	stp	x23, x24, [sp, #0x30]
+     174: f90023f9     	str	x25, [sp, #0x40]
+     178: f9406815     	ldr	x21, [x0, #0xd0]
+     17c: 910183a0     	add	x0, x29, #0x60
+     180: 94000000     	bl	0x180 <apple_mfi_ioctl+0xb8>
+     184: b5002b00     	cbnz	x0, 0x6e4 <apple_mfi_ioctl+0x61c>
+     188: b94063a1     	ldr	w1, [x29, #0x60]
+     18c: 7110003f     	cmp	w1, #0x400
+     190: 54001c08     	b.hi	0x510 <apple_mfi_ioctl+0x448>
+     194: f94037a0     	ldr	x0, [x29, #0x68]
+     198: 2a0103e1     	mov	w1, w1
+     19c: 94000000     	bl	0x19c <apple_mfi_ioctl+0xd4>
+     1a0: aa0003f4     	mov	x20, x0
+     1a4: b140041f     	cmn	x0, #0x1, lsl #12       // =0x1000
+     1a8: 54000808     	b.hi	0x2a8 <apple_mfi_ioctl+0x1e0>
+     1ac: aa0003e3     	mov	x3, x0
+     1b0: 58003641     	ldr	x1, 0x878 <apple_mfi_ioctl+0x7b0>
+     1b4: f94002a0     	ldr	x0, [x21]
+     1b8: b94063a2     	ldr	w2, [x29, #0x60]
+     1bc: 94000000     	bl	0x1bc <apple_mfi_ioctl+0xf4>
+     1c0: 528ee060     	mov	w0, #0x7703             // =30467
+     1c4: 72b00200     	movk	w0, #0x8010, lsl #16
+     1c8: 6b00027f     	cmp	w19, w0
+     1cc: 54001a60     	b.eq	0x518 <apple_mfi_ioctl+0x450>
+     1d0: 54000789     	b.ls	0x2c0 <apple_mfi_ioctl+0x1f8>
+     1d4: 528ee0a0     	mov	w0, #0x7705             // =30469
+     1d8: 72b00200     	movk	w0, #0x8010, lsl #16
+     1dc: 6b00027f     	cmp	w19, w0
+     1e0: 54002080     	b.eq	0x5f0 <apple_mfi_ioctl+0x528>
+     1e4: 54001563     	b.lo	0x490 <apple_mfi_ioctl+0x3c8>
+     1e8: 11000800     	add	w0, w0, #0x2
+     1ec: 6b00027f     	cmp	w19, w0
+     1f0: 54001cc0     	b.eq	0x588 <apple_mfi_ioctl+0x4c0>
+     1f4: 11000400     	add	w0, w0, #0x1
+     1f8: 6b00027f     	cmp	w19, w0
+     1fc: 540022a1     	b.ne	0x650 <apple_mfi_ioctl+0x588>
+     200: b94063a0     	ldr	w0, [x29, #0x60]
+     204: 71007c1f     	cmp	w0, #0x1f
+     208: 54002949     	b.ls	0x730 <apple_mfi_ioctl+0x668>
+     20c: f94002b7     	ldr	x23, [x21]
+     210: f94052f3     	ldr	x19, [x23, #0xa0]
+     214: 9101c276     	add	x22, x19, #0x70
+     218: aa1603e0     	mov	x0, x22
+     21c: 94000000     	bl	0x21c <apple_mfi_ioctl+0x154>
+     220: f9404e64     	ldr	x4, [x19, #0x98]
+     224: aa1403e3     	mov	x3, x20
+     228: f9400260     	ldr	x0, [x19]
+     22c: d2800402     	mov	x2, #0x20               // =32
+     230: 528009c1     	mov	w1, #0x4e               // =78
+     234: f9400484     	ldr	x4, [x4, #0x8]
+     238: d63f0080     	blr	x4
+     23c: 37f82960     	tbnz	w0, #0x1f, 0x768 <apple_mfi_ioctl+0x6a0>
+     240: aa1603e0     	mov	x0, x22
+     244: 94000000     	bl	0x244 <apple_mfi_ioctl+0x17c>
+     248: b94063b3     	ldr	w19, [x29, #0x60]
+     24c: f94037b5     	ldr	x21, [x29, #0x68]
+     250: d5384100     	mrs	x0, SP_EL0
+     254: aa1503e1     	mov	x1, x21
+     258: f9400400     	ldr	x0, [x0, #0x8]
+     25c: ab130021     	adds	x1, x1, x19
+     260: 9a8083e0     	csel	x0, xzr, x0, hi
+     264: da9f3021     	csinv	x1, x1, xzr, lo
+     268: fa00003f     	sbcs	xzr, x1, x0
+     26c: 9a9f87e1     	cset	x1, ls
+     270: b4000141     	cbz	x1, 0x298 <apple_mfi_ioctl+0x1d0>
+     274: aa1303e1     	mov	x1, x19
+     278: 52800022     	mov	w2, #0x1                // =1
+     27c: aa1403e0     	mov	x0, x20
+     280: 94000000     	bl	0x280 <apple_mfi_ioctl+0x1b8>
+     284: aa1303e2     	mov	x2, x19
+     288: aa1403e1     	mov	x1, x20
+     28c: aa1503e0     	mov	x0, x21
+     290: 94000000     	bl	0x290 <apple_mfi_ioctl+0x1c8>
+     294: aa0003f3     	mov	x19, x0
+     298: b5002233     	cbnz	x19, 0x6dc <apple_mfi_ioctl+0x614>
+     29c: aa1403e0     	mov	x0, x20
+     2a0: 94000000     	bl	0x2a0 <apple_mfi_ioctl+0x1d8>
+     2a4: d2800000     	mov	x0, #0x0                // =0
+     2a8: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     2ac: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     2b0: a94363f7     	ldp	x23, x24, [sp, #0x30]
+     2b4: f94023f9     	ldr	x25, [sp, #0x40]
+     2b8: a8c77bfd     	ldp	x29, x30, [sp], #0x70
+     2bc: d65f03c0     	ret
+     2c0: 528ee020     	mov	w0, #0x7701             // =30465
+     2c4: 72b00200     	movk	w0, #0x8010, lsl #16
+     2c8: 6b00027f     	cmp	w19, w0
+     2cc: 540006e0     	b.eq	0x3a8 <apple_mfi_ioctl+0x2e0>
+     2d0: 54001d08     	b.hi	0x670 <apple_mfi_ioctl+0x5a8>
+     2d4: 528ee0c0     	mov	w0, #0x7706             // =30470
+     2d8: 72a80200     	movk	w0, #0x4010, lsl #16
+     2dc: 6b00027f     	cmp	w19, w0
+     2e0: 54001b81     	b.ne	0x650 <apple_mfi_ioctl+0x588>
+     2e4: b94063b7     	ldr	w23, [x29, #0x60]
+     2e8: 71007eff     	cmp	w23, #0x1f
+     2ec: 54002229     	b.ls	0x730 <apple_mfi_ioctl+0x668>
+     2f0: f94002a0     	ldr	x0, [x21]
+     2f4: 52800021     	mov	w1, #0x1                // =1
+     2f8: 390163bf     	strb	wzr, [x29, #0x58]
+     2fc: 710082ff     	cmp	w23, #0x20
+     300: 390143a1     	strb	w1, [x29, #0x50]
+     304: 390167bf     	strb	wzr, [x29, #0x59]
+     308: f9405013     	ldr	x19, [x0, #0xa0]
+     30c: 54000461     	b.ne	0x398 <apple_mfi_ioctl+0x2d0>
+     310: 58002e41     	ldr	x1, 0x8d8 <apple_mfi_ioctl+0x810>
+     314: aa1303f6     	mov	x22, x19
+     318: f9400260     	ldr	x0, [x19]
+     31c: d2800402     	mov	x2, #0x20               // =32
+     320: 94000000     	bl	0x320 <apple_mfi_ioctl+0x258>
+     324: 58002de1     	ldr	x1, 0x8e0 <apple_mfi_ioctl+0x818>
+     328: aa1403e2     	mov	x2, x20
+     32c: f84706c0     	ldr	x0, [x22], #0x70
+     330: 94000000     	bl	0x330 <apple_mfi_ioctl+0x268>
+     334: aa1603e0     	mov	x0, x22
+     338: 94000000     	bl	0x338 <apple_mfi_ioctl+0x270>
+     33c: f9404e64     	ldr	x4, [x19, #0x98]
+     340: aa1403e3     	mov	x3, x20
+     344: f9400260     	ldr	x0, [x19]
+     348: d2800402     	mov	x2, #0x20               // =32
+     34c: 52800421     	mov	w1, #0x21               // =33
+     350: f9401084     	ldr	x4, [x4, #0x20]
+     354: d63f0080     	blr	x4
+     358: 37f81e40     	tbnz	w0, #0x1f, 0x720 <apple_mfi_ioctl+0x658>
+     35c: f9404e64     	ldr	x4, [x19, #0x98]
+     360: 910163a3     	add	x3, x29, #0x58
+     364: f9400260     	ldr	x0, [x19]
+     368: d2800042     	mov	x2, #0x2                // =2
+     36c: 2a1703e1     	mov	w1, w23
+     370: f9400084     	ldr	x4, [x4]
+     374: d63f0080     	blr	x4
+     378: 37f82260     	tbnz	w0, #0x1f, 0x7c4 <apple_mfi_ioctl+0x6fc>
+     37c: 7940b3a0     	ldrh	w0, [x29, #0x58]
+     380: 5ac00400     	rev16	w0, w0
+     384: 12003c00     	and	w0, w0, #0xffff
+     388: 7100801f     	cmp	w0, #0x20
+     38c: 54002240     	b.eq	0x7d4 <apple_mfi_ioctl+0x70c>
+     390: aa1603e0     	mov	x0, x22
+     394: 94000000     	bl	0x394 <apple_mfi_ioctl+0x2cc>
+     398: 58002b81     	ldr	x1, 0x908 <apple_mfi_ioctl+0x840>
+     39c: f94002a0     	ldr	x0, [x21]
+     3a0: 94000000     	bl	0x3a0 <apple_mfi_ioctl+0x2d8>
+     3a4: 140000ce     	b	0x6dc <apple_mfi_ioctl+0x614>
+     3a8: b94063b3     	ldr	w19, [x29, #0x60]
+     3ac: 34001c33     	cbz	w19, 0x730 <apple_mfi_ioctl+0x668>
+     3b0: f94002a0     	ldr	x0, [x21]
+     3b4: f9405016     	ldr	x22, [x0, #0xa0]
+     3b8: 9102a2d7     	add	x23, x22, #0xa8
+     3bc: 3942a2c0     	ldrb	w0, [x22, #0xa8]
+     3c0: 35000200     	cbnz	w0, 0x400 <apple_mfi_ioctl+0x338>
+     3c4: 9101c2d8     	add	x24, x22, #0x70
+     3c8: 9102a2d7     	add	x23, x22, #0xa8
+     3cc: aa1803e0     	mov	x0, x24
+     3d0: 94000000     	bl	0x3d0 <apple_mfi_ioctl+0x308>
+     3d4: f9404ec0     	ldr	x0, [x22, #0x98]
+     3d8: aa1703e3     	mov	x3, x23
+     3dc: d2800022     	mov	x2, #0x1                // =1
+     3e0: 52800001     	mov	w1, #0x0                // =0
+     3e4: f9400004     	ldr	x4, [x0]
+     3e8: f94002c0     	ldr	x0, [x22]
+     3ec: d63f0080     	blr	x4
+     3f0: 2a0003f9     	mov	w25, w0
+     3f4: aa1803e0     	mov	x0, x24
+     3f8: 37f81db9     	tbnz	w25, #0x1f, 0x7ac <apple_mfi_ioctl+0x6e4>
+     3fc: 94000000     	bl	0x3fc <apple_mfi_ioctl+0x334>
+     400: 2a1303f3     	mov	w19, w19
+     404: aa1703e1     	mov	x1, x23
+     408: aa1303e2     	mov	x2, x19
+     40c: aa1403e0     	mov	x0, x20
+     410: 94000000     	bl	0x410 <apple_mfi_ioctl+0x348>
+     414: b13ffc1f     	cmn	x0, #0xfff
+     418: 9a803273     	csel	x19, x19, x0, lo
+     41c: 37f82273     	tbnz	w19, #0x1f, 0x868 <apple_mfi_ioctl+0x7a0>
+     420: f94037b6     	ldr	x22, [x29, #0x68]
+     424: 93407e73     	sxtw	x19, w19
+     428: d5384100     	mrs	x0, SP_EL0
+     42c: aa1603e1     	mov	x1, x22
+     430: f9400400     	ldr	x0, [x0, #0x8]
+     434: ab130021     	adds	x1, x1, x19
+     438: 9a8083e0     	csel	x0, xzr, x0, hi
+     43c: da9f3021     	csinv	x1, x1, xzr, lo
+     440: fa00003f     	sbcs	xzr, x1, x0
+     444: 9a9f87e1     	cset	x1, ls
+     448: b4000141     	cbz	x1, 0x470 <apple_mfi_ioctl+0x3a8>
+     44c: aa1303e1     	mov	x1, x19
+     450: 52800022     	mov	w2, #0x1                // =1
+     454: aa1403e0     	mov	x0, x20
+     458: 94000000     	bl	0x458 <apple_mfi_ioctl+0x390>
+     45c: aa1303e2     	mov	x2, x19
+     460: aa1403e1     	mov	x1, x20
+     464: aa1603e0     	mov	x0, x22
+     468: 94000000     	bl	0x468 <apple_mfi_ioctl+0x3a0>
+     46c: aa0003f3     	mov	x19, x0
+     470: 34fff173     	cbz	w19, 0x29c <apple_mfi_ioctl+0x1d4>
+     474: 580020e1     	ldr	x1, 0x890 <apple_mfi_ioctl+0x7c8>
+     478: 910183a2     	add	x2, x29, #0x60
+     47c: f94002a0     	ldr	x0, [x21]
+     480: f94037a3     	ldr	x3, [x29, #0x68]
+     484: 94000000     	bl	0x484 <apple_mfi_ioctl+0x3bc>
+     488: 14000095     	b	0x6dc <apple_mfi_ioctl+0x614>
+     48c: d503201f     	nop
+     490: b94063a0     	ldr	w0, [x29, #0x60]
+     494: 7100041f     	cmp	w0, #0x1
+     498: 540014c9     	b.ls	0x730 <apple_mfi_ioctl+0x668>
+     49c: f94002a0     	ldr	x0, [x21]
+     4a0: f9405016     	ldr	x22, [x0, #0xa0]
+     4a4: 9101c2d7     	add	x23, x22, #0x70
+     4a8: aa1703e0     	mov	x0, x23
+     4ac: 94000000     	bl	0x4ac <apple_mfi_ioctl+0x3e4>
+     4b0: f9404ec4     	ldr	x4, [x22, #0x98]
+     4b4: d2800042     	mov	x2, #0x2                // =2
+     4b8: f94002c0     	ldr	x0, [x22]
+     4bc: aa1403e3     	mov	x3, x20
+     4c0: 52800601     	mov	w1, #0x30               // =48
+     4c4: f9400c84     	ldr	x4, [x4, #0x18]
+     4c8: d63f0080     	blr	x4
+     4cc: 2a0003e2     	mov	w2, w0
+     4d0: 37f81380     	tbnz	w0, #0x1f, 0x740 <apple_mfi_ioctl+0x678>
+     4d4: 79400283     	ldrh	w3, [x20]
+     4d8: 93407c13     	sxtw	x19, w0
+     4dc: 58001f61     	ldr	x1, 0x8c8 <apple_mfi_ioctl+0x800>
+     4e0: f94002c0     	ldr	x0, [x22]
+     4e4: 5ac00462     	rev16	w2, w3
+     4e8: 92403c42     	and	x2, x2, #0xffff
+     4ec: f90052c2     	str	x2, [x22, #0xa0]
+     4f0: 94000000     	bl	0x4f0 <apple_mfi_ioctl+0x428>
+     4f4: aa1703e0     	mov	x0, x23
+     4f8: 94000000     	bl	0x4f8 <apple_mfi_ioctl+0x430>
+     4fc: f94037b5     	ldr	x21, [x29, #0x68]
+     500: 17ffff54     	b	0x250 <apple_mfi_ioctl+0x188>
+     504: d503201f     	nop
+     508: 92800300     	mov	x0, #-0x19              // =-25
+     50c: d65f03c0     	ret
+     510: 928002a0     	mov	x0, #-0x16              // =-22
+     514: 17ffff65     	b	0x2a8 <apple_mfi_ioctl+0x1e0>
+     518: b94063b3     	ldr	w19, [x29, #0x60]
+     51c: 340010b3     	cbz	w19, 0x730 <apple_mfi_ioctl+0x668>
+     520: f94002a0     	ldr	x0, [x21]
+     524: f9405016     	ldr	x22, [x0, #0xa0]
+     528: 9101c2d7     	add	x23, x22, #0x70
+     52c: aa1703e0     	mov	x0, x23
+     530: 94000000     	bl	0x530 <apple_mfi_ioctl+0x468>
+     534: f9404ec4     	ldr	x4, [x22, #0x98]
+     538: 9102a6c3     	add	x3, x22, #0xa9
+     53c: f94002c0     	ldr	x0, [x22]
+     540: d2800022     	mov	x2, #0x1                // =1
+     544: 528000a1     	mov	w1, #0x5                // =5
+     548: f9400084     	ldr	x4, [x4]
+     54c: d63f0080     	blr	x4
+     550: 2a0003f8     	mov	w24, w0
+     554: aa1703e0     	mov	x0, x23
+     558: 37f80d98     	tbnz	w24, #0x1f, 0x708 <apple_mfi_ioctl+0x640>
+     55c: 94000000     	bl	0x55c <apple_mfi_ioctl+0x494>
+     560: 2a1303f3     	mov	w19, w19
+     564: aa1303e2     	mov	x2, x19
+     568: 9102a2c1     	add	x1, x22, #0xa8
+     56c: aa1403e0     	mov	x0, x20
+     570: 94000000     	bl	0x570 <apple_mfi_ioctl+0x4a8>
+     574: 36f80693     	tbz	w19, #0x1f, 0x644 <apple_mfi_ioctl+0x57c>
+     578: 580019c1     	ldr	x1, 0x8b0 <apple_mfi_ioctl+0x7e8>
+     57c: f94002a0     	ldr	x0, [x21]
+     580: 94000000     	bl	0x580 <apple_mfi_ioctl+0x4b8>
+     584: 14000056     	b	0x6dc <apple_mfi_ioctl+0x614>
+     588: b94063a0     	ldr	w0, [x29, #0x60]
+     58c: 7100fc1f     	cmp	w0, #0x3f
+     590: 54000d09     	b.ls	0x730 <apple_mfi_ioctl+0x668>
+     594: f94002b7     	ldr	x23, [x21]
+     598: f94052f3     	ldr	x19, [x23, #0xa0]
+     59c: 9101c276     	add	x22, x19, #0x70
+     5a0: aa1603e0     	mov	x0, x22
+     5a4: 94000000     	bl	0x5a4 <apple_mfi_ioctl+0x4dc>
+     5a8: f9404e64     	ldr	x4, [x19, #0x98]
+     5ac: aa1403e3     	mov	x3, x20
+     5b0: f9400260     	ldr	x0, [x19]
+     5b4: d2800802     	mov	x2, #0x40               // =64
+     5b8: 52800241     	mov	w1, #0x12               // =18
+     5bc: f9400484     	ldr	x4, [x4, #0x8]
+     5c0: d63f0080     	blr	x4
+     5c4: 36ffe3e0     	tbz	w0, #0x1f, 0x240 <apple_mfi_ioctl+0x178>
+     5c8: 58001a41     	ldr	x1, 0x910 <apple_mfi_ioctl+0x848>
+     5cc: 2a0003e2     	mov	w2, w0
+     5d0: aa1703e0     	mov	x0, x23
+     5d4: 94000000     	bl	0x5d4 <apple_mfi_ioctl+0x50c>
+     5d8: aa1603e0     	mov	x0, x22
+     5dc: 94000000     	bl	0x5dc <apple_mfi_ioctl+0x514>
+     5e0: 580019c1     	ldr	x1, 0x918 <apple_mfi_ioctl+0x850>
+     5e4: f94002a0     	ldr	x0, [x21]
+     5e8: 94000000     	bl	0x5e8 <apple_mfi_ioctl+0x520>
+     5ec: 1400003c     	b	0x6dc <apple_mfi_ioctl+0x614>
+     5f0: b94063a1     	ldr	w1, [x29, #0x60]
+     5f4: f94052a0     	ldr	x0, [x21, #0xa0]
+     5f8: eb00003f     	cmp	x1, x0
+     5fc: 540009a3     	b.lo	0x730 <apple_mfi_ioctl+0x668>
+     600: f94002a0     	ldr	x0, [x21]
+     604: f9405016     	ldr	x22, [x0, #0xa0]
+     608: 9101c2d7     	add	x23, x22, #0x70
+     60c: aa1703e0     	mov	x0, x23
+     610: 94000000     	bl	0x610 <apple_mfi_ioctl+0x548>
+     614: a9498ac4     	ldp	x4, x2, [x22, #0x98]
+     618: aa1403e3     	mov	x3, x20
+     61c: f94002c0     	ldr	x0, [x22]
+     620: 52800621     	mov	w1, #0x31               // =49
+     624: f9400884     	ldr	x4, [x4, #0x10]
+     628: d63f0080     	blr	x4
+     62c: 93407c13     	sxtw	x19, w0
+     630: 37f80b13     	tbnz	w19, #0x1f, 0x790 <apple_mfi_ioctl+0x6c8>
+     634: aa1703e0     	mov	x0, x23
+     638: 94000000     	bl	0x638 <apple_mfi_ioctl+0x570>
+     63c: f94052d3     	ldr	x19, [x22, #0xa0]
+     640: 37f810d3     	tbnz	w19, #0x1f, 0x858 <apple_mfi_ioctl+0x790>
+     644: 93407e73     	sxtw	x19, w19
+     648: f94037b5     	ldr	x21, [x29, #0x68]
+     64c: 17ffff01     	b	0x250 <apple_mfi_ioctl+0x188>
+     650: 58001701     	ldr	x1, 0x930 <apple_mfi_ioctl+0x868>
+     654: f94002a0     	ldr	x0, [x21]
+     658: 94000000     	bl	0x658 <apple_mfi_ioctl+0x590>
+     65c: aa1403e0     	mov	x0, x20
+     660: 94000000     	bl	0x660 <apple_mfi_ioctl+0x598>
+     664: 92800300     	mov	x0, #-0x19              // =-25
+     668: 17ffff10     	b	0x2a8 <apple_mfi_ioctl+0x1e0>
+     66c: d503201f     	nop
+     670: b94063b3     	ldr	w19, [x29, #0x60]
+     674: 340005f3     	cbz	w19, 0x730 <apple_mfi_ioctl+0x668>
+     678: f94002a0     	ldr	x0, [x21]
+     67c: f9405016     	ldr	x22, [x0, #0xa0]
+     680: 9101c2d7     	add	x23, x22, #0x70
+     684: aa1703e0     	mov	x0, x23
+     688: 94000000     	bl	0x688 <apple_mfi_ioctl+0x5c0>
+     68c: f9404ec4     	ldr	x4, [x22, #0x98]
+     690: 9102aac3     	add	x3, x22, #0xaa
+     694: f94002c0     	ldr	x0, [x22]
+     698: d2800022     	mov	x2, #0x1                // =1
+     69c: 52800201     	mov	w1, #0x10               // =16
+     6a0: f9400084     	ldr	x4, [x4]
+     6a4: d63f0080     	blr	x4
+     6a8: 2a0003f8     	mov	w24, w0
+     6ac: aa1703e0     	mov	x0, x23
+     6b0: 37f80218     	tbnz	w24, #0x1f, 0x6f0 <apple_mfi_ioctl+0x628>
+     6b4: 94000000     	bl	0x6b4 <apple_mfi_ioctl+0x5ec>
+     6b8: 2a1303f3     	mov	w19, w19
+     6bc: aa1303e2     	mov	x2, x19
+     6c0: 9102a2c1     	add	x1, x22, #0xa8
+     6c4: aa1403e0     	mov	x0, x20
+     6c8: 94000000     	bl	0x6c8 <apple_mfi_ioctl+0x600>
+     6cc: 36fffbd3     	tbz	w19, #0x1f, 0x644 <apple_mfi_ioctl+0x57c>
+     6d0: 58000e81     	ldr	x1, 0x8a0 <apple_mfi_ioctl+0x7d8>
+     6d4: f94002a0     	ldr	x0, [x21]
+     6d8: 94000000     	bl	0x6d8 <apple_mfi_ioctl+0x610>
+     6dc: aa1403e0     	mov	x0, x20
+     6e0: 94000000     	bl	0x6e0 <apple_mfi_ioctl+0x618>
+     6e4: 928001a0     	mov	x0, #-0xe               // =-14
+     6e8: 17fffef0     	b	0x2a8 <apple_mfi_ioctl+0x1e0>
+     6ec: d503201f     	nop
+     6f0: 94000000     	bl	0x6f0 <apple_mfi_ioctl+0x628>
+     6f4: 93407f13     	sxtw	x19, w24
+     6f8: 58000d01     	ldr	x1, 0x898 <apple_mfi_ioctl+0x7d0>
+     6fc: f94002c0     	ldr	x0, [x22]
+     700: 94000000     	bl	0x700 <apple_mfi_ioctl+0x638>
+     704: 17fffff2     	b	0x6cc <apple_mfi_ioctl+0x604>
+     708: 94000000     	bl	0x708 <apple_mfi_ioctl+0x640>
+     70c: 93407f13     	sxtw	x19, w24
+     710: 58000cc1     	ldr	x1, 0x8a8 <apple_mfi_ioctl+0x7e0>
+     714: f94002c0     	ldr	x0, [x22]
+     718: 94000000     	bl	0x718 <apple_mfi_ioctl+0x650>
+     71c: 17ffff96     	b	0x574 <apple_mfi_ioctl+0x4ac>
+     720: 58000e41     	ldr	x1, 0x8e8 <apple_mfi_ioctl+0x820>
+     724: f9400260     	ldr	x0, [x19]
+     728: 94000000     	bl	0x728 <apple_mfi_ioctl+0x660>
+     72c: 17ffff19     	b	0x390 <apple_mfi_ioctl+0x2c8>
+     730: aa1403e0     	mov	x0, x20
+     734: 94000000     	bl	0x734 <apple_mfi_ioctl+0x66c>
+     738: 928002a0     	mov	x0, #-0x16              // =-22
+     73c: 17fffedb     	b	0x2a8 <apple_mfi_ioctl+0x1e0>
+     740: 58000bc1     	ldr	x1, 0x8b8 <apple_mfi_ioctl+0x7f0>
+     744: f94002c0     	ldr	x0, [x22]
+     748: 94000000     	bl	0x748 <apple_mfi_ioctl+0x680>
+     74c: aa1703e0     	mov	x0, x23
+     750: 94000000     	bl	0x750 <apple_mfi_ioctl+0x688>
+     754: 58000b61     	ldr	x1, 0x8c0 <apple_mfi_ioctl+0x7f8>
+     758: f94002a0     	ldr	x0, [x21]
+     75c: 94000000     	bl	0x75c <apple_mfi_ioctl+0x694>
+     760: 17ffffdf     	b	0x6dc <apple_mfi_ioctl+0x614>
+     764: d503201f     	nop
+     768: 58000dc1     	ldr	x1, 0x920 <apple_mfi_ioctl+0x858>
+     76c: 2a0003e2     	mov	w2, w0
+     770: aa1703e0     	mov	x0, x23
+     774: 94000000     	bl	0x774 <apple_mfi_ioctl+0x6ac>
+     778: aa1603e0     	mov	x0, x22
+     77c: 94000000     	bl	0x77c <apple_mfi_ioctl+0x6b4>
+     780: 58000d41     	ldr	x1, 0x928 <apple_mfi_ioctl+0x860>
+     784: f94002a0     	ldr	x0, [x21]
+     788: 94000000     	bl	0x788 <apple_mfi_ioctl+0x6c0>
+     78c: 17ffffd4     	b	0x6dc <apple_mfi_ioctl+0x614>
+     790: f94002c0     	ldr	x0, [x22]
+     794: 2a1303e2     	mov	w2, w19
+     798: 580009c1     	ldr	x1, 0x8d0 <apple_mfi_ioctl+0x808>
+     79c: 94000000     	bl	0x79c <apple_mfi_ioctl+0x6d4>
+     7a0: aa1703e0     	mov	x0, x23
+     7a4: 94000000     	bl	0x7a4 <apple_mfi_ioctl+0x6dc>
+     7a8: 17ffffa6     	b	0x640 <apple_mfi_ioctl+0x578>
+     7ac: 94000000     	bl	0x7ac <apple_mfi_ioctl+0x6e4>
+     7b0: 93407f33     	sxtw	x19, w25
+     7b4: 58000661     	ldr	x1, 0x880 <apple_mfi_ioctl+0x7b8>
+     7b8: f94002c0     	ldr	x0, [x22]
+     7bc: 94000000     	bl	0x7bc <apple_mfi_ioctl+0x6f4>
+     7c0: 17ffff17     	b	0x41c <apple_mfi_ioctl+0x354>
+     7c4: 58000961     	ldr	x1, 0x8f0 <apple_mfi_ioctl+0x828>
+     7c8: f9400260     	ldr	x0, [x19]
+     7cc: 94000000     	bl	0x7cc <apple_mfi_ioctl+0x704>
+     7d0: 17fffef0     	b	0x390 <apple_mfi_ioctl+0x2c8>
+     7d4: f9404e64     	ldr	x4, [x19, #0x98]
+     7d8: 910143a3     	add	x3, x29, #0x50
+     7dc: f9400260     	ldr	x0, [x19]
+     7e0: d2800022     	mov	x2, #0x1                // =1
+     7e4: 52800201     	mov	w1, #0x10               // =16
+     7e8: f9401084     	ldr	x4, [x4, #0x20]
+     7ec: d63f0080     	blr	x4
+     7f0: 37f80240     	tbnz	w0, #0x1f, 0x838 <apple_mfi_ioctl+0x770>
+     7f4: 52803e80     	mov	w0, #0x1f4              // =500
+     7f8: 94000000     	bl	0x7f8 <apple_mfi_ioctl+0x730>
+     7fc: f9404e64     	ldr	x4, [x19, #0x98]
+     800: d2800022     	mov	x2, #0x1                // =1
+     804: f9400260     	ldr	x0, [x19]
+     808: 9102aa63     	add	x3, x19, #0xaa
+     80c: 52800201     	mov	w1, #0x10               // =16
+     810: f9400084     	ldr	x4, [x4]
+     814: d63f0080     	blr	x4
+     818: 2a0003e2     	mov	w2, w0
+     81c: 37f80160     	tbnz	w0, #0x1f, 0x848 <apple_mfi_ioctl+0x780>
+     820: 3942aa60     	ldrb	w0, [x19, #0xaa]
+     824: 7100401f     	cmp	w0, #0x10
+     828: 54ffdb41     	b.ne	0x390 <apple_mfi_ioctl+0x2c8>
+     82c: aa1603e0     	mov	x0, x22
+     830: 94000000     	bl	0x830 <apple_mfi_ioctl+0x768>
+     834: 17fffe9a     	b	0x29c <apple_mfi_ioctl+0x1d4>
+     838: 58000601     	ldr	x1, 0x8f8 <apple_mfi_ioctl+0x830>
+     83c: f9400260     	ldr	x0, [x19]
+     840: 94000000     	bl	0x840 <apple_mfi_ioctl+0x778>
+     844: 17fffed3     	b	0x390 <apple_mfi_ioctl+0x2c8>
+     848: 580005c1     	ldr	x1, 0x900 <apple_mfi_ioctl+0x838>
+     84c: f9400260     	ldr	x0, [x19]
+     850: 94000000     	bl	0x850 <apple_mfi_ioctl+0x788>
+     854: 17fffecf     	b	0x390 <apple_mfi_ioctl+0x2c8>
+     858: 58000341     	ldr	x1, 0x8c0 <apple_mfi_ioctl+0x7f8>
+     85c: f94002a0     	ldr	x0, [x21]
+     860: 94000000     	bl	0x860 <apple_mfi_ioctl+0x798>
+     864: 17ffff9e     	b	0x6dc <apple_mfi_ioctl+0x614>
+     868: 58000101     	ldr	x1, 0x888 <apple_mfi_ioctl+0x7c0>
+     86c: f94002a0     	ldr	x0, [x21]
+     870: 94000000     	bl	0x870 <apple_mfi_ioctl+0x7a8>
+     874: 17ffff9a     	b	0x6dc <apple_mfi_ioctl+0x614>
+     878: 00 00 00 00  	.word	0x00000000
+     87c: 00 00 00 00  	.word	0x00000000
+     880: 00 00 00 00  	.word	0x00000000
+     884: 00 00 00 00  	.word	0x00000000
+     888: 00 00 00 00  	.word	0x00000000
+     88c: 00 00 00 00  	.word	0x00000000
+     890: 00 00 00 00  	.word	0x00000000
+     894: 00 00 00 00  	.word	0x00000000
+     898: 00 00 00 00  	.word	0x00000000
+     89c: 00 00 00 00  	.word	0x00000000
+     8a0: 00 00 00 00  	.word	0x00000000
+     8a4: 00 00 00 00  	.word	0x00000000
+     8a8: 00 00 00 00  	.word	0x00000000
+     8ac: 00 00 00 00  	.word	0x00000000
+     8b0: 00 00 00 00  	.word	0x00000000
+     8b4: 00 00 00 00  	.word	0x00000000
+     8b8: 00 00 00 00  	.word	0x00000000
+     8bc: 00 00 00 00  	.word	0x00000000
+     8c0: 00 00 00 00  	.word	0x00000000
+     8c4: 00 00 00 00  	.word	0x00000000
+     8c8: 00 00 00 00  	.word	0x00000000
+     8cc: 00 00 00 00  	.word	0x00000000
+     8d0: 00 00 00 00  	.word	0x00000000
+     8d4: 00 00 00 00  	.word	0x00000000
+     8d8: 00 00 00 00  	.word	0x00000000
+     8dc: 00 00 00 00  	.word	0x00000000
+     8e0: 00 00 00 00  	.word	0x00000000
+     8e4: 00 00 00 00  	.word	0x00000000
+     8e8: 00 00 00 00  	.word	0x00000000
+     8ec: 00 00 00 00  	.word	0x00000000
+     8f0: 00 00 00 00  	.word	0x00000000
+     8f4: 00 00 00 00  	.word	0x00000000
+     8f8: 00 00 00 00  	.word	0x00000000
+     8fc: 00 00 00 00  	.word	0x00000000
+     900: 00 00 00 00  	.word	0x00000000
+     904: 00 00 00 00  	.word	0x00000000
+     908: 00 00 00 00  	.word	0x00000000
+     90c: 00 00 00 00  	.word	0x00000000
+     910: 00 00 00 00  	.word	0x00000000
+     914: 00 00 00 00  	.word	0x00000000
+     918: 00 00 00 00  	.word	0x00000000
+     91c: 00 00 00 00  	.word	0x00000000
+     920: 00 00 00 00  	.word	0x00000000
+     924: 00 00 00 00  	.word	0x00000000
+     928: 00 00 00 00  	.word	0x00000000
+     92c: 00 00 00 00  	.word	0x00000000
+     930: 00 00 00 00  	.word	0x00000000
+     934: 00 00 00 00  	.word	0x00000000
+
+0000000000000938 <apple_mfi_compat_ioctl>:
+     938: a9bf7bfd     	stp	x29, x30, [sp, #-0x10]!
+     93c: 2a0203e2     	mov	w2, w2
+     940: 910003fd     	mov	x29, sp
+     944: 94000000     	bl	0x944 <apple_mfi_compat_ioctl+0xc>
+     948: a8c17bfd     	ldp	x29, x30, [sp], #0x10
+     94c: d65f03c0     	ret
+
+0000000000000950 <apple_mfi_auth_probe>:
+     950: a9bd7bfd     	stp	x29, x30, [sp, #-0x30]!
+     954: 910003fd     	mov	x29, sp
+     958: 58000742     	ldr	x2, 0xa40 <apple_mfi_auth_probe+0xf0>
+     95c: a90153f3     	stp	x19, x20, [sp, #0x10]
+     960: aa0103f4     	mov	x20, x1
+     964: a9025bf5     	stp	x21, x22, [sp, #0x20]
+     968: aa0003f6     	mov	x22, x0
+     96c: 52901801     	mov	w1, #0x80c0             // =32960
+     970: f9400840     	ldr	x0, [x2, #0x10]
+     974: 72a04801     	movk	w1, #0x240, lsl #16
+     978: 94000000     	bl	0x978 <apple_mfi_auth_probe+0x28>
+     97c: aa0003f3     	mov	x19, x0
+     980: 58000681     	ldr	x1, 0xa50 <apple_mfi_auth_probe+0x100>
+     984: 9101c000     	add	x0, x0, #0x70
+     988: 58000615     	ldr	x21, 0xa48 <apple_mfi_auth_probe+0xf8>
+     98c: f9000276     	str	x22, [x19]
+     990: 910022a2     	add	x2, x21, #0x8
+     994: a909fe74     	stp	x20, xzr, [x19, #0x98]
+     998: 94000000     	bl	0x998 <apple_mfi_auth_probe+0x48>
+     99c: 580005e3     	ldr	x3, 0xa58 <apple_mfi_auth_probe+0x108>
+     9a0: 52800022     	mov	w2, #0x1                // =1
+     9a4: 52800001     	mov	w1, #0x0                // =0
+     9a8: aa1503e0     	mov	x0, x21
+     9ac: 94000000     	bl	0x9ac <apple_mfi_auth_probe+0x5c>
+     9b0: 37f80340     	tbnz	w0, #0x1f, 0xa18 <apple_mfi_auth_probe+0xc8>
+     9b4: 580005a1     	ldr	x1, 0xa68 <apple_mfi_auth_probe+0x118>
+     9b8: 91002274     	add	x20, x19, #0x8
+     9bc: b94002b5     	ldr	w21, [x21]
+     9c0: aa1403e0     	mov	x0, x20
+     9c4: 120c2eb5     	and	w21, w21, #0xfff00000
+     9c8: 94000000     	bl	0x9c8 <apple_mfi_auth_probe+0x78>
+     9cc: 58000520     	ldr	x0, 0xa70 <apple_mfi_auth_probe+0x120>
+     9d0: 52800022     	mov	w2, #0x1                // =1
+     9d4: f9002660     	str	x0, [x19, #0x48]
+     9d8: 2a1503e1     	mov	w1, w21
+     9dc: aa1403e0     	mov	x0, x20
+     9e0: 94000000     	bl	0x9e0 <apple_mfi_auth_probe+0x90>
+     9e4: 2a0003f4     	mov	w20, w0
+     9e8: 36f80220     	tbz	w0, #0x1f, 0xa2c <apple_mfi_auth_probe+0xdc>
+     9ec: 58000461     	ldr	x1, 0xa78 <apple_mfi_auth_probe+0x128>
+     9f0: aa1603e0     	mov	x0, x22
+     9f4: 94000000     	bl	0x9f4 <apple_mfi_auth_probe+0xa4>
+     9f8: aa1303e0     	mov	x0, x19
+     9fc: 94000000     	bl	0x9fc <apple_mfi_auth_probe+0xac>
+     a00: 93407e80     	sxtw	x0, w20
+     a04: a94153f3     	ldp	x19, x20, [sp, #0x10]
+     a08: a9425bf5     	ldp	x21, x22, [sp, #0x20]
+     a0c: a8c37bfd     	ldp	x29, x30, [sp], #0x30
+     a10: d65f03c0     	ret
+     a14: d503201f     	nop
+     a18: 58000241     	ldr	x1, 0xa60 <apple_mfi_auth_probe+0x110>
+     a1c: 2a0003f4     	mov	w20, w0
+     a20: aa1603e0     	mov	x0, x22
+     a24: 94000000     	bl	0xa24 <apple_mfi_auth_probe+0xd4>
+     a28: 17fffff4     	b	0x9f8 <apple_mfi_auth_probe+0xa8>
+     a2c: 580002a0     	ldr	x0, 0xa80 <apple_mfi_auth_probe+0x130>
+     a30: 94000000     	bl	0xa30 <apple_mfi_auth_probe+0xe0>
+     a34: aa1303e0     	mov	x0, x19
+     a38: 17fffff3     	b	0xa04 <apple_mfi_auth_probe+0xb4>
+     a3c: d503201f     	nop
+     a40: 00 00 00 00  	.word	0x00000000
+     a44: 00 00 00 00  	.word	0x00000000
+     a48: 00 00 00 00  	.word	0x00000000
+     a4c: 00 00 00 00  	.word	0x00000000
+     a50: 00 00 00 00  	.word	0x00000000
+     a54: 00 00 00 00  	.word	0x00000000
+     a58: 00 00 00 00  	.word	0x00000000
+     a5c: 00 00 00 00  	.word	0x00000000
+     a60: 00 00 00 00  	.word	0x00000000
+     a64: 00 00 00 00  	.word	0x00000000
+     a68: 00 00 00 00  	.word	0x00000000
+     a6c: 00 00 00 00  	.word	0x00000000
+     a70: 00 00 00 00  	.word	0x00000000
+     a74: 00 00 00 00  	.word	0x00000000
+     a78: 00 00 00 00  	.word	0x00000000
+     a7c: 00 00 00 00  	.word	0x00000000
+     a80: 00 00 00 00  	.word	0x00000000
+     a84: 00 00 00 00  	.word	0x00000000
