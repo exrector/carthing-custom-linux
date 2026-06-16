@@ -1,5 +1,6 @@
 # Car Thing Custom Linux
 
+> **СБОРКА + ПРОШИВКА (2026-06-16): [docs/BUILD-AND-FLASH.md](docs/BUILD-AND-FLASH.md)** — единый источник истины.
 > **АКТУАЛЬНОЕ СОСТОЯНИЕ (вход для агентов): [docs/SYSTEM-STATE-2026-06-10.md](docs/SYSTEM-STATE-2026-06-10.md)**
 > Запреты: [INVARIANTS.md](INVARIANTS.md). Тесты/доказательства: [docs/dual-mode-test-plan-2026-06-10.md](docs/dual-mode-test-plan-2026-06-10.md).
 
