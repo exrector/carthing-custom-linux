@@ -6,7 +6,7 @@ Buffer lifecycle:
     dev = GE2DDevice()
     buf = dev.alloc(width, height, fmt=GE2D_FMT_RGBA)  # DMA buffer
     buf.pixels[0:4] = b'\xff\x00\x00\xff'              # CPU write
-    dev.fillrect(buf, color=0xFF0000FF, x=0, y=0, w=100, h=100)
+    dev.fillrect(buf, color=0xFF0000FF, x=0, y=0, w=100, h=100)  # RGBA red
     dev.blit(src=buf_a, dst=buf_b, sx=0, sy=0, sw=480, sh=800, dx=0, dy=0)
     buf.close()
     dev.close()
@@ -227,18 +227,29 @@ CANVAS_TYPE_INVALID = 3
 CANVAS_ALLOC        = 2
 
 # ge2d internal format codes (from ge2d.h)
+# GE2D_FMT_S32_RGBA = GE2D_LITTLE_ENDIAN | 0x300  (32bpp = 0x300, NOT 0x100 which is 16bpp)
+# GE2D_COLOR_MAP_*8888: RGBA=0, ARGB=1<<20, ABGR=2<<20, BGRA=3<<20
 _GE2D_LITTLE_ENDIAN = 1 << 24
-_FMT_S32_ABGR  = (1 << 8) | (3 << 20) | _GE2D_LITTLE_ENDIAN  # RGBA_8888
-_FMT_S32_ARGB  = (1 << 8) | (2 << 20) | _GE2D_LITTLE_ENDIAN  # BGRA_8888 → ARGB
-_FMT_S24_BGR   = (2 << 8) | (5 << 20) | _GE2D_LITTLE_ENDIAN  # RGB_888
-_FMT_S16_RGB565 = (1 << 8) | (5 << 20) | _GE2D_LITTLE_ENDIAN  # RGB_565
+_FMT_BASE_32 = _GE2D_LITTLE_ENDIAN | 0x300   # 32bpp base
+_FMT_BASE_24 = _GE2D_LITTLE_ENDIAN | 0x200   # 24bpp base
+_FMT_BASE_16 = _GE2D_LITTLE_ENDIAN | 0x100   # 16bpp base
+
+# libge2d mapping: PIXEL_FORMAT_RGBA_8888 → GE2D_FORMAT_S32_ARGB (color_map=1)
+# This matches PIL 'RGBA' byte order [R,G,B,A] → GE2D ARGB value 0xAARRGGBB
+_FMT_S32_ARGB  = _FMT_BASE_32 | (1 << 20)  # GE2D_FORMAT_S32_ARGB  — for PIL RGBA
+_FMT_S32_RGBA  = _FMT_BASE_32 | (0 << 20)  # GE2D_FORMAT_S32_RGBA
+_FMT_S32_ABGR  = _FMT_BASE_32 | (2 << 20)  # GE2D_FORMAT_S32_ABGR
+_FMT_S32_BGRA  = _FMT_BASE_32 | (3 << 20)  # GE2D_FORMAT_S32_BGRA  — for PIL BGRA
+
+_FMT_S24_RGB   = _FMT_BASE_24 | (0 << 20)  # GE2D_FORMAT_S24_RGB
+_FMT_S16_RGB565 = _FMT_BASE_16 | (5 << 20) # GE2D_FORMAT_S16_RGB565
 
 _BPP = {
-    GE2D_FMT_RGBA:   (32, _FMT_S32_ABGR),
-    GE2D_FMT_RGBX:   (32, _FMT_S32_ABGR),
-    GE2D_FMT_RGB:    (24, _FMT_S24_BGR),
+    GE2D_FMT_RGBA:   (32, _FMT_S32_ARGB),  # PIL 'RGBA' → GE2D ARGB
+    GE2D_FMT_RGBX:   (32, _FMT_S32_ARGB),
+    GE2D_FMT_RGB:    (24, _FMT_S24_RGB),
     GE2D_FMT_RGB565: (16, _FMT_S16_RGB565),
-    GE2D_FMT_BGRA:   (32, _FMT_S32_ARGB),
+    GE2D_FMT_BGRA:   (32, _FMT_S32_BGRA),  # PIL 'BGRA' → GE2D BGRA
 }
 
 def _canvas_aligned(x):
@@ -396,9 +407,10 @@ class GE2DDevice:
     def fillrect(self, dst: GE2DBuffer, color: int,
                  x: int = 0, y: int = 0,
                  w: int = -1, h: int = -1):
-        """Fill rectangle on dst with ARGB color (0xAARRGGBB).
+        """Fill rectangle on dst with color in RGBA format (0xRRGGBBAA).
 
-        color format matches GE2D alu_const_color: 0xAARRGGBB
+        Examples: red=0xFF0000FF, green=0x00FF00FF, blue=0x0000FFFF, white=0xFFFFFFFF.
+        The GE2D hardware rotates bytes: buffer bytes = [B, G, R, A] = DRM XRGB8888-compatible.
         """
         if w < 0: w = dst.width
         if h < 0: h = dst.height
