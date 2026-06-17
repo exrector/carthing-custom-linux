@@ -7,12 +7,12 @@ usage: bring-up-device1-normal-boot-macos.sh [--bsd IFACE]
 
 Host-side macOS remediation for device №1 normal boot.
 
-On this host, once `NCM Gadget` exists in `ioreg`, this is the canonical first
+On this host, once `exrector's device` exists in `ioreg`, this is the canonical first
 recovery action after a replug. Do not wait for `en14` or `utun*` routing to
 self-heal.
 
 This script does not decide whether the USB gadget exists. Use
-`check-device1-normal-boot-macos.sh` when you need to confirm `NCM Gadget`
+`check-device1-normal-boot-macos.sh` when you need to confirm `exrector's device`
 and the BSD interface name, then use this script to:
 
 1. assign `172.16.42.1/24` to the BSD interface
@@ -51,7 +51,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 discover_bsd_name() {
-    ioreg -r -n 'NCM Gadget' -w 0 -l 2>/dev/null \
+    ioreg -r -n 'exrector's device' -w 0 -l 2>/dev/null \
         | sed -n 's/.*"BSD Name" = "\(.*\)".*/\1/p' \
         | head -n 1
 }
@@ -104,7 +104,7 @@ if [ -z "${bsd_name:-}" ]; then
 fi
 
 if [ -z "${bsd_name:-}" ]; then
-    echo "NCM Gadget BSD interface not found in ioreg" >&2
+    echo "exrector's device BSD interface not found in ioreg" >&2
     echo "run ./scripts/check-device1-normal-boot-macos.sh first" >&2
     exit 1
 fi
