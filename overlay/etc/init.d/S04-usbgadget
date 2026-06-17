@@ -214,7 +214,7 @@ build_composite() {
 
     mkdir -p strings/0x409
     echo "Spotify AB" > strings/0x409/manufacturer
-    echo "NCM Gadget" > strings/0x409/product
+    echo "exrector's device" > strings/0x409/product
     if [ -r /sys/class/efuse/usid ]; then
         tr -d '\000[:space:]' </sys/class/efuse/usid > strings/0x409/serialnumber 2>/dev/null || true
     fi
