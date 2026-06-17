@@ -23,6 +23,9 @@ try:
 except Exception:
     pass
 
+_BOOT_PROFILE_ENABLED = os.environ.get("CARTHING_BOOT_PROFILE", "1") != "0"
+_BOOT_PROFILE_T0 = time.monotonic()
+
 import runtime_paths  # noqa: F401  (ставит sys.path)
 import state_paths
 import identity_service
@@ -39,6 +42,31 @@ from virtual_connectors import HciOperationGate, VirtualRoutePatchBay
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("carthing_runtime")
+
+
+def _boot_profile_uptime() -> float | None:
+    try:
+        with open("/proc/uptime", "r", encoding="ascii") as fh:
+            return float(fh.read().split()[0])
+    except Exception:
+        return None
+
+
+def _boot_milestone(milestone: str, **fields) -> None:
+    if not _BOOT_PROFILE_ENABLED:
+        return
+    uptime = _boot_profile_uptime()
+    parts = [f"BOOT_PROFILE milestone={milestone}"]
+    if uptime is not None:
+        parts.append(f"proc_uptime_s={uptime:.3f}")
+    parts.append(f"runtime_s={time.monotonic() - _BOOT_PROFILE_T0:.3f}")
+    for key, value in fields.items():
+        safe = str(value).replace(" ", "_")
+        parts.append(f"{key}={safe}")
+    logger.info(" ".join(parts))
+
+
+_boot_milestone("runtime.module_loaded")
 
 RENDER_INTERVAL = 0.2   # с: рендер-тик (живой прогресс на экране)
 PUBLISH_EVERY = 5       # каждые N тиков писать runtime-bt.json (~1 с)
@@ -1236,12 +1264,16 @@ async def _pair_speaker_once():
 
 async def main():
     global orch, gui, transfer, backchannel, iap2, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
+    _boot_milestone("runtime.main_start")
     _verify_persistent()
+    _boot_milestone("runtime.persistent_verified")
 
     # Per-boot инвентарь возможностей + настройки.
     import hardware_inventory
     from settings_service import SettingsService
+    _boot_milestone("hardware_inventory.start")
     hw_caps = hardware_inventory.probe()
+    _boot_milestone("hardware_inventory.ready", enabled_caps=sum(1 for v in hw_caps.values() if v))
     settings = SettingsService()
     session_runner = SessionRunner()
     hci_gate = HciOperationGate()
@@ -1263,17 +1295,22 @@ async def main():
 
     # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
     device = None
+    _boot_milestone("ble.init_start")
     for attempt in range(8):
         try:
             device, _transport = await init_ble(configure_device=_configure)
+            _boot_milestone("ble.init_ready", attempt=attempt + 1)
             break
         except OSError as e:
+            _boot_milestone("ble.init_retry", attempt=attempt + 1, error=type(e).__name__)
             logger.warning("init_ble attempt %d failed (HCI busy?): %s", attempt + 1, e)
             await asyncio.sleep(3)
     if device is None:
+        _boot_milestone("ble.init_failed")
         logger.error("init_ble failed after retries — exiting (supervisor restart)")
         return
     await orch.apply_identity()       # одно имя на все транспорты
+    _boot_milestone("identity.applied")
 
     device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
 
@@ -1286,6 +1323,13 @@ async def main():
     if _gui_enabled and (_use_web_display or _use_mac_display or hw_caps.get("display_drm")):
         try:
             if _use_web_display:
+                _display_kind = "web"
+            elif _use_mac_display:
+                _display_kind = "mac"
+            else:
+                _display_kind = "drm"
+            _boot_milestone("gui.display_start", kind=_display_kind)
+            if _use_web_display:
                 from web_display import WebDisplay
                 _display = WebDisplay()
             elif _use_mac_display:
@@ -1294,6 +1338,7 @@ async def main():
             else:
                 from drm_display import DRMDisplay
                 _display = DRMDisplay()
+            _boot_milestone("gui.display_ready", kind=_display_kind)
             from gui_controller import GuiController
             gui = GuiController(_display,
                                 on_command=_on_command, on_pairing=_on_pairing,
@@ -1313,6 +1358,7 @@ async def main():
                                 on_set_theme=_on_set_theme,
                                 on_power_off=_on_power_off,
                                 on_set_mode=_on_set_mode)
+            _boot_milestone("gui.controller_ready")
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
             # WS-loop), а gui.handle_input делает asyncio.ensure_future -> маршалим в loop рантайма
@@ -1336,10 +1382,13 @@ async def main():
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
             _select_boot_play_now(gui.app_state)
+            _boot_milestone("gui.ready")
         except Exception as e:
             gui = None
+            _boot_milestone("gui.disabled", error=type(e).__name__)
             logger.warning("GUI disabled: %s", e)
     elif not _gui_enabled:
+        _boot_milestone("gui.disabled", reason="env")
         logger.info("GUI disabled by CARTHING_GUI_ENABLE=0")
 
     # Transfer: A2DP relay + backchannel (внутри единого рантайма).
@@ -1349,6 +1398,7 @@ async def main():
     # Production path stays enabled unless this explicit lab switch is used.
     if os.environ.get("CARTHING_TRANSFER_ENABLE", "1") == "1":
         try:
+            _boot_milestone("transfer.start")
             from transfer_service import TransferService
             from transfer_control import TransferControlBackchannel
             if gui is not None:
@@ -1372,11 +1422,14 @@ async def main():
                 Protocol.CLASSIC_AVRCP,
             ):
                 session_runner.register(TransferRouteConnector(protocol, transfer))
+            _boot_milestone("transfer.ready")
         except Exception as e:
             transfer = None
+            _boot_milestone("transfer.disabled", error=type(e).__name__)
             logger.warning("transfer disabled: %s", e)
     else:
         transfer = None
+        _boot_milestone("transfer.disabled", reason="env")
         logger.info("transfer disabled by CARTHING_TRANSFER_ENABLE=0 for clean Bumble lab")
 
     # iAP2/MFi: Apple accessory слой поверх того же Bumble runtime.
@@ -1386,16 +1439,21 @@ async def main():
     # row and pollute the first-pair experiment.
     if os.environ.get("CARTHING_IAP2_ENABLE") == "1":
         try:
+            _boot_milestone("iap2.start")
             from iap2_service import IAP2Service
             iap2 = IAP2Service(device)
             await iap2.start()
+            _boot_milestone("iap2.ready")
         except Exception as e:
             iap2 = None
+            _boot_milestone("iap2.disabled", error=type(e).__name__)
             logger.warning("iAP2 disabled: %s", e)
     else:
+        _boot_milestone("iap2.disabled", reason="env")
         logger.info("iAP2 disabled by lab switch for clean dual-mode audio pairing")
 
     # macOS-источник (Фаза 4, каркас).
+    _boot_milestone("mac_service.start")
     from mac_service import MacService
     mac = MacService(model, on_update=_on_publish)
     trusted_path = getattr(gui.app_state, "trusted_path", None) if gui is not None else None
@@ -1407,10 +1465,12 @@ async def main():
     # [CLAUDE 2026-06-02] Без режимов: на boot поднимаем присутствие, активного маршрута нет.
     if gui is not None:
         gui.show_home()
+    _boot_milestone("mac_service.ready")
 
     # Видимость — ПОСЛЕ transfer.start(): orchestrator перегейтит classic в not-connectable
     # (никакой открытой A2DP-рекламы; directed-к-bonded / тишина по фазе).
     await orch.apply_visibility()
+    _boot_milestone("visibility.applied")
     logger.info("apply_visibility done")
     asyncio.create_task(_resume_bonded_classic_audio())
     asyncio.create_task(_pair_speaker_once())
@@ -1424,6 +1484,7 @@ async def main():
                                classic_discoverable=False)
         logger.info("auto pairing armed (CAR_THING_AUTO_PAIRING=1)")
     asyncio.ensure_future(orch.kick_reconnect())
+    _boot_milestone("reconnect.scheduled")
     logger.info("kick_reconnect scheduled")
 
     # Рендер-цикл — ОТДЕЛЬНАЯ задача (не зависит от input.start, который блокирует loop).
@@ -1492,6 +1553,7 @@ async def main():
                 await asyncio.sleep(1.0)
 
     asyncio.ensure_future(_render_loop())
+    _boot_milestone("render_loop.scheduled")
 
     # Физический ввод (энкодер/кнопки/тач) -> GUI (параллельно рендеру).
     if gui is not None:
@@ -1505,7 +1567,9 @@ async def main():
                 # Headless-режим ниже сохраняет btn_1 (там экрана нет).
                 gui.handle_input(event)
             asyncio.ensure_future(input_handler.start(on_event=_on_input))
+            _boot_milestone("input.scheduled", mode="gui")
         except Exception as e:
+            _boot_milestone("input.disabled", error=type(e).__name__)
             logger.warning("input disabled: %s", e)
     else:
         # Headless: пресет-кнопка 1 = тумблер маршрута (решение владельца 2026-06-10).
@@ -1518,10 +1582,13 @@ async def main():
                     asyncio.create_task(_route_toggle_flip())
 
             asyncio.ensure_future(input_handler.start(on_event=_on_headless_input))
+            _boot_milestone("input.scheduled", mode="headless")
             logger.info("headless input: button 1 = route toggle")
         except Exception as e:
+            _boot_milestone("input.disabled", error=type(e).__name__)
             logger.warning("headless input disabled: %s", e)
 
+    _boot_milestone("runtime.ready")
     logger.info("runtime up — name=%s", identity_service.visible_name())
     await asyncio.get_event_loop().create_future()   # работать вечно
 

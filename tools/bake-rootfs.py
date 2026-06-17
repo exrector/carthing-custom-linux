@@ -25,7 +25,7 @@ REPO_ROOT = TOOLS_DIR.parent                           # .../carthing-release-in
 OVERLAY = REPO_ROOT / "overlay"                        # overlay/ (основной overlay проекта)
 DEFAULT_BASE_BUNDLE = REPO_ROOT / "source" / "base-bundle"  # source/base-bundle
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "a4149788075407912293eee712c22707b349fde7"
+EXPECTED_RUNTIME_TREE_SHA1 = "10c48d6c327e18a1ddb2919c4817241db602cd60"
 EXPECTED_BASE_BOOTFS_SHA256 = "957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e"
 REJECTED_BOOTFS_SHA256 = {
     "7977c31176b8531b27457bf7df23eb9e63c86499f8ef2054d1ed6b7c308259ee":
