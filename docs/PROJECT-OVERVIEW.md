@@ -1,5 +1,15 @@
 # Car Thing — открытая платформа
 
+> **Статус 2026-06-17:** этот файл остаётся обзором/позиционированием проекта и
+> содержит исторические фрагменты старой структуры. Для исполняемой инструкции
+> с нуля используй [`GETTING-STARTED-FROM-ZERO.md`](GETTING-STARTED-FROM-ZERO.md),
+> для текущего flash/bake цикла —
+> [`BUILD-AND-FLASH.md`](BUILD-AND-FLASH.md), для фактического baseline —
+> [`PRODUCT-BASELINE-2026-06-17-QN19.md`](PRODUCT-BASELINE-2026-06-17-QN19.md).
+> Не считать актуальными команды и пути вида `carthing_full_real/`,
+> `source/overlay`, `source/bake-rootfs.py`, `tools/recovery` и
+> `tools/bring-up-network.sh` из старого текста ниже.
+
 **Hook:** Это не «попытка взломать Car Thing». Это **полная открытая платформа**, построенная с нуля: вскрытый Apple MFi-чип (чего не сделал ни один публичный проект), свой Bluetooth-роутер на Bumble, собственный Linux на Buildroot, GUI в DRM без сторонних библиотек — и всё это без закрытых бинарников Spotify.
 
 Самый глубокий реверс-инжиниринг из всех Car Thing проектов на GitHub: каждый чип на плате, каждая шина, каждый протокол.

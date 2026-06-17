@@ -1,6 +1,9 @@
 # Car Thing Custom Linux
 
 > **СБОРКА + ПРОШИВКА (2026-06-16): [docs/BUILD-AND-FLASH.md](docs/BUILD-AND-FLASH.md)** — единый источник истины.
+> **PRODUCT BASELINE (2026-06-17): [docs/PRODUCT-BASELINE-2026-06-17-QN19.md](docs/PRODUCT-BASELINE-2026-06-17-QN19.md)** — текущая P1/P2-архитектура и факты live QN19.
+> **START FROM ZERO: [docs/GETTING-STARTED-FROM-ZERO.md](docs/GETTING-STARTED-FROM-ZERO.md)** — установка зависимостей, `superbird-tool`, прошивка, USB/NCM, SSH, bake.
+> **CLEANUP LEDGER (2026-06-17): [docs/REPOSITORY-CLEANUP-2026-06-17.md](docs/REPOSITORY-CLEANUP-2026-06-17.md)** — что активно, что архив, что нельзя удалять без манифеста.
 > **АКТУАЛЬНОЕ СОСТОЯНИЕ (вход для агентов): [docs/SYSTEM-STATE-2026-06-10.md](docs/SYSTEM-STATE-2026-06-10.md)**
 > Запреты: [INVARIANTS.md](INVARIANTS.md). Тесты/доказательства: [docs/dual-mode-test-plan-2026-06-10.md](docs/dual-mode-test-plan-2026-06-10.md).
 
@@ -147,7 +150,7 @@ In other words: first own userspace completely, then decide whether a kernel rep
 - `carthing_superbird_rootfs_defconfig` validated against Buildroot `2026.02.1`
 - flash bundle generation is scripted to preserve the existing `bootfs.bin` + `env.txt` contract
 - attach -> `hci0` -> Bumble `hci-socket:0` is now live-proven on device `№1`
-- runtime is now configured to autostart with writable `/run/carthing` logs and persistent bond storage on `mmcblk0p1`
+- runtime is now configured to autostart with writable `/run/carthing` logs and persistent bond storage on `mmcblk0p1` (current product baseline; state-on-p2 was reverted)
 - iPhone pairing requires the HID profile layer first; AMS alone is not sufficient for discovery in iOS Settings
 - a real cold boot with the permanent flashed image is now proven:
   - the iPhone pair survives reboot

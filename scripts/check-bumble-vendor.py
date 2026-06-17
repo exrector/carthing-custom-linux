@@ -63,7 +63,6 @@ def main() -> int:
     import a2dp_bridge  # noqa: E402
     import accessory_orchestrator  # noqa: E402
     import carthing_runtime  # noqa: F401
-    import media_remote  # noqa: F401
 
     # A6 (ревью 2026-06-05): гоняем РЕАЛЬНУЮ pairing-фабрику оркестратора,
     # а не синтетический PairingConfig — регрессия runtime-CTKD теперь ловится.

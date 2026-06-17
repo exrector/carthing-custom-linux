@@ -1,4 +1,8 @@
-# BUILD-AND-FLASH — единый источник истины (2026-06-16)
+# BUILD-AND-FLASH — сборка и прошивка текущего образа (2026-06-17)
+
+Если начинаешь с пустой машины или впервые подключаешь Car Thing, сначала читай
+[`GETTING-STARTED-FROM-ZERO.md`](GETTING-STARTED-FROM-ZERO.md). Этот файл ниже
+описывает уже текущий рабочий flash/bake цикл проекта.
 
 Этот документ описывает **текущую рабочую прошивку** Car Thing и полный цикл
 «изменение кода → пересборка → прошивка». Всё что здесь написано — проверено
@@ -34,15 +38,20 @@ stock BL33 (U-Boot)
 
 | Раздел | Сектор | Размер | Содержимое |
 |--------|--------|--------|------------|
-| p1 | 8192 | FAT32 (bootfs.bin) | Image, superbird.dtb, bootargs.txt, U-Boot env |
-| p2 | 352256 | ext4 512MB (rootfs.img) | Buildroot rootfs + наш overlay |
+| p1 | 8192 | FAT32 (bootfs.bin) | U-Boot-readable boot files (`Image`, `superbird.dtb`, `bootargs.txt`) + current small runtime state |
+| p2 | 352256 | ext4 512MB (rootfs.img) | readonly Buildroot rootfs + наш overlay |
+
+Текущий продуктовый baseline 2026-06-17: только p1/p2. p3 не используется.
+`/run/carthing-state` сейчас монтируется с p1/vfat. Коммит `6358ad9`
+про state-on-p2 был откатан в `786e734`; не считать его установленным фактом.
 
 ### Ядро
 
 - Linux 4.9.113, собран с GCC 6.5.0 в NixOS-окружении (JoeyEamigh/nixos-superbird).
 - `CONFIG_EXT4_FS=y`, `CONFIG_MMC=y` — встроены в ядро, модули при загрузке не нужны.
 - Лежит внутри `image/bootfs.bin` (FAT-образ, в git не хранится — только SHA256SUMS).
-- **Пересборка ядра без NixOS-окружения невозможна.** Не пересобирать без причины.
+- **Обычная пересборка rootfs не требует NixOS.** NixOS/Colima/GCC 6.5.0 относятся
+  к отдельной пересборке ядра. Не пересобирать ядро без причины.
 
 ### Python-рантайм
 
@@ -59,7 +68,8 @@ carthing-release-integration/
 │   ├── bootfs.bin             FAT-образ p1: ядро + DTB + env
 │   ├── rootfs.img             ext4 512MB p2: Buildroot + overlay
 │   ├── env.txt                U-Boot переменные окружения
-│   └── SHA256SUMS             хэши всех трёх файлов
+│   ├── bootlogos.bin          logo partition payload (p7)
+│   └── SHA256SUMS             хэши flash-артефактов
 ├── source/
 │   └── base-bundle/           Buildroot baseline rootfs (бинари gitignored)
 ├── overlay/                   наш userspace overlay (Python + init + etc)
@@ -86,25 +96,38 @@ carthing-release-integration/
 
 SHA256SUMS (актуальные):
 ```
-2ff2159a8733759576b4bda9c52e0bfc8cb02b1115766a8379e8f8d610dba76f  bootfs.bin
-f204ac3d535bbc639061c594af1a5f7eaa327ecc1d636a7a63b829a7bd3e1fc0  rootfs.img
+957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e  bootfs.bin
+13b2b14fd15e0e20920513bc786f527f1efb75f71024822fb5467e9eb238c21b  rootfs.img
 bee43a070ad18a764a7a0f97827e6213757976f6b7a8a3987331a9396c196cb9  env.txt
 40a74a8c3fa2d18480dcbc38ddc7f37209da2b1d071d23c8e3f23232aa6f2402  bootlogos.bin
 ```
 
 `bootfs.bin` обновлён 2026-06-17: ядро пересобрано с `CONFIG_AMLOGIC_MEDIA_GE2D=y` → `/dev/ge2d` доступен.
+FAT p1 очищен от macOS AppleDouble/`.fseventsd` metadata и проверен через `fsck_msdos`;
+чистый bootfs sha256: `957f91c3...`.
 Артефакт сборки: `carthing-device-backups/artifacts/kernel-build-ge2d-20260617/`
 Сборщик: Colima + builder контейнер + GCC 6.5.0 (тот же тулчейн что и оригинал).
 
 `bootlogos.bin` — кастомный загрузочный логотип (5 слотов: bootup/burn_mode/bad_charger/shell_mode/overheat).
 Прошивается автоматически в p7 (сектор 319488) как часть `flash.py`.
 
-Runtime tree SHA1 (Python-файлы в overlay): `880bd037b7f43df44ac203b3f6d5089a06ad0320`
+Rootfs `13b2b14f...` запечён 2026-06-17 из `overlay/`: включает GE2D userspace,
+native AAC/SBC libraries (`libhelixaac.so`, `libsbc.so`, `sbc_synth.so`),
+release-quiet debug profile, один `S03-runtime-state` вместо дубля `S11`, и
+vfat state mount options `noatime,nodiratime,flush,errors=remount-ro`.
+Предыдущие rootfs сохранены локально в `image/archive-*/`.
+
+`source/base-bundle/bootfs.bin` синхронизирован с текущим чистым GE2D bootfs
+`957f91c3...`. `tools/bake-rootfs.py` теперь отказывает bake, если base-bundle
+снова содержит известный старый bootfs `7977c311...` или рабочий, но dirty-FAT bootfs
+`2ff2159a...`.
+
+Runtime tree SHA1 (Python-файлы в overlay): `a4149788075407912293eee712c22707b349fde7`
 
 Проверить что у тебя именно эти образы:
 ```sh
 cd (local repo root)
-shasum -a 256 image/bootfs.bin image/rootfs.img image/env.txt | sed 's|image/||g'
+shasum -a 256 image/bootfs.bin image/rootfs.img image/env.txt image/bootlogos.bin | sed 's|image/||g'
 # должно совпасть с image/SHA256SUMS
 ```
 
@@ -179,7 +202,7 @@ python3 tools/bake-rootfs.py
 ```sh
 BUNDLE=$(ls -d flash-bake-unified-stable-* | sort | tail -1)
 cp "$BUNDLE/rootfs.img" image/rootfs.img
-shasum -a 256 image/bootfs.bin image/rootfs.img image/env.txt | \
+shasum -a 256 image/bootfs.bin image/rootfs.img image/env.txt image/bootlogos.bin | \
   sed 's|image/||g' > image/SHA256SUMS
 cat image/SHA256SUMS
 ```
@@ -263,6 +286,11 @@ NCM Gadget (`0x0525:0xa4a1`) может быть виден в ioreg, но en14 
 каждой загрузке → загрузка занимает 10+ минут. Решение: `e2fsck -f -y rootfs.img`
 (или `tools/bake-rootfs.py` делает это автоматически).
 
+Текущий e2tools-путь может оставлять пустые orphan-директории в `/lost+found`
+после удаления старого vendor subtree. Это не мешает boot/runtime и не попадает
+в import path, но для финального release-clean bake нужно заменить e2rm-tree
+механику на более чистую debugfs/генератор-rootfs процедуру.
+
 ### shadow при перепрошивке
 `/etc/shadow` с хэшем пароля "carthing" включён в overlay и копируется при bake.
 До 2026-06-16 — не копировался, пароль терялся при перепрошивке.
@@ -271,6 +299,16 @@ NCM Gadget (`0x0525:0xa4a1`) может быть виден в ioreg, но en14 
 `bake-rootfs.py` вычищает `/var/lib/carthing-state` при каждой сборке.
 До 2026-06-17 — base-bundle мог содержать BT bonds от исходного устройства,
 и все прошитые девайсы «знали» чужие MAC-адреса бондов.
+
+### p1/vfat dirty warning
+Если live `dmesg` показывает `FAT-fs (mmcblk0p1): Volume was not properly
+unmounted`, не делать reboot ради косметических тестов. p1 читает U-Boot, и
+грязная FAT уже приводила к boot-loop.
+
+Текущий canonical `bootfs.bin` (`957f91c3...`) уже исправляет известную причину
+ложного warning: Linux FAT16 state byte в boot sector offset `0x25` должен быть
+`0x00` в чистом образе. При RW mount ядро временно ставит его обратно в `0x01`;
+это нормально, если clean remount-ro/unmount очищает его перед следующим boot.
 
 ### bootlogos.bin отсутствует
 Если `image/bootlogos.bin` не найден, `flash.py` выводит WARNING и пропускает p7.

@@ -2,8 +2,8 @@
   "$schema": "/dev/null",
   "metadataVersion": 1,
   "name": "carthing-custom-linux",
-  "version": "device1-v1-working-2026-05-18",
-  "description": "Custom Buildroot Linux userspace for Superbird; persistent HID pairing and AMS runtime proven after cold boot; reuses bootfs/env and replaces only rootfs.img",
+  "version": "qn19-product-baseline-2026-06-17",
+  "description": "Custom Buildroot Linux userspace for Superbird; P1 FAT boot/state + P2 readonly Buildroot rootfs; GE2D kernel bootfs and baked GE2D/native codec userspace baseline",
   "steps": [
     {
       "type": "bulkcmd",

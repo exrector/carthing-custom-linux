@@ -25,9 +25,21 @@ REPO_ROOT = TOOLS_DIR.parent                           # .../carthing-release-in
 OVERLAY = REPO_ROOT / "overlay"                        # overlay/ (основной overlay проекта)
 DEFAULT_BASE_BUNDLE = REPO_ROOT / "source" / "base-bundle"  # source/base-bundle
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "880bd037b7f43df44ac203b3f6d5089a06ad0320"
+EXPECTED_RUNTIME_TREE_SHA1 = "a4149788075407912293eee712c22707b349fde7"
+EXPECTED_BASE_BOOTFS_SHA256 = "957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e"
+REJECTED_BOOTFS_SHA256 = {
+    "7977c31176b8531b27457bf7df23eb9e63c86499f8ef2054d1ed6b7c308259ee":
+        "old non-booting bootfs; see INVARIANTS.md bootloop recovery note",
+    "2ff2159a8733759576b4bda9c52e0bfc8cb02b1115766a8379e8f8d610dba76f":
+        "dirty FAT bootfs with macOS AppleDouble/.fseventsd metadata; clean it before baking",
+    "28f4b24ae96438453e38898adb4893ca70eaa2b964e2d498d85566d92c21c5b6":
+        "intermediate bootfs with macOS metadata removed but Linux FAT16 dirty-state byte still set",
+}
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
+    "libhelixaac.so",
+    "libsbc.so",
+    "sbc_synth.so",
 )
 RETIRED_RUNTIME_FILES = (
     "classic_profile_probe.py",
@@ -42,6 +54,7 @@ RETIRED_INIT_FILES = (
     ":S50-carthing-remote.disabled",
     "S50-carthing-remote",
     "S50-carthing-remote.disabled",
+    "S11-runtime-state",
     # S60 — ошибочный дублёр автостарта (2026-06-10): настоящий стартер =
     # init-wrapper -> disabled-S50-carthing-remote. Вычищать из образов.
     "S60-carthing-runtime",
@@ -98,6 +111,8 @@ def e2copy_file(image: Path, src: Path, dest: str, *, mode: str = "0644") -> Non
 
 def e2read_file(image: Path, src: str, dest: Path) -> None:
     run(["e2cp", f"{image}:{src}", str(dest)])
+    if not dest.exists():
+        raise SystemExit(f"e2cp reported success but did not extract {src}")
 
 
 def e2rm_file(image: Path, dest: str) -> None:
@@ -161,6 +176,11 @@ def patch_default_carthing(image: Path) -> None:
             "CARTHING_A2DP_RECEIVER=": "CARTHING_A2DP_RECEIVER=",
             "CARTHING_A2DP_NAME=": "CARTHING_A2DP_NAME=",
             "CARTHING_A2DP_AUTOCONNECT=": "CARTHING_A2DP_AUTOCONNECT=0",
+            "CARTHING_STATE_MOUNT_OPTIONS=": "CARTHING_STATE_MOUNT_OPTIONS=rw,noatime,nodiratime,flush,errors=remount-ro",
+            "CARTHING_DEBUG_PROFILE=": "CARTHING_DEBUG_PROFILE=quiet",
+            "CARTHING_DEBUG_HTTP_ENABLE=": "CARTHING_DEBUG_HTTP_ENABLE=0",
+            "CARTHING_DEBUG_TELNET_ENABLE=": "CARTHING_DEBUG_TELNET_ENABLE=0",
+            "CARTHING_REVERSE_AGENT_ENABLE=": "CARTHING_REVERSE_AGENT_ENABLE=0",
             # Карантин снят решением владельца 2026-06-10 (автостарт =
             # S60-carthing-runtime; рубильник: no-autostart на state-разделе).
             "CARTHING_BUMBLE_QUARANTINE=": "CARTHING_BUMBLE_QUARANTINE=0",
@@ -393,6 +413,20 @@ def copy_base_bundle(base: Path, output: Path) -> None:
         src = base / name
         if not src.exists():
             raise SystemExit(f"missing base bundle artifact: {src}")
+
+    bootfs_hash = sha256(base / "bootfs.bin")
+    if bootfs_hash in REJECTED_BOOTFS_SHA256:
+        raise SystemExit(
+            "rejected base-bundle bootfs: "
+            f"{bootfs_hash} ({REJECTED_BOOTFS_SHA256[bootfs_hash]}). "
+            "Refresh source/base-bundle from the current image/ hardware baseline."
+        )
+    if bootfs_hash != EXPECTED_BASE_BOOTFS_SHA256:
+        raise SystemExit(
+            f"unexpected base-bundle bootfs sha256: {bootfs_hash} != "
+            f"{EXPECTED_BASE_BOOTFS_SHA256}. Update the bake guard only after "
+            "capturing the new kernel/bootfs provenance."
+        )
 
     output.mkdir(parents=True, exist_ok=False)
     for name in required:

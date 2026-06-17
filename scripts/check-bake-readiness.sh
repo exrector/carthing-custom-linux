@@ -3,6 +3,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+export PYTHONDONTWRITEBYTECODE=1
+PYCACHE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/carthing-bake-readiness-pycache.XXXXXX")"
+trap 'rm -rf "$PYCACHE_DIR"' EXIT
+export PYTHONPYCACHEPREFIX="$PYCACHE_DIR"
 
 python3 scripts/smoke-route-graph.py
 python3 scripts/check-bumble-vendor.py

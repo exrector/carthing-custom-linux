@@ -356,10 +356,12 @@ def check_route_activation_intent():
             on_route_output_select=lambda key: events.append(("output", key)),
             on_route_activate=lambda: events.append(("activate", None)),
         )
-        dispatcher.dispatch("route_input_select", "iphone")
+        # Source rows are identity-keyed by address (`source:<MAC>`) so a
+        # stale human id like "iphone" must not be treated as a valid route key.
+        dispatcher.dispatch("route_input_select", "source:10:A2:D3:83:82:50")
         dispatcher.dispatch("route_output_select", "fosi")
-        assert events == [("input", "iphone"), ("output", "fosi")]
-        assert app_state.route_input == "iphone"
+        assert events == [("input", "source:10:A2:D3:83:82:50"), ("output", "fosi")]
+        assert app_state.route_input == "source:10:A2:D3:83:82:50"
         assert app_state.route_output == "fosi"
         assert app_state.route_active is False
         dispatcher.dispatch("route_activate")

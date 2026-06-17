@@ -13,11 +13,13 @@ image/bootfs.bin
 image/bootlogos.bin
 image/boot/
 image/manual/
+image/archive-*/
 # source/base-bundle — Buildroot baseline (бинари, не в git)
 source/base-bundle/*.img
 source/base-bundle/bootfs.bin
 source/base-bundle/boot/
 source/base-bundle/manual/
+source/base-bundle/archive-*/
 
 # вложенные репозитории (перенесены внутрь 2026-06-15, не часть этого репо).
 # ВНИМАНИЕ: carthing-custom-linux/.git — это git-движок самого release-integration.

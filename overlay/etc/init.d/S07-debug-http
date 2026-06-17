@@ -2,6 +2,8 @@
 set -eu
 
 . /etc/default/carthing
+runtime_env=${CARTHING_DEBUG_RUNTIME_PROFILE:-/run/carthing/debug-runtime.env}
+[ -r "$runtime_env" ] && . "$runtime_env"
 
 [ "${CARTHING_DEBUG_HTTP_ENABLE:-0}" = "1" ] || exit 0
 

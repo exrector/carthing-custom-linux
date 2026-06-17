@@ -5,6 +5,7 @@ set -eu
 
 state_device=${CARTHING_STATE_DEVICE:-/dev/mmcblk0p1}
 state_mount=${CARTHING_STATE_MOUNT:-/run/carthing-state}
+state_options=${CARTHING_STATE_MOUNT_OPTIONS:-rw,noatime,nodiratime,flush,errors=remount-ro}
 keys_file=${CARTHING_RUNTIME_KEYS:-$state_mount/carthing/keys.json}
 keys_dir=$(dirname "$keys_file")
 profile_dir=${CARTHING_PROFILE_DIR:-$state_mount/carthing/profiles}
@@ -12,7 +13,7 @@ profile_dir=${CARTHING_PROFILE_DIR:-$state_mount/carthing/profiles}
 mkdir -p "$state_mount"
 
 if ! awk -v target="$state_mount" '$2 == target { found = 1 } END { exit(found ? 0 : 1) }' /proc/mounts; then
-    mount -t vfat "$state_device" "$state_mount"
+    mount -t vfat -o "$state_options" "$state_device" "$state_mount"
 fi
 
 mkdir -p "$keys_dir" "$profile_dir" /run/carthing
