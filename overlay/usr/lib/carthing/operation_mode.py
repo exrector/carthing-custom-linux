@@ -24,6 +24,8 @@
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 PLAYNOW = "playnow"
 COMMUTATOR = "commutator"
 RESERVED = "reserved"
@@ -36,6 +38,34 @@ LABELS = {PLAYNOW: "Play Now", COMMUTATOR: "Коммутатор", RESERVED: "Р
 DEFAULT = PLAYNOW
 
 
+@dataclass(frozen=True, slots=True)
+class ModeResources:
+    """Runtime resources a product mode is allowed to own."""
+
+    gui: bool = True
+    ble_control: bool = True
+    notifications: bool = True
+    a2dp_listener: bool = True
+    speaker_standby: bool = False
+    receiver_stream: bool = False
+    route_patchbay: bool = False
+    speaker_scan: bool = False
+    usb_profile: str = "ncm"
+
+    def as_dict(self) -> dict:
+        return {
+            "gui": self.gui,
+            "ble_control": self.ble_control,
+            "notifications": self.notifications,
+            "a2dp_listener": self.a2dp_listener,
+            "speaker_standby": self.speaker_standby,
+            "receiver_stream": self.receiver_stream,
+            "route_patchbay": self.route_patchbay,
+            "speaker_scan": self.speaker_scan,
+            "usb_profile": self.usb_profile,
+        }
+
+
 def current(settings) -> str:
     """Активный режим из settings (с откатом на DEFAULT)."""
     try:
@@ -43,6 +73,30 @@ def current(settings) -> str:
     except Exception:
         mode = DEFAULT
     return mode if mode in ALL else DEFAULT
+
+
+def normalize(mode: str | None) -> str:
+    mode = str(mode or DEFAULT).strip()
+    return mode if mode in ALL else DEFAULT
+
+
+def resources(mode: str | None) -> ModeResources:
+    """Desired resource contract for a mode.
+
+    Keep AVDTP listener as a transitional baseline until lazy route startup is
+    proved; commutator-only work is speaker standby/receiver/patchbay/scan.
+    """
+    mode = normalize(mode)
+    if mode == COMMUTATOR:
+        return ModeResources(
+            speaker_standby=True,
+            receiver_stream=True,
+            route_patchbay=True,
+            speaker_scan=True,
+        )
+    if mode == RESERVED:
+        return ModeResources(usb_profile="reserved")
+    return ModeResources()
 
 
 def commutator_enabled(settings) -> bool:

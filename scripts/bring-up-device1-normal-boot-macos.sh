@@ -30,6 +30,14 @@ USB_ROUTE_CIDR=${USB_ROUTE_CIDR:-172.16.42.0/24}
 
 bsd_name=
 
+as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --bsd)
@@ -82,11 +90,11 @@ pin_route() {
     attempts=3
     while [ "$attempts" -gt 0 ]; do
         attempts=$((attempts - 1))
-        sudo route -n delete -host "$ROOT_DEFAULT_IP" >/dev/null 2>&1 || true
-        sudo route -n delete -host "$ROOT_STAGE2_IP" >/dev/null 2>&1 || true
-        sudo route -n delete -net "$USB_ROUTE_CIDR" >/dev/null 2>&1 || true
-        sudo route -n add -net "$USB_ROUTE_CIDR" -interface "$bsd_name" >/dev/null 2>&1 \
-            || sudo route -n change -net "$USB_ROUTE_CIDR" -interface "$bsd_name" >/dev/null 2>&1 \
+        as_root route -n delete -host "$ROOT_DEFAULT_IP" >/dev/null 2>&1 || true
+        as_root route -n delete -host "$ROOT_STAGE2_IP" >/dev/null 2>&1 || true
+        as_root route -n delete -net "$USB_ROUTE_CIDR" >/dev/null 2>&1 || true
+        as_root route -n add -net "$USB_ROUTE_CIDR" -interface "$bsd_name" >/dev/null 2>&1 \
+            || as_root route -n change -net "$USB_ROUTE_CIDR" -interface "$bsd_name" >/dev/null 2>&1 \
             || true
 
         default_if=$(route_iface "$ROOT_DEFAULT_IP")
@@ -111,10 +119,10 @@ fi
 
 echo "host_bsd_name: $bsd_name"
 echo "host_assign_ip: $HOST_USB_IP/$USB_NETMASK"
-sudo ifconfig "$bsd_name" "$HOST_USB_IP" netmask "$USB_NETMASK" up
+as_root ifconfig "$bsd_name" "$HOST_USB_IP" netmask "$USB_NETMASK" up
 
 for ip in "$ROOT_DEFAULT_IP" "$ROOT_STAGE2_IP"; do
-    sudo arp -d "$ip" >/dev/null 2>&1 || true
+    as_root arp -d "$ip" >/dev/null 2>&1 || true
 done
 
 route_ok=0

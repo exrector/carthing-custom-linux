@@ -294,6 +294,16 @@ macOS may route `172.16.42.77` through a VPN `utun*` interface. The bring-up
 script fixes that by assigning `172.16.42.1/24` to the NCM interface and pinning
 the route back to that interface.
 
+On the development Mac, install the persistent route watchdog once:
+
+```sh
+scripts/install-carthing-usb-route-watch-macos.sh
+```
+
+It runs as `com.exrector.carthing.usb-route-watch` and keeps the USB route
+pinned without disabling VPN. The manual bring-up script remains the immediate
+fallback.
+
 ## SSH into the device
 
 After USB networking is up:

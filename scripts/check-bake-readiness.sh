@@ -11,6 +11,7 @@ export PYTHONPYCACHEPREFIX="$PYCACHE_DIR"
 python3 scripts/smoke-route-graph.py
 python3 scripts/check-bumble-vendor.py
 python3 scripts/check-route-architecture.py
+python3 scripts/check-operation-mode-contract.py
 python3 - <<'PY'
 import importlib.util
 from pathlib import Path

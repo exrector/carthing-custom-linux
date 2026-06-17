@@ -1,6 +1,6 @@
 # Mode-Orchestrated Runtime Plan — QN19 — 2026-06-17
 
-Status: proposed workstream after `qn19-early-gui-2026-06-17`.
+Status: first implementation slice landed after `qn19-early-gui-2026-06-17`.
 
 This is the larger task that should group the next related changes. The goal is
 not another isolated boot tweak; the goal is to make the selected product mode
@@ -14,18 +14,32 @@ own runtime resources.
 | `commutator` | Full audio switchboard/router. | Everything in Play Now plus explicit route graph, selected speaker standby/connection, A2DP sink/source, AVRCP backchannel, codec/relay path. | hidden routes not requested by the active session. |
 | `reserved` | Future USB-oriented slot. | For now behaves like Play Now. | Bluetooth switchboard behavior unless the future USB session explicitly asks for it. |
 
-## Current Code Facts
+## Implemented Slice — 2026-06-17
 
-- `operation_mode.py` already defines `PLAYNOW`, `COMMUTATOR`, `RESERVED`, and
-  `DEFAULT = PLAYNOW`.
-- `AppState` still initializes `operation_mode` as `"commutator"` before runtime
-  loads settings. This should be aligned with `operation_mode.DEFAULT`.
-- `TransferService.start()` always installs SDP records and starts the AVDTP
-  listener, then only gates the speaker standby loop by `operation_mode`.
-- `carthing_runtime._on_set_mode()` can start or stop the standby loop live, but
-  mode selection is not yet a central session/resource owner.
-- `_on_session_select()` is a no-op, while route activation, Play Now selection,
-  transfer state, and operation mode live in separate partial mechanisms.
+- `operation_mode.py` defines the product modes and an explicit
+  `ModeResources` contract.
+- `AppState.operation_mode` defaults to `operation_mode.DEFAULT` (`playnow`).
+- `RuntimeModel.bt_block()` publishes `operation_mode` and `mode_resources`.
+- `TransferService.apply_operation_mode()` owns standby-loop, receiver-stream,
+  speaker-scan and local-sink teardown for Play Now.
+- `carthing_runtime._apply_operation_mode()` is the single runtime path used by
+  boot, settings, and route activation.
+- Selected external route activation intentionally enters `commutator`; Play Now
+  selection returns to `playnow`.
+- `scripts/check-operation-mode-contract.py` is included in
+  `scripts/check-bake-readiness.sh`.
+- QN19 live proof after reboot: `operation_mode=playnow`,
+  `speaker_standby=false`, `receiver_stream=false`, `route_patchbay=false`,
+  `speaker_scan=false`, and all commutator `actual_*` indicators false.
+
+## Current Remaining Code Facts
+
+- AVDTP listener still starts at boot as a transitional compatibility baseline.
+  It is published separately as `a2dp_listener=true` and `actual_a2dp_listener=true`.
+- `transfer_active` remains a legacy broad flag and should not be used as proof
+  that a speaker route is active.
+- Full Play Now -> Коммутатор -> Play Now route-load proof remains the next live
+  slice before lazy-starting the AVDTP/SDP surface.
 
 ## Desired Contract
 

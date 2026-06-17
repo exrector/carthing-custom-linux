@@ -15,6 +15,7 @@ import asyncio
 import logging
 
 import identity_service
+import operation_mode
 from a2dp_bridge import A2DPBridge
 from app_state import normalize_address
 
@@ -61,16 +62,97 @@ class TransferService:
             self.bridge.state.transfer_active = True
         except Exception:
             pass
-        # [CLAUDE 2026-06-13] Standby/пейджинг колонок — ТОЛЬКО в режиме коммутатора.
-        # В Play Now устройство не гоняет радио по кругу (нет «PAGE_TIMEOUT в цикле»).
-        import operation_mode
-        _mode = getattr(self.bridge.state, "operation_mode", operation_mode.DEFAULT)
-        if _mode == operation_mode.COMMUTATOR:
-            self.bridge.start_standby_loop()
-            logger.info("transfer: commutator mode -> standby loop started")
-        else:
-            logger.info("transfer: play-now mode -> commutator/standby NOT started")
+        await self.apply_operation_mode(
+            getattr(self.bridge.state, "operation_mode", operation_mode.DEFAULT),
+            reason="transfer.start",
+        )
         await self.orch.on_a2dp_state(True)
+
+    def _cancel_standby_loop(self):
+        task = getattr(self.bridge, "_standby_task", None)
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _cancel_receiver_tasks(self):
+        task = getattr(self.bridge, "_receiver_retry_task", None)
+        if task is not None and not task.done():
+            task.cancel()
+        for runtime in list(getattr(self.bridge, "_speaker_runtimes", {}).values()):
+            task = getattr(runtime, "connect_task", None)
+            if task is not None and not task.done():
+                task.cancel()
+
+    async def _stop_all_receiver_streams(self):
+        self._cancel_receiver_tasks()
+        for address in list(getattr(self.bridge, "_speaker_runtimes", {}).keys()):
+            try:
+                await self.bridge.stop_receiver_stream(address)
+            except Exception as exc:
+                logger.info("receiver stream stop ignored for %s: %s", address, exc)
+        try:
+            await self.bridge.stop_receiver_stream()
+        except Exception as exc:
+            logger.info("receiver route clear ignored: %s", exc)
+
+    def resource_state(self):
+        standby_task = getattr(self.bridge, "_standby_task", None)
+        runtimes = list(getattr(self.bridge, "_speaker_runtimes", {}).values())
+        receiver_stream = any(
+            getattr(getattr(runtime, "connector", None), "rtp_channel", None) is not None
+            for runtime in runtimes
+        )
+        receiver_connecting = any(
+            getattr(runtime, "connect_task", None) is not None
+            and not runtime.connect_task.done()
+            for runtime in runtimes
+        )
+        speaker_scan = any(
+            task is not None and not task.done()
+            for task in (
+                getattr(self.bridge, "_scan_task", None),
+                getattr(self.bridge, "_enroll_task", None),
+                self._speaker_enroll_task,
+            )
+        )
+        return {
+            "actual_standby_loop": standby_task is not None and not standby_task.done(),
+            "actual_receiver_stream": receiver_stream,
+            "actual_receiver_connecting": receiver_connecting,
+            "actual_a2dp_listener": bool(getattr(self.bridge, "listener", None)),
+            "actual_speaker_scan": speaker_scan,
+            "actual_source_stream": bool(getattr(self.bridge, "source_stream_active", False)),
+            "packets_forwarded": int(getattr(self.bridge, "packets_forwarded", 0)),
+            "packets_dropped": int(getattr(self.bridge, "packets_dropped", 0)),
+        }
+
+    async def apply_operation_mode(self, mode, reason=""):
+        mode = operation_mode.normalize(mode)
+        desired = operation_mode.resources(mode)
+        try:
+            self.bridge.state.operation_mode = mode
+        except Exception:
+            pass
+        if desired.speaker_standby:
+            self.bridge.start_standby_loop()
+        else:
+            self._cancel_standby_loop()
+            await self._stop_all_receiver_streams()
+            await self.stop_speaker_enrollment()
+            try:
+                self.bridge.local_sink_enabled = False
+            except Exception:
+                pass
+            self.model.audio_sink = "builtin"
+        resources = desired.as_dict()
+        resources.update(self.resource_state())
+        self.model.set_operation_mode(mode, resources)
+        logger.info(
+            "transfer mode applied: mode=%s reason=%s resources=%s",
+            mode,
+            reason or "-",
+            resources,
+        )
+        self._sync()
 
     async def start_speaker_enrollment(self):
         if self._speaker_enroll_task is not None and not self._speaker_enroll_task.done():

@@ -132,7 +132,7 @@ release-quiet debug profile, boot profiling markers, precompiled Python bytecode
 `2ff2159a...`, intermediate dirty-state bootfs `28f4b24a...` или GE2D bootfs
 `957f91c3...` с vendor Android bootargs.
 
-Runtime tree SHA1 (Python-файлы в overlay): `12d39cc9032a1b88f2a452744d4a68198ae768d5`
+Runtime tree SHA1 (Python-файлы в overlay): `e3a530efa4bfd45be7335091831738ca342342af`
 
 Проверить что у тебя именно эти образы:
 ```sh

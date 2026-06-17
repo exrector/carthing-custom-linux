@@ -80,6 +80,8 @@ class RuntimeModel:
     def __init__(self):
         self.session = MediaSession()
         self._active_session = "remote"
+        self.operation_mode = "playnow"
+        self.mode_resources = {}
         self.power_tier = "boot"
         self.mode_status = "remote"
         # AudioRoute: куда идёт звук (builtin = телефон сам; speaker = Transfer-relay).
@@ -167,6 +169,10 @@ class RuntimeModel:
         self.route_cables = []
         self.route_active = False
 
+    def set_operation_mode(self, mode, resources=None):
+        self.operation_mode = str(mode or "playnow")
+        self.mode_resources = dict(resources or {})
+
     # ── уведомления (зеркало iPhone) ─────────────────────────────────────────
     def add_notification(self, uid, app, title, body=""):
         # title = содержание (у Напоминаний — сам текст; у Сообщений — отправитель);
@@ -212,6 +218,8 @@ class RuntimeModel:
                               "last": (self.notifications[-1]["title"] if self.notifications else None)},
             "active_session": self.active_session,
             "device_mode": self.device_mode,
+            "operation_mode": self.operation_mode,
+            "mode_resources": dict(self.mode_resources),
             "mode_status": self.mode_status,
             "power_tier": self.power_tier,
             "transfer_active": self.transfer_active,

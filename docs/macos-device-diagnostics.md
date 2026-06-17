@@ -4,8 +4,19 @@
 
 ## FIRST RULE ON THIS MAC
 
+The preferred steady-state fix is the route watchdog:
+
+```sh
+scripts/install-carthing-usb-route-watch-macos.sh
+```
+
+It installs `com.exrector.carthing.usb-route-watch` as a root LaunchDaemon. The
+daemon does not touch VPN state; it only pins the specific Car Thing USB subnet
+route back to the current `Exrector QN19` BSD interface.
+
 If device `№1` was replugged in normal boot and `NCM Gadget` exists in
-`ioreg`, do not wait for `en14` or routing to repair themselves.
+`ioreg`, do not wait for `en14` or routing to repair themselves. If the daemon is
+not installed or you need an immediate one-shot repair, run the manual fallback.
 
 Do this first:
 

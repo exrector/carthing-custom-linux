@@ -47,6 +47,10 @@ import identity_service
 _record_import("identity_service", _t_import)
 
 _t_import = time.monotonic()
+import operation_mode
+_record_import("operation_mode", _t_import)
+
+_t_import = time.monotonic()
 from runtime_model import RuntimeModel
 _record_import("runtime_model", _t_import)
 
@@ -454,6 +458,54 @@ def _select_boot_play_now(app_state):
         logger.warning("boot Play Now selection failed: %s", exc)
 
 
+def _mode_resource_snapshot(mode=None):
+    mode = operation_mode.normalize(mode or getattr(model, "operation_mode", operation_mode.DEFAULT))
+    resources = operation_mode.resources(mode).as_dict()
+    if transfer is not None and hasattr(transfer, "resource_state"):
+        try:
+            resources.update(transfer.resource_state())
+        except Exception as exc:
+            logger.info("mode resource snapshot ignored transfer state: %s", exc)
+    if route_patchbay is not None:
+        try:
+            resources["actual_route_patchbay"] = bool(route_patchbay.current_cables())
+        except Exception:
+            resources["actual_route_patchbay"] = False
+    return resources
+
+
+async def _apply_operation_mode(mode, persist=False, reason=""):
+    mode = operation_mode.normalize(mode)
+    if gui is not None:
+        try:
+            gui.app_state.operation_mode = mode
+        except Exception:
+            pass
+    if settings is not None and persist:
+        settings.set("operation_mode", mode)
+    if transfer is not None and hasattr(transfer, "apply_operation_mode"):
+        await transfer.apply_operation_mode(mode, reason=reason)
+    else:
+        model.set_operation_mode(mode, operation_mode.resources(mode).as_dict())
+    if mode != operation_mode.COMMUTATOR:
+        if route_patchbay is not None:
+            try:
+                await route_patchbay.deactivate()
+            except Exception as exc:
+                logger.warning("mode teardown: patchbay deactivate failed: %s", exc)
+        if session_runner is not None:
+            try:
+                await session_runner.stop_current()
+            except Exception as exc:
+                logger.warning("mode teardown: session stop failed: %s", exc)
+        model.clear_route_plan()
+    resources = _mode_resource_snapshot(mode)
+    model.set_operation_mode(mode, resources)
+    _boot_milestone("mode.applied", mode=mode, reason=reason or "-")
+    logger.info("operation mode applied: mode=%s reason=%s resources=%s", mode, reason or "-", resources)
+    _on_publish()
+
+
 def _unsupported_route_protocols(plan):
     return [
         protocol for protocol in plan.required_protocols
@@ -477,12 +529,14 @@ async def _activate_route():
 
     # 2) Маршрут не выбран целиком -> остаёмся выключенными (звук на встроенном).
     if not route_input or not route_output:
+        await _apply_operation_mode(operation_mode.PLAYNOW, persist=True, reason="route_empty")
         model.audio_sink = "builtin"
         _on_publish()
         return
 
     # 3) Выход = сам Car Thing -> Play Now (control по BLE), без A2DP/patchbay.
     if route_output == getattr(app_state, "SELF_OUTPUT_KEY", "carthing"):
+        await _apply_operation_mode(operation_mode.PLAYNOW, persist=True, reason="route_playnow")
         model.audio_sink = "builtin"
         logger.info("route active: %s -> Car Thing (Play Now / BLE control)", route_input)
         _on_publish()
@@ -506,6 +560,7 @@ async def _activate_route():
         logger.warning("route rejected: transport adapter not implemented for %s", readable)
         _on_publish()
         return
+    await _apply_operation_mode(operation_mode.COMMUTATOR, persist=True, reason="route_external")
     if route_patchbay is not None:
         try:
             await route_patchbay.activate(routed, registry)
@@ -668,6 +723,14 @@ async def _activate_selected_route_output():
         return
     ro = str(getattr(gui.app_state, "route_output", "") or "").strip()
     self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
+    lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
+    lineout_enabled = os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1"
+    external_output = bool(ro and ro != self_key and (ro != lineout_key or lineout_enabled))
+    await _apply_operation_mode(
+        operation_mode.COMMUTATOR if external_output else operation_mode.PLAYNOW,
+        persist=True,
+        reason="route_activate",
+    )
     await _apply_route_output(ro)
     # [CLAUDE 2026-06-11] СЕРИАЛИЗАЦИЯ page: если колонка ещё дозванивается,
     # ждём её таск — контроллер делает только один page за раз, параллельный
@@ -680,9 +743,7 @@ async def _activate_selected_route_output():
         except Exception:
             pass
     source_up = getattr(transfer.bridge, "_source_connection", None) is not None
-    lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
-    lineout_enabled = os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1"
-    if ro and ro != self_key and (ro != lineout_key or lineout_enabled):
+    if external_output:
         if not source_up:
             await _apply_route_command("connect")
     else:
@@ -746,27 +807,13 @@ def _on_power_off():
 
 
 def _on_set_mode(new):
-    # [CLAUDE 2026-06-13] Выбрать КОНКРЕТНЫЙ режим из подпунктов настроек.
-    # Персист + применить (поднять/погасить коммутатор без рестарта).
-    import operation_mode as _opmode
-    if new not in _opmode.ALL:
+    # Выбрать конкретный product-mode из настроек.
+    # Все ресурсные эффекты идут через единый apply-путь, чтобы boot/routes/settings
+    # не расходились между собой.
+    if new not in operation_mode.ALL:
         return
-    if gui is not None:
-        gui.app_state.operation_mode = new
-    if settings is not None:
-        settings.set("operation_mode", new)
-    logger.info("operation mode -> %s", new)
-    async def _apply():
-        if transfer is None or getattr(transfer, "bridge", None) is None:
-            return
-        if new == _opmode.COMMUTATOR:
-            transfer.bridge.start_standby_loop()
-        else:
-            task = getattr(transfer.bridge, "_standby_task", None)
-            if task is not None and not task.done():
-                task.cancel()
-            await transfer.bridge.stop_receiver_stream()
-    asyncio.ensure_future(_apply())
+    logger.info("operation mode request -> %s", new)
+    asyncio.ensure_future(_apply_operation_mode(new, persist=True, reason="settings"))
 
 
 def _on_set_off_timeout(sec):
@@ -1471,8 +1518,11 @@ async def main():
                 from app_state import AppState
                 app_state = AppState()
                 _select_boot_play_now(app_state)
-            import operation_mode as _opmode
-            app_state.operation_mode = _opmode.current(settings)  # [CLAUDE 2026-06-13] режим из settings ДО старта циклов
+            app_state.operation_mode = operation_mode.current(settings)  # режим из settings ДО старта циклов
+            model.set_operation_mode(
+                app_state.operation_mode,
+                operation_mode.resources(app_state.operation_mode).as_dict(),
+            )
             logger.info("operation mode: %s", app_state.operation_mode)
             transfer = TransferService(device, app_state, orch, model, on_change=_on_publish, hci_gate=hci_gate)
             backchannel = TransferControlBackchannel(_emit_source_intent, model=model)
@@ -1480,6 +1530,7 @@ async def main():
             # раньше handler не был подключён, команды умирали в логе моста).
             transfer.bridge.speaker_command_handler = backchannel.handle_speaker_command
             await transfer.start()        # SDP + AVDTP listener (видимость ещё перегейтим)
+            await _apply_operation_mode(app_state.operation_mode, persist=False, reason="boot")
             for protocol in (
                 Protocol.CLASSIC_A2DP_SINK,
                 Protocol.CLASSIC_A2DP_SOURCE,

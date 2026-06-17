@@ -31,13 +31,34 @@ Current recovery key set includes:
 
 ## Host Bring-Up
 
-First rule on this Mac:
+Normal rule on this Mac:
+
+- keep `com.exrector.carthing.usb-route-watch` installed as a root LaunchDaemon
+- it runs every 10 seconds, detects `Exrector QN19` in IORegistry, assigns
+  `172.16.42.1/24` to the current USB BSD interface, and pins
+  `172.16.42.0/24` to that interface
+- it does not disable, stop, or reconfigure VPN; it only installs the more
+  specific Car Thing USB route
+
+Install or refresh it from the repo root:
+
+```sh
+scripts/install-carthing-usb-route-watch-macos.sh
+```
+
+Uninstall:
+
+```sh
+scripts/install-carthing-usb-route-watch-macos.sh --uninstall
+```
+
+Manual fallback:
 
 - if device `№1` was replugged in normal boot, do not wait for `en14` or the route to recover by themselves
 - force host-side bring-up first
 - only after that decide whether the target itself is still broken
 
-On this Mac host, bring the USB link up with:
+Run:
 
 ```sh
 ./scripts/bring-up-device1-normal-boot-macos.sh
@@ -53,6 +74,15 @@ Typical bad host-side state that still requires this script:
 - `NCM Gadget` exists in `ioreg`
 - `en14` exists but shows `status: inactive`
 - route to `172.16.42.77` points to `utun*`
+
+With the LaunchDaemon installed, these states should self-heal. If they do not,
+run the manual fallback once and inspect:
+
+```sh
+launchctl print system/com.exrector.carthing.usb-route-watch
+tail -50 /var/log/carthing-usb-route-watch.log
+tail -50 /var/log/carthing-usb-route-watch.err
+```
 
 ## Recommended Access Order
 

@@ -12,6 +12,7 @@ active source on non-media desktops.
 import json
 import os
 from pathlib import Path
+import operation_mode
 from runtime_paths import device_name
 import state_paths
 
@@ -463,7 +464,7 @@ class AppState:
         self.speaker_pairing_status = ""
         self.pairing_message = ""
         self.assistant_state = "idle"   # idle|listening|thinking|responding (Фаза 5)
-        self.operation_mode = "commutator"   # [CLAUDE 2026-06-13] playnow|commutator|reserved; рантайм берёт из settings
+        self.operation_mode = operation_mode.DEFAULT
         self.power_unplug_status = "idle"   # idle|preparing|ready|error
         self.power_unplug_message = ""
         # Фактическое состояние трубы (RUNBOOK задача №5, шаг 1):
