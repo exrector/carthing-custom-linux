@@ -7,7 +7,7 @@
 
 ## Ожидает бейка
 
-*(пусто после локального bake `flash-bake-unified-stable-20260617-235414`; устройство не прошивалось этим bundle)*
+*(пусто после локального bake `flash-bake-unified-stable-20260618-013904`; устройство не прошивалось этим bundle)*
 
 ---
 
@@ -24,3 +24,4 @@
 | 2026-06-17 | Логотип при загрузке — наш (вождь, 480×800 RGB565), normal boot slot `bootup_spotify` | `image/bootlogos.bin` + `tools/flash.py` пишет в сектор 319488 при прошивке |
 | 2026-06-17 | BT-бонды не переносятся между устройствами | `bake-rootfs.py` вычищает `/var/lib/carthing-state` при каждом бейке |
 | 2026-06-17 | Mode-aware resource policy: `resource_policy.py`, CPU governor diagnostics, optional `S11-zram`, runtime-state `resource_policy`, ALS/proximity diagnostics, and safe-unplug через центральный Play Now teardown | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260617-235414`, rootfs sha256 `362c4290d37cb7a5b1a93c2def85d9c0bd4d504487f7cfaa943bc327535ec17e`, runtime tree sha1 `e3e456c79ad0712a3c54549b71acd97dc4e7b6b1` |
+| 2026-06-18 | Route-load/manual-background-policy: route-scoped Fosi standby, Play Now releases speaker ACL, periodic `LinkManager` polling disabled, `speaker_scan` manual/event-driven, proof script `tools/route-load-proof.sh`, iPhone stickiness preserved | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-013904`, rootfs sha256 `f5b6b1994c45174fef66d8947b0dd49679ebebe93bf70f5d7e545a512cbfb4ac`, runtime tree sha1 `856683dc1506cab30070c0229ca44aef1330ed48`; proof `docs/ROUTE-LOAD-PROOF-2026-06-18.md` |

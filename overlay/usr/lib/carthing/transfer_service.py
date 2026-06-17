@@ -68,10 +68,20 @@ class TransferService:
         )
         await self.orch.on_a2dp_state(True)
 
-    def _cancel_standby_loop(self):
+    async def _stop_standby_loop(self):
         task = getattr(self.bridge, "_standby_task", None)
         if task is not None and not task.done():
             task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except asyncio.CancelledError:
+                pass
+            except asyncio.TimeoutError:
+                logger.warning("standby loop cancel timed out")
+            except Exception as exc:
+                logger.info("standby loop stop ignored: %s", exc)
+        if getattr(self.bridge, "_standby_task", None) is task and (task is None or task.done()):
+            self.bridge._standby_task = None
 
     def _cancel_receiver_tasks(self):
         task = getattr(self.bridge, "_receiver_retry_task", None)
@@ -87,6 +97,7 @@ class TransferService:
         for address in list(getattr(self.bridge, "_speaker_runtimes", {}).keys()):
             try:
                 await self.bridge.stop_receiver_stream(address)
+                await self.bridge.disconnect_speaker_link(address)
             except Exception as exc:
                 logger.info("receiver stream stop ignored for %s: %s", address, exc)
         try:
@@ -96,6 +107,9 @@ class TransferService:
 
     def resource_state(self):
         standby_task = getattr(self.bridge, "_standby_task", None)
+        if standby_task is not None and standby_task.done():
+            self.bridge._standby_task = None
+            standby_task = None
         runtimes = list(getattr(self.bridge, "_speaker_runtimes", {}).values())
         receiver_stream = any(
             getattr(getattr(runtime, "connector", None), "rtp_channel", None) is not None
@@ -135,7 +149,7 @@ class TransferService:
         if desired.speaker_standby:
             self.bridge.start_standby_loop()
         else:
-            self._cancel_standby_loop()
+            await self._stop_standby_loop()
             await self._stop_all_receiver_streams()
             await self.stop_speaker_enrollment()
             try:
@@ -338,15 +352,17 @@ class TransferService:
         #  - выход (Fosi) — НАШЕ устройство вывода, его держим/реконнектим сами.
         await self.orch.set_transfer_connectable(True)   # connectable для bonded-источника (не discoverable)
         await self.orch.on_a2dp_state(True)
-        self.bridge.start_standby_loop()
-        await self.bridge.ensure_trusted_speakers_connected()
+        # 2026-06-18: activation is explicit, but still route-scoped. Do not
+        # launch a general trusted-device poll here; the selected output connect
+        # below is the only radio work this user action requested.
         await self.bridge.request_receiver_connection()
         logger.info("transfer armed: route set, waiting for iPhone to pick Car Thing as output")
         self._sync()
 
     async def deactivate(self):
-        # Transfer выключен: останавливаем только аудиопоток. Classic standby с
-        # доверенными динамиками остаётся жить и будет переподключаться само.
+        # Transfer выключен: останавливаем аудиопоток и source. Standby-loop
+        # принадлежит operation_mode: Play Now должен гасить его через
+        # apply_operation_mode(), Коммутатор может держать его живым.
         self.model.transfer_active = False
         try:
             self.bridge.state.transfer_active = False

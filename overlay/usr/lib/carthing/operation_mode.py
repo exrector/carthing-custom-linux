@@ -10,9 +10,11 @@
                 ни standby-пейджинг колонок, ни receiver-цикл, ни скан. Радио
                 почти простаивает -> ноль контеншена с GUI, ноль «PAGE_TIMEOUT по
                 кругу». Это дефолт «спокойного» состояния.
-  • COMMUTATOR — полный транскод-хаб: standby доверенных выходов, receiver-цикл,
-                форвард/транскод A2DP, переключение маршрутов. Включается, когда
-                реально нужно гонять звук на колонки.
+  • COMMUTATOR — явный транскод-хаб: route-scoped standby выбранного выхода,
+                receiver-stream, форвард/транскод A2DP, переключение маршрутов.
+                Включается, когда реально нужно гонять звук на колонки. Скан и
+                опрос trusted devices не являются фоновым ресурсом режима: они
+                запускаются вручную/событийно при выборе, rescan или activate.
   • RESERVED  — задел под будущий режим (идей было много: голосовой ассистент,
                 автономный плеер с ЦАП и т.д.). Сейчас ведёт себя как PLAYNOW.
 
@@ -84,7 +86,9 @@ def resources(mode: str | None) -> ModeResources:
     """Desired resource contract for a mode.
 
     Keep AVDTP listener as a transitional baseline until lazy route startup is
-    proved; commutator-only work is speaker standby/receiver/patchbay/scan.
+    proved. Commutator owns route-scoped standby/receiver/patchbay only; scans
+    stay manual/event-driven so the mode itself does not poll trusted devices in
+    the background.
     """
     mode = normalize(mode)
     if mode == COMMUTATOR:
@@ -92,7 +96,7 @@ def resources(mode: str | None) -> ModeResources:
             speaker_standby=True,
             receiver_stream=True,
             route_patchbay=True,
-            speaker_scan=True,
+            speaker_scan=False,
         )
     if mode == RESERVED:
         return ModeResources(usb_profile="reserved")

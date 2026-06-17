@@ -730,11 +730,16 @@ class A2DPBridge:
             self._standby_task = asyncio.create_task(self.speaker_standby_loop())
 
     async def speaker_standby_loop(self):
-        """Keep trusted speakers in a bonded Classic standby connection.
+        """Keep the selected route speaker in bonded Classic standby.
 
-        This is deliberately below Transfer. A trusted speaker should stick to
-        the device when available; Transfer only decides whether that existing
-        connection is used as the audio route.
+        2026-06-18 resource-policy correction:
+        Play Now is the default low-noise mode, and Commutator should only spend
+        radio time on the route the user actually selected. The older policy
+        paged every trusted speaker in the standby loop; with Fosi selected this
+        still tried Maedhawk, producing PAGE_TIMEOUT/backoff noise and stealing
+        controller time from the active path. Multi-speaker soak testing remains
+        available with CARTHING_STANDBY_ALL_SPEAKERS=1, but release behavior is
+        selected-output standby only.
         """
         while True:
             try:
@@ -748,12 +753,20 @@ class A2DPBridge:
     async def ensure_trusted_speakers_connected(self):
         speakers = list(self.state.trusted_speakers)
         selected_address = normalize_address(self.state.active_route_speaker_address() or "")
-        if selected_address:
+        standby_all = os.environ.get("CARTHING_STANDBY_ALL_SPEAKERS") == "1"
+        if selected_address and not standby_all:
+            speakers = [
+                speaker for speaker in speakers
+                if normalize_address(speaker.get("address")) == selected_address
+            ]
+        elif selected_address:
             speakers.sort(
                 key=lambda speaker: 0
                 if normalize_address(speaker.get("address")) == selected_address
                 else 1
             )
+        else:
+            return
         for speaker in speakers:
             # Pure sources are not paged as speakers. Multirole devices are
             # eligible only after the output side was explicitly enrolled, so
@@ -786,9 +799,10 @@ class A2DPBridge:
             # канал просто живёт в фоне. Идемпотентно: если уже held на этот адрес — no-op.
             if asyncio.get_running_loop().time() < runtime.backoff_not_before:
                 continue
-            # Standby is a per-device invariant. HCI paging is still serialized
-            # by request_receiver_connection(), but active route selection no
-            # longer suppresses other trusted outputs.
+            # Release standby is route-scoped. The selected output is held so
+            # Fosi-class DACs leave pairing mode and stay ready; non-selected
+            # speakers are not paged in the background unless explicitly enabled
+            # for lab diagnostics via CARTHING_STANDBY_ALL_SPEAKERS=1.
             await self.request_receiver_connection(address)
 
     async def enable_classic_visibility(self):
@@ -2010,15 +2024,15 @@ class A2DPBridge:
         # [CLAUDE 2026-06-03] ACL+encrypt мало: Fosi видит «пустой» ACL и ВИСИТ В РЕЖИМЕ ПАРЫ
         # (мигает), пока нет открытого медиа-транспорта. Открываем AVDTP (open+start) сразу при
         # паре — колонка выходит из пары и держится подключённой. RTP не льётся без источника,
-        # канал просто живёт в фоне. Затем поднимаем standby-петлю, чтобы держать/реконнектить
-        # независимо от активации маршрута (trusted speaker «прилипает» ниже Transfer).
+        # канал просто живёт в фоне до завершения pair-flow. Дальнейший standby теперь
+        # поднимается только явным режимом/маршрутом: Play Now не должен держать
+        # фоновые speaker loops после добавления устройства.
         try:
             await self.setup_receiver(address)
             self.logger.info("A2DP stream opened+held after pairing: %s", address)
         except Exception as exc:
             self.logger.warning("A2DP stream open after pairing failed (kept ACL): %s",
                                  error_text(exc))
-        self.start_standby_loop()
         self.state.speaker_pairing_status = "done"
         self.state.pairing_message = f"{label} добавлен"
         try:
@@ -2637,6 +2651,48 @@ class A2DPBridge:
         current = self._current_receiver_connector()
         self._sync_receiver_fields(current)
         self.state.transfer_status = "standby"
+        self.on_state_change()
+
+    async def disconnect_speaker_link(self, address):
+        """Release a trusted speaker's live Classic link without forgetting it.
+
+        2026-06-18 Play Now resource policy:
+        returning to Play Now should leave no Commutator-owned radio footprint.
+        stop_receiver_stream() only suspends media/AVDTP so a speaker can resume
+        cheaply inside Commutator; this method is the stronger mode-teardown path
+        that closes the Classic ACL while keeping pairing keys and the trusted
+        device row intact for the next explicit route activation.
+        """
+        address = normalize_address(address)
+        if not address:
+            return
+        runtime = self._speaker_runtime(address, create=False)
+        if runtime is None:
+            return
+        task = runtime.active_task()
+        if task is not None and not task.done():
+            task.cancel()
+        runtime.connect_task = None
+        runtime.standby_connecting = False
+        await self._close_receiver_protocol(address)
+        connector = runtime.connector
+        connection = connector.connection
+        connector.connection = None
+        connector.protocol = None
+        connector.source = None
+        connector.stream = None
+        connector.rtp_channel = None
+        connector.connecting = False
+        if self.receiver_address == address:
+            self._sync_receiver_fields(None)
+        self.state.set_speaker_online(address, False)
+        self.state.set_speaker_connected(address, False)
+        if connection is not None:
+            try:
+                await connection.disconnect()
+                self.logger.info("A2DP speaker classic ACL disconnected for Play Now: %s", address)
+            except Exception as exc:
+                self.logger.info("A2DP speaker classic disconnect ignored: %s: %s", address, error_text(exc))
         self.on_state_change()
 
     def on_avdtp_connection(self, protocol: avdtp.Protocol):

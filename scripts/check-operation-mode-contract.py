@@ -27,10 +27,13 @@ def main() -> int:
     for key in ("speaker_standby", "receiver_stream", "route_patchbay", "speaker_scan"):
         if play[key]:
             failures.append(f"playnow unexpectedly enables {key}")
-        if not comm[key]:
-            failures.append(f"commutator must enable {key}")
         if reserved[key]:
             failures.append(f"reserved unexpectedly enables {key}")
+    for key in ("speaker_standby", "receiver_stream", "route_patchbay"):
+        if not comm[key]:
+            failures.append(f"commutator must enable {key}")
+    if comm["speaker_scan"]:
+        failures.append("commutator must not enable background speaker_scan; scans are manual/event-driven")
 
     app_state = AppState()
     if app_state.operation_mode != operation_mode.DEFAULT:
@@ -75,6 +78,8 @@ def main() -> int:
         failures.append("TransferService lacks apply_operation_mode")
     if "_stop_all_receiver_streams" not in transfer_text:
         failures.append("TransferService lacks all-receiver stream teardown for Play Now")
+    if "link_manager.start()" in runtime_text:
+        failures.append("runtime still starts periodic LinkManager polling")
 
     init_text = (ROOT / "overlay/usr/libexec/carthing/init-wrapper").read_text()
     if "S11-zram" not in init_text:

@@ -1,0 +1,693 @@
+{
+  "schema": 1,
+  "snapshots": [
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "before",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": false,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": false,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": false,
+          "route_patchbay": false,
+          "speaker_scan": false,
+          "speaker_standby": false,
+          "usb_profile": "ncm"
+        },
+        "now_playing": {
+          "album": "",
+          "artist": "Erasmo Carlos",
+          "duration": 227.0,
+          "elapsed": 161.1,
+          "playing": false,
+          "supported_commands": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "title": "É Preciso Dar Um Jeito, Meu Amigo"
+        },
+        "operation_mode": "playnow",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 250000,
+              "governor": "schedutil",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "schedutil",
+            "schedutil",
+            "ondemand",
+            "conservative",
+            "powersave",
+            "performance"
+          ],
+          "mode": "playnow",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "carthing",
+          "protocols": [],
+          "warnings": []
+        },
+        "source_connected": true,
+        "source_name": "iphone",
+        "source_peer": "10:A2:D3:83:82:50/P",
+        "transfer_active": true
+      },
+      "ts": 1781735757.8254454
+    },
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "selected-output",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "device",
+          "route_output": true
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": false,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": false,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": false,
+          "route_patchbay": false,
+          "speaker_scan": false,
+          "speaker_standby": false,
+          "usb_profile": "ncm"
+        },
+        "now_playing": {
+          "album": "",
+          "artist": "Erasmo Carlos",
+          "duration": 227.0,
+          "elapsed": 161.1,
+          "playing": false,
+          "supported_commands": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "title": "É Preciso Dar Um Jeito, Meu Amigo"
+        },
+        "operation_mode": "playnow",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 1800000,
+              "governor": "schedutil",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "schedutil",
+            "schedutil",
+            "ondemand",
+            "conservative",
+            "powersave",
+            "performance"
+          ],
+          "mode": "playnow",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "carthing",
+          "protocols": [],
+          "warnings": []
+        },
+        "source_connected": true,
+        "source_name": "iphone",
+        "source_peer": "10:A2:D3:83:82:50/P",
+        "transfer_active": true
+      },
+      "ts": 1781735760.267638
+    },
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "commutator-hold",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "device",
+          "route_output": true
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": true,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": true,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": true,
+          "route_patchbay": true,
+          "speaker_scan": false,
+          "speaker_standby": true,
+          "usb_profile": "ncm"
+        },
+        "now_playing": {
+          "album": "",
+          "artist": "Erasmo Carlos",
+          "duration": 227.0,
+          "elapsed": 161.1,
+          "playing": false,
+          "supported_commands": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "title": "É Preciso Dar Um Jeito, Meu Amigo"
+        },
+        "operation_mode": "commutator",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 1800000,
+              "governor": "performance",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "performance",
+            "performance",
+            "schedutil",
+            "ondemand"
+          ],
+          "mode": "commutator",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "C4:A9:B8:70:2F:E5",
+          "protocols": [],
+          "warnings": []
+        },
+        "source_connected": true,
+        "source_name": "iphone",
+        "source_peer": "10:A2:D3:83:82:50/P",
+        "transfer_active": true
+      },
+      "ts": 1781735786.2256925
+    },
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "after",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": false,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": false,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": false,
+          "route_patchbay": false,
+          "speaker_scan": false,
+          "speaker_standby": false,
+          "usb_profile": "ncm"
+        },
+        "now_playing": {
+          "album": "",
+          "artist": "Erasmo Carlos",
+          "duration": 227.0,
+          "elapsed": 161.1,
+          "playing": false,
+          "supported_commands": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "title": "É Preciso Dar Um Jeito, Meu Amigo"
+        },
+        "operation_mode": "playnow",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 250000,
+              "governor": "schedutil",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "schedutil",
+            "schedutil",
+            "ondemand",
+            "conservative",
+            "powersave",
+            "performance"
+          ],
+          "mode": "playnow",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "carthing",
+          "protocols": [],
+          "warnings": []
+        },
+        "source_connected": true,
+        "source_name": "iphone",
+        "source_peer": "10:A2:D3:83:82:50/P",
+        "transfer_active": true
+      },
+      "ts": 1781735792.3509557
+    }
+  ],
+  "summary": [
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": false,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": false,
+      "governor": "schedutil",
+      "label": "before",
+      "now_playing_playing": false,
+      "now_playing_title": "É Preciso Dar Um Jeito, Meu Amigo",
+      "operation_mode": "playnow",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "carthing",
+      "source_connected": true,
+      "source_name": "iphone",
+      "source_peer": "10:A2:D3:83:82:50/P",
+      "zram_active": true,
+      "zram_used_kb": 0
+    },
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": false,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": false,
+      "governor": "schedutil",
+      "label": "selected-output",
+      "now_playing_playing": false,
+      "now_playing_title": "É Preciso Dar Um Jeito, Meu Amigo",
+      "operation_mode": "playnow",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "carthing",
+      "source_connected": true,
+      "source_name": "iphone",
+      "source_peer": "10:A2:D3:83:82:50/P",
+      "zram_active": true,
+      "zram_used_kb": 0
+    },
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": true,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": true,
+      "governor": "performance",
+      "label": "commutator-hold",
+      "now_playing_playing": false,
+      "now_playing_title": "É Preciso Dar Um Jeito, Meu Amigo",
+      "operation_mode": "commutator",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "C4:A9:B8:70:2F:E5",
+      "source_connected": true,
+      "source_name": "iphone",
+      "source_peer": "10:A2:D3:83:82:50/P",
+      "zram_active": true,
+      "zram_used_kb": 0
+    },
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": false,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": false,
+      "governor": "schedutil",
+      "label": "after",
+      "now_playing_playing": false,
+      "now_playing_title": "É Preciso Dar Um Jeito, Meu Amigo",
+      "operation_mode": "playnow",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "carthing",
+      "source_connected": true,
+      "source_name": "iphone",
+      "source_peer": "10:A2:D3:83:82:50/P",
+      "zram_active": true,
+      "zram_used_kb": 0
+    }
+  ]
+}

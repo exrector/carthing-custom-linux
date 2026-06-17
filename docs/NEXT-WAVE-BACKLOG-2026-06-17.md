@@ -217,18 +217,27 @@ Acceptance:
 
 ### A5. Route-Load Proof: Play Now -> Коммутатор -> Play Now
 
-Status: `NEXT`
+Status: `DONE`
 
 Original idea preserved:
 Full proof must cover cold boot Play Now, switch Play Now -> Коммутатор,
 selected route activation/deactivation, and return to Play Now.
 
 Implementation shape:
-- Add a host proof script that captures:
+- ~~Add a host proof script that captures:
   runtime-bt JSON, route fields, mode resources, packets forwarded/dropped,
-  HCI/page timeout counters, log markers.
-- Use current route hardware first: iPhone + known-good Fosi.
-- Append results to `docs/route-test-series-results.md`.
+  HCI/page timeout counters, log markers.~~
+- ~~Use current route hardware first: iPhone + known-good Fosi.~~
+- Results are published in `docs/ROUTE-LOAD-PROOF-2026-06-18.md`.
+
+Result:
+- Proof artifact: `artifacts/route-load-20260618-013706/proof.json`.
+- Play Now keeps iPhone sticky:
+  `source_connected=true`, `source_peer=10:A2:D3:83:82:50/P`.
+- Коммутатор activates only selected Fosi output.
+- Maedhawk is not paged in the final proof window.
+- Returning to Play Now releases external speaker ACL/standby/receiver while
+  leaving iPhone BLE/AMS alive.
 
 Acceptance:
 - In Play Now, actual commutator resources remain false.
@@ -286,7 +295,10 @@ whether AVDTP listener/SDP setup is still needed at boot or should be
 lazy-started only when user activates a route.
 
 Current state:
-- Standby/receiver/scan/patchbay are gated.
+- Standby/receiver/patchbay are gated by mode and route.
+- `speaker_scan` is no longer a background mode-owned resource; it is
+  manual/event-driven.
+- Periodic `LinkManager.start()` polling is disabled; boot tick only.
 - AVDTP listener still starts at boot as transitional compatibility surface.
 
 Next:

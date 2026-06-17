@@ -883,6 +883,13 @@ def _sync_model_route_selection():
 
 def _on_publish():
     _sync_model_route_selection()
+    try:
+        model.set_operation_mode(
+            getattr(model, "operation_mode", operation_mode.DEFAULT),
+            _mode_resource_snapshot(getattr(model, "operation_mode", operation_mode.DEFAULT)),
+        )
+    except Exception:
+        pass
     if resource_policy is not None:
         try:
             model.set_resource_policy(resource_policy.snapshot(
@@ -1608,7 +1615,15 @@ async def main():
     link_manager = LinkManager(trusted_registry, interval=15.0)
     if gui is not None:
         link_manager.register(AppStateLinkAdapter(gui.app_state))
-        link_manager.start()
+        # 2026-06-18 owner decision: trusted-device status is sampled on explicit
+        # events, not by a periodic background loop. The current adapter only
+        # reflects local AppState flags, but keeping a 15s manager running made
+        # the architecture look polling-driven and invited heavier probes later.
+        try:
+            await link_manager.tick()
+        except Exception as exc:
+            logger.info("link manager boot tick ignored: %s", exc)
+        logger.info("link manager periodic polling disabled; boot tick only")
     # [CLAUDE 2026-06-02] Без режимов: на boot поднимаем присутствие, активного маршрута нет.
     if gui is not None:
         gui.show_home()

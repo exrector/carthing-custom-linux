@@ -1,0 +1,569 @@
+{
+  "schema": 1,
+  "snapshots": [
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "before",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "speaker",
+          "route_output": false
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": false,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": false,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": false,
+          "route_patchbay": false,
+          "speaker_scan": false,
+          "speaker_standby": false,
+          "usb_profile": "ncm"
+        },
+        "operation_mode": "playnow",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 250000,
+              "governor": "schedutil",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "schedutil",
+            "schedutil",
+            "ondemand",
+            "conservative",
+            "powersave",
+            "performance"
+          ],
+          "mode": "playnow",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "carthing",
+          "protocols": [],
+          "warnings": []
+        },
+        "transfer_active": true
+      },
+      "ts": 1781735420.1970844
+    },
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "selected-output",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "speaker",
+          "route_output": true
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": false,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": false,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": false,
+          "route_patchbay": false,
+          "speaker_scan": false,
+          "speaker_standby": false,
+          "usb_profile": "ncm"
+        },
+        "operation_mode": "playnow",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 250000,
+              "governor": "schedutil",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "schedutil",
+            "schedutil",
+            "ondemand",
+            "conservative",
+            "powersave",
+            "performance"
+          ],
+          "mode": "playnow",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "carthing",
+          "protocols": [],
+          "warnings": []
+        },
+        "transfer_active": true
+      },
+      "ts": 1781735422.638971
+    },
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "commutator-hold",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "device",
+          "route_output": true
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": true,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": true,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": true,
+          "route_patchbay": true,
+          "speaker_scan": true,
+          "speaker_standby": true,
+          "usb_profile": "ncm"
+        },
+        "operation_mode": "commutator",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 1800000,
+              "governor": "performance",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "performance",
+            "performance",
+            "schedutil",
+            "ondemand"
+          ],
+          "mode": "commutator",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "C4:A9:B8:70:2F:E5",
+          "protocols": [],
+          "warnings": []
+        },
+        "transfer_active": true
+      },
+      "ts": 1781735448.6137493
+    },
+    {
+      "inputs": [
+        {
+          "address": "10:A2:D3:83:82:50",
+          "key": "10:A2:D3:83:82:50",
+          "label": null,
+          "route_input": true
+        }
+      ],
+      "label": "after",
+      "outputs": [
+        {
+          "address": "C4:A9:B8:70:2F:E5",
+          "codecs": [
+            "AAC",
+            "SBC",
+            "vendor:0000000a:0103",
+            "vendor:0000000a:0104",
+            "vendor:0000000a:0106",
+            "vendor:0000004f:0001",
+            "vendor:000000d7:0024"
+          ],
+          "key": "C4:A9:B8:70:2F:E5",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        },
+        {
+          "address": "41:42:9C:A0:BD:14",
+          "codecs": [
+            "SBC"
+          ],
+          "key": "41:42:9C:A0:BD:14",
+          "label": null,
+          "role": "device",
+          "route_output": false
+        }
+      ],
+      "runtime": {
+        "mode_resources": {
+          "a2dp_listener": true,
+          "actual_a2dp_listener": true,
+          "actual_receiver_connecting": false,
+          "actual_receiver_stream": false,
+          "actual_route_patchbay": false,
+          "actual_source_stream": false,
+          "actual_speaker_scan": false,
+          "actual_standby_loop": false,
+          "ble_control": true,
+          "gui": true,
+          "notifications": true,
+          "packets_dropped": 0,
+          "packets_forwarded": 0,
+          "receiver_stream": false,
+          "route_patchbay": false,
+          "speaker_scan": false,
+          "speaker_standby": false,
+          "usb_profile": "ncm"
+        },
+        "operation_mode": "playnow",
+        "resource_policy": {
+          "cpu_policies": [
+            {
+              "available_governors": [
+                "interactive",
+                "performance",
+                "schedutil"
+              ],
+              "cur_freq_khz": 1398000,
+              "governor": "schedutil",
+              "max_freq_khz": 1800000,
+              "min_freq_khz": 100000,
+              "policy": "policy0"
+            }
+          ],
+          "cpu_policy_enabled": true,
+          "cpu_preferred_governors": [
+            "schedutil",
+            "schedutil",
+            "ondemand",
+            "conservative",
+            "powersave",
+            "performance"
+          ],
+          "mode": "playnow",
+          "reason": "publish",
+          "sensors": {
+            "als_prox_present": true,
+            "tmd2772": {
+              "iio_device": "/sys/bus/iio/devices/iio:device0",
+              "illuminance_input": 0,
+              "illuminance_target_input": 150,
+              "integration_time": "0.111",
+              "intensity0_raw": 2,
+              "intensity1_raw": 0,
+              "proximity_raw": 0
+            }
+          },
+          "tier": "boot",
+          "zram": {
+            "active": true,
+            "algorithm": "[lzo] deflate",
+            "device": "/dev/zram0",
+            "disksize_bytes": 134217728,
+            "mm_stat": "4096       62     4096        0     4096        0        0",
+            "present": true,
+            "swap_size_kb": 131068,
+            "swap_used_kb": 0
+          }
+        },
+        "route": {
+          "active": false,
+          "cables": [],
+          "input": "source:10:A2:D3:83:82:50",
+          "name": "",
+          "output": "carthing",
+          "protocols": [],
+          "warnings": []
+        },
+        "transfer_active": true
+      },
+      "ts": 1781735454.748206
+    }
+  ],
+  "summary": [
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": false,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": false,
+      "governor": "schedutil",
+      "label": "before",
+      "operation_mode": "playnow",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "carthing",
+      "zram_active": true,
+      "zram_used_kb": 0
+    },
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": false,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": false,
+      "governor": "schedutil",
+      "label": "selected-output",
+      "operation_mode": "playnow",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "carthing",
+      "zram_active": true,
+      "zram_used_kb": 0
+    },
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": true,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": true,
+      "governor": "performance",
+      "label": "commutator-hold",
+      "operation_mode": "commutator",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "C4:A9:B8:70:2F:E5",
+      "zram_active": true,
+      "zram_used_kb": 0
+    },
+    {
+      "actual_receiver_connecting": false,
+      "actual_receiver_stream": false,
+      "actual_route_patchbay": false,
+      "actual_source_stream": false,
+      "actual_speaker_scan": false,
+      "actual_standby_loop": false,
+      "governor": "schedutil",
+      "label": "after",
+      "operation_mode": "playnow",
+      "packets_dropped": 0,
+      "packets_forwarded": 0,
+      "route_active": false,
+      "route_input": "source:10:A2:D3:83:82:50",
+      "route_output": "carthing",
+      "zram_active": true,
+      "zram_used_kb": 0
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+route-load proof output=C4:A9:B8:70:2F:E5 hold=20s wait=35s
+proof: artifacts/route-load-20260618-012620/proof.json

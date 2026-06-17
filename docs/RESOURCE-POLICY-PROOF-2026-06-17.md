@@ -78,10 +78,12 @@ This bundle has not been flashed in full.
 
 ## Remaining
 
-- A1 is still `PARTIAL`: Play Now CPU policy is live-proven, but Коммутатор
-  boost/release still needs route-load proof.
+- A1 is now proven by the 2026-06-18 route-load proof:
+  `docs/ROUTE-LOAD-PROOF-2026-06-18.md` shows Play Now `schedutil`,
+  Коммутатор `performance`, then Play Now `schedutil`.
 - A3 is still `PARTIAL`: safe-unplug code is deployed, but actual physical USB
   removal proof should be done only with the owner present.
 - A4 is `PARTIAL`: sensor readings are published; product auto-brightness or
   wake/dim thresholds are not enabled yet.
-- A5 remains a candidate, not mandatory work.
+- A5 is `DONE`: final artifact
+  `artifacts/route-load-20260618-013706/proof.json`.
