@@ -13,7 +13,9 @@ Scope: first optimization wave after `carthing-next-wave-backlog-2026-06-17`.
 - `S11-zram` enables optional 128 MB `/dev/zram0` swap.
 - Safe unplug now enters central Play Now teardown before finalizer launch.
 - Bake guards now agree on runtime tree sha1:
-  `80e62aa8eeae5899bfdfe73576781bc1f5d22d5d`.
+  `e3e456c79ad0712a3c54549b71acd97dc4e7b6b1`.
+- Runtime publishes TMD2772 ALS/proximity diagnostics, but does not yet change
+  brightness automatically.
 
 ## Local Gates
 
@@ -44,6 +46,9 @@ mode_resources.speaker_scan=false
 resource_policy.zram.active=true
 resource_policy.zram.disksize_bytes=134217728
 resource_policy.zram.swap_size_kb=131068
+resource_policy.sensors.als_prox_present=true
+resource_policy.sensors.tmd2772.illuminance_input=1
+resource_policy.sensors.tmd2772.proximity_raw=0
 Traceback count in carthing-remote.log: 0
 ```
 
@@ -62,9 +67,9 @@ runtime.ready proc_uptime_s=15.000 runtime_s=4.315
 Local bake completed:
 
 ```text
-bundle: flash-bake-unified-stable-20260617-234759
+bundle: flash-bake-unified-stable-20260617-235414
 bootfs.bin sha256: 6e99a75c57e38acab5be5b818f559132a4b7a167e7ccfa80e4e3ce1aedd7df3e
-rootfs.img sha256: 72ec4b955ed94fbaaf1fc09387e8ea276d3cc7135c54e0252bb564ebdfe2b89b
+rootfs.img sha256: 362c4290d37cb7a5b1a93c2def85d9c0bd4d504487f7cfaa943bc327535ec17e
 env.txt sha256: 622490729632aeb3eff2fffe89da6fc13b800f51eda77791e27d89225363fb69
 meta.json sha256: 121f3ea3327d5a6ae2575d54c5d8e2cf1cd3a1b1d48a3c5760fdff3017b1b56c
 ```
@@ -77,4 +82,6 @@ This bundle has not been flashed in full.
   boost/release still needs route-load proof.
 - A3 is still `PARTIAL`: safe-unplug code is deployed, but actual physical USB
   removal proof should be done only with the owner present.
-- A4/A5 remain candidates, not mandatory work.
+- A4 is `PARTIAL`: sensor readings are published; product auto-brightness or
+  wake/dim thresholds are not enabled yet.
+- A5 remains a candidate, not mandatory work.

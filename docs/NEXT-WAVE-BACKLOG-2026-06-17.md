@@ -191,7 +191,15 @@ Acceptance:
 
 ### A4. ALS/Proximity Sensor Policy
 
-Status: `NEXT`
+Status: `PARTIAL live 2026-06-17`
+
+Local implementation note:
+`resource_policy.py` now publishes TMD2772 ALS/proximity diagnostics in
+runtime-state without changing brightness automatically. QN19 live proof shows
+`als_prox_present=true`, `illuminance_input=1`, and `proximity_raw=0`. This is
+kept `PARTIAL` because the actual product policy (auto brightness, wake/dim, or
+proximity behavior) still needs a measured threshold decision.
+Proof: `docs/RESOURCE-POLICY-PROOF-2026-06-17.md`.
 
 Original idea preserved:
 ALS/proximity IIO device exists. Use `in_illuminance0_input` for auto-brightness

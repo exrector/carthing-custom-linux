@@ -190,6 +190,7 @@ class RuntimeResourcePolicy:
             "cpu_preferred_governors": list(preferred or self._preferred_governors(mode, tier)),
             "cpu_policies": policy_rows,
             "zram": self.zram_status(),
+            "sensors": self.sensor_status(),
         }
 
     def zram_status(self) -> dict:
@@ -218,3 +219,33 @@ class RuntimeResourcePolicy:
         if mm_stat:
             out["mm_stat"] = mm_stat
         return out
+
+    def sensor_status(self) -> dict:
+        out = {
+            "als_prox_present": bool(self.hw_caps.get("als_prox_tmd2772")),
+            "tmd2772": {},
+        }
+        device = self._find_iio_device("tmd2772")
+        if device is None:
+            return out
+        out["tmd2772"] = {
+            "iio_device": str(device),
+            "illuminance_input": _int_or_none(_read_text(device / "in_illuminance0_input")),
+            "illuminance_target_input": _int_or_none(_read_text(device / "in_illuminance0_target_input")),
+            "intensity0_raw": _int_or_none(_read_text(device / "in_intensity0_raw")),
+            "intensity1_raw": _int_or_none(_read_text(device / "in_intensity1_raw")),
+            "proximity_raw": _int_or_none(_read_text(device / "in_proximity0_raw")),
+            "integration_time": _read_text(device / "in_illuminance0_integration_time") or None,
+        }
+        return out
+
+    @staticmethod
+    def _find_iio_device(name: str) -> Path | None:
+        root = Path("/sys/bus/iio/devices")
+        try:
+            for path in sorted(root.glob("iio:device*")):
+                if _read_text(path / "name") == name:
+                    return path
+        except Exception:
+            return None
+        return None

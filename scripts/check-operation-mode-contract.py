@@ -51,6 +51,8 @@ def main() -> int:
         failures.append("RuntimeModel does not publish resource_policy diagnostics")
     elif bt["resource_policy"].get("cpu_policies") != []:
         failures.append("ResourcePolicy empty-sysfs test should publish an empty cpu_policies list")
+    elif "sensors" not in bt["resource_policy"]:
+        failures.append("ResourcePolicy does not publish sensor diagnostics")
 
     app_state_text = (ROOT / "overlay/usr/lib/carthing/app_state.py").read_text()
     if 'operation_mode = "commutator"' in app_state_text:
