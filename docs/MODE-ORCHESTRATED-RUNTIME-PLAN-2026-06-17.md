@@ -96,6 +96,73 @@ record BOOT_PROFILE/RUNTIME_PROFILE milestones
      - selected route activation/deactivation;
      - rootfs remains readonly and state writes remain controlled.
 
+## Additions From `carthing_analysis.md` And Ideas Log
+
+These items should be folded into the same workstream because they are mode
+ownership problems, not independent UI tweaks.
+
+8. **Mode resource telemetry**
+   - Publish and log whether commutator-only resources are running:
+     `standby_loop`, `receiver_stream`, `a2dp_listener`, `route_patchbay`,
+     `speaker_scan`, `usb_profile`.
+   - Track proof counters per boot/session: page attempts, `PAGE_TIMEOUT`, HCI
+     busy/retry events, active route output, and selected-vs-active route.
+   - Acceptance: in Play Now, proof logs show no background speaker paging and no
+     receiver loop unless pairing or route activation explicitly requests it.
+
+9. **Per-mode CPU/DVFS policy**
+   - `carthing_analysis.md` identifies `performance` governor as wasteful for the
+     default control-surface mode.
+   - Add a guarded CPU policy layer after mode ownership exists:
+     Play Now can use a low/elastic governor or capped frequency, while
+     Коммутатор can temporarily raise frequency for route activation, codec work,
+     and heavy render bursts.
+   - Acceptance: record governor/frequency in runtime proof and verify no UI or
+     AMS regression before baking.
+
+10. **Commutator audio throughput proof**
+   - The analysis highlights the Bluetooth UART bandwidth problem and the fwload
+     3 Mbit/s path. The repo currently has `CARTHING_BT_INIT_BACKEND=attach`
+     while also carrying fwload tooling.
+   - Treat this as a Коммутатор prerequisite, not as a Play Now boot dependency:
+     first prove the live HCI UART speed and A2DP throughput under route load,
+     then decide whether the product image should switch to fwload or keep the
+     current attach path.
+   - Acceptance: route activation proof must include no sustained RTP drops caused
+     by UART/HCI bandwidth.
+
+11. **Reserved mode as USB profile owner**
+   - The analysis maps ConfigFS USB profiles (`ncm`, `ncm+audio`, `hid`,
+     `mass_storage`, `rndis`, `midi`, `ncm+hid`).
+   - Keep `reserved` equivalent to Play Now until USB mode work starts, but model
+     it as the future owner of USB profile/session resources.
+   - Any USB profile switch that can disrupt SSH/NCM must be gated, visible in UI,
+     and reversible through the rescue path.
+
+12. **Mode-aware power and safe-unplug**
+   - Safe unplug is not a Linux `poweroff`; it is a mode/resource teardown:
+     stop route, stop standby/pairing/scans, sync state, make persistent storage
+     safe, then show that physical USB power can be removed.
+   - The same resource-stop code should be reused by mode switches and safe
+     unplug, rather than maintaining separate partial teardown paths.
+
+13. **Sensor-assisted UI/power policy**
+   - ALS/proximity can belong to the Play Now resource set: auto-brightness,
+     dim-on-away, wake-on-approach.
+   - This should come after mode ownership because it changes render/power
+     behavior and needs proof against touch/input usability.
+
+## Explicitly Deferred From This Workstream
+
+- p3/ext4 state migration: valuable research, but not part of the current P1/P2
+  product baseline unless reopened explicitly with a recovery plan.
+- custom ThingLabsOSS U-Boot/FIP: useful for research, on-panel boot menus, or
+  full GPT freedom, but not required for the current Play Now/Коммутатор runtime
+  optimization.
+- VPU/video, OSD2, VAD/voice, eBPF, HW crypto, ZRAM: keep as capability backlog.
+  They should not block the mode owner unless a specific product feature needs
+  them.
+
 ## Acceptance Criteria
 
 - Cold boot default is Play Now in settings, GUI, runtime JSON, and logs.
@@ -103,6 +170,12 @@ record BOOT_PROFILE/RUNTIME_PROFILE milestones
   route activation explicitly requests it.
 - Коммутатор starts only through explicit mode/route action and tears down cleanly.
 - Резерв does not accidentally start Bluetooth switchboard work.
+- Runtime proof includes mode resource state and HCI/page counters sufficient to
+  prove the system is actually quieter in Play Now.
+- CPU/frequency policy changes are gated by mode and backed by live proof, not
+  assumed from theory.
+- USB profile ownership is reserved-mode aware and does not strand normal
+  NCM/SSH access without a recovery path.
 - `scripts/check-bake-readiness.sh` catches regressions in the mode contract.
 - The final state is baked into `image/rootfs.img`, verified on QN19, committed,
   and tagged as the next product baseline.
