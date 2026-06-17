@@ -205,8 +205,8 @@ build_composite() {
 
     unbind_if_bound
 
-    # VID=0x0525 (Linux Foundation), PID=0xa4a1 — stable USB identity.
-    # macOS detection scripts search ioreg by product string "Car Thing".
+    # Keep the Linux Foundation NCM gadget identity for continuity with macOS
+    # network service matching. The interface set is expanded by configfs.
     echo 0x0525 > idVendor || return 1
     echo 0xa4a1 > idProduct || return 1
     echo 0x0100 > bcdDevice || true
@@ -214,7 +214,7 @@ build_composite() {
 
     mkdir -p strings/0x409
     echo "Spotify AB" > strings/0x409/manufacturer
-    echo "Car Thing" > strings/0x409/product
+    echo "NCM Gadget" > strings/0x409/product
     if [ -r /sys/class/efuse/usid ]; then
         tr -d '\000[:space:]' </sys/class/efuse/usid > strings/0x409/serialnumber 2>/dev/null || true
     fi

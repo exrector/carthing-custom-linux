@@ -11,7 +11,7 @@ DO NOT use `adb devices` to decide whether the USB NCM gadget exists.
 DO NOT infer "USB gadget absent" from failed ping or a VPN route.
 
 Source of truth on macOS:
-1. `ioreg` for `Car Thing` presence and `BSD Name`.
+1. `ioreg` for `NCM Gadget` presence and `BSD Name`.
 2. `ifconfig <bsd>` for link state and IP.
 3. `route get <ip>` only after the USB gadget is confirmed.
 
@@ -53,8 +53,7 @@ ROOT_DEFAULT_IP=${ROOT_DEFAULT_IP:-172.16.42.2}
 ROOT_STAGE2_IP=${ROOT_STAGE2_IP:-172.16.42.77}
 
 usb_dump() {
-    # Product string is "Car Thing" (set by S04-usbgadget, VID=0x0525 PID=0xa4a1)
-    ioreg -r -n 'Car Thing' -w 0 -l 2>/dev/null || true
+    ioreg -r -n 'NCM Gadget' -w 0 -l 2>/dev/null || true
 }
 
 extract_first() {
@@ -103,7 +102,7 @@ snapshot() {
 
     if [ -z "$dump" ]; then
         echo "usb_ncm_gadget: absent"
-        echo "diagnosis: Car Thing not present in IOUSB tree"
+        echo "diagnosis: NCM Gadget not present in IOUSB tree"
         echo
         return 0
     fi
