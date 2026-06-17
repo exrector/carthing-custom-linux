@@ -8,6 +8,14 @@ already done. Do not delete historical tasks from source documents. When a task
 is complete, mark it as `DONE` and keep the original wording or a faithful
 short form.
 
+Important: this backlog is an option board, not an execution mandate. Items are
+not automatically "required" just because they are listed here. Before
+implementation, each `NEXT`/`RESEARCH` item must be re-judged against the real
+product goal: innovation, measurable optimization, lower runtime load, faster
+perceived boot, better reliability, or clearer architecture. If an item is only
+"nice to have" or adds complexity without a strong product payoff, keep it
+visible but do not implement it in the current wave.
+
 ## Sources Read
 
 - `carthing_analysis.md`
