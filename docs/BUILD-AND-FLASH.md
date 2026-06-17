@@ -99,7 +99,7 @@ SHA256SUMS (актуальные):
 957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e  bootfs.bin
 13b2b14fd15e0e20920513bc786f527f1efb75f71024822fb5467e9eb238c21b  rootfs.img
 bee43a070ad18a764a7a0f97827e6213757976f6b7a8a3987331a9396c196cb9  env.txt
-40a74a8c3fa2d18480dcbc38ddc7f37209da2b1d071d23c8e3f23232aa6f2402  bootlogos.bin
+ebcba5c0a116cd5b504073595e031ca3eb9cb2e6ccad0e824d6a1bd0aacccb9c  bootlogos.bin
 ```
 
 `bootfs.bin` обновлён 2026-06-17: ядро пересобрано с `CONFIG_AMLOGIC_MEDIA_GE2D=y` → `/dev/ge2d` доступен.
@@ -108,7 +108,9 @@ FAT p1 очищен от macOS AppleDouble/`.fseventsd` metadata и провер
 Артефакт сборки: `carthing-device-backups/artifacts/kernel-build-ge2d-20260617/`
 Сборщик: Colima + builder контейнер + GCC 6.5.0 (тот же тулчейн что и оригинал).
 
-`bootlogos.bin` — кастомный загрузочный логотип (5 слотов: bootup/burn_mode/bad_charger/shell_mode/overheat).
+`bootlogos.bin` — кастомный загрузочный логотип (5 слотов:
+bootup_spotify/burn_mode/bad_charger/shell_mode/overheat). Normal boot uses
+`bootup_spotify`; this matches the stock/bishopdynamics U-Boot env.
 Прошивается автоматически в p7 (сектор 319488) как часть `flash.py`.
 
 Rootfs `13b2b14f...` запечён 2026-06-17 из `overlay/`: включает GE2D userspace,
@@ -273,9 +275,13 @@ scripts/reverse-agent-enqueue.sh '<cmd>' device1       # команда чере
 ## Известные ловушки
 
 ### Boot mode
-`halt=True` в GUI → плата уходит в Amlogic burn mode (= Maskrom), не выключается.
-Переменная-предохранитель: `CARTHING_ALLOW_LINUX_POWEROFF=1`.
-Кнопка в GUI = «Сон экрана», не настоящий poweroff.
+`poweroff`/`halt` в Linux → плата уходит в Amlogic burn mode (= Maskrom), не
+выключается. Переменная-предохранитель: `CARTHING_ALLOW_LINUX_POWEROFF=1`.
+
+GUI-пункт `Отключение USB -> Подготовить` = подготовка к физическому
+выдёргиванию USB-питания, а не настоящий poweroff: runtime останавливает
+маршруты, sync'ает состояние, finalizer пытается clean-unmount/remount-ro
+`/run/carthing-state`, гасит экран и уводит плату в suspend.
 
 ### USB-сеть
 NCM Gadget (`0x0525:0xa4a1`) может быть виден в ioreg, но en14 всё равно `inactive`.

@@ -144,6 +144,11 @@ Kernel work is separate:
 - real Linux `poweroff`/`halt`;
 - folder sprawl as an active development model.
 
+The GUI `Отключение USB -> Подготовить` action is allowed and intentional: it is
+the product path for preparing physical USB power removal. It stops runtime
+activity, syncs state, makes `/run/carthing-state` clean/read-only or unmounted,
+blanks the screen, and enters suspend. It is not Linux `poweroff`/`halt`.
+
 Large historical folders may remain physically present as archives, but the
 active project root is this repository's top-level `overlay/`, `tools/`,
 `scripts/`, `image/`, `source/base-bundle/`, and current `docs/`.

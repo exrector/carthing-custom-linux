@@ -19,7 +19,7 @@
 #   Формат:     Amlogic proprietary logo binary (несколько BMP-слотов)
 #
 #   Слоты (имена = ключи, по которым U-Boot читает через imgread pic logo <name>):
-#     bootup      — показывается при нормальной загрузке
+#     bootup_spotify — показывается при нормальной загрузке
 #     burn_mode   — показывается при входе в USB Burn Mode
 #     shell_mode  — показывается при входе в shell mode
 #     bad_charger — показывается при подключении несовместимого зарядника
@@ -57,7 +57,7 @@ BAD_CHARGER_BMP="$SCRIPT_DIR/bad_charger.bmp"
 SHELL_MODE_BMP="$SCRIPT_DIR/shell_mode.bmp"
 OVERHEAT_BMP="$SCRIPT_DIR/overheat.bmp"
 
-# Источник для bootup (по умолчанию наш PNG, можно override через env)
+# Источник для bootup_spotify (по умолчанию наш PNG, можно override через env)
 BOOTUP_SRC="${BOOTUP_SRC:-$SCRIPT_DIR/bootup-source.png}"
 
 WORK="$(mktemp -d)"
@@ -102,13 +102,14 @@ if [ ! -f "$AML_IMGPACK" ]; then
       -o "$AML_IMGPACK"
 fi
 
-# --- Конвертация bootup ---
+# --- Конвертация bootup_spotify ---
 if [ "$NO_CONVERT" = "1" ]; then
-    BOOTUP_BMP="$BOOTUP_SRC"
-    echo "bootup: используем готовый BMP $BOOTUP_BMP"
+    BOOTUP_BMP="$WORK/bootup_spotify.bmp"
+    cp "$BOOTUP_SRC" "$BOOTUP_BMP"
+    echo "bootup_spotify: используем готовый BMP $BOOTUP_SRC"
 else
-    BOOTUP_BMP="$WORK/bootup.bmp"
-    echo "bootup: конвертация $BOOTUP_SRC → 480×800 BMP RGB565 (+90° CW)"
+    BOOTUP_BMP="$WORK/bootup_spotify.bmp"
+    echo "bootup_spotify: конвертация $BOOTUP_SRC → 480×800 BMP RGB565 (+90° CW)"
 
     # Определяем размеры источника
     W=$(magick identify -format "%w" "$BOOTUP_SRC")

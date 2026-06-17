@@ -20,5 +20,5 @@
 | 2026-06-17 | `source/base-bundle` hardware baseline repaired: old bootfs `7977c311...`, dirty-FAT GE2D bootfs `2ff2159a...`, and intermediate bootfs `28f4b24a...` replaced with clean GE2D bootfs `957f91c3...`; bake rejects all stale hashes | `source/base-bundle/SHA256SUMS` + `tools/bake-rootfs.py` guard |
 | 2026-06-17 | Ядро с GE2D (`CONFIG_AMLOGIC_MEDIA_GE2D=y`) — `/dev/ge2d` теперь есть | `image/bootfs.bin` обновлён и FAT-cleaned, sha256 `957f91c3` |
 | 2026-06-17 | Пароль root = `carthing` | `overlay/etc/shadow` создан с SHA-512 хэшем; `bake-rootfs.py` копирует его автоматически |
-| 2026-06-17 | Логотип при загрузке — наш (вождь, 480×800 RGB565) | `image/bootlogos.bin` + `tools/flash.py` пишет в сектор 319488 при прошивке |
+| 2026-06-17 | Логотип при загрузке — наш (вождь, 480×800 RGB565), normal boot slot `bootup_spotify` | `image/bootlogos.bin` + `tools/flash.py` пишет в сектор 319488 при прошивке |
 | 2026-06-17 | BT-бонды не переносятся между устройствами | `bake-rootfs.py` вычищает `/var/lib/carthing-state` при каждом бейке |
