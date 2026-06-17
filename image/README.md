@@ -7,7 +7,7 @@
 - release debug profile: `quiet` by default; SSH stays on, HTTP/telnet/reverse-agent stay off
 - **логин: `root` / пароль `carthing`** (SSH-ключей нет — добавь свой в `/root/.ssh/authorized_keys` при желании)
 - hardware baseline: GE2D kernel in `bootfs.bin`, clean Linux/CarThing bootargs, 512M rootfs, rescue NCM (`CONFIG_USB_G_NCM=y`) для SSH после каждой загрузки
-- runtime tree sha1: `10c48d6c327e18a1ddb2919c4817241db602cd60`
+- runtime tree sha1: `f6b35eecfcfc093e1186e765a03ba81ab736cfb8`
 
 ## Включение в репозиторий
 

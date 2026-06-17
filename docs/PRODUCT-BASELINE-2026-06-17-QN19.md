@@ -100,7 +100,7 @@ After this cleanup:
 - `tools/bake-rootfs.py` bakes `ge2d.py`, `ge2d_test.py`, `libhelixaac.so`,
   `libsbc.so`, and `sbc_synth.so`;
 - `image/rootfs.img` was updated locally;
-- `image/SHA256SUMS` records rootfs sha256 `338a0052...`;
+- `image/SHA256SUMS` records rootfs sha256 `1084cbc6...`;
 - the previous rootfs was preserved at
   `image/archive-20260617-123635/rootfs-before-clean-baseline.img`;
 - QN19 was not flashed or rebooted.
@@ -113,7 +113,7 @@ After the follow-up cleanup:
   and the dirty-FAT bootfs sha256 `2ff2159a...`, intermediate dirty-state
   bootfs sha256 `28f4b24a...`, and Android-bootargs bootfs sha256
   `957f91c3...`;
-- `image/rootfs.img` was rebuilt again with sha256 `338a0052...`;
+- `image/rootfs.img` was rebuilt again with sha256 `1084cbc6...`;
 - baked rootfs has only `S03-runtime-state`; retired duplicate
   `S11-runtime-state` is absent;
 - baked release defaults set debug profile to `quiet`, disabling HTTP, telnet,

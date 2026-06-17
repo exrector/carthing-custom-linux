@@ -9,9 +9,11 @@ overlays the unified userspace files from this repository.
 from __future__ import annotations
 
 import argparse
+import compileall
 import datetime as dt
 import hashlib
 import os
+import py_compile
 import shutil
 import subprocess
 import sys
@@ -25,7 +27,7 @@ REPO_ROOT = TOOLS_DIR.parent                           # .../carthing-release-in
 OVERLAY = REPO_ROOT / "overlay"                        # overlay/ (основной overlay проекта)
 DEFAULT_BASE_BUNDLE = REPO_ROOT / "source" / "base-bundle"  # source/base-bundle
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "10c48d6c327e18a1ddb2919c4817241db602cd60"
+EXPECTED_RUNTIME_TREE_SHA1 = "f6b35eecfcfc093e1186e765a03ba81ab736cfb8"
 EXPECTED_BASE_BOOTFS_SHA256 = "6e99a75c57e38acab5be5b818f559132a4b7a167e7ccfa80e4e3ce1aedd7df3e"
 REJECTED_BOOTFS_SHA256 = {
     "7977c31176b8531b27457bf7df23eb9e63c86499f8ef2054d1ed6b7c308259ee":
@@ -160,6 +162,45 @@ def copy_overlay_tree(image: Path, source: Path, dest_root: str) -> None:
         e2copy_file(image, src, f"{dest_root.rstrip('/')}/{rel}", mode=mode)
 
 
+def copy_pyc_tree(image: Path, source: Path, dest_root: str) -> int:
+    count = 0
+    for src in sorted(source.rglob("*.pyc")):
+        if "__pycache__" not in src.parts:
+            continue
+        rel = src.relative_to(source).as_posix()
+        e2copy_file(image, src, f"{dest_root.rstrip('/')}/{rel}", mode="0644")
+        count += 1
+    return count
+
+
+def bake_runtime_bytecode(image: Path, runtime_dir: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="carthing-pyc-") as tmp_s:
+        tmp_runtime = Path(tmp_s) / "carthing"
+        shutil.copytree(
+            runtime_dir,
+            tmp_runtime,
+            ignore=shutil.ignore_patterns("__pycache__", ".DS_Store", "._*"),
+        )
+        ok = compileall.compile_dir(
+            tmp_runtime,
+            quiet=1,
+            force=True,
+            legacy=False,
+            optimize=0,
+            invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
+            stripdir=str(tmp_runtime),
+            prependdir="/usr/lib/carthing",
+        )
+        if not ok:
+            raise SystemExit("runtime bytecode compilation failed")
+        e2rm_tree(image, "/usr/lib/carthing/__pycache__")
+        e2rm_tree(image, "/usr/lib/carthing/vendor/__pycache__")
+        e2rm_tree(image, "/usr/lib/carthing/vendor/bumble/__pycache__")
+        e2rm_tree(image, "/usr/lib/carthing/modules/__pycache__")
+        copied = copy_pyc_tree(image, tmp_runtime, "/usr/lib/carthing")
+        print(f"runtime bytecode files: {copied}")
+
+
 def clean_retired_runtime(image: Path) -> None:
     for name in RETIRED_RUNTIME_FILES:
         e2rm_file(image, f"/usr/lib/carthing/{name}")
@@ -252,6 +293,8 @@ def copy_runtime(image: Path) -> None:
         src = runtime_dir / name
         if src.exists():
             e2copy_file(image, src, f"/usr/lib/carthing/{name}", mode="0755")
+
+    bake_runtime_bytecode(image, runtime_dir)
 
 
 def copy_support_files(image: Path) -> None:

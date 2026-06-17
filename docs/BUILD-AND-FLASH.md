@@ -97,7 +97,7 @@ carthing-release-integration/
 SHA256SUMS (актуальные):
 ```
 6e99a75c57e38acab5be5b818f559132a4b7a167e7ccfa80e4e3ce1aedd7df3e  bootfs.bin
-338a0052a892b724abe13dfcd018d893dffadeb6a1fc85914b4f0c23464f1b80  rootfs.img
+1084cbc64d8eeb895e1ed04b96f36ce6192c30e73304a8f690679428e1d9c643  rootfs.img
 622490729632aeb3eff2fffe89da6fc13b800f51eda77791e27d89225363fb69  env.txt
 ebcba5c0a116cd5b504073595e031ca3eb9cb2e6ccad0e824d6a1bd0aacccb9c  bootlogos.bin
 ```
@@ -118,10 +118,10 @@ bootup_spotify/burn_mode/bad_charger/shell_mode/overheat). Normal boot uses
 Live U-Boot env меняется только при следующей env-прошивке; live kernel cmdline
 уже очищен через p1 `bootargs.txt`.
 
-Rootfs `338a0052...` запечён 2026-06-17 из `overlay/`: включает GE2D userspace,
+Rootfs `1084cbc6...` запечён 2026-06-17 из `overlay/`: включает GE2D userspace,
 native AAC/SBC libraries (`libhelixaac.so`, `libsbc.so`, `sbc_synth.so`),
-release-quiet debug profile, boot profiling markers, один `S03-runtime-state`
-вместо дубля `S11`, и vfat state mount options
+release-quiet debug profile, boot profiling markers, precompiled Python bytecode,
+один `S03-runtime-state` вместо дубля `S11`, и vfat state mount options
 `noatime,nodiratime,flush,errors=remount-ro`.
 Предыдущие rootfs сохранены локально в `image/archive-*/`.
 
@@ -131,7 +131,7 @@ release-quiet debug profile, boot profiling markers, один `S03-runtime-state
 `2ff2159a...`, intermediate dirty-state bootfs `28f4b24a...` или GE2D bootfs
 `957f91c3...` с vendor Android bootargs.
 
-Runtime tree SHA1 (Python-файлы в overlay): `10c48d6c327e18a1ddb2919c4817241db602cd60`
+Runtime tree SHA1 (Python-файлы в overlay): `f6b35eecfcfc093e1186e765a03ba81ab736cfb8`
 
 Проверить что у тебя именно эти образы:
 ```sh

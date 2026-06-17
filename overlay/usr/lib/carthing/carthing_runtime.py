@@ -25,20 +25,55 @@ except Exception:
 
 _BOOT_PROFILE_ENABLED = os.environ.get("CARTHING_BOOT_PROFILE", "1") != "0"
 _BOOT_PROFILE_T0 = time.monotonic()
+_BOOT_IMPORT_EVENTS = []
 
+
+def _record_import(label: str, start: float) -> None:
+    if _BOOT_PROFILE_ENABLED:
+        _BOOT_IMPORT_EVENTS.append(
+            (label, time.monotonic() - start, time.monotonic() - _BOOT_PROFILE_T0)
+        )
+
+_t_import = time.monotonic()
 import runtime_paths  # noqa: F401  (ставит sys.path)
+_record_import("runtime_paths", _t_import)
+
+_t_import = time.monotonic()
 import state_paths
+_record_import("state_paths", _t_import)
+
+_t_import = time.monotonic()
 import identity_service
-from ble_transport import init_ble
-from accessory_orchestrator import AccessoryOrchestrator
+_record_import("identity_service", _t_import)
+
+_t_import = time.monotonic()
 from runtime_model import RuntimeModel
-from iphone_service import IPhoneService
+_record_import("runtime_model", _t_import)
+
+_t_import = time.monotonic()
 from link_manager import LinkAdapter, LinkManager
+_record_import("link_manager", _t_import)
+
+_t_import = time.monotonic()
 from route_graph import Protocol
+_record_import("route_graph", _t_import)
+
+_t_import = time.monotonic()
 from route_planner import RoutePlanError, RoutePlanner
+_record_import("route_planner", _t_import)
+
+_t_import = time.monotonic()
 from session_runner import AdapterConnector, SessionRunner
+_record_import("session_runner", _t_import)
+
+_t_import = time.monotonic()
 from trusted_device_registry import TrustedDeviceRegistry
+_record_import("trusted_device_registry", _t_import)
+
+_t_import = time.monotonic()
 from virtual_connectors import HciOperationGate, VirtualRoutePatchBay
+_record_import("virtual_connectors", _t_import)
+del _t_import
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("carthing_runtime")
@@ -66,14 +101,31 @@ def _boot_milestone(milestone: str, **fields) -> None:
     logger.info(" ".join(parts))
 
 
+def _boot_import_milestones() -> None:
+    if not _BOOT_PROFILE_ENABLED:
+        return
+    uptime = _boot_profile_uptime()
+    for module, duration, runtime_at_end in _BOOT_IMPORT_EVENTS:
+        parts = [
+            f"BOOT_PROFILE_IMPORT module={module}",
+            f"duration_s={duration:.3f}",
+            f"runtime_s={runtime_at_end:.3f}",
+        ]
+        if uptime is not None:
+            parts.insert(1, f"proc_uptime_s={uptime:.3f}")
+        logger.info(" ".join(parts))
+
+
+_boot_import_milestones()
 _boot_milestone("runtime.module_loaded")
 
 RENDER_INTERVAL = 0.2   # с: рендер-тик (живой прогресс на экране)
 PUBLISH_EVERY = 5       # каждые N тиков писать runtime-bt.json (~1 с)
 
-orch: AccessoryOrchestrator | None = None
+orch = None                 # AccessoryOrchestrator
 model = RuntimeModel()
-_iphone: IPhoneService | None = None
+_boot_milestone("runtime.model_ready")
+_iphone = None              # IPhoneService
 gui = None
 transfer = None          # TransferService
 backchannel = None       # TransferControlBackchannel
@@ -814,6 +866,7 @@ async def _on_connection(connection):
         # on_disconnect/kick_reconnect will re-apply the proper visibility.
         await orch.on_le_connection_started()
 
+    from iphone_service import IPhoneService
     _iphone = IPhoneService(model, on_update=_on_publish, hci_gate=hci_gate)
     started = {"v": False}
 
@@ -1284,6 +1337,9 @@ async def main():
 
     def _configure(device):
         global orch
+        _boot_milestone("accessory_orchestrator.import_start")
+        from accessory_orchestrator import AccessoryOrchestrator
+        _boot_milestone("accessory_orchestrator.import_ready")
         orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p),
                                      hci_gate=hci_gate)
         orch.install()  # CTKD pairing config + classic enabled (для CTKD)
@@ -1296,6 +1352,8 @@ async def main():
     # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
     device = None
     _boot_milestone("ble.init_start")
+    from ble_transport import init_ble
+    _boot_milestone("ble.transport_imported")
     for attempt in range(8):
         try:
             device, _transport = await init_ble(configure_device=_configure)
