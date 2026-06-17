@@ -1315,62 +1315,8 @@ async def _pair_speaker_once():
         gate.set()
 
 
-async def main():
-    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
-    _boot_milestone("runtime.main_start")
-    _verify_persistent()
-    _boot_milestone("runtime.persistent_verified")
-
-    # Per-boot инвентарь возможностей + настройки.
-    import hardware_inventory
-    from settings_service import SettingsService
-    _boot_milestone("hardware_inventory.start")
-    hw_caps = hardware_inventory.probe()
-    _boot_milestone("hardware_inventory.ready", enabled_caps=sum(1 for v in hw_caps.values() if v))
-    settings = SettingsService()
-    session_runner = SessionRunner()
-    hci_gate = HciOperationGate()
-    route_patchbay = VirtualRoutePatchBay()
-    for protocol in Protocol:
-        session_runner.register(CompatibilityConnector(protocol))
-    logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
-
-    def _configure(device):
-        global orch
-        _boot_milestone("accessory_orchestrator.import_start")
-        from accessory_orchestrator import AccessoryOrchestrator
-        _boot_milestone("accessory_orchestrator.import_ready")
-        orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p),
-                                     hci_gate=hci_gate)
-        orch.install()  # CTKD pairing config + classic enabled (для CTKD)
-        # [CLAUDE 2026-06-04] CoD до power_on() — iOS запоминает CoD при ПЕРВОМ сопряжении.
-        # Если CoD=0 в момент pairing, iPhone не поймёт что это аудиоустройство и не покажет
-        # в списке аудиовыходов. 0x240414 = Audio/Video Major + Loudspeaker minor + Audio service.
-        from a2dp_bridge import COD_AUDIO_LOUDSPEAKER
-        device.class_of_device = COD_AUDIO_LOUDSPEAKER
-
-    # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
-    device = None
-    _boot_milestone("ble.init_start")
-    from ble_transport import init_ble
-    _boot_milestone("ble.transport_imported")
-    for attempt in range(8):
-        try:
-            device, _transport = await init_ble(configure_device=_configure)
-            _boot_milestone("ble.init_ready", attempt=attempt + 1)
-            break
-        except OSError as e:
-            _boot_milestone("ble.init_retry", attempt=attempt + 1, error=type(e).__name__)
-            logger.warning("init_ble attempt %d failed (HCI busy?): %s", attempt + 1, e)
-            await asyncio.sleep(3)
-    if device is None:
-        _boot_milestone("ble.init_failed")
-        logger.error("init_ble failed after retries — exiting (supervisor restart)")
-        return
-    await orch.apply_identity()       # одно имя на все транспорты
-    _boot_milestone("identity.applied")
-
-    device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
+def _init_gui_surface():
+    global gui, power
 
     # GUI: один home-surface + views поверх DRM (если дисплей доступен).
     # На macOS: WebDisplay через браузер (env CAR_THING_WEB_DISPLAY=1, рекомендуется)
@@ -1440,6 +1386,7 @@ async def main():
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
             _select_boot_play_now(gui.app_state)
+            gui.show_home()
             _boot_milestone("gui.ready")
         except Exception as e:
             gui = None
@@ -1448,6 +1395,65 @@ async def main():
     elif not _gui_enabled:
         _boot_milestone("gui.disabled", reason="env")
         logger.info("GUI disabled by CARTHING_GUI_ENABLE=0")
+
+
+async def main():
+    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
+    _boot_milestone("runtime.main_start")
+    _verify_persistent()
+    _boot_milestone("runtime.persistent_verified")
+
+    # Per-boot инвентарь возможностей + настройки.
+    import hardware_inventory
+    from settings_service import SettingsService
+    _boot_milestone("hardware_inventory.start")
+    hw_caps = hardware_inventory.probe()
+    _boot_milestone("hardware_inventory.ready", enabled_caps=sum(1 for v in hw_caps.values() if v))
+    settings = SettingsService()
+    session_runner = SessionRunner()
+    hci_gate = HciOperationGate()
+    route_patchbay = VirtualRoutePatchBay()
+    for protocol in Protocol:
+        session_runner.register(CompatibilityConnector(protocol))
+    logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
+    _init_gui_surface()
+
+    def _configure(device):
+        global orch
+        _boot_milestone("accessory_orchestrator.import_start")
+        from accessory_orchestrator import AccessoryOrchestrator
+        _boot_milestone("accessory_orchestrator.import_ready")
+        orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p),
+                                     hci_gate=hci_gate)
+        orch.install()  # CTKD pairing config + classic enabled (для CTKD)
+        # [CLAUDE 2026-06-04] CoD до power_on() — iOS запоминает CoD при ПЕРВОМ сопряжении.
+        # Если CoD=0 в момент pairing, iPhone не поймёт что это аудиоустройство и не покажет
+        # в списке аудиовыходов. 0x240414 = Audio/Video Major + Loudspeaker minor + Audio service.
+        from a2dp_bridge import COD_AUDIO_LOUDSPEAKER
+        device.class_of_device = COD_AUDIO_LOUDSPEAKER
+
+    # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
+    device = None
+    _boot_milestone("ble.init_start")
+    from ble_transport import init_ble
+    _boot_milestone("ble.transport_imported")
+    for attempt in range(8):
+        try:
+            device, _transport = await init_ble(configure_device=_configure)
+            _boot_milestone("ble.init_ready", attempt=attempt + 1)
+            break
+        except OSError as e:
+            _boot_milestone("ble.init_retry", attempt=attempt + 1, error=type(e).__name__)
+            logger.warning("init_ble attempt %d failed (HCI busy?): %s", attempt + 1, e)
+            await asyncio.sleep(3)
+    if device is None:
+        _boot_milestone("ble.init_failed")
+        logger.error("init_ble failed after retries — exiting (supervisor restart)")
+        return
+    await orch.apply_identity()       # одно имя на все транспорты
+    _boot_milestone("identity.applied")
+
+    device.on("connection", lambda c: asyncio.ensure_future(_on_connection(c)))
 
     # Transfer: A2DP relay + backchannel (внутри единого рантайма).
     #
