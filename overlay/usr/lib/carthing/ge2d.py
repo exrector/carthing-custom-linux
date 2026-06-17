@@ -145,8 +145,36 @@ class _ConfigExIon(ctypes.Structure):
         ("dst_planes",           _PlaneIon * 4),
     ]
 
-# GE2D_CONFIG_EX_ION ioctl code = _IOW('G', 0x03, sizeof(_ConfigExIon))
+# GE2D_CONFIG_EX_ION — original ION path (needs ION allocator, NOT for our DMA buffers)
 GE2D_CONFIG_EX_ION = _IOW(_G, 0x03, ctypes.sizeof(_ConfigExIon))
+
+# ---------------------------------------------------------------------------
+# _ConfigMemType — extended config for GE2D_CONFIG_EX_MEM (DMA-BUF path)
+# Use this for buffers allocated via GE2D_REQUEST_BUFF on G12A (S905D2)
+# ---------------------------------------------------------------------------
+
+# mem_alloc_type values (enum from ge2d.h)
+AML_GE2D_MEM_ION    = 0
+AML_GE2D_MEM_DMABUF = 1   # our GE2D-allocated DMA buffers
+AML_GE2D_MEM_INVALID = 2
+
+class _ConfigMemType(ctypes.Structure):
+    """config_para_ex_memtype_s:
+       ge2d_magic (4) + pad (4) + _ge2d_config_ex (504) + 3×mem_alloc_type (12) = 524 → pad to 528
+    """
+    _fields_ = [
+        ("ge2d_magic",           ctypes.c_int),       # must = sizeof(this struct) = 528
+        ("_pad_align",           ctypes.c_uint),      # aligns _ge2d_config_ex to offset 8
+        ("_ge2d_config_ex",      _ConfigExIon),       # 504 bytes at offset 8
+        ("src1_mem_alloc_type",  ctypes.c_uint),      # offset 512
+        ("src2_mem_alloc_type",  ctypes.c_uint),      # offset 516
+        ("dst_mem_alloc_type",   ctypes.c_uint),      # offset 520
+        # ctypes adds 4 bytes trailing pad → sizeof = 528
+    ]
+
+# GE2D_CONFIG_EX_MEM = _IOW('G', 0x07, sizeof(config_ge2d_para_ex_s))
+# config_ge2d_para_ex_s is union(config_para_ex_ion_s=504, config_para_ex_memtype_s=528) → 528
+GE2D_CONFIG_EX_MEM = _IOW(_G, 0x07, ctypes.sizeof(_ConfigMemType))
 
 class _Rect(ctypes.Structure):
     _fields_ = [("x", ctypes.c_int), ("y", ctypes.c_int),
@@ -306,55 +334,60 @@ class GE2DDevice:
     def _configure(self, dst: GE2DBuffer,
                    src: GE2DBuffer | None = None,
                    src2: GE2DBuffer | None = None):
-        cfg = _ConfigExIon()
-        ctypes.memset(ctypes.byref(cfg), 0, ctypes.sizeof(cfg))
+        wrap = _ConfigMemType()
+        ctypes.memset(ctypes.byref(wrap), 0, ctypes.sizeof(wrap))
+        wrap.ge2d_magic = ctypes.sizeof(_ConfigMemType)  # driver checks this == 528
+        ex = wrap._ge2d_config_ex
 
         # dst
         d_bpp, d_fmt = _BPP[dst.fmt]
         d_cw = _canvas_w(dst.width, d_bpp)
-        cfg.dst_para.mem_type = CANVAS_ALLOC
-        cfg.dst_para.format   = d_fmt
-        cfg.dst_para.left     = 0
-        cfg.dst_para.top      = 0
-        cfg.dst_para.width    = d_cw
-        cfg.dst_para.height   = dst.height
-        cfg.dst_planes[0].shared_fd = dst.dma_fd
-        cfg.dst_planes[0].w = d_cw
-        cfg.dst_planes[0].h = dst.height
-        cfg.dst_planes[0].addr = 0
+        ex.dst_para.mem_type = CANVAS_ALLOC
+        ex.dst_para.format   = d_fmt
+        ex.dst_para.left     = 0
+        ex.dst_para.top      = 0
+        ex.dst_para.width    = d_cw
+        ex.dst_para.height   = dst.height
+        ex.dst_planes[0].shared_fd = dst.dma_fd
+        ex.dst_planes[0].w = d_cw
+        ex.dst_planes[0].h = dst.height
+        wrap.dst_mem_alloc_type = AML_GE2D_MEM_DMABUF
 
         # src
         if src is not None:
             s_bpp, s_fmt = _BPP[src.fmt]
             s_cw = _canvas_w(src.width, s_bpp)
-            cfg.src_para.mem_type = CANVAS_ALLOC
-            cfg.src_para.format   = s_fmt
-            cfg.src_para.left     = 0
-            cfg.src_para.top      = 0
-            cfg.src_para.width    = s_cw
-            cfg.src_para.height   = src.height
-            cfg.src_planes[0].shared_fd = src.dma_fd
-            cfg.src_planes[0].w = s_cw
-            cfg.src_planes[0].h = src.height
-            cfg.src_planes[0].addr = 0
+            ex.src_para.mem_type = CANVAS_ALLOC
+            ex.src_para.format   = s_fmt
+            ex.src_para.left     = 0
+            ex.src_para.top      = 0
+            ex.src_para.width    = s_cw
+            ex.src_para.height   = src.height
+            ex.src_planes[0].shared_fd = src.dma_fd
+            ex.src_planes[0].w = s_cw
+            ex.src_planes[0].h = src.height
+            wrap.src1_mem_alloc_type = AML_GE2D_MEM_DMABUF
         else:
-            cfg.src_para.mem_type = CANVAS_TYPE_INVALID
+            ex.src_para.mem_type = CANVAS_TYPE_INVALID
+            wrap.src1_mem_alloc_type = AML_GE2D_MEM_INVALID
 
         # src2
         if src2 is not None:
             s2_bpp, s2_fmt = _BPP[src2.fmt]
             s2_cw = _canvas_w(src2.width, s2_bpp)
-            cfg.src2_para.mem_type = CANVAS_ALLOC
-            cfg.src2_para.format   = s2_fmt
-            cfg.src2_para.width    = s2_cw
-            cfg.src2_para.height   = src2.height
-            cfg.src2_planes[0].shared_fd = src2.dma_fd
-            cfg.src2_planes[0].w = s2_cw
-            cfg.src2_planes[0].h = src2.height
+            ex.src2_para.mem_type = CANVAS_ALLOC
+            ex.src2_para.format   = s2_fmt
+            ex.src2_para.width    = s2_cw
+            ex.src2_para.height   = src2.height
+            ex.src2_planes[0].shared_fd = src2.dma_fd
+            ex.src2_planes[0].w = s2_cw
+            ex.src2_planes[0].h = src2.height
+            wrap.src2_mem_alloc_type = AML_GE2D_MEM_DMABUF
         else:
-            cfg.src2_para.mem_type = CANVAS_TYPE_INVALID
+            ex.src2_para.mem_type = CANVAS_TYPE_INVALID
+            wrap.src2_mem_alloc_type = AML_GE2D_MEM_INVALID
 
-        _ioctl(self._fd, GE2D_CONFIG_EX_ION, cfg)
+        _ioctl(self._fd, GE2D_CONFIG_EX_MEM, wrap)
 
     # -----------------------------------------------------------------------
     # fillrect — hardware fill rectangle with solid color
