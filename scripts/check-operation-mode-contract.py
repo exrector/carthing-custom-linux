@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "overlay/usr/lib/carthing"))
 
 import operation_mode  # noqa: E402
+from resource_policy import RuntimeResourcePolicy  # noqa: E402
 from app_state import AppState  # noqa: E402
 from runtime_model import RuntimeModel  # noqa: E402
 
@@ -39,11 +40,17 @@ def main() -> int:
 
     model = RuntimeModel()
     model.set_operation_mode(operation_mode.PLAYNOW, play)
+    policy = RuntimeResourcePolicy(cpufreq_root="/missing-cpufreq", zram_sysfs="/missing-zram")
+    model.set_resource_policy(policy.apply(operation_mode.PLAYNOW, tier="interactive", reason="test"))
     bt = model.bt_block()
     if bt.get("operation_mode") != operation_mode.PLAYNOW:
         failures.append("RuntimeModel does not publish operation_mode")
     if bt.get("mode_resources", {}).get("speaker_standby"):
         failures.append("RuntimeModel publishes speaker_standby in Play Now")
+    if "resource_policy" not in bt:
+        failures.append("RuntimeModel does not publish resource_policy diagnostics")
+    elif bt["resource_policy"].get("cpu_policies") != []:
+        failures.append("ResourcePolicy empty-sysfs test should publish an empty cpu_policies list")
 
     app_state_text = (ROOT / "overlay/usr/lib/carthing/app_state.py").read_text()
     if 'operation_mode = "commutator"' in app_state_text:
@@ -56,12 +63,20 @@ def main() -> int:
         failures.append("route activation does not apply operation mode")
     if 'reason="settings"' not in runtime_text:
         failures.append("settings mode handler does not use central operation mode apply")
+    if 'reason="safe_unplug"' not in runtime_text:
+        failures.append("safe unplug does not pass through central Play Now mode teardown")
+    if "_apply_resource_policy" not in runtime_text:
+        failures.append("carthing_runtime does not apply mode-aware resource policy")
 
     transfer_text = (ROOT / "overlay/usr/lib/carthing/transfer_service.py").read_text()
     if "async def apply_operation_mode" not in transfer_text:
         failures.append("TransferService lacks apply_operation_mode")
     if "_stop_all_receiver_streams" not in transfer_text:
         failures.append("TransferService lacks all-receiver stream teardown for Play Now")
+
+    init_text = (ROOT / "overlay/usr/libexec/carthing/init-wrapper").read_text()
+    if "S11-zram" not in init_text:
+        failures.append("init-wrapper does not run optional S11-zram before runtime")
 
     if failures:
         for failure in failures:

@@ -16,15 +16,23 @@ python3 - <<'PY'
 import importlib.util
 from pathlib import Path
 
-script = Path("scripts/bake-unified-runtime-rootfs.py")
-spec = importlib.util.spec_from_file_location("bake_unified_runtime_rootfs", script)
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
+mods = []
+for script in (Path("scripts/bake-unified-runtime-rootfs.py"), Path("tools/bake-rootfs.py")):
+    spec = importlib.util.spec_from_file_location(script.stem.replace("-", "_"), script)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mods.append((script, mod))
 
-actual = mod.runtime_tree_sha1(Path("overlay/usr/lib/carthing"))
-expected = mod.EXPECTED_RUNTIME_TREE_SHA1
+actual = mods[0][1].runtime_tree_sha1(Path("overlay/usr/lib/carthing"))
+expected = mods[0][1].EXPECTED_RUNTIME_TREE_SHA1
 if actual != expected:
     raise SystemExit(f"runtime tree sha mismatch: {actual} != {expected}")
+for script, mod in mods[1:]:
+    if mod.EXPECTED_RUNTIME_TREE_SHA1 != expected:
+        raise SystemExit(
+            f"{script} EXPECTED_RUNTIME_TREE_SHA1 mismatch: "
+            f"{mod.EXPECTED_RUNTIME_TREE_SHA1} != {expected}"
+        )
 print(f"RUNTIME TREE SHA OK: {actual}")
 PY
 python3 -m py_compile \

@@ -136,6 +136,7 @@ backchannel = None       # TransferControlBackchannel
 iap2 = None              # IAP2Service
 settings = None          # SettingsService
 hw_caps = {}             # hardware_inventory.probe()
+resource_policy = None   # RuntimeResourcePolicy
 mac = None               # MacService
 power = None             # IdlePowerController
 session_runner = None    # SessionRunner
@@ -474,6 +475,20 @@ def _mode_resource_snapshot(mode=None):
     return resources
 
 
+def _apply_resource_policy(mode=None, reason=""):
+    if resource_policy is None:
+        return
+    try:
+        policy = resource_policy.apply(
+            mode or getattr(model, "operation_mode", operation_mode.DEFAULT),
+            tier=getattr(model, "power_tier", ""),
+            reason=reason,
+        )
+        model.set_resource_policy(policy)
+    except Exception as exc:
+        logger.info("resource policy apply ignored: %s", exc)
+
+
 async def _apply_operation_mode(mode, persist=False, reason=""):
     mode = operation_mode.normalize(mode)
     if gui is not None:
@@ -501,6 +516,7 @@ async def _apply_operation_mode(mode, persist=False, reason=""):
         model.clear_route_plan()
     resources = _mode_resource_snapshot(mode)
     model.set_operation_mode(mode, resources)
+    _apply_resource_policy(mode, reason=reason or "operation_mode")
     _boot_milestone("mode.applied", mode=mode, reason=reason or "-")
     logger.info("operation mode applied: mode=%s reason=%s resources=%s", mode, reason or "-", resources)
     _on_publish()
@@ -797,13 +813,17 @@ def _on_power_off():
         app_state.power_unplug_status = "preparing"
         app_state.power_unplug_message = "Готовим..."
     logger.warning("safe unplug requested")
-    asyncio.ensure_future(
-        power_control.prepare_for_usb_unplug(
+    async def _run():
+        try:
+            await _apply_operation_mode(operation_mode.PLAYNOW, persist=True, reason="safe_unplug")
+        except Exception as exc:
+            logger.warning("safe unplug mode teardown ignored: %s", exc)
+        await power_control.prepare_for_usb_unplug(
             transfer=transfer,
             power=power,
             state=app_state,
         )
-    )
+    asyncio.ensure_future(_run())
 
 
 def _on_set_mode(new):
@@ -863,6 +883,15 @@ def _sync_model_route_selection():
 
 def _on_publish():
     _sync_model_route_selection()
+    if resource_policy is not None:
+        try:
+            model.set_resource_policy(resource_policy.snapshot(
+                mode=getattr(model, "operation_mode", operation_mode.DEFAULT),
+                tier=getattr(model, "power_tier", ""),
+                reason="publish",
+            ))
+        except Exception:
+            pass
     model.write_bt_json()
 
 
@@ -1445,7 +1474,7 @@ def _init_gui_surface():
 
 
 async def main():
-    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, mac, power, session_runner, link_manager, hci_gate, route_patchbay
+    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, resource_policy, mac, power, session_runner, link_manager, hci_gate, route_patchbay
     _boot_milestone("runtime.main_start")
     _verify_persistent()
     _boot_milestone("runtime.persistent_verified")
@@ -1457,6 +1486,9 @@ async def main():
     hw_caps = hardware_inventory.probe()
     _boot_milestone("hardware_inventory.ready", enabled_caps=sum(1 for v in hw_caps.values() if v))
     settings = SettingsService()
+    from resource_policy import RuntimeResourcePolicy
+    resource_policy = RuntimeResourcePolicy(settings=settings, hw_caps=hw_caps)
+    _apply_resource_policy(operation_mode.current(settings), reason="boot")
     session_runner = SessionRunner()
     hci_gate = HciOperationGate()
     route_patchbay = VirtualRoutePatchBay()
@@ -1627,6 +1659,7 @@ async def main():
 
     async def _render_loop():
         tick = 0
+        last_policy_tier = None
         logger.info("_render_loop started, gui=%s power=%s", gui, power)
         while True:
             try:
@@ -1637,6 +1670,9 @@ async def main():
                     power.note_model(model)
                     power.tick()
                     model.power_tier = power.runtime_tier
+                    if model.power_tier != last_policy_tier:
+                        last_policy_tier = model.power_tier
+                        _apply_resource_policy(reason="power_tier")
                 if gui is not None and not shade:
                     gui.apply(model)      # RuntimeModel -> AppState (живой прогресс)
                     if power is None or power.display_awake:

@@ -7,7 +7,7 @@
 
 ## Ожидает бейка
 
-*(пусто после локального bake `image/rootfs.img` 2026-06-17 18:18 MSK; устройство не прошивалось после этого bake)*
+*(пусто после локального bake `flash-bake-unified-stable-20260617-234759`; устройство не прошивалось этим bundle)*
 
 ---
 
@@ -23,3 +23,4 @@
 | 2026-06-17 | Пароль root = `carthing` | `overlay/etc/shadow` создан с SHA-512 хэшем; `bake-rootfs.py` копирует его автоматически |
 | 2026-06-17 | Логотип при загрузке — наш (вождь, 480×800 RGB565), normal boot slot `bootup_spotify` | `image/bootlogos.bin` + `tools/flash.py` пишет в сектор 319488 при прошивке |
 | 2026-06-17 | BT-бонды не переносятся между устройствами | `bake-rootfs.py` вычищает `/var/lib/carthing-state` при каждом бейке |
+| 2026-06-17 | Mode-aware resource policy: `resource_policy.py`, CPU governor diagnostics, optional `S11-zram`, runtime-state `resource_policy`, and safe-unplug через центральный Play Now teardown | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260617-234759`, rootfs sha256 `72ec4b955ed94fbaaf1fc09387e8ea276d3cc7135c54e0252bb564ebdfe2b89b`, runtime tree sha1 `80e62aa8eeae5899bfdfe73576781bc1f5d22d5d` |

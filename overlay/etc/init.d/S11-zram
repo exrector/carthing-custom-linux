@@ -1,0 +1,100 @@
+#!/bin/sh
+set -eu
+
+. /etc/default/carthing
+
+log_dir=/run/carthing
+log_file="$log_dir/zram.log"
+mkdir -p "$log_dir"
+
+log() {
+    echo "[S11-zram] $*" >>"$log_file" 2>/dev/null || true
+}
+
+if [ "${CARTHING_ZRAM_ENABLE:-1}" != "1" ]; then
+    log "disabled by CARTHING_ZRAM_ENABLE"
+    exit 0
+fi
+
+sysfs=${CARTHING_ZRAM_SYSFS:-/sys/block/zram0}
+dev=${CARTHING_ZRAM_DEVICE:-/dev/zram0}
+size=${CARTHING_ZRAM_SIZE_BYTES:-134217728}
+algorithm=${CARTHING_ZRAM_ALGORITHM:-lz4}
+
+if [ ! -d "$sysfs" ] && command -v modprobe >/dev/null 2>&1; then
+    modprobe zram 2>>"$log_file" || true
+fi
+
+if [ ! -d "$sysfs" ]; then
+    log "not available: $sysfs"
+    exit 0
+fi
+
+if awk '$1 ~ /zram0$/ { found = 1 } END { exit(found ? 0 : 1) }' /proc/swaps 2>/dev/null; then
+    log "already active"
+    exit 0
+fi
+
+if [ ! -e "$dev" ] && [ -r "$sysfs/dev" ]; then
+    IFS=: read -r major minor <"$sysfs/dev"
+    mknod "$dev" b "$major" "$minor" 2>>"$log_file" || true
+fi
+
+if [ ! -e "$dev" ]; then
+    log "missing device node: $dev"
+    exit 0
+fi
+
+current_size=$(cat "$sysfs/disksize" 2>/dev/null || echo 0)
+
+if [ "$current_size" = "0" ] && [ -w "$sysfs/comp_algorithm" ]; then
+    available=$(cat "$sysfs/comp_algorithm" 2>/dev/null || true)
+    if echo "$available" | grep -qw "$algorithm" 2>/dev/null; then
+        echo "$algorithm" >"$sysfs/comp_algorithm" 2>>"$log_file" || true
+    else
+        for fallback in lzo lzo-rle deflate zstd lz4; do
+            if echo "$available" | grep -qw "$fallback" 2>/dev/null; then
+                echo "$fallback" >"$sysfs/comp_algorithm" 2>>"$log_file" || true
+                algorithm=$fallback
+                break
+            fi
+        done
+        log "algorithm ${CARTHING_ZRAM_ALGORITHM:-} unsupported, selected=$algorithm available=$available"
+    fi
+fi
+
+if [ "$current_size" != "0" ]; then
+    log "using existing disksize=$current_size"
+elif [ -w "$sysfs/disksize" ]; then
+    echo "$size" >"$sysfs/disksize" 2>>"$log_file" || {
+        log "failed to set disksize=$size"
+        exit 0
+    }
+else
+    log "missing writable disksize"
+    exit 0
+fi
+
+if ! command -v mkswap >/dev/null 2>&1 || ! command -v swapon >/dev/null 2>&1; then
+    log "swap tools missing"
+    exit 0
+fi
+
+mkswap "$dev" >>"$log_file" 2>&1 || {
+    log "mkswap failed"
+    exit 0
+}
+
+if swapon --help 2>&1 | grep -q -- "-p"; then
+    swapon -p 5 "$dev" >>"$log_file" 2>&1 || {
+        log "swapon -p failed"
+        exit 0
+    }
+elif swapon "$dev" >>"$log_file" 2>&1; then
+    log "swapon active without priority flag"
+else
+    log "swapon failed"
+    exit 0
+fi
+
+log "active size=$size algorithm=$(cat "$sysfs/comp_algorithm" 2>/dev/null || true)"

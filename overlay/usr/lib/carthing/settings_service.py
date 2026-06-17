@@ -30,6 +30,9 @@ _DEFAULTS = {
     "publish_interval_active_sec": 1.0,
     "publish_interval_quiet_sec": 10.0,
     "publish_interval_off_sec": 30.0,
+    "cpu_policy_enable": True,
+    "cpu_governor_playnow": "schedutil",
+    "cpu_governor_commutator": "performance",
 }
 
 

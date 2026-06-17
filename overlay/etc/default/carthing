@@ -63,6 +63,17 @@ CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/state.json
 CARTHING_TRANSCODE_AAC_TO_SBC=1
 CARTHING_EXPERIMENTAL_LINEOUT_ENABLE=0
 
+# Mode-aware resource policy. Runtime may change only the CPU governor, never
+# frequency limits. Unsupported governors are reported in runtime diagnostics
+# and ignored. ZRAM is optional and S11-zram exits cleanly if the kernel/device
+# does not expose /sys/block/zram0 or swap tools.
+CARTHING_CPU_POLICY_ENABLE=1
+CARTHING_CPU_GOV_PLAYNOW=schedutil
+CARTHING_CPU_GOV_COMMUTATOR=performance
+CARTHING_ZRAM_ENABLE=1
+CARTHING_ZRAM_SIZE_BYTES=134217728
+CARTHING_ZRAM_ALGORITHM=lzo
+
 CARTHING_SSH_ENABLE=1
 CARTHING_DROPBEAR_ARGS=""
 CARTHING_DEBUG_HTTP_ENABLE=1

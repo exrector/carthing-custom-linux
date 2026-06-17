@@ -154,6 +154,7 @@ async def prepare_for_usb_unplug(transfer=None, power=None, state=None) -> None:
     """
     logger.warning("safe unplug: begin")
     _set_unplug_status(state, "preparing", "Готовим...")
+    _set_unplug_status(state, "stopping_routes", "Останавливаем маршруты...")
     await graceful_shutdown(transfer=transfer, power=None, halt=False)
     bridge = getattr(transfer, "bridge", None) if transfer is not None else None
     bridge_state = getattr(bridge, "state", None) if bridge is not None else None
@@ -168,5 +169,10 @@ async def prepare_for_usb_unplug(transfer=None, power=None, state=None) -> None:
         os.sync()
     except Exception:
         pass
-    _set_unplug_status(state, "preparing", "Закрываем запись...")
+    _set_unplug_status(state, "syncing", "Закрываем запись...")
+    try:
+        os.sync()
+    except Exception:
+        pass
+    _set_unplug_status(state, "ready_to_unplug", "Можно выдернуть питание")
     _launch_finalizer("normal-safe-unplug")

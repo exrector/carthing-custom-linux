@@ -104,7 +104,16 @@ policy, not risky partitioning or bootloader work.
 
 ### A1. Per-Mode CPU/DVFS Policy
 
-Status: `NEXT`
+Status: `PARTIAL live 2026-06-17`
+
+Local implementation note:
+`resource_policy.py` now applies a conservative mode-aware CPU governor policy
+and publishes accepted governor/frequency diagnostics through runtime state.
+Play Now prefers `schedutil`; Коммутатор can request `performance` when the
+kernel supports it. QN19 live+reboot proof confirms Play Now governor
+`performance -> schedutil` and runtime-state publication. This is not fully
+`DONE` until Коммутатор route activation proof confirms boost/release behavior.
+Proof: `docs/RESOURCE-POLICY-PROOF-2026-06-17.md`.
 
 Original idea preserved:
 CPU governor `performance` -> `schedutil`; live QN19 showed all four cores at
@@ -126,7 +135,14 @@ Acceptance:
 
 ### A2. ZRAM 128 MB As Safety Margin
 
-Status: `NEXT`
+Status: `DONE live 2026-06-17`
+
+Local implementation note:
+`S11-zram` now enables `/dev/zram0` as 128 MB swap and exits successfully if
+zram or swap tools are unavailable. QN19 live+reboot proof shows `/dev/zram0`
+active in `/proc/swaps`, algorithm `[lzo] deflate`, zero used swap at boot, and
+runtime-state `resource_policy.zram.active=true`.
+Proof: `docs/RESOURCE-POLICY-PROOF-2026-06-17.md`.
 
 Original idea preserved:
 ZRAM exists (`CONFIG_ZRAM=y`) but `disksize=0` and swap is off. Add 128 MB
@@ -144,7 +160,16 @@ Acceptance:
 
 ### A3. Mode-Aware Safe Unplug Reuse
 
-Status: `NEXT`
+Status: `PARTIAL live 2026-06-17`
+
+Local implementation note:
+The GUI power action now sends the runtime through the central
+`_apply_operation_mode(playnow, reason="safe_unplug")` path before launching the
+safe-unplug finalizer. `power_control.prepare_for_usb_unplug()` also publishes
+clearer states: `preparing -> stopping_routes -> syncing -> ready_to_unplug`.
+Deployed on QN19, but intentionally not marked `DONE` until a real safe-unplug
+test is performed with the owner ready to remove/reapply USB power.
+Proof so far: `docs/RESOURCE-POLICY-PROOF-2026-06-17.md`.
 
 Original idea preserved:
 Safe unplug is a mode/resource teardown: stop route, stop standby/pairing/scans,
