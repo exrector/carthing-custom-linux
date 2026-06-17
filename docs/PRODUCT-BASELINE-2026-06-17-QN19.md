@@ -74,10 +74,15 @@ FAT-fs (mmcblk0p1): Volume was not properly unmounted. Some data may be corrupt.
 ```
 
 The canonical bootfs now clears that byte to `0x00` before flashing
-(`957f91c3...`). Live QN19 was patched the same way, rebooted, and
+(`6e99a75c...`). Live QN19 was patched the same way, rebooted, and
 `dmesg | grep -i FAT-fs` returned no warning. While the partition is mounted RW,
 Linux sets byte `0x25` back to `0x01`; that is expected mount-state behavior and
 must be cleared again by clean remount-ro/unmount.
+
+Follow-up bootargs cleanup also removed vendor Android parameters from p1
+`bootargs.txt`: `reboot_mode_android`, `androidboot.*`, `jtag`, and
+`uboot_version`. Live QN19 rebooted with a clean `/proc/cmdline` and no FAT
+warning.
 
 ## Image/source reconciliation
 
@@ -95,7 +100,7 @@ After this cleanup:
 - `tools/bake-rootfs.py` bakes `ge2d.py`, `ge2d_test.py`, `libhelixaac.so`,
   `libsbc.so`, and `sbc_synth.so`;
 - `image/rootfs.img` was updated locally;
-- `image/SHA256SUMS` records rootfs sha256 `e741a815...`;
+- `image/SHA256SUMS` records rootfs sha256 `338a0052...`;
 - the previous rootfs was preserved at
   `image/archive-20260617-123635/rootfs-before-clean-baseline.img`;
 - QN19 was not flashed or rebooted.
@@ -103,10 +108,12 @@ After this cleanup:
 After the follow-up cleanup:
 
 - `source/base-bundle/bootfs.bin` was synchronized to the current clean GE2D bootfs
-  sha256 `957f91c3...`;
+  sha256 `6e99a75c...`;
 - `tools/bake-rootfs.py` rejects the old known-bad bootfs sha256 `7977c311...`
-  and the dirty-FAT bootfs sha256 `2ff2159a...`;
-- `image/rootfs.img` was rebuilt again with sha256 `13b2b14f...`;
+  and the dirty-FAT bootfs sha256 `2ff2159a...`, intermediate dirty-state
+  bootfs sha256 `28f4b24a...`, and Android-bootargs bootfs sha256
+  `957f91c3...`;
+- `image/rootfs.img` was rebuilt again with sha256 `338a0052...`;
 - baked rootfs has only `S03-runtime-state`; retired duplicate
   `S11-runtime-state` is absent;
 - baked release defaults set debug profile to `quiet`, disabling HTTP, telnet,

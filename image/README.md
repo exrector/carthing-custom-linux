@@ -6,8 +6,8 @@
 - runtime + GUI (modular Compositor), BT-стек, GE2D userspace, native AAC/SBC codec libs
 - release debug profile: `quiet` by default; SSH stays on, HTTP/telnet/reverse-agent stay off
 - **логин: `root` / пароль `carthing`** (SSH-ключей нет — добавь свой в `/root/.ssh/authorized_keys` при желании)
-- hardware baseline: GE2D kernel in `bootfs.bin`, 512M rootfs, rescue NCM (`CONFIG_USB_G_NCM=y`) для SSH после каждой загрузки
-- runtime tree sha1: `a4149788075407912293eee712c22707b349fde7`
+- hardware baseline: GE2D kernel in `bootfs.bin`, clean Linux/CarThing bootargs, 512M rootfs, rescue NCM (`CONFIG_USB_G_NCM=y`) для SSH после каждой загрузки
+- runtime tree sha1: `10c48d6c327e18a1ddb2919c4817241db602cd60`
 
 ## Включение в репозиторий
 

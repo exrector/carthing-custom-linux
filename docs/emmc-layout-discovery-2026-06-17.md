@@ -165,5 +165,5 @@ U-Boot и сам Amlogic её знают. Linux — нет.
 
 - ~~**0.2** Отключить HTTP/Telnet~~ → **SKIP** (решение владельца — не трогать)
 - ~~**1.1** UART 115200 / fwload backend~~ → **REFINE**: `btattach-mini` уже делает speed-switch до 3 Мбит/с сам; задача переосмыслена как «проверить A2DP пропускную способность под нагрузкой»
-- **GE2D**: ядро пересобрано с `CONFIG_AMLOGIC_MEDIA_GE2D=y` (GCC 6.5.0, Colima builder), `image/bootfs.bin` обновлён; после FAT cleanup product sha256 `957f91c3`, прошито, подтверждено: `/dev/ge2d` есть, 499 МГц, IRQ=40
+- **GE2D**: ядро пересобрано с `CONFIG_AMLOGIC_MEDIA_GE2D=y` (GCC 6.5.0, Colima builder), `image/bootfs.bin` обновлён; после FAT cleanup и bootargs cleanup product sha256 `6e99a75c`, прошито/проверено на QN19: `/dev/ge2d` есть, 499 МГц, IRQ=40
 - NCM-интерфейс на Mac сейчас: **en18** (не en14)

@@ -40,7 +40,7 @@ the product baseline.
 | `ПЛАН-ПРИОРИТЕТЫ.md` p2-state DONE claims | stale/reverted | correct to current p1/vfat + backup-recovery baseline |
 | `INVARIANTS.md` p2-state DONE claim | stale/reverted | correct to current p1/vfat + rejected p3 |
 | GE2D kernel artifact without build log/config | provenance gap | document as working live, not fully reproducible yet |
-| `source/base-bundle/bootfs.bin` had old sha `7977c311...`, then dirty-FAT GE2D sha `2ff2159a...`, then intermediate sha `28f4b24a...` | dangerous stale/dirty binary | replaced with clean GE2D bootfs `957f91c3...`; bake now rejects `7977c311...`, `2ff2159a...`, and `28f4b24a...` |
+| `source/base-bundle/bootfs.bin` had old sha `7977c311...`, then dirty-FAT GE2D sha `2ff2159a...`, then intermediate sha `28f4b24a...`, then Android-bootargs GE2D sha `957f91c3...` | dangerous stale/dirty/vendor binary | replaced with clean Linux/CarThing bootfs `6e99a75c...`; bake now rejects `7977c311...`, `2ff2159a...`, `28f4b24a...`, and `957f91c3...` |
 | duplicate `S11-runtime-state` | confusing duplicate mount path | removed from overlay and retired by bake |
 | debug HTTP/telnet/reverse-agent on by default | product security risk | release default is now `quiet`; live QN19 ports left with SSH only |
 | macOS `._*` / `.fseventsd` files on live p1 | generated boot-partition noise | removed live after p1 backup |

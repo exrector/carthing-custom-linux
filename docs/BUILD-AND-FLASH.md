@@ -96,15 +96,16 @@ carthing-release-integration/
 
 SHA256SUMS (актуальные):
 ```
-957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e  bootfs.bin
-13b2b14fd15e0e20920513bc786f527f1efb75f71024822fb5467e9eb238c21b  rootfs.img
-bee43a070ad18a764a7a0f97827e6213757976f6b7a8a3987331a9396c196cb9  env.txt
+6e99a75c57e38acab5be5b818f559132a4b7a167e7ccfa80e4e3ce1aedd7df3e  bootfs.bin
+338a0052a892b724abe13dfcd018d893dffadeb6a1fc85914b4f0c23464f1b80  rootfs.img
+622490729632aeb3eff2fffe89da6fc13b800f51eda77791e27d89225363fb69  env.txt
 ebcba5c0a116cd5b504073595e031ca3eb9cb2e6ccad0e824d6a1bd0aacccb9c  bootlogos.bin
 ```
 
 `bootfs.bin` обновлён 2026-06-17: ядро пересобрано с `CONFIG_AMLOGIC_MEDIA_GE2D=y` → `/dev/ge2d` доступен.
-FAT p1 очищен от macOS AppleDouble/`.fseventsd` metadata и проверен через `fsck_msdos`;
-чистый bootfs sha256: `957f91c3...`.
+FAT p1 очищен от macOS AppleDouble/`.fseventsd` metadata, vendor bootargs
+удалены, FAT clean byte проверен (`0x25 == 0x00`); чистый bootfs sha256:
+`6e99a75c...`.
 Артефакт сборки: `carthing-device-backups/artifacts/kernel-build-ge2d-20260617/`
 Сборщик: Colima + builder контейнер + GCC 6.5.0 (тот же тулчейн что и оригинал).
 
@@ -113,18 +114,24 @@ bootup_spotify/burn_mode/bad_charger/shell_mode/overheat). Normal boot uses
 `bootup_spotify`; this matches the stock/bishopdynamics U-Boot env.
 Прошивается автоматически в p7 (сектор 319488) как часть `flash.py`.
 
-Rootfs `13b2b14f...` запечён 2026-06-17 из `overlay/`: включает GE2D userspace,
+`env.txt` очищен от legacy recovery/AVB/SELinux/slot/wipe переменных.
+Live U-Boot env меняется только при следующей env-прошивке; live kernel cmdline
+уже очищен через p1 `bootargs.txt`.
+
+Rootfs `338a0052...` запечён 2026-06-17 из `overlay/`: включает GE2D userspace,
 native AAC/SBC libraries (`libhelixaac.so`, `libsbc.so`, `sbc_synth.so`),
-release-quiet debug profile, один `S03-runtime-state` вместо дубля `S11`, и
-vfat state mount options `noatime,nodiratime,flush,errors=remount-ro`.
+release-quiet debug profile, boot profiling markers, один `S03-runtime-state`
+вместо дубля `S11`, и vfat state mount options
+`noatime,nodiratime,flush,errors=remount-ro`.
 Предыдущие rootfs сохранены локально в `image/archive-*/`.
 
 `source/base-bundle/bootfs.bin` синхронизирован с текущим чистым GE2D bootfs
-`957f91c3...`. `tools/bake-rootfs.py` теперь отказывает bake, если base-bundle
-снова содержит известный старый bootfs `7977c311...` или рабочий, но dirty-FAT bootfs
-`2ff2159a...`.
+`6e99a75c...`. `tools/bake-rootfs.py` теперь отказывает bake, если base-bundle
+снова содержит известный старый bootfs `7977c311...`, dirty-FAT bootfs
+`2ff2159a...`, intermediate dirty-state bootfs `28f4b24a...` или GE2D bootfs
+`957f91c3...` с vendor Android bootargs.
 
-Runtime tree SHA1 (Python-файлы в overlay): `a4149788075407912293eee712c22707b349fde7`
+Runtime tree SHA1 (Python-файлы в overlay): `10c48d6c327e18a1ddb2919c4817241db602cd60`
 
 Проверить что у тебя именно эти образы:
 ```sh
@@ -311,10 +318,12 @@ NCM Gadget (`0x0525:0xa4a1`) может быть виден в ioreg, но en14 
 unmounted`, не делать reboot ради косметических тестов. p1 читает U-Boot, и
 грязная FAT уже приводила к boot-loop.
 
-Текущий canonical `bootfs.bin` (`957f91c3...`) уже исправляет известную причину
-ложного warning: Linux FAT16 state byte в boot sector offset `0x25` должен быть
-`0x00` в чистом образе. При RW mount ядро временно ставит его обратно в `0x01`;
-это нормально, если clean remount-ro/unmount очищает его перед следующим boot.
+Текущий canonical `bootfs.bin` (`6e99a75c...`) уже исправляет известные причины
+ложного warning и vendor cmdline drift: Linux FAT16 state byte в boot sector
+offset `0x25` должен быть `0x00` в чистом образе, а `bootargs.txt` не должен
+содержать `androidboot.*` / `reboot_mode_android`. При RW mount ядро временно
+ставит FAT byte обратно в `0x01`; это нормально, если clean remount-ro/unmount
+очищает его перед следующим boot.
 
 ### bootlogos.bin отсутствует
 Если `image/bootlogos.bin` не найден, `flash.py` выводит WARNING и пропускает p7.

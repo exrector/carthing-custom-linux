@@ -26,7 +26,7 @@ OVERLAY = REPO_ROOT / "overlay"                        # overlay/ (основн�
 DEFAULT_BASE_BUNDLE = REPO_ROOT / "source" / "base-bundle"  # source/base-bundle
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
 EXPECTED_RUNTIME_TREE_SHA1 = "10c48d6c327e18a1ddb2919c4817241db602cd60"
-EXPECTED_BASE_BOOTFS_SHA256 = "957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e"
+EXPECTED_BASE_BOOTFS_SHA256 = "6e99a75c57e38acab5be5b818f559132a4b7a167e7ccfa80e4e3ce1aedd7df3e"
 REJECTED_BOOTFS_SHA256 = {
     "7977c31176b8531b27457bf7df23eb9e63c86499f8ef2054d1ed6b7c308259ee":
         "old non-booting bootfs; see INVARIANTS.md bootloop recovery note",
@@ -34,6 +34,8 @@ REJECTED_BOOTFS_SHA256 = {
         "dirty FAT bootfs with macOS AppleDouble/.fseventsd metadata; clean it before baking",
     "28f4b24ae96438453e38898adb4893ca70eaa2b964e2d498d85566d92c21c5b6":
         "intermediate bootfs with macOS metadata removed but Linux FAT16 dirty-state byte still set",
+    "957f91c32f9e7da654537006d004b5d1e0295236ffaeff8ecfb2f49a4d875b5e":
+        "GE2D bootfs with vendor Android bootargs; use the clean Linux/CarThing bootargs baseline",
 }
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
