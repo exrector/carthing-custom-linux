@@ -36,6 +36,9 @@ class TransferService:
             on_visibility_request=self._on_bridge_visibility,
         )
         self._speaker_enroll_task = None
+        self._operation_mode = operation_mode.normalize(
+            getattr(app_state, "operation_mode", operation_mode.DEFAULT)
+        )
 
     async def _on_bridge_visibility(self, connectable: bool, discoverable: bool):
         """Callback от a2dp_bridge — перенаправляем в оркестратор асинхронно.
@@ -94,12 +97,37 @@ class TransferService:
 
     async def _stop_all_receiver_streams(self):
         self._cancel_receiver_tasks()
-        for address in list(getattr(self.bridge, "_speaker_runtimes", {}).keys()):
+        # 2026-06-18 owner-facing mode invariant:
+        # Play Now must leave no Commutator-owned output footprint.  Older code
+        # only walked volatile SpeakerRuntime cells, which missed trusted output
+        # rows that had no current runtime or had stale GUI flags.  Build the
+        # teardown set from every known source of speaker identity, then clear
+        # both transport and AppState flags so the route screen cannot claim an
+        # external output is still connected while the product mode says Play Now.
+        addresses = set()
+        addresses.update(
+            normalize_address(address)
+            for address in getattr(self.bridge, "_speaker_runtimes", {}).keys()
+        )
+        for speaker in getattr(self.bridge.state, "trusted_speakers", []) or []:
+            addresses.add(normalize_address(speaker.get("address")))
+        for address in (
+            getattr(self.bridge, "receiver_address", ""),
+            getattr(self.bridge.state, "active_route_speaker_address", lambda: "")(),
+        ):
+            addresses.add(normalize_address(address))
+        addresses.discard("")
+        for address in sorted(addresses):
             try:
                 await self.bridge.stop_receiver_stream(address)
                 await self.bridge.disconnect_speaker_link(address)
             except Exception as exc:
                 logger.info("receiver stream stop ignored for %s: %s", address, exc)
+            try:
+                self.bridge.state.set_speaker_connected(address, False)
+                self.bridge.state.set_speaker_online(address, False)
+            except Exception:
+                pass
         try:
             await self.bridge.stop_receiver_stream()
         except Exception as exc:
@@ -127,7 +155,7 @@ class TransferService:
                 getattr(self.bridge, "_enroll_task", None),
                 self._speaker_enroll_task,
             )
-        )
+        ) or bool(getattr(self.bridge.state, "transfer_scanning", False))
         return {
             "actual_standby_loop": standby_task is not None and not standby_task.done(),
             "actual_receiver_stream": receiver_stream,
@@ -142,21 +170,31 @@ class TransferService:
     async def apply_operation_mode(self, mode, reason=""):
         mode = operation_mode.normalize(mode)
         desired = operation_mode.resources(mode)
+        # carthing_runtime also mirrors the mode into AppState before calling
+        # this method, so reading bridge.state.operation_mode here loses the
+        # true transition edge. Keep an internal last-applied mode so entering
+        # Commutator reliably runs the owner-requested one-shot output snapshot.
+        previous_mode = self._operation_mode
         try:
             self.bridge.state.operation_mode = mode
         except Exception:
             pass
         if desired.speaker_standby:
+            if previous_mode != mode:
+                await self.bridge.refresh_standby_snapshot(duration=5.0)
             self.bridge.start_standby_loop()
+            await self.bridge.ensure_trusted_speakers_connected()
         else:
             await self._stop_standby_loop()
             await self._stop_all_receiver_streams()
+            self.bridge.clear_standby_snapshot()
             await self.stop_speaker_enrollment()
             try:
                 self.bridge.local_sink_enabled = False
             except Exception:
                 pass
             self.model.audio_sink = "builtin"
+        self._operation_mode = mode
         resources = desired.as_dict()
         resources.update(self.resource_state())
         self.model.set_operation_mode(mode, resources)
@@ -389,6 +427,7 @@ class TransferService:
         try:
             self.bridge.state.select_route_speaker(address)
             self.bridge.state.transfer_status = "standby"
+            self.bridge.allow_standby_address(address, reason="manual-select")
             await self.bridge.ensure_trusted_speakers_connected()
         except Exception as e:
             logger.warning("speaker select failed: %s", e)

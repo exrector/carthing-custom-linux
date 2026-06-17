@@ -231,17 +231,23 @@ Implementation shape:
 - Results are published in `docs/ROUTE-LOAD-PROOF-2026-06-18.md`.
 
 Result:
-- Proof artifact: `artifacts/route-load-20260618-013706/proof.json`.
+- Proof artifact: `artifacts/route-load-20260618-015708/proof.json`.
 - Play Now keeps iPhone sticky:
   `source_connected=true`, `source_peer=10:A2:D3:83:82:50/P`.
-- Коммутатор activates only selected Fosi output.
-- Maedhawk is not paged in the final proof window.
+- Коммутатор performs an explicit one-shot trusted-output snapshot on entry:
+  final proof found Fosi and Maedhawk online, held Fosi as active and Maedhawk
+  as standby.
 - Returning to Play Now releases external speaker ACL/standby/receiver while
   leaving iPhone BLE/AMS alive.
+- Route-view no longer shows empty `ROUTE: -`: it shows mode/action status, and
+  Play Now visually dims external output rows so they look inactive until
+  Коммутатор owns them.
 
 Acceptance:
 - In Play Now, actual commutator resources remain false.
-- In Коммутатор with active route, only selected output is active.
+- In Коммутатор with active route, selected output is active and other
+  snapshot-found online outputs may be held as standby; offline trusted outputs
+  are not continuously polled.
 - Returning to Play Now tears down receiver/standby/patchbay.
 
 ### A6. Input Pairing Enrollment Window

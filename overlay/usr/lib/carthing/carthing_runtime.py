@@ -684,6 +684,7 @@ async def _apply_route_output(key):
         try:
             gui.app_state.select_active_route_output(key)
             transfer.bridge.state.select_active_route_output(key)
+            transfer.bridge.allow_standby_address(key, reason="route-output")
         except Exception as e:
             logger.warning("select speaker %s failed: %s", key, e)
         # [CLAUDE 2026-06-11] НЕ обзваниваем ВСЕ колонки на [LNK]: page выключенной

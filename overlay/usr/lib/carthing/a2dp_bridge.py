@@ -392,6 +392,7 @@ class A2DPBridge:
         self._scan_task: asyncio.Task | None = None
         self._enroll_task: asyncio.Task | None = None
         self._receiver_retry_task: asyncio.Task | None = None
+        self._standby_snapshot_addresses: set[str] = set()
         self._speaker_runtimes: dict[str, SpeakerRuntime] = {}
         self._stale_link_key_addresses = set()
         # [CLAUDE 2026-06-12] локальный выход (этаж 4): флаг ставит runtime
@@ -729,17 +730,50 @@ class A2DPBridge:
         if self._standby_task is None or self._standby_task.done():
             self._standby_task = asyncio.create_task(self.speaker_standby_loop())
 
-    async def speaker_standby_loop(self):
-        """Keep the selected route speaker in bonded Classic standby.
+    def clear_standby_snapshot(self):
+        self._standby_snapshot_addresses.clear()
 
-        2026-06-18 resource-policy correction:
-        Play Now is the default low-noise mode, and Commutator should only spend
-        radio time on the route the user actually selected. The older policy
-        paged every trusted speaker in the standby loop; with Fosi selected this
-        still tried Maedhawk, producing PAGE_TIMEOUT/backoff noise and stealing
-        controller time from the active path. Multi-speaker soak testing remains
-        available with CARTHING_STANDBY_ALL_SPEAKERS=1, but release behavior is
-        selected-output standby only.
+    def allow_standby_address(self, address, reason: str = ""):
+        address = normalize_address(address)
+        if not address:
+            return
+        self._standby_snapshot_addresses.add(address)
+        self.state.transfer_status = "output selected"
+        self.logger.info("A2DP standby snapshot include: %s reason=%s", address, reason or "-")
+
+    async def refresh_standby_snapshot(self, duration: float = 5.0):
+        """One-shot trusted-output discovery for entering Commutator.
+
+        Product rule from 2026-06-18 owner correction: do not keep polling in
+        the background, but when the user explicitly enters Commutator, scan once
+        and hold the trusted outputs that were actually online then. Manual
+        output selection can add a target later without reopening general
+        all-speaker polling.
+        """
+        self.state.transfer_status = "scanning outputs"
+        self.on_state_change()
+        found = await self.scan_trusted_speakers(duration=duration, connect_after=False)
+        self._standby_snapshot_addresses = {normalize_address(address) for address in found if address}
+        self.state.transfer_status = (
+            f"found outputs: {len(self._standby_snapshot_addresses)}"
+            if self._standby_snapshot_addresses
+            else "no outputs found"
+        )
+        self.logger.info(
+            "A2DP standby snapshot refreshed: count=%d addresses=%s",
+            len(self._standby_snapshot_addresses),
+            ",".join(sorted(self._standby_snapshot_addresses)) or "-",
+        )
+        self.on_state_change()
+
+    async def speaker_standby_loop(self):
+        """Keep the Commutator-discovered speaker snapshot in Classic standby.
+
+        2026-06-18 owner correction:
+        Play Now remains quiet, but Commutator is allowed to hold multiple
+        trusted outputs if they were found online by the explicit one-shot scan
+        performed when the user entered the mode. This preserves multi-output
+        readiness without returning to constant background polling.
         """
         while True:
             try:
@@ -754,10 +788,13 @@ class A2DPBridge:
         speakers = list(self.state.trusted_speakers)
         selected_address = normalize_address(self.state.active_route_speaker_address() or "")
         standby_all = os.environ.get("CARTHING_STANDBY_ALL_SPEAKERS") == "1"
-        if selected_address and not standby_all:
+        snapshot = set(self._standby_snapshot_addresses)
+        if standby_all:
+            pass
+        elif snapshot:
             speakers = [
                 speaker for speaker in speakers
-                if normalize_address(speaker.get("address")) == selected_address
+                if normalize_address(speaker.get("address")) in snapshot
             ]
         elif selected_address:
             speakers.sort(
@@ -765,8 +802,18 @@ class A2DPBridge:
                 if normalize_address(speaker.get("address")) == selected_address
                 else 1
             )
+            speakers = [
+                speaker for speaker in speakers
+                if normalize_address(speaker.get("address")) == selected_address
+            ]
         else:
             return
+        if selected_address:
+            speakers.sort(
+                key=lambda speaker: 0
+                if normalize_address(speaker.get("address")) == selected_address
+                else 1
+            )
         for speaker in speakers:
             # Pure sources are not paged as speakers. Multirole devices are
             # eligible only after the output side was explicitly enrolled, so
@@ -799,10 +846,10 @@ class A2DPBridge:
             # канал просто живёт в фоне. Идемпотентно: если уже held на этот адрес — no-op.
             if asyncio.get_running_loop().time() < runtime.backoff_not_before:
                 continue
-            # Release standby is route-scoped. The selected output is held so
-            # Fosi-class DACs leave pairing mode and stay ready; non-selected
-            # speakers are not paged in the background unless explicitly enabled
-            # for lab diagnostics via CARTHING_STANDBY_ALL_SPEAKERS=1.
+            # Release standby is snapshot-scoped. Outputs found by the explicit
+            # Commutator scan are held; offline trusted rows are not paged in the
+            # background unless manually selected or lab-enabled via
+            # CARTHING_STANDBY_ALL_SPEAKERS=1.
             await self.request_receiver_connection(address)
 
     async def enable_classic_visibility(self):
@@ -1563,7 +1610,7 @@ class A2DPBridge:
                 delay,
             )
 
-    async def scan_trusted_speakers(self, duration: float = 6.0):
+    async def scan_trusted_speakers(self, duration: float = 6.0, connect_after: bool = True):
         found = set()
         complete = asyncio.get_running_loop().create_future()
 
@@ -1599,10 +1646,14 @@ class A2DPBridge:
                 self.logger.info("A2DP speaker scan stop ignored: %s", error_text(exc))
             self.state.transfer_scanning = False
             self.on_state_change()
-            if self.state.transfer_active and self.source_stream_active:
-                await self.request_receiver_connection(require_online=True)
-            else:
-                await self.ensure_trusted_speakers_connected()
+            if connect_after:
+                if self.state.transfer_active and self.source_stream_active:
+                    await self.request_receiver_connection(require_online=True)
+                else:
+                    for address in found:
+                        self.allow_standby_address(address, reason="trusted-scan")
+                    await self.ensure_trusted_speakers_connected()
+        return set(found)
 
     async def scan_pairable_speakers(self, duration: float = 10.0):
         """Classic inquiry for new speaker enrollment.
@@ -2693,6 +2744,7 @@ class A2DPBridge:
                 self.logger.info("A2DP speaker classic ACL disconnected for Play Now: %s", address)
             except Exception as exc:
                 self.logger.info("A2DP speaker classic disconnect ignored: %s: %s", address, error_text(exc))
+        self.state.transfer_status = "playnow"
         self.on_state_change()
 
     def on_avdtp_connection(self, protocol: avdtp.Protocol):

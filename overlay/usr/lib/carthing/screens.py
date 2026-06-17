@@ -223,10 +223,10 @@ class RouteBuilderScreen(Screen):
             return True
         return False
 
-    def _dot(self, draw, x, y, dev):
+    def _dot(self, draw, x, y, dev, dim=False):
         connected = bool(dev.get("connected"))
         online = bool(dev.get("online")) or connected
-        color = T.STATUS_OK if connected else (T.MUTED if online else T.FAINT)
+        color = T.FAINT if dim else (T.STATUS_OK if connected else (T.MUTED if online else T.FAINT))
         draw.ellipse((x - 6, y - 6, x + 6, y + 6), fill=color)
 
     def _column(self, draw, regions, side, x0, x1, title, sel_key, intent):
@@ -251,12 +251,22 @@ class RouteBuilderScreen(Screen):
             key = dev.get("key") or dev.get("address")
             selected = (key == sel_key) or bool(dev.get("route_" + side))
             connected = bool(dev.get("connected"))
+            mode = str(getattr(self.state, "operation_mode", "playnow") or "playnow")
+            self_key = getattr(self.state, "SELF_OUTPUT_KEY", "carthing")
+            dim_output = side == "output" and mode != "commutator" and key != self_key
             # ЗЕЛЁНЫЙ = реально подключён сейчас; выбранный, но не подключён — акцент; иначе обычный
-            name_col = T.STATUS_OK if connected else (T.ACCENT if selected else T.FG)
+            name_col = T.FAINT if dim_output else (T.STATUS_OK if connected else (T.ACCENT if selected else T.FG))
             rect = (x0, int(y), x1, int(y + self.ROW_H2 - 8))
             if selected:
-                draw.rectangle(rect, fill=T.SURFACE_SEL,
-                               outline=(T.STATUS_OK if connected else T.ACCENT), width=2)
+                # 2026-06-18 owner GUI rule: Play Now is a quiet mode.  External
+                # outputs remain selectable, but they must not look active until
+                # Commutator owns the route graph and radio work.
+                draw.rectangle(
+                    rect,
+                    fill=(T.BG if dim_output else T.SURFACE_SEL),
+                    outline=(T.FAINT if dim_output else (T.STATUS_OK if connected else T.ACCENT)),
+                    width=2,
+                )
             name = dev.get("label") or dev.get("address") or "Device"
             name = C.truncate(draw, name, T.font(T.SZ_SMALL), (x1 - x0) - 44)
             draw.text((x0 + 12, int(y) + 4), name, font=T.font(T.SZ_SMALL), fill=name_col)
@@ -266,7 +276,7 @@ class RouteBuilderScreen(Screen):
             sub = str(dev.get("address") or dev.get("type") or "")
             sub = C.truncate(draw, sub, T.font(self.MAC_FONT), (x1 - x0) - 44)
             draw.text((x0 + 12, int(y) + 28), sub, font=T.font(self.MAC_FONT), fill=T.FAINT)
-            self._dot(draw, x1 - 16, int(y) + self.ROW_H2 // 2 - 4, dev)
+            self._dot(draw, x1 - 16, int(y) + self.ROW_H2 // 2 - 4, dev, dim=dim_output)
             if regions is not None:
                 regions.add(rect, intent, payload=key)
             rows[key] = int(y) + self.ROW_H2 // 2 - 4
@@ -351,30 +361,41 @@ class RouteBuilderScreen(Screen):
                 if regions is not None and intent is not None:
                     regions.add((x - 10, cy - R, x + w + 10, cy + R), intent, payload=payload)
                 x += w + gap
-            # ROUTE status line (RUNBOOK задача №5, шаг 2): факт выше кнопок
+            # 2026-06-18 owner GUI correction:
+            # This line is the user's feedback channel for explicit/manual route
+            # work.  A bare "ROUTE: -" looked like missing data while Play Now was
+            # intentionally quiet.  Show the product mode and the current action
+            # instead; if Play Now still sees an external output footprint, make
+            # that mismatch visible instead of hiding it behind the selected mode.
             src_conn = getattr(self.state, "actual_source_connected", False)
             src_stream = getattr(self.state, "actual_source_streaming", False)
             recv_addr = getattr(self.state, "actual_receiver_addr", "")
-            if src_conn and recv_addr:
-                # Имена: по выбранным ключам (упрощение: метки из inputs/outputs)
-                def _label(key, devs):
-                    for d in (devs or []):
-                        if (d.get("key") or d.get("address", "")) == key:
-                            return (d.get("label") or key or "?").upper()[:8]
-                    return (key or "?").upper()[:8]
-                src_lbl = _label(ri, getattr(self.state, "route_inputs", []))
-                spk_lbl = _label(ro, getattr(self.state, "route_outputs", []))
-                suffix = "►" if src_stream else "…"  # ▶ или …
-                route_text = f"ROUTE: {src_lbl}→{spk_lbl} {suffix}"
-                # Цвет: выбранный маршрут совпадает с фактом → STATUS_OK, иначе WARN
-                expected_match = (ri and ro and src_conn and recv_addr)
-                route_col = T.STATUS_OK if expected_match else T.WARN
-            elif src_conn:
-                route_text = "ROUTE: ←? …"
-                route_col = T.ACCENT
+            mode = str(getattr(self.state, "operation_mode", "playnow") or "playnow")
+            status = str(getattr(self.state, "transfer_status", "") or "").lower()
+            self_key = getattr(self.state, "SELF_OUTPUT_KEY", "carthing")
+            external_connected = [
+                d for d in (getattr(self.state, "route_outputs", []) or [])
+                if (d.get("key") or d.get("address")) != self_key and d.get("connected")
+            ]
+            if mode == "commutator":
+                if getattr(self.state, "transfer_scanning", False) or "scanning" in status:
+                    route_text, route_col = "MODE: COMM SCAN", T.STATUS_WARN
+                elif recv_addr and src_conn:
+                    route_text = "MODE: COMM LINK" + (" PLAY" if src_stream else " WAIT")
+                    route_col = T.STATUS_OK if src_stream else T.ACCENT
+                elif external_connected:
+                    route_text = f"MODE: COMM HOLD {len(external_connected)}"
+                    route_col = T.STATUS_OK
+                elif "no outputs" in status:
+                    route_text, route_col = "MODE: COMM NO OUT", T.WARN
+                else:
+                    route_text, route_col = "MODE: COMM READY", T.ACCENT
+            elif recv_addr or external_connected:
+                route_text = "MODE: PLAY NOW EXT"
+                route_col = T.WARN
             else:
-                route_text = "ROUTE: —"
-                route_col = T.HAIRLINE
+                route_text = "MODE: PLAY NOW"
+                route_col = T.STATUS_OK
             fs = T.font(T.SZ_SMALL)
             rtw = int(draw.textlength(route_text, font=fs))
             draw.text((T.W // 2 - rtw // 2, bar_top + 8), route_text, font=fs, fill=route_col)
