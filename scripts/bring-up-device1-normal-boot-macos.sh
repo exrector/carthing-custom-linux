@@ -51,7 +51,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 discover_bsd_name() {
-    ioreg -r -n 'exrector's device' -w 0 -l 2>/dev/null \
+    ioreg -r -n "exrector's device" -w 0 -l 2>/dev/null \
         | sed -n 's/.*"BSD Name" = "\(.*\)".*/\1/p' \
         | head -n 1
 }

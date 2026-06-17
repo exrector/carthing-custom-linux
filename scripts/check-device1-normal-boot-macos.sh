@@ -53,7 +53,7 @@ ROOT_DEFAULT_IP=${ROOT_DEFAULT_IP:-172.16.42.2}
 ROOT_STAGE2_IP=${ROOT_STAGE2_IP:-172.16.42.77}
 
 usb_dump() {
-    ioreg -r -n 'exrector's device' -w 0 -l 2>/dev/null || true
+    ioreg -r -n "exrector's device" -w 0 -l 2>/dev/null || true
 }
 
 extract_first() {
