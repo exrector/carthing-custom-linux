@@ -229,6 +229,34 @@ class RouteBuilderScreen(Screen):
         color = T.FAINT if dim else (T.STATUS_OK if connected else (T.MUTED if online else T.FAINT))
         draw.ellipse((x - 6, y - 6, x + 6, y + 6), fill=color)
 
+    def _device_subline(self, dev):
+        protos = sorted({
+            str(proto)
+            for endpoint in (dev.get("endpoints") or [])
+            for proto in (endpoint.get("protocols") or [])
+        })
+        labels = []
+        if "classic_a2dp_sink" in protos:
+            labels.append("A2DP in")
+        if "classic_a2dp_source" in protos:
+            labels.append("A2DP out")
+        if "classic_avrcp" in protos:
+            labels.append("AVRCP")
+        if "ble_ams" in protos:
+            labels.append("AMS")
+        if "ble_ancs" in protos:
+            labels.append("ANCS")
+        profile = ((dev.get("metadata") or {}).get("capability_profile") or {})
+        status = str(profile.get("probe_status") or "").strip()
+        if status and status not in ("ready", "ok"):
+            labels.append(status)
+        unknowns = profile.get("unknowns") or []
+        if unknowns:
+            labels.append("?" + ",".join(str(v).replace("_", "-") for v in unknowns[:2]))
+        if labels:
+            return " / ".join(labels)
+        return str(dev.get("address") or dev.get("type") or "")
+
     def _column(self, draw, regions, side, x0, x1, title, sel_key, intent):
         focused = self.focus == side
         draw.text((x0 + 12, self.HEAD_Y), title, font=T.font(28),
@@ -273,7 +301,7 @@ class RouteBuilderScreen(Screen):
             # [CLAUDE 2026-06-11] вторая строка ВНУТРИ рамки (раньше MAC на y+30
             # шрифтом 18 выпадал за низ rect y+48 — «явно некрасиво»). У self-выхода
             # (Car Thing) адреса нет — показываем тип (Play Now), а не тире-подчёркивание.
-            sub = str(dev.get("address") or dev.get("type") or "")
+            sub = self._device_subline(dev)
             sub = C.truncate(draw, sub, T.font(self.MAC_FONT), (x1 - x0) - 44)
             draw.text((x0 + 12, int(y) + 28), sub, font=T.font(self.MAC_FONT), fill=T.FAINT)
             self._dot(draw, x1 - 16, int(y) + self.ROW_H2 // 2 - 4, dev, dim=dim_output)

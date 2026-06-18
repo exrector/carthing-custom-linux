@@ -253,11 +253,17 @@ def _merge_label(current, incoming, address=""):
     current = _clean_label(current)
     incoming = _clean_label(incoming)
     address = normalize_address(address)
+    current_placeholder = current.startswith("Bluetooth Input ")
     if not incoming:
         return current
     if _looks_like_address(incoming) or normalize_address(incoming) == address:
         return current or incoming
-    if not current or _looks_like_address(current) or normalize_address(current) == address:
+    if (
+        not current
+        or current_placeholder
+        or _looks_like_address(current)
+        or normalize_address(current) == address
+    ):
         return incoming
     return current
 
@@ -353,8 +359,8 @@ def _normalize_trusted_row(device):
         device["role"] = device.get("role") if device.get("role") not in ("source",) else "speaker"
         device["type"] = device.get("type") or "Динамик"
     elif _device_is_input(device):
-        device["role"] = device.get("role") if device.get("role") not in ("speaker",) else "source"
-        device["type"] = device.get("type") or "Источник"
+        device["role"] = "source"
+        device["type"] = "Источник"
     _ensure_capability_profile(device)
     return device
 

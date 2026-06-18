@@ -1398,6 +1398,51 @@ class A2DPBridge:
         except Exception as exc:
             self.logger.info("speaker remote-name heal ignored (%s): %s", address, error_text(exc))
 
+    async def _heal_source_name(self, address, connection=None):
+        """Replace a provisional input label with the peer's Classic remote name."""
+        address = normalize_address(address)
+        if not address:
+            return
+        try:
+            device_row = next(
+                (d for d in getattr(self.state, "trusted", [])
+                 if normalize_address(d.get("address")) == address),
+                None,
+            )
+            current = (device_row or {}).get("label") or ""
+            if (
+                current
+                and not current.startswith("Bluetooth Input ")
+                and not looks_like_address(current)
+                and current != address
+            ):
+                return
+            name = await self._gate(
+                "a2dp-source-remote-name",
+                lambda: asyncio.wait_for(
+                    self.device.request_remote_name(connection or address),
+                    timeout=5.0,
+                ),
+            )
+            name = str(name or "").strip()
+            if not name or looks_like_address(name):
+                return
+            self.state.enroll_trusted_device(
+                address,
+                name=name,
+                service_uuids={"audio_source", "110a", "avrcp", "110e", "110f"},
+                metadata={
+                    "input_enrolled": True,
+                    "name_source": "classic_remote_name",
+                    "probe_stage": "source_name_ready",
+                },
+            )
+            self.state.save_trusted()
+            self.logger.info("device card source name healed: %s -> %s", address, name)
+            self.on_state_change()
+        except Exception as exc:
+            self.logger.info("source remote-name heal ignored (%s): %s", address, error_text(exc))
+
     def _find_classic_connection(self, address):
         """[CLAUDE 2026-06-02] Найти ЖИВОЙ classic (BR/EDR) коннект к адресу среди
         device.connections — чтобы переиспользовать, а не дозваниваться вторично (раса 0xB)."""
@@ -2235,6 +2280,7 @@ class A2DPBridge:
         self._trust_incoming_source_during_pairing(
             address,
             reason="classic_avctp",
+            connection=l2cap_channel.connection,
         )
         if (
             self.state.is_trusted_speaker(address)
@@ -2254,6 +2300,8 @@ class A2DPBridge:
         if self.state.is_trusted_source(address):
             self._source_avrcp = protocol
             self._source_avrcp_addr = address
+            connection = getattr(getattr(protocol, "avctp_protocol", None), "connection", None)
+            asyncio.create_task(self._heal_source_name(address, connection=connection))
             asyncio.create_task(self._start_source_avrcp_session())
         elif self.state.is_trusted_speaker(address):
             self.logger.info("AVRCP speaker backchannel armed: %s", address)
@@ -2266,7 +2314,7 @@ class A2DPBridge:
             "source",
         )
 
-    def _trust_incoming_source_during_pairing(self, address, reason="classic"):
+    def _trust_incoming_source_during_pairing(self, address, reason="classic", connection=None):
         """Enroll a newly selected input only inside the explicit Add Device flow.
 
         macOS/iPadOS/another phone may enter through Classic first while the
@@ -2304,6 +2352,7 @@ class A2DPBridge:
             address,
             reason,
         )
+        asyncio.create_task(self._heal_source_name(address, connection=connection))
         if self.on_input_enrolled is not None:
             try:
                 result = self.on_input_enrolled(address)
@@ -2867,6 +2916,7 @@ class A2DPBridge:
         self._trust_incoming_source_during_pairing(
             peer_address,
             reason="classic_avdtp",
+            connection=protocol.l2cap_channel.connection,
         )
         if (
             self.state.is_trusted_speaker(peer_address)
