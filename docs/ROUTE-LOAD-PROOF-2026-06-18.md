@@ -198,3 +198,24 @@ no equivalent Fosi footprint after the patched 10:35 restart. A direct rejection
 line will appear only if the speaker initiates a fresh incoming connection; the
 state proof already confirms that Play Now no longer keeps or reports an
 external output link while Fosi is powered.
+
+## Owner Manual Proof 2026-06-18 10:44 — Commutator Still Acquires Fosi
+
+Owner performed the missing end-to-end interaction test after the Play Now
+incoming-output gate was deployed:
+
+```text
+1. Start music while CarThing is in Play Now.
+2. Switch operation mode to Коммутатор.
+3. Wait for the explicit Commutator output acquisition window.
+4. Fosi Audio ZD3 automatically connects to CarThing.
+5. Route output is redirected to Fosi.
+6. Music plays through Fosi successfully.
+```
+
+Result: the new Play Now gate does not break the intended Коммутатор behavior.
+The product contract is now validated in both directions:
+
+- Play Now stays quiet and does not keep or accept external output links.
+- Коммутатор can still acquire the trusted Fosi output, route to it, and play
+  audio when the user explicitly enters that mode.
