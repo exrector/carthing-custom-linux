@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>CarThingObserver</string>
+    <key>CFBundleDisplayName</key>
+    <string>Car Thing Observer</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.exrector.carthing.observer</string>
+    <key>CFBundleVersion</key>
+    <string>0.1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Car Thing project — local diagnostic helper</string>
+    <!-- Требуется macOS TCC для доступа к CoreBluetooth. -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Car Thing Observer использует Bluetooth для подключения к устройству Car Thing по BLE GATT и L2CAP CoC для наблюдения за сессией.</string>
+</dict>
+</plist>

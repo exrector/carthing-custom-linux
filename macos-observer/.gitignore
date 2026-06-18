@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+*.xcodeproj
+DerivedData/
+.DS_Store
+# Runtime-артефакты, если env CARTHING_OBSERVER_ARTIFACTS укажет внутрь папки.
+artifacts/
