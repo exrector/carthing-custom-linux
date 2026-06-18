@@ -7,7 +7,7 @@
 
 ## Ожидает бейка
 
-*(пусто после локального bake `flash-bake-unified-stable-20260618-015815`; устройство не прошивалось этим bundle)*
+*(пусто после локального bake `flash-bake-unified-stable-20260618-102714`; устройство не прошивалось этим bundle)*
 
 ---
 
@@ -26,3 +26,4 @@
 | 2026-06-17 | Mode-aware resource policy: `resource_policy.py`, CPU governor diagnostics, optional `S11-zram`, runtime-state `resource_policy`, ALS/proximity diagnostics, and safe-unplug через центральный Play Now teardown | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260617-235414`, rootfs sha256 `362c4290d37cb7a5b1a93c2def85d9c0bd4d504487f7cfaa943bc327535ec17e`, runtime tree sha1 `e3e456c79ad0712a3c54549b71acd97dc4e7b6b1` |
 | 2026-06-18 | Route-load/manual-background-policy: route-scoped Fosi standby, Play Now releases speaker ACL, periodic `LinkManager` polling disabled, `speaker_scan` manual/event-driven, proof script `tools/route-load-proof.sh`, iPhone stickiness preserved | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-013904`, rootfs sha256 `f5b6b1994c45174fef66d8947b0dd49679ebebe93bf70f5d7e545a512cbfb4ac`, runtime tree sha1 `856683dc1506cab30070c0229ca44aef1330ed48`; proof `docs/ROUTE-LOAD-PROOF-2026-06-18.md` |
 | 2026-06-18 | Commutator snapshot standby: one-shot trusted-output scan on Коммутатор entry, hold all found online outputs, Play Now clears all external output footprints, Route-view mode/status line, external outputs dimmed in Play Now | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-015815`, rootfs sha256 `174ad69defe7a2edf4ed857ef61cf513e90b81766c2769109de2268fae2ed589`, runtime tree sha1 `1dd0d1d9ab0e2cdad4662c665eb2caeee3487b61`; proof `artifacts/route-load-20260618-015708/proof.json` |
+| 2026-06-18 | Source-first gentle Play Now teardown: when leaving Коммутатор, close iPhone/source AVDTP stream/signaling before suspending/closing receiver outputs and releasing speaker ACLs | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-102714`, rootfs sha256 `713cfc81bccf9f53ad83ac7c6360f144a3bdd51f34934daaac695d9b9a51a8a2`, runtime tree sha1 `c7899528cc75dfaf0b97e1780de72595779b4a83`; live deploy verified source ACL closes before Play Now resource teardown, active-RTP graceful-close proof still needs Fosi + playback |

@@ -125,3 +125,32 @@ released with Fosi on return to Play Now.
 - AVDTP/SDP listener is still started at boot as a transitional compatibility
   surface. Lazy listener startup should be researched separately because it can
   affect iPhone stickiness and pairing behavior.
+
+## Follow-up 2026-06-18 10:27 — Source-First Play Now Teardown
+
+Owner correction: "do not just tear down output ACLs; tell the source first that
+we are going to end the route." Implemented in `TransferService.apply_operation_mode()`:
+Play Now transitions now call `bridge.disconnect_source()` before stopping
+standby/receiver streams and releasing external speaker ACLs.
+
+Why: `disconnect_source()` already performs the polite iPhone path: close the
+A2DP source stream, close AVDTP signaling, then release Classic ACL while leaving
+BLE/AMS/ANCS/CTS intact. Running that before output teardown prevents the source
+from continuing to send RTP into an output that is already disappearing.
+
+Live check after deploy:
+
+```text
+transfer_service.py deployed with restart
+operation_mode before/after remains playnow
+source_connected=true source_peer=10:A2:D3:83:82:50/P
+10:26:38 A2DP source classic ACL disconnected (back to BLE-only)
+10:26:38 transfer mode applied: mode=playnow ...
+```
+
+Limit of that live check: Fosi was unavailable/backoff and no source RTP stream
+was opened, so the active-stream log lines (`A2DP source stream closed gracefully`,
+`A2DP source AVDTP signaling closed gracefully`) were not re-exercised in this
+specific proof. The code path is the same `disconnect_source()` path already
+used for iPhone graceful return; a full audio proof should be repeated with Fosi
+online and playback active.

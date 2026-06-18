@@ -185,6 +185,15 @@ class TransferService:
             self.bridge.start_standby_loop()
             await self.bridge.ensure_trusted_speakers_connected()
         else:
+            # 2026-06-18 owner correction:
+            # Going back to Play Now should be polite, not just a speaker ACL
+            # yank.  Close the active iPhone/source AVDTP stream/signaling first
+            # via disconnect_source(); this tells iOS that the audio route is
+            # ending before we suspend/close receiver streams and release speaker
+            # ACLs.  Speaker-side teardown still uses AVDTP suspend/close before
+            # ACL disconnect below, but the source-first order avoids forwarding
+            # into a disappearing output and reduces dropped packets.
+            await self.bridge.disconnect_source()
             await self._stop_standby_loop()
             await self._stop_all_receiver_streams()
             self.bridge.clear_standby_snapshot()
