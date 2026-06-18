@@ -340,8 +340,7 @@ class AccessoryOrchestrator:
                 logger.warning("%s(%s) failed: %s", fn_name, val, e)
 
     # ── intents / события (пересчитывают видимость) ──────────────────────────
-    async def arm_pairing(self, on: bool, disconnect_current: bool = False,
-                          classic_discoverable: bool = False):
+    async def arm_pairing(self, on: bool, classic_discoverable: bool = False):
         """GUI: вход/выход «Режим сопряжения» (двунаправленный — источники И динамики)."""
         self.pairing_armed = bool(on)
         self.classic_pairing_discoverable = bool(on and classic_discoverable)
@@ -355,69 +354,14 @@ class AccessoryOrchestrator:
             # попытка идёт на on-air RPA с обеих сторон -> DHKey сходится. Свежая пара перезапишет
             # старый бонд (keystore keyed by identity). Резолвинг вернётся на следующем power_on.
             # Codex: долгосрочно — refresh resolving list на on_bonded (тогда и рестарт не нужен).
+            # 2026-06-18 product invariant: entering input pairing must not
+            # disconnect an already attached Play Now phone. The earlier
+            # forced-disconnect experiment made another device easier to see
+            # only by breaking the primary source. New input discovery must be
+            # solved as a transport/advertising design problem, not by dropping
+            # existing LE/Classic links.
             await self._disable_resolution_for_pairing()
-            if disconnect_current:
-                await self._disconnect_current_connections_for_pairing()
         await self.apply_visibility()
-
-    async def disconnect_le_connections_for_pairing(self):
-        """Free BLE advertising for adding another input without dropping Classic outputs."""
-        disconnected = set()
-        try:
-            from bumble.core import BT_BR_EDR_TRANSPORT
-            raw_connections = self.device.connections
-            connections = list(raw_connections.values() if hasattr(raw_connections, "values") else raw_connections)
-        except Exception:
-            connections = []
-            BT_BR_EDR_TRANSPORT = object()
-        for connection in connections:
-            if getattr(connection, "transport", None) == BT_BR_EDR_TRANSPORT:
-                continue
-            try:
-                peer = getattr(connection, "peer_address", connection)
-                disconnected.add(str(peer))
-                logger.info("Input pairing mode: disconnect current LE peer %s", peer)
-                await connection.disconnect()
-            except Exception as e:
-                logger.warning("input pairing LE disconnect ignored: %s", e)
-        for _ in range(10):
-            try:
-                raw_connections = self.device.connections
-                current = list(raw_connections.values() if hasattr(raw_connections, "values") else raw_connections)
-                if not any(getattr(c, "transport", None) != BT_BR_EDR_TRANSPORT for c in current):
-                    break
-            except Exception:
-                break
-            await asyncio.sleep(0.2)
-        return disconnected
-
-    async def _disconnect_current_connections_for_pairing(self):
-        """Pairing is a deliberate service operation.
-
-        On this controller, trying to start undirected advertising while an
-        existing central is connected is unreliable and often gets silenced by
-        apply_visibility(). Drop current links first so a new iPhone/Mac can
-        actually see the accessory.
-        """
-        try:
-            raw_connections = self.device.connections
-            connections = list(raw_connections.values() if hasattr(raw_connections, "values") else raw_connections)
-        except Exception:
-            connections = []
-        for connection in connections:
-            try:
-                peer = getattr(connection, "peer_address", connection)
-                logger.info("Pairing mode: disconnect current peer %s", peer)
-                await connection.disconnect()
-            except Exception as e:
-                logger.warning("pairing disconnect ignored: %s", e)
-        for _ in range(10):
-            try:
-                if not self.device.connections:
-                    break
-            except Exception:
-                break
-            await asyncio.sleep(0.2)
 
     async def _disable_resolution_for_pairing(self):
         try:

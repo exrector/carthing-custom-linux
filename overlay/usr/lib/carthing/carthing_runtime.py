@@ -305,8 +305,7 @@ def _on_pairing(enabled, role="source"):
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
                 if orch is not None:
-                    await orch.arm_pairing(True, disconnect_current=False,
-                                           classic_discoverable=False)
+                    await orch.arm_pairing(True, classic_discoverable=False)
             else:
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
@@ -1643,8 +1642,7 @@ async def main():
             gui.set_pairing_mode(True, role="source")
         if power is not None:
             power.set_pairing(True)
-        await orch.arm_pairing(True, disconnect_current=False,
-                               classic_discoverable=False)
+        await orch.arm_pairing(True, classic_discoverable=False)
         logger.info("auto pairing armed (CAR_THING_AUTO_PAIRING=1)")
     asyncio.ensure_future(orch.kick_reconnect())
     _boot_milestone("reconnect.scheduled")

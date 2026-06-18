@@ -1074,6 +1074,49 @@ class PairingModal:
         y = rect[1] + (rect[3] - rect[1] - text_h) // 2 - bbox[1]
         draw.text((x, y), label, font=font, fill=fill)
 
+    def _render_input_instructions(self, draw, x0, x1):
+        """Universal input-pairing copy for any second device.
+
+        This modal is not a macOS-specific surface: the next input may be an
+        iPad, another phone, a desktop computer, or a future transport peer.
+        Keep the copy about the user's action and the advertised local name,
+        not about one OS. 2026-06-18: added after live test showed that an
+        empty ADD IN screen made pairing/debug state ambiguous.
+        """
+        device_name = str(getattr(self.state, "device_name", "") or "Car Thing").strip()
+        title = "ADD DEVICE"
+        title_f = T.font(T.SZ_TITLE)
+        body_f = T.font(T.SZ_META)
+        small_f = T.font(T.SZ_SMALL)
+        max_w = x1 - x0
+
+        tw = int(draw.textlength(title, font=title_f))
+        draw.text(((x0 + x1 - tw) // 2, 104), title, font=title_f, fill=T.MUTED)
+
+        y = 178
+        body_lines = [
+            "На втором устройстве:",
+            "Settings / Bluetooth",
+            "или Настройки / Bluetooth",
+            "выбери это имя:",
+        ]
+        for line in body_lines:
+            text = C.truncate(draw, line, body_f, max_w)
+            tw = int(draw.textlength(text, font=body_f))
+            draw.text(((x0 + x1 - tw) // 2, y), text, font=body_f, fill=T.FG)
+            y += 34
+
+        y += 10
+        for line in C.wrap_lines(draw, device_name, body_f, max_w)[:2]:
+            text = C.truncate(draw, line, body_f, max_w)
+            tw = int(draw.textlength(text, font=body_f))
+            draw.text(((x0 + x1 - tw) // 2, y), text, font=body_f, fill=T.ACCENT)
+            y += 36
+
+        hint = "Back = cancel"
+        tw = int(draw.textlength(hint, font=small_f))
+        draw.text(((x0 + x1 - tw) // 2, T.H - 64), hint, font=small_f, fill=T.FAINT)
+
     def render(self, img, regions):
         # Add In is a passive pairing surface: no inquiry rows, just a live
         # indicator that Car Thing is advertising/connectable for the source.
@@ -1084,10 +1127,7 @@ class PairingModal:
         draw.rectangle([0, 0, T.W, T.H], fill=T.BG)            # чёрный фон
         self._scan_indicator(draw, (X0 + X1) // 2, 32)         # «шевелится» = скан активен
         if getattr(self.state, "pairing_role", "") == "input":
-            label = "ADD IN" if T.THEME == "terminal" else "IN"
-            f = T.font(T.SZ_TITLE)
-            tw = int(draw.textlength(label, font=f))
-            draw.text(((X0 + X1 - tw) // 2, 128), label, font=f, fill=T.MUTED)
+            self._render_input_instructions(draw, X0, X1)
             return
 
         candidates = self._visible_candidates()
