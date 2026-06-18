@@ -37,10 +37,10 @@ def _dedupe_registry(devices):
     вращает адреса / новый IRK), и раньше каждый бонд становился отдельной карточкой.
 
     Идентичность:
-      • source (телефон): рантайм моделирует РОВНО один источник (один a.iphone) ->
-        все source-карточки сливаются в ОДНУ. Канон = подключённая, иначе самая
-        полная (есть label/endpoints), иначе первая. Адрес кануна = подключённый.
-      • output (колонка): classic-MAC стабилен (не вращается) -> дедуп по адресу.
+      • input/source: одна карточка на стабильный address/key. iPhone, Mac и iPad
+        могут быть отдельными входами; route policy выбирает активный input, но
+        registry не имеет права стирать остальные источники.
+      • output (колонка): classic-MAC стабилен -> дедуп по адресу.
     Свойства (capabilities/endpoints/metadata/label) объединяются по всем дублям.
     """
     def merge_into(dst, src):
@@ -55,28 +55,13 @@ def _dedupe_registry(devices):
         dst["connected"] = bool(dst.get("connected") or src.get("connected"))
         return dst
 
-    sources, others, out, seen_addr = [], [], [], {}
+    # 2026-06-18 owner bugfix: sources are not a single identity class anymore.
+    # The previous "all role=source -> one card" rule solved rotating iPhone
+    # rows, but it also swallowed a bonded Mac source into the iPhone card after
+    # reboot. Keep one card per stable source address; route policy can still
+    # choose one active input, but the registry must not erase other inputs.
+    out, seen_addr = [], {}
     for d in devices:
-        if d.get("role") == "source":
-            sources.append(d)
-        else:
-            others.append(d)
-    # источники -> одна карточка
-    if sources:
-        def score(d):
-            return (2 if d.get("connected") else 0) + (1 if (d.get("label") and d.get("label") != d.get("address")) else 0) + (1 if d.get("endpoints") else 0)
-        canon = max(sources, key=score)
-        for d in sources:
-            if d is not canon:
-                merge_into(canon, d)
-        # адрес кануна = подключённого источника, если есть
-        conn = next((d for d in sources if d.get("connected") and d.get("address")), None)
-        if conn:
-            canon["address"] = conn["address"]
-        canon["key"] = "source:" + normalize_address(canon.get("address") or "") if canon.get("address") else (canon.get("key") or "source")
-        out.append(canon)
-    # выходы/прочее -> дедуп по адресу
-    for d in others:
         addr = normalize_address(d.get("address"))
         if addr and addr in seen_addr:
             merge_into(seen_addr[addr], d)
@@ -85,6 +70,67 @@ def _dedupe_registry(devices):
         if addr:
             seen_addr[addr] = d
     return out
+
+
+def _bonded_source_endpoints():
+    return [
+        {
+            "id": "audio-input",
+            "direction": "input",
+            "protocols": ["classic_a2dp_sink"],
+            "capabilities": ["audio_input"],
+            "label": "Bluetooth audio input",
+        },
+        {
+            "id": "media-control",
+            "direction": "control",
+            "protocols": ["classic_avrcp"],
+            "capabilities": ["control_output", "metadata_input"],
+            "label": "Media control",
+        },
+    ]
+
+
+def _reset_to_bonded_source_guess(device):
+    """Undo iPhone evidence that was accidentally applied to another source."""
+    device["label"] = "Bluetooth Source"
+    device["type"] = "Источник"
+    device["role"] = "source"
+    device["capabilities"] = ["audio_input", "metadata_input", "control_output"]
+    device["endpoints"] = _bonded_source_endpoints()
+    md = dict(device.get("metadata") or {})
+    ev = dict(md.get("enrollment_evidence") or {})
+    ev["ble_services"] = []
+    ev["missing_capabilities"] = []
+    ev["probe_stage"] = "bond_restored"
+    ev["enrollment_state"] = "degraded"
+    md["enrollment_evidence"] = ev
+    md.pop("capability_profile", None)
+    device["metadata"] = md
+    return device
+
+
+def _repair_source_identity_collisions(devices):
+    """Keep a bonded Mac/iPad/computer from inheriting the active iPhone identity."""
+    iphone_sources = [
+        d for d in devices
+        if d.get("role") == "source" and str(d.get("label") or "").strip().lower() == "iphone"
+    ]
+    if len(iphone_sources) <= 1:
+        return devices
+
+    def score(d):
+        return (
+            4 if d.get("route_input") else 0,
+            2 if d.get("connected") else 0,
+            1 if "notifications_input" in set(d.get("capabilities") or []) else 0,
+        )
+
+    keep = max(iphone_sources, key=score)
+    for d in iphone_sources:
+        if d is not keep:
+            _reset_to_bonded_source_guess(d)
+    return devices
 
 
 def _bonded_source_rows(keystore_path=None):
@@ -113,30 +159,8 @@ def _bonded_source_rows(keystore_path=None):
                 "role": "source",
                 "online": False,
                 "connected": False,
-                "capabilities": ["audio_input", "metadata_input", "control_output", "notifications_input"],
-                "endpoints": [
-                    {
-                        "id": "audio-input",
-                        "direction": "input",
-                        "protocols": ["classic_a2dp_sink"],
-                        "capabilities": ["audio_input"],
-                        "label": "Bluetooth audio input",
-                    },
-                    {
-                        "id": "media-control",
-                        "direction": "control",
-                        "protocols": ["ble_ams", "ble_hid"],
-                        "capabilities": ["control_output", "metadata_input"],
-                        "label": "Media control",
-                    },
-                    {
-                        "id": "notifications",
-                        "direction": "metadata",
-                        "protocols": ["ble_ancs"],
-                        "capabilities": ["notifications_input"],
-                        "label": "Notifications",
-                    },
-                ],
+                "capabilities": ["audio_input", "metadata_input", "control_output"],
+                "endpoints": _bonded_source_endpoints(),
                 "constraints": ["idle_link_allowed", "active_media_requires_route"],
             })
     return rows
@@ -253,7 +277,7 @@ def _merge_label(current, incoming, address=""):
     current = _clean_label(current)
     incoming = _clean_label(incoming)
     address = normalize_address(address)
-    current_placeholder = current.startswith("Bluetooth Input ")
+    current_placeholder = current.startswith("Bluetooth Input ") or current == "Bluetooth Source"
     if not incoming:
         return current
     if _looks_like_address(incoming) or normalize_address(incoming) == address:
@@ -682,7 +706,12 @@ class AppState:
                 # Иначе route_planner не найдёт endpoints → RoutePlanError → кнопка красная.
                 if not had_address or not had_endpoints:
                     new_bond = True
-        devices = _dedupe_registry(devices)   # [CLAUDE 2026-06-13] одна карточка на устройство
+        devices = _dedupe_registry(devices)
+        before_identity_repair = json.dumps(devices, ensure_ascii=False, sort_keys=True)
+        devices = _repair_source_identity_collisions(devices)
+        if json.dumps(devices, ensure_ascii=False, sort_keys=True) != before_identity_repair:
+            new_bond = True
+        # Одна карточка на устройство; разные input sources не сливаем.
         self.trusted = devices
         loaded_route_input = next(
             (device.get("key") or device.get("address") for device in self.route_inputs if device.get("route_input")),

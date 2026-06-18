@@ -990,28 +990,33 @@ async def _on_connection(connection):
             try:
                 gui.app_state.load_trusted()
                 try:
-                    # iOS connects over an RPA; the persisted source row is keyed by
-                    # the identity address from the keystore. Label AMS-capable sources
-                    # as iPhone instead of leaving the generic "Bluetooth Source".
-                    for row in gui.app_state.trusted_sources:
-                        address = row.get("address")
-                        if row.get("label") == "Bluetooth Source":
-                            row["label"] = "iPhone"
-                            row["type"] = row.get("type") or "Источник"
-                        if address:
-                            gui.app_state.enroll_trusted_device(
-                                address,
-                                name=row.get("label") or "iPhone",
-                                service_uuids={"110a", "audio_source"},
-                                ble_services={"ams", "ancs", "1812"},
-                                metadata={
-                                    "enrolled_from": "ble_source_connection",
-                                    "input_enrolled": True,
-                                    "probe_stage": "ams_ancs_ready",
-                                },
-                            )
-                            peer = address or peer
-                    gui.app_state.save_trusted()
+                    # AMS/ANCS evidence belongs only to the current encrypted LE
+                    # peer. Updating every trusted source made a bonded Mac look
+                    # like an iPhone after reboot.
+                    from app_state import normalize_address
+                    peer = normalize_address(getattr(connection, "peer_address", ""))
+                    target = next(
+                        (
+                            row for row in gui.app_state.trusted_sources
+                            if normalize_address(row.get("address")) == peer
+                        ),
+                        None,
+                    )
+                    if target is not None and peer:
+                        target["label"] = "iPhone"
+                        target["type"] = target.get("type") or "Источник"
+                        gui.app_state.enroll_trusted_device(
+                            peer,
+                            name="iPhone",
+                            service_uuids={"110a", "audio_source"},
+                            ble_services={"ams", "ancs", "1812"},
+                            metadata={
+                                "enrolled_from": "ble_source_connection",
+                                "input_enrolled": True,
+                                "probe_stage": "ams_ancs_ready",
+                            },
+                        )
+                        gui.app_state.save_trusted()
                 finally:
                     logger.info("trusted sources synced after AMS: %s", peer or "ok")
             except Exception as e:
