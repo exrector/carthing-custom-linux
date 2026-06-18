@@ -140,7 +140,7 @@ These are real surfaces, but not yet product-safe APIs.
 | DRM OSD2 / planes | kernel has `CONFIG_AMLOGIC_MEDIA_FB_OSD2_ENABLE=y`; DRM live has one connector | DRM/KMS + Amlogic OSD | overlay planes / cursor / composition | notification overlays without full redraw | run DRM plane enumeration/proof |
 | SARADC | IIO `meson-g12a-saradc`, voltage0..7 live | `amlogic,meson-g12a-saradc` | analog board sensing | detect board IDs, buttons, rails, diagnostics | empirical channel map under state changes |
 | USB host / xHCI | xHCI buses exist, `dwc3 forced to host`, `usb2 unsupported hub`; USB3 PHY disabled | DWC3 host + USB2 PHY | attach USB peripherals | possible lab USB accessories | map physical port behavior; do not depend on it |
-| USB composite functions | kernel has NCM/ECM/RNDIS/UAC1/UAC2/MIDI/HID/MassStorage/MTP/PTP/ACC | ConfigFS gadget | present device to Mac/PC as composite gadget | USB reserve mode, audio/HID/MIDI experiments | prove each profile on macOS without losing NCM |
+| USB composite functions | kernel has NCM/ECM/RNDIS/UAC1/UAC2/MIDI/HID/MassStorage/MTP/PTP/ACC; NCM/UAC2/storage have prior live tests | ConfigFS gadget | present device to Mac/PC as composite gadget | USB reserve mode, audio/HID/MIDI experiments | productize tested NCM/UAC2/storage; prove remaining profiles on macOS without losing NCM |
 | MFi auth chip | I2C `3-0010`, `/dev/apple_mfi`, cert len 608; module ABI warnings | proprietary module + I2C | Apple accessory authentication | identity/auth research | treat as research; no iAP2 promise without proof |
 | Amlogic crypto DMA | dmesg AES/SHA DMA; DTB `aml_aes`, `aml_sha`, `aml_tdes` okay | kernel crypto drivers | hardware crypto acceleration | hashes/signing/diagnostics | verify `/proc/crypto` actual driver selection |
 | DDR bandwidth / DMC monitor | DTB okay, `/dev/memory_bandwidth` | Amlogic monitor | memory bandwidth telemetry | performance profiling | expose read-only metric if stable |
@@ -173,7 +173,7 @@ These are real surfaces, but not yet product-safe APIs.
 | `proximity_zone` already reads TMD2772 | Stale. TMD2772 values are exposed in diagnostics, but product wake/dim policy is not implemented yet. |
 | LIS2DH12 might be useful if driver is enabled | Not on QN19. It does not answer over raw I2C. |
 | MAX20332 is only a phantom DT node | Wrong. It physically answers at `0x35`; only Linux integration is missing. |
-| USB profiles are all product-ready because ConfigFS functions exist | Too strong. Kernel support exists, but each profile must be proven on macOS without losing NCM recovery. |
+| USB profiles are all product-ready because ConfigFS functions exist | Too strong. NCM, UAC2 audio, and mass-storage have live tests; remaining profiles still need proof and all product profiles must preserve NCM recovery. |
 | VAD means voice wake is ready | Too strong. `/dev/vad` exists, but the ioctl/API contract is not proven. |
 | Video hardware means video feature is ready | Too strong. Amlogic media nodes exist; product decode/display route is unproven. |
 
@@ -218,8 +218,9 @@ These are real surfaces, but not yet product-safe APIs.
    - use only after channel identity is known.
 
 7. **USB reserve profiles**
-   - `ncm+audio`, `ncm+hid`, `ncm+midi`, mass-storage rescue;
-   - each profile must keep a recovery path.
+   - `ncm+audio` and mass-storage already have prior proof;
+   - `ncm+hid`, `ncm+midi`, RNDIS/ECM remain candidates;
+   - each product profile must keep a recovery path.
 
 8. **DRM plane / OSD2 proof**
    - enumerate planes;
@@ -331,4 +332,3 @@ Devnodes:
   /dev/watchdog0
   /dev/zram0
 ```
-
