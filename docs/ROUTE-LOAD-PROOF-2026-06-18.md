@@ -154,3 +154,47 @@ was opened, so the active-stream log lines (`A2DP source stream closed gracefull
 specific proof. The code path is the same `disconnect_source()` path already
 used for iPhone graceful return; a full audio proof should be repeated with Fosi
 online and playback active.
+
+## Follow-up 2026-06-18 10:35 — Play Now Rejects Incoming Outputs
+
+Owner-observed failure: Fosi Audio ZD3 was powered on while the GUI showed Play
+Now, and it still connected to CarThing. The earlier fix stopped our outgoing
+standby/receiver loops, but it did not reject a bonded/trusted speaker that
+initiated Classic/AVCTP/AVDTP from the outside.
+
+Implemented in `a2dp_bridge.py`:
+
+- Added `_speaker_allowed_in_current_mode()`, a role-scoped gate for trusted
+  output devices.
+- In Play Now, trusted speaker-owned Classic ACL, AVCTP and AVDTP surfaces are
+  rejected/disconnected immediately.
+- In Коммутатор, incoming speaker surfaces are accepted only for the entry
+  snapshot, the selected route output, or explicit lab mode
+  `CARTHING_STANDBY_ALL_SPEAKERS=1`.
+- Trusted source/iPhone handling is not gated by this speaker rule, preserving
+  BLE/AMS/ANCS/CTS stickiness.
+
+Live check after deploy:
+
+```text
+tools/deploy usr/lib/carthing/a2dp_bridge.py --restart
+
+runtime up in Play Now
+iPhone source connected=true peer=10:A2:D3:83:82:50/P
+AMS ready, ANCS ready, CTS ready
+
+after 70s with Fosi powered on:
+operation_mode=playnow
+mode_resources.actual_standby_loop=false
+mode_resources.actual_receiver_stream=false
+mode_resources.actual_receiver_connecting=false
+Fosi Audio ZD3 connected=false standby=false connecting=false status=offline
+Maedhawk BT Cable connected=false standby=false connecting=false status=offline
+```
+
+The same log window records the pre-fix failure at 10:31 (`Classic BT
+connection`, `AVCTP incoming`, `AVRCP speaker backchannel armed` for Fosi), and
+no equivalent Fosi footprint after the patched 10:35 restart. A direct rejection
+line will appear only if the speaker initiates a fresh incoming connection; the
+state proof already confirms that Play Now no longer keeps or reports an
+external output link while Fosi is powered.

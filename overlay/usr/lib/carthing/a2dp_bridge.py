@@ -31,6 +31,7 @@ from bumble.sdp import (
 
 from app_state import normalize_address
 from local_sink_client import LocalSinkClient
+import operation_mode
 from route_graph import Capability, Endpoint, EndpointDirection, Protocol
 from runtime_paths import device_name
 
@@ -432,6 +433,52 @@ class A2DPBridge:
         runtime = self._speaker_runtime(address, create=True)
         runtime.connector.connection = connection
         return runtime
+
+    def _speaker_allowed_in_current_mode(self, address, surface: str = "") -> bool:
+        """Gate incoming speaker-owned links by product mode.
+
+        2026-06-18 owner-observed bug: Play Now was quiet on our outgoing
+        standby loop, but a bonded Fosi could still initiate Classic/AVCTP and
+        look "connected" while the GUI said Play Now. The fix is role-scoped:
+        trusted sources (iPhone) remain allowed, while trusted outputs are
+        accepted only when Commutator owns them via the entry snapshot or a
+        selected route. This keeps iPhone stickiness without letting speakers
+        resurrect the commutator from the outside.
+        """
+        address = normalize_address(address)
+        if not address or not self.state.is_trusted_speaker(address):
+            return False
+        mode = operation_mode.normalize(getattr(self.state, "operation_mode", operation_mode.DEFAULT))
+        if mode != operation_mode.COMMUTATOR:
+            self.logger.info(
+                "A2DP speaker incoming rejected by mode: peer=%s surface=%s mode=%s",
+                address,
+                surface or "-",
+                mode,
+            )
+            return False
+        if os.environ.get("CARTHING_STANDBY_ALL_SPEAKERS") == "1":
+            return True
+        selected = normalize_address(self.state.active_route_speaker_address() or "")
+        if selected and address == selected:
+            return True
+        if address in self._standby_snapshot_addresses:
+            return True
+        self.logger.info(
+            "A2DP speaker incoming rejected outside commutator snapshot: peer=%s surface=%s selected=%s snapshot=%s",
+            address,
+            surface or "-",
+            selected or "-",
+            ",".join(sorted(self._standby_snapshot_addresses)) or "-",
+        )
+        return False
+
+    async def _disconnect_l2cap_channel(self, channel, reason: str):
+        try:
+            await channel.disconnect()
+            self.logger.info("A2DP L2CAP channel disconnected: reason=%s", reason)
+        except Exception as exc:
+            self.logger.info("A2DP L2CAP disconnect ignored: reason=%s error=%s", reason, error_text(exc))
 
     def _selected_speaker_connector(self) -> SpeakerConnector | None:
         address = normalize_address(self.state.active_route_speaker_address())
@@ -2183,6 +2230,13 @@ class A2DPBridge:
         except Exception:
             address = "?"
         self.logger.info("AVCTP incoming connection from %s", address)
+        if (
+            self.state.is_trusted_speaker(address)
+            and not self.state.is_trusted_source(address)
+            and not self._speaker_allowed_in_current_mode(address, "avctp")
+        ):
+            asyncio.create_task(self._disconnect_l2cap_channel(l2cap_channel, "speaker-mode-gate-avctp"))
+            return
         protocol = self._make_avrcp_session(address)
         l2cap_channel.on(
             l2cap_channel.EVENT_OPEN,
@@ -2748,9 +2802,21 @@ class A2DPBridge:
         self.on_state_change()
 
     def on_avdtp_connection(self, protocol: avdtp.Protocol):
-        peer_address = protocol.l2cap_channel.connection.peer_address
+        peer_address = normalize_address(protocol.l2cap_channel.connection.peer_address)
+        if (
+            self.state.is_trusted_speaker(peer_address)
+            and not self.state.is_trusted_source(peer_address)
+            and not self._speaker_allowed_in_current_mode(peer_address, "avdtp")
+        ):
+            asyncio.create_task(
+                self._disconnect_l2cap_channel(protocol.l2cap_channel, "speaker-mode-gate-avdtp")
+            )
+            return
         if self.state.trusted_sources and not self.state.is_trusted_source(peer_address):
             self.logger.warning("A2DP source rejected, not trusted: %s", peer_address)
+            asyncio.create_task(
+                self._disconnect_l2cap_channel(protocol.l2cap_channel, "untrusted-source-avdtp")
+            )
             return
 
         self.logger.info("A2DP incoming trusted source: %s", peer_address)
@@ -3078,6 +3144,20 @@ class A2DPBridge:
             lambda _error: self.on_classic_authentication_failure(peer_address),
         )
         if self.state.is_trusted_speaker(peer_address):
+            if not self._speaker_allowed_in_current_mode(peer_address, "classic"):
+                self.state.set_speaker_online(peer_address, False)
+                self.state.set_speaker_connected(peer_address, False)
+                self.on_state_change()
+                try:
+                    await connection.disconnect()
+                    self.logger.info("A2DP speaker incoming classic ACL disconnected by mode: %s", peer_address)
+                except Exception as exc:
+                    self.logger.info(
+                        "A2DP speaker incoming classic mode disconnect ignored: %s: %s",
+                        peer_address,
+                        error_text(exc),
+                    )
+                return
             self._set_speaker_connection(peer_address, connection)
             self.state.set_speaker_connected(peer_address, True)
             self.on_state_change()
