@@ -56,6 +56,20 @@ class VirtualRoutePatchBay:
                 label="Transfer audio output",
             ),
             _RouteSocketSpec(
+                socket_id="session:peer",
+                kind=SocketKind.SESSION,
+                protocols={Protocol.BLE_GATT_BOOTSTRAP, Protocol.BLE_L2CAP_COC_SESSION},
+                capabilities={Capability.SESSION_PEER},
+                label="Session peer",
+            ),
+            _RouteSocketSpec(
+                socket_id="session:remote-mic",
+                kind=SocketKind.REMOTE_MIC,
+                protocols={Protocol.BLE_L2CAP_COC_SESSION},
+                capabilities={Capability.REMOTE_MIC_RECEIVER},
+                label="Remote microphone receiver",
+            ),
+            _RouteSocketSpec(
                 socket_id="transfer:control-input",
                 kind=SocketKind.CONTROL_INPUT,
                 protocols={Protocol.CLASSIC_AVRCP},

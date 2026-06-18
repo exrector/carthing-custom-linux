@@ -138,6 +138,7 @@ settings = None          # SettingsService
 hw_caps = {}             # hardware_inventory.probe()
 resource_policy = None   # RuntimeResourcePolicy
 mac = None               # MacService
+session_plane = None     # SessionPlaneService: per-peer CTSP/GATT/L2CAP runtime cells
 power = None             # IdlePowerController
 session_runner = None    # SessionRunner
 link_manager = None      # LinkManager
@@ -790,11 +791,15 @@ def _on_toggle_notif_blink(on):
 def _on_toggle_client(on):
     # 2026-06-18 owner: Client ON/OFF is a product setting for session/client
     # plane only. It does not switch Play Now/Commutator and does not touch the
-    # sticky iPhone audio/control path; future CTSP/GATT listeners must gate on it.
+    # media/audio path. CTSP/GATT/L2CAP session visibility is gated here.
     enabled = bool(on)
     if gui is not None:
         gui.app_state.client_enabled = enabled
     model.client_enabled = enabled
+    if session_plane is not None:
+        session_plane.set_enabled(enabled)
+    if orch is not None:
+        asyncio.ensure_future(orch.set_session_advertising(enabled))
     if settings is not None:
         settings.set("client_enabled", enabled)
     logger.info("session client plane -> %s", "on" if enabled else "off")
@@ -968,6 +973,14 @@ async def _on_connection(connection):
         # pairing advertising immediately; if pairing fails and disconnects,
         # on_disconnect/kick_reconnect will re-apply the proper visibility.
         await orch.on_le_connection_started()
+
+    if session_plane is not None and session_plane.on_connection(connection):
+        if gui is not None:
+            gui.set_pairing_mode(False)
+        if power is not None:
+            power.set_pairing(False)
+        _on_publish()
+        return
 
     from iphone_service import IPhoneService
     _iphone = IPhoneService(model, on_update=_on_publish, hci_gate=hci_gate)
@@ -1509,7 +1522,7 @@ def _init_gui_surface():
 
 
 async def main():
-    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, resource_policy, mac, power, session_runner, link_manager, hci_gate, route_patchbay
+    global orch, gui, transfer, backchannel, iap2, settings, hw_caps, resource_policy, mac, session_plane, power, session_runner, link_manager, hci_gate, route_patchbay
     _boot_milestone("runtime.main_start")
     _verify_persistent()
     _boot_milestone("runtime.persistent_verified")
@@ -1575,6 +1588,7 @@ async def main():
     # Clean Bumble lab uses CARTHING_TRANSFER_ENABLE=0 to prove the BLE/Bumble
     # pairing surface without installing any Classic A2DP/AVRCP SDP records.
     # Production path stays enabled unless this explicit lab switch is used.
+    app_state_for_runtime = gui.app_state if gui is not None else None
     if os.environ.get("CARTHING_TRANSFER_ENABLE", "1") == "1":
         try:
             _boot_milestone("transfer.start")
@@ -1586,6 +1600,7 @@ async def main():
                 from app_state import AppState
                 app_state = AppState()
                 _select_boot_play_now(app_state)
+            app_state_for_runtime = app_state
             app_state.operation_mode = operation_mode.current(settings)  # режим из settings ДО старта циклов
             app_state.client_enabled = bool(settings.get("client_enabled", False))
             model.client_enabled = app_state.client_enabled
@@ -1641,6 +1656,28 @@ async def main():
     _boot_milestone("mac_service.start")
     from mac_service import MacService
     mac = MacService(model, on_update=_on_publish)
+    if app_state_for_runtime is None:
+        from app_state import AppState
+        app_state_for_runtime = AppState()
+        _select_boot_play_now(app_state_for_runtime)
+    try:
+        _boot_milestone("session_plane.start")
+        from session_plane_service import SessionPlaneService
+        session_plane = SessionPlaneService(
+            device,
+            app_state_for_runtime,
+            model,
+            on_change=_on_publish,
+            on_client_toggle=_on_toggle_client,
+        )
+        session_plane.install()
+        session_plane.set_enabled(bool(settings.get("client_enabled", False)))
+        await orch.set_session_advertising(bool(settings.get("client_enabled", False)))
+        _boot_milestone("session_plane.ready", enabled=bool(settings.get("client_enabled", False)))
+    except Exception as e:
+        session_plane = None
+        _boot_milestone("session_plane.disabled", error=type(e).__name__)
+        logger.warning("session plane disabled: %s", e)
     trusted_path = getattr(gui.app_state, "trusted_path", None) if gui is not None else None
     trusted_registry = TrustedDeviceRegistry(trusted_path).load()
     link_manager = LinkManager(trusted_registry, interval=15.0)

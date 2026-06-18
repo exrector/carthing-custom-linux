@@ -117,6 +117,39 @@ class EnrollmentManager:
                 label="Media control",
             ))
 
+        explicit_capabilities = self._enum_set(Capability, evidence.capabilities)
+        if (
+            Capability.SESSION_PEER in explicit_capabilities
+            or Capability.REMOTE_MIC_RECEIVER in explicit_capabilities
+        ):
+            capabilities.add(Capability.SESSION_PEER)
+            endpoints.append(Endpoint(
+                id="session-control",
+                direction=EndpointDirection.SESSION,
+                protocols={
+                    Protocol.BLE_GATT_BOOTSTRAP,
+                    Protocol.BLE_L2CAP_COC_SESSION,
+                },
+                capabilities={Capability.SESSION_PEER},
+                label="Session control/data",
+                metadata={"transport_adapter": "ctsp"},
+            ))
+        if Capability.REMOTE_MIC_RECEIVER in explicit_capabilities:
+            capabilities.add(Capability.REMOTE_MIC_RECEIVER)
+            endpoints.append(Endpoint(
+                id="remote-mic",
+                direction=EndpointDirection.SESSION,
+                protocols={Protocol.BLE_L2CAP_COC_SESSION},
+                capabilities={Capability.REMOTE_MIC_RECEIVER},
+                label="Remote microphone receiver",
+                metadata={
+                    "audio_format": "pcm_s16le",
+                    "sample_rate_hz": 16000,
+                    "channels": 1,
+                    "on_demand": True,
+                },
+            ))
+
         if self._has_ancs(evidence):
             capabilities.add(Capability.NOTIFICATIONS_INPUT)
             endpoints.append(Endpoint(
@@ -127,7 +160,7 @@ class EnrollmentManager:
                 label="Notifications",
             ))
 
-        capabilities.update(self._enum_set(Capability, evidence.capabilities))
+        capabilities.update(explicit_capabilities)
         constraints.update(self._enum_set(Constraint, evidence.constraints))
         if evidence.endpoints:
             endpoints = self._merge_endpoints(endpoints, evidence.endpoints)

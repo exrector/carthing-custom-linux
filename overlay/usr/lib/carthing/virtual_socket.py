@@ -17,6 +17,8 @@ from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Pro
 class SocketKind(str, Enum):
     AUDIO_INPUT = "audio_input"
     AUDIO_OUTPUT = "audio_output"
+    SESSION = "session"
+    REMOTE_MIC = "remote_mic"
     CONTROL_INPUT = "control_input"
     CONTROL_OUTPUT = "control_output"
     METADATA_INPUT = "metadata_input"
@@ -125,6 +127,13 @@ class VirtualPatchBay:
 def _socket_kind_for_endpoint(endpoint: Endpoint) -> SocketKind:
     capabilities = set(endpoint.capabilities)
     protocols = set(endpoint.protocols)
+    if Capability.REMOTE_MIC_RECEIVER in capabilities:
+        return SocketKind.REMOTE_MIC
+    if Capability.SESSION_PEER in capabilities or (
+        endpoint.direction == EndpointDirection.SESSION
+        and Protocol.BLE_L2CAP_COC_SESSION in protocols
+    ):
+        return SocketKind.SESSION
     if Capability.AUDIO_INPUT in capabilities or (
         endpoint.direction == EndpointDirection.INPUT and Protocol.CLASSIC_A2DP_SINK in protocols
     ):

@@ -242,6 +242,10 @@ class RouteBuilderScreen(Screen):
             labels.append("A2DP out")
         if "classic_avrcp" in protos:
             labels.append("AVRCP")
+        if "ble_gatt_bootstrap" in protos:
+            labels.append("GATT")
+        if "ble_l2cap_coc_session" in protos:
+            labels.append("CTSP")
         if "ble_ams" in protos:
             labels.append("AMS")
         if "ble_ancs" in protos:

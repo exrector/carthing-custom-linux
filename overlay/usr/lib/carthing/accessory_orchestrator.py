@@ -29,6 +29,7 @@ import os
 import struct
 import time
 
+from bumble.core import UUID as BumbleUUID
 from bumble.device import AdvertisingData, AdvertisingType, Device
 from bumble.hci import Address, HCI_Write_Local_Name_Command, OwnAddressType
 from bumble.pairing import PairingConfig, PairingDelegate
@@ -39,6 +40,7 @@ logger = logging.getLogger(__name__)
 
 APPEARANCE_REMOTE = 0x0180          # Generic Remote Control
 HID_SERVICE_UUID = 0x1812          # HID-over-GATT
+SESSION_SERVICE_UUID = "C7C50000-0000-4000-8000-00C7C7C7C7C7"
 DUAL_MODE_ADV_FLAGS = (
     AdvertisingData.LE_GENERAL_DISCOVERABLE_MODE_FLAG
     | AdvertisingData.BR_EDR_CONTROLLER_FLAG
@@ -71,6 +73,8 @@ class AccessoryOrchestrator:
         self.pairing_armed = False        # выставляется GUI-intent'ом «add source/speaker»
         self.classic_pairing_discoverable = False
         self.transfer_connectable = False # classic connectable для A2DP (Transfer)
+        self.session_advertising = False  # Client ON: advertise CTSP/GATT bootstrap
+        self.session_advertising_blocked = False  # controller refused advertising while LE-connected
         self.a2dp_open = False
         self.phase = PAIRING
 
@@ -215,7 +219,9 @@ class AccessoryOrchestrator:
         #   • есть LE-бонд → bonded-only sticky (реконнект к уже-bonded iPhone)
         #   • иначе → ПОЛНАЯ ТИШИНА (нет бонда + не сопряжение)
         ble_connected = self._has_le_connection()
-        if ble_connected:
+        if ble_connected and self.session_advertising and not self.session_advertising_blocked:
+            await self._advertise_bonded_only(allow_while_connected=True)
+        elif ble_connected:
             self._mark_advertising_silent_after_le_connect()
         elif self.pairing_armed and classic_first:
             # Audio-first lab flow: expose exactly one Classic pairing surface.
@@ -249,6 +255,11 @@ class AccessoryOrchestrator:
             (AdvertisingData.COMPLETE_LIST_OF_16_BIT_SERVICE_CLASS_UUIDS,
              struct.pack("<H", HID_SERVICE_UUID)),
         ]
+        if self.session_advertising:
+            items.append((
+                AdvertisingData.COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS,
+                BumbleUUID(SESSION_SERVICE_UUID).to_bytes(force_128=True),
+            ))
         return bytes(AdvertisingData(items))
 
     def _scan_response_payload(self, with_name: bool):
@@ -412,10 +423,11 @@ class AccessoryOrchestrator:
         await self.apply_visibility()
 
     async def on_disconnect(self):
+        self.session_advertising_blocked = False
         await asyncio.sleep(0.5)   # дать контроллеру осесть (иначе start_advertising = 0xC)
         await self.kick_reconnect()
 
-    async def _advertise_bonded_only(self):
+    async def _advertise_bonded_only(self, allow_while_connected: bool = False):
         """НЕПРЕРЫВНАЯ undirected bonded reconnect — БЕЗ ИМЕНИ в scan response.
         [CLAUDE 2026-06-03] Имя убрано: неспаренные не должны видеть «Car Thing (SN)». Уже
         bonded iPhone реконнектит HID-периферию по БОНДУ + HID-service UUID + адресу, имя ему
@@ -426,7 +438,7 @@ class AccessoryOrchestrator:
             await self._gate("orch-refresh-fal", self.device.refresh_filter_accept_list)
         except Exception:
             pass
-        if self._has_le_connection():
+        if self._has_le_connection() and not allow_while_connected:
             self._mark_advertising_silent_after_le_connect()
             return
         self.device.advertising_data = self._adv_payload()
@@ -439,10 +451,17 @@ class AccessoryOrchestrator:
                 own_address_type=OwnAddressType.PUBLIC,
                 auto_restart=True,
                 advertising_filter_policy=0x00))
+            self.session_advertising_blocked = False
             logger.info("Sticky: continuous bonded reconnect advertising (public, NO-name, %dms)",
                         STICKY_ADV_INTERVAL_MS)
         except Exception as e:
-            logger.warning("bonded-only advertising failed: %s", e)
+            if allow_while_connected and "COMMAND_DISALLOWED" in str(e):
+                self.session_advertising_blocked = True
+                logger.warning(
+                    "session advertising blocked while LE connection is active; "
+                    "leaving current media link intact: %s", e)
+            else:
+                logger.warning("bonded-only advertising failed: %s", e)
 
     async def kick_reconnect(self):
         """Прилипание = НЕПРЕРЫВНАЯ bonded-only реклама (apply_visibility). Точка вызова
@@ -450,4 +469,16 @@ class AccessoryOrchestrator:
         [CLAUDE 2026-06-01] Убрал directed-burst (+4с): directed-к-identity приватный iPhone (RPA)
         ИГНОРИРУЕТ, он только задерживал поднятие undirected sticky на 4с => медленный реконнект.
         Теперь sticky встаёт сразу с быстрым интервалом."""
+        await self.apply_visibility()
+
+    async def set_session_advertising(self, on: bool):
+        """Client ON/OFF visibility for the CTSP/session plane.
+
+        This does not change media routing. If the controller refuses advertising
+        while another LE central is attached, the failure is logged and the
+        existing media link is left alone.
+        """
+        self.session_advertising = bool(on)
+        if not self.session_advertising:
+            self.session_advertising_blocked = False
         await self.apply_visibility()

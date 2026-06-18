@@ -28,6 +28,26 @@ def normalize_address(address) -> str:
     return text.split("/", 1)[0]
 
 
+def _route_selector_address(value) -> str:
+    text = str(value or "").strip()
+    if text.lower().startswith("source:"):
+        text = text.split(":", 1)[1]
+    return normalize_address(text)
+
+
+def _route_input_key(device) -> str:
+    """Stable route key for an input card.
+
+    Trusted cards may carry legacy human IDs from older registry snapshots.
+    Route ownership must instead be address-stable, otherwise selecting
+    `source:<addr>` can silently clear the active input on old cards.
+    """
+    address = normalize_address(device.get("address"))
+    if device.get("role") == "source" and address:
+        return f"source:{address}"
+    return device.get("key") or address
+
+
 def _dedupe_registry(devices):
     """[CLAUDE 2026-06-13] УНИВЕРСАЛЬНАЯ картотека: одна карточка на одно устройство.
 
@@ -89,6 +109,69 @@ def _bonded_source_endpoints():
             "label": "Media control",
         },
     ]
+
+
+def _session_peer_endpoints():
+    return [
+        {
+            "id": "session-control",
+            "direction": "session",
+            "protocols": ["ble_gatt_bootstrap", "ble_l2cap_coc_session"],
+            "capabilities": ["session_peer"],
+            "label": "Session control/data",
+            "metadata": {"transport_adapter": "ctsp"},
+        },
+        {
+            "id": "remote-mic",
+            "direction": "session",
+            "protocols": ["ble_l2cap_coc_session"],
+            "capabilities": ["remote_mic_receiver"],
+            "label": "Remote microphone receiver",
+            "metadata": {
+                "audio_format": "pcm_s16le",
+                "sample_rate_hz": 16000,
+                "channels": 1,
+                "on_demand": True,
+            },
+        },
+    ]
+
+
+def _looks_like_session_peer(device):
+    metadata = dict(device.get("metadata") or {})
+    evidence = dict(metadata.get("enrollment_evidence") or {})
+    label = _clean_label(device.get("label") or device.get("name")).lower()
+    explicit = set(str(value) for value in (device.get("capabilities") or []))
+    if "session_peer" in explicit or "remote_mic_receiver" in explicit:
+        return True
+    if evidence.get("name_source") == "macos_local_controller_match":
+        return True
+    if evidence.get("kind") in ("macos", "computer", "desktop"):
+        return True
+    return any(token in label for token in ("macbook", "mac mini", "mac studio", "imac", "mac pro"))
+
+
+def _ensure_session_peer_capabilities(device):
+    """Add the separate Mac/server session line without changing audio routing.
+
+    Persistent card ownership mirrors the output side: AppState stores the card
+    and capabilities, while the transport runtime owns any live CTSP/CoC channel.
+    """
+    if not _looks_like_session_peer(device):
+        return device
+    device["capabilities"] = _merge_unique_strings(
+        device.get("capabilities"),
+        ["session_peer", "remote_mic_receiver"],
+    )
+    device["endpoints"] = _merge_endpoints(device.get("endpoints"), _session_peer_endpoints())
+    metadata = dict(device.get("metadata") or {})
+    evidence = dict(metadata.get("enrollment_evidence") or {})
+    evidence.setdefault("session_enrolled", True)
+    evidence.setdefault("session_protocol", "ctsp")
+    evidence.setdefault("remote_mic", "pcm_s16le_16000_mono_on_demand")
+    metadata["enrollment_evidence"] = evidence
+    device["metadata"] = metadata
+    return device
 
 
 def _reset_to_bonded_source_guess(device):
@@ -191,6 +274,14 @@ def _device_is_output(device):
         device.get("role") == "speaker"
         or _has_capability(device, "audio_output")
         or "output" in _endpoint_dirs(device)
+    )
+
+
+def _device_is_session_peer(device):
+    return (
+        _has_capability(device, "session_peer")
+        or _has_capability(device, "remote_mic_receiver")
+        or "session" in _endpoint_dirs(device)
     )
 
 
@@ -675,13 +766,16 @@ class AppState:
                         "constraints": ["idle_link_allowed", "active_media_requires_route"],
                         "metadata": {"legacy_role": role},
                     })
-        devices = [_normalize_trusted_row(device) for device in devices]
+        new_bond = False
+        before_session_repair = json.dumps(devices, ensure_ascii=False, sort_keys=True)
+        devices = [_normalize_trusted_row(_ensure_session_peer_capabilities(device)) for device in devices]
+        if json.dumps(devices, ensure_ascii=False, sort_keys=True) != before_session_repair:
+            new_bond = True
         by_key = {device.get("key"): device for device in devices if device.get("key")}
         by_address = {device.get("address"): device for device in devices if device.get("address")}
         # [CLAUDE 2026-06-03] keys.json (keystore Bumble) только ЧИТАЕМ — узнать, какие источники
         # привязаны. Но device-ЗАПИСЬ должна жить в state.json вместе со всеми (один источник правды).
         # Если бонд ещё не записан как устройство — добавляем и помечаем на персист.
-        new_bond = False
         for bonded in _bonded_source_rows():
             bonded = _normalize_trusted_row(bonded)
             existing = by_key.get(bonded["key"]) or by_address.get(bonded["address"])
@@ -707,6 +801,10 @@ class AppState:
                 if not had_address or not had_endpoints:
                     new_bond = True
         devices = _dedupe_registry(devices)
+        before_session_repair = json.dumps(devices, ensure_ascii=False, sort_keys=True)
+        devices = [_normalize_trusted_row(_ensure_session_peer_capabilities(device)) for device in devices]
+        if json.dumps(devices, ensure_ascii=False, sort_keys=True) != before_session_repair:
+            new_bond = True
         before_identity_repair = json.dumps(devices, ensure_ascii=False, sort_keys=True)
         devices = _repair_source_identity_collisions(devices)
         if json.dumps(devices, ensure_ascii=False, sort_keys=True) != before_identity_repair:
@@ -801,7 +899,7 @@ class AppState:
         return [device for device in self.trusted if device.get("role") == role]
 
     def upsert_trusted_device(self, device):
-        row = _trusted_device_to_row(device)
+        row = _ensure_session_peer_capabilities(_trusted_device_to_row(device))
         address = normalize_address(row.get("address"))
         existing = next(
             (
@@ -866,6 +964,10 @@ class AppState:
     @property
     def trusted_speakers(self):
         return [device for device in self.trusted if _device_is_output(device)]
+
+    @property
+    def session_peers(self):
+        return [device for device in self.trusted if _device_is_session_peer(device)]
 
     @property
     def route_inputs(self):
@@ -935,12 +1037,17 @@ class AppState:
 
     def select_route_input(self, key_or_address):
         selected = None
-        needle = normalize_address(key_or_address)
+        needle = _route_selector_address(key_or_address)
         for device in self.route_inputs:
-            match = device.get("key") == key_or_address or device.get("address") == needle
+            route_key = _route_input_key(device)
+            match = (
+                route_key == key_or_address
+                or device.get("key") == key_or_address
+                or normalize_address(device.get("address")) == needle
+            )
             device["route_input"] = match
             if match:
-                selected = device.get("key") or device.get("address")
+                selected = route_key
         self._route_input = selected or ""
         self.route_focus = "input"
         self.route_compatible = None        # пересчитает рантайм

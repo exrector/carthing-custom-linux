@@ -14,6 +14,9 @@ from typing import Any
 class Capability(str, Enum):
     AUDIO_INPUT = "audio_input"
     AUDIO_OUTPUT = "audio_output"
+    SESSION_PEER = "session_peer"
+    REMOTE_MIC_RECEIVER = "remote_mic_receiver"
+    USB_PEER = "usb_peer"
     CONTROL_INPUT = "control_input"
     CONTROL_OUTPUT = "control_output"
     METADATA_INPUT = "metadata_input"
@@ -25,11 +28,14 @@ class Capability(str, Enum):
 class EndpointDirection(str, Enum):
     INPUT = "input"
     OUTPUT = "output"
+    SESSION = "session"
     CONTROL = "control"
     METADATA = "metadata"
 
 
 class Protocol(str, Enum):
+    BLE_GATT_BOOTSTRAP = "ble_gatt_bootstrap"
+    BLE_L2CAP_COC_SESSION = "ble_l2cap_coc_session"
     BLE_AMS = "ble_ams"
     BLE_ANCS = "ble_ancs"
     BLE_CTS = "ble_cts"
@@ -40,6 +46,7 @@ class Protocol(str, Enum):
     CLASSIC_A2DP_SINK = "classic_a2dp_sink"
     CLASSIC_A2DP_SOURCE = "classic_a2dp_source"
     CLASSIC_AVRCP = "classic_avrcp"
+    USB_NCM_SESSION = "usb_ncm_session"
     USB_AUDIO_IN = "usb_audio_in"
     USB_AUDIO_OUT = "usb_audio_out"
     UI_CONTROL = "ui_control"

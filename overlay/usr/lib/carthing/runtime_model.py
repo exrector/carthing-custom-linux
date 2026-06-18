@@ -91,6 +91,7 @@ class RuntimeModel:
         self.speaker_name = None
         self.speaker_connected = False
         self.speakers = []
+        self.session_peers = []
         self.transfer_active = False
         # ControlRoute: кто рулит источником (local/speaker_remote -> source).
         self.control_routes = []             # list[(controller, source)]
@@ -210,6 +211,7 @@ class RuntimeModel:
             },
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
             "speakers": list(self.speakers),
+            "session_peers": list(self.session_peers),
             "route": {
                 "name": self.route_name,
                 "input": self.route_input,
