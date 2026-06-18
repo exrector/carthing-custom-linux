@@ -15,7 +15,8 @@ Scope: first optimization wave after `carthing-next-wave-backlog-2026-06-17`.
 - Bake guards now agree on runtime tree sha1:
   `e3e456c79ad0712a3c54549b71acd97dc4e7b6b1`.
 - Runtime publishes TMD2772 ALS/proximity diagnostics, but does not yet change
-  brightness automatically.
+  brightness automatically. Follow-up 2026-06-18 enabled the DTB proximity
+  engine (`enable-proxy=true`); userspace wake/dim policy is still pending.
 
 ## Local Gates
 

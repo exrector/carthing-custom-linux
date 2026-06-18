@@ -3,7 +3,7 @@
   "metadataVersion": 1,
   "name": "carthing-custom-linux",
   "version": "qn19-product-baseline-2026-06-17",
-  "description": "Custom Buildroot Linux userspace for Superbird; P1 FAT boot/state + P2 readonly Buildroot rootfs; GE2D kernel bootfs and baked GE2D/native codec userspace baseline",
+  "description": "Custom Buildroot Linux userspace for Superbird; P1 FAT boot/state + P2 readonly Buildroot rootfs; GE2D kernel bootfs with TMD2772 proximity enabled and baked GE2D/native codec userspace baseline",
   "steps": [
     {
       "type": "bulkcmd",
