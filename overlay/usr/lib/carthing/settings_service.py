@@ -33,6 +33,7 @@ _DEFAULTS = {
     "cpu_policy_enable": True,
     "cpu_governor_playnow": "schedutil",
     "cpu_governor_commutator": "performance",
+    "client_enabled": False,            # session/client plane; OFF = no background session transport
 }
 
 

@@ -81,6 +81,7 @@ class RuntimeModel:
         self.session = MediaSession()
         self._active_session = "remote"
         self.operation_mode = "playnow"
+        self.client_enabled = False
         self.mode_resources = {}
         self.resource_policy = {}
         self.power_tier = "boot"
@@ -223,6 +224,7 @@ class RuntimeModel:
             "active_session": self.active_session,
             "device_mode": self.device_mode,
             "operation_mode": self.operation_mode,
+            "client_enabled": bool(self.client_enabled),
             "mode_resources": dict(self.mode_resources),
             "resource_policy": dict(self.resource_policy),
             "mode_status": self.mode_status,

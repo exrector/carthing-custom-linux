@@ -481,6 +481,7 @@ class SettingsScreen(Screen):
                 ("brightness", "Яркость"),
             ]},
             {"key": "mode", "label": "Режим", "children": []},
+            {"key": "client_toggle", "label": "Клиент"},
             {"key": "power_off", "label": "Отключение USB", "children": []},
             {"key": "about", "label": "О системе"},
         ]
@@ -619,6 +620,9 @@ class SettingsScreen(Screen):
             plabel = it["label"]
             if it["key"] == "mode":          # [CLAUDE 2026-06-13] показываем активный режим на самом пункте
                 plabel = f'{it["label"]}: {_om.label(cur_mode)}'
+            elif it["key"] == "client_toggle":
+                on = bool(getattr(self.state, "client_enabled", False)) if self.state else False
+                plabel = f'{it["label"]}: {"Вкл" if on else "Выкл"}'
             rows.append((0, it["key"], plabel, has_children, it["key"] in self.expanded, None))
             if has_children and it["key"] in self.expanded:
                 for child in self._children(it):

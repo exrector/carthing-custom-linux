@@ -787,6 +787,20 @@ def _on_toggle_notif_blink(on):
         settings.set("notif_blink", bool(on))
 
 
+def _on_toggle_client(on):
+    # 2026-06-18 owner: Client ON/OFF is a product setting for session/client
+    # plane only. It does not switch Play Now/Commutator and does not touch the
+    # sticky iPhone audio/control path; future CTSP/GATT listeners must gate on it.
+    enabled = bool(on)
+    if gui is not None:
+        gui.app_state.client_enabled = enabled
+    model.client_enabled = enabled
+    if settings is not None:
+        settings.set("client_enabled", enabled)
+    logger.info("session client plane -> %s", "on" if enabled else "off")
+    _on_publish()
+
+
 def _on_set_theme(name):
     # [CLAUDE 2026-06-11] Тема применяется при ИМПОРТЕ ui_theme (icon-defaults
     # захватывают цвета) -> персист + чистый выход; супервизор поднимет нас с
@@ -882,6 +896,7 @@ def _sync_model_route_selection():
         app_state = gui.app_state
         model.route_input = str(getattr(app_state, "route_input", "") or "")
         model.route_output = str(getattr(app_state, "active_route_output", "") or "")
+        model.client_enabled = bool(getattr(app_state, "client_enabled", False))
     except Exception:
         pass
 
@@ -1449,7 +1464,8 @@ def _init_gui_surface():
                                 on_set_brightness=_on_set_brightness,
                                 on_set_theme=_on_set_theme,
                                 on_power_off=_on_power_off,
-                                on_set_mode=_on_set_mode)
+                                on_set_mode=_on_set_mode,
+                                on_toggle_client=_on_toggle_client)
             _boot_milestone("gui.controller_ready")
             logger.info("GUI active (modular Compositor)")
             # MacDisplay / WebDisplay: events приходят из ЧУЖОГО потока (pygame main-thread /
@@ -1471,6 +1487,8 @@ def _init_gui_surface():
             gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
             gui.app_state.notif_blink = bool(settings.get("notif_blink", True))  # [CLAUDE] персист моргания
             gui.app_state.screen_brightness = int(settings.get("screen_brightness_pct", 100))
+            gui.app_state.client_enabled = bool(settings.get("client_enabled", False))
+            model.client_enabled = gui.app_state.client_enabled
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
             _select_boot_play_now(gui.app_state)
@@ -1498,6 +1516,7 @@ async def main():
     hw_caps = hardware_inventory.probe()
     _boot_milestone("hardware_inventory.ready", enabled_caps=sum(1 for v in hw_caps.values() if v))
     settings = SettingsService()
+    model.client_enabled = bool(settings.get("client_enabled", False))
     from resource_policy import RuntimeResourcePolicy
     resource_policy = RuntimeResourcePolicy(settings=settings, hw_caps=hw_caps)
     _apply_resource_policy(operation_mode.current(settings), reason="boot")
@@ -1563,6 +1582,8 @@ async def main():
                 app_state = AppState()
                 _select_boot_play_now(app_state)
             app_state.operation_mode = operation_mode.current(settings)  # режим из settings ДО старта циклов
+            app_state.client_enabled = bool(settings.get("client_enabled", False))
+            model.client_enabled = app_state.client_enabled
             model.set_operation_mode(
                 app_state.operation_mode,
                 operation_mode.resources(app_state.operation_mode).as_dict(),

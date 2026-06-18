@@ -19,7 +19,7 @@ class Dispatcher:
                  on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None,
                  on_set_off_timeout=None, on_toggle_notif_blink=None,
                  on_set_brightness=None, on_set_theme=None,
-                 on_power_off=None, on_set_mode=None):
+                 on_power_off=None, on_set_mode=None, on_toggle_client=None):
         self.state = state
         self.on_command = on_command or (lambda src, cmd: None)
         self.on_transfer_rescan = on_transfer_rescan or (lambda: None)
@@ -38,6 +38,7 @@ class Dispatcher:
         self.on_set_theme = on_set_theme or (lambda name: None)  # [CLAUDE 2026-06-11] тема UI
         self.on_power_off = on_power_off or (lambda: None)      # [CLAUDE 2026-06-13] мягкое выключение
         self.on_set_mode = on_set_mode or (lambda mode: None)   # [CLAUDE 2026-06-13] выбор режима
+        self.on_toggle_client = on_toggle_client or (lambda on: None)
 
     def dispatch(self, intent, payload=None):
         if intent == "media_play_pause":
@@ -149,6 +150,10 @@ class Dispatcher:
         elif key in ("brightness", "sleep", "off_timeout", "notif_blink"):
             # [CLAUDE 2026-06-11] press энкодера по строке = шаг "+" (единый паттерн −/+)
             self._display_adjust(key, "+")
+        elif key == "client_toggle":
+            new = not bool(getattr(self.state, "client_enabled", False))
+            self.state.client_enabled = new
+            self.on_toggle_client(new)
         elif key == "power_off_confirm":          # [CLAUDE 2026-06-13] подтверждённое мягкое выключение
             self.on_power_off()
             return
