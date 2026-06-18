@@ -229,8 +229,13 @@ class AccessoryOrchestrator:
         else:
             await self._advertise_silent()
 
-        logger.info("Visibility: phase=%s pairing_armed=%s transfer_conn=%s",
-                    phase, self.pairing_armed, self.transfer_connectable)
+        logger.info(
+            "Visibility: phase=%s pairing_armed=%s classic_disc=%s transfer_conn=%s",
+            phase,
+            self.pairing_armed,
+            classic_discoverable,
+            self.transfer_connectable,
+        )
 
     # ── BLE advertising примитивы (порт проверенного из media_remote) ─────────
     def _adv_payload(self):

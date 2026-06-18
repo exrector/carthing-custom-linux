@@ -325,6 +325,7 @@ class A2DPBridge:
         hci_gate=None,
         on_state_change=None,
         on_visibility_request=None,
+        on_input_enrolled=None,
         logger: logging.Logger | None = None,
     ):
         self.device = device
@@ -348,6 +349,7 @@ class A2DPBridge:
         # Если задан — bridge НЕ трогает set_connectable/set_discoverable напрямую,
         # а делегирует решение оркестратору.
         self.on_visibility_request = on_visibility_request
+        self.on_input_enrolled = on_input_enrolled
         self.logger = logger or logging.getLogger(__name__)
 
         self.listener: avdtp.Listener | None = None
@@ -2230,6 +2232,10 @@ class A2DPBridge:
         except Exception:
             address = "?"
         self.logger.info("AVCTP incoming connection from %s", address)
+        self._trust_incoming_source_during_pairing(
+            address,
+            reason="classic_avctp",
+        )
         if (
             self.state.is_trusted_speaker(address)
             and not self.state.is_trusted_source(address)
@@ -2252,6 +2258,61 @@ class A2DPBridge:
         elif self.state.is_trusted_speaker(address):
             self.logger.info("AVRCP speaker backchannel armed: %s", address)
             asyncio.create_task(self._start_speaker_avrcp_session(address, protocol))
+
+    def _input_pairing_active(self):
+        role = getattr(self.state, "pairing_role", "")
+        return bool(getattr(self.state, "pairing_mode", False)) and role in (
+            "input",
+            "source",
+        )
+
+    def _trust_incoming_source_during_pairing(self, address, reason="classic"):
+        """Enroll a newly selected input only inside the explicit Add Device flow.
+
+        macOS/iPadOS/another phone may enter through Classic first while the
+        current Play Now phone keeps the LE link. Without this pairing-window
+        enrollment, the normal source guard rejects the incoming A2DP/AVRCP
+        channels as untrusted. Outside Add Device this remains closed.
+        """
+        address = normalize_address(address)
+        if not address or self.state.is_trusted_source(address):
+            return False
+        if not self._input_pairing_active():
+            return False
+        label = f"Bluetooth Input {address[-5:]}" if len(address) >= 5 else "Bluetooth Input"
+        row = self.state.enroll_trusted_device(
+            address,
+            name=label,
+            service_uuids={"audio_source", "110a", "avrcp", "110e", "110f"},
+            metadata={
+                "enrolled_from": "input_pairing_classic_incoming",
+                "input_enrolled": True,
+                "probe_stage": reason,
+            },
+        )
+        row["online"] = True
+        row["connected"] = True
+        self.state.speaker_pairing_status = "done"
+        self.state.pairing_message = f"{label} добавлен"
+        self.state.pairing_mode = False
+        try:
+            self.state.save_trusted()
+        except Exception as exc:
+            self.logger.warning("input source trust save failed: %s", error_text(exc))
+        self.logger.info(
+            "A2DP incoming source enrolled during Add Device: %s reason=%s",
+            address,
+            reason,
+        )
+        if self.on_input_enrolled is not None:
+            try:
+                result = self.on_input_enrolled(address)
+                if hasattr(result, "__await__"):
+                    asyncio.ensure_future(result)
+            except Exception as exc:
+                self.logger.warning("input enrolled callback failed: %s", error_text(exc))
+        self.on_state_change()
+        return True
 
     async def _start_speaker_avrcp_session(self, address, protocol):
         """Подписка на нотификации колонки: громкость по AVRCP идёт не кнопками,
@@ -2803,6 +2864,10 @@ class A2DPBridge:
 
     def on_avdtp_connection(self, protocol: avdtp.Protocol):
         peer_address = normalize_address(protocol.l2cap_channel.connection.peer_address)
+        self._trust_incoming_source_during_pairing(
+            peer_address,
+            reason="classic_avdtp",
+        )
         if (
             self.state.is_trusted_speaker(peer_address)
             and not self.state.is_trusted_source(peer_address)

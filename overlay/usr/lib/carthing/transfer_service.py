@@ -34,6 +34,7 @@ class TransferService:
             hci_gate=hci_gate,
             on_state_change=self._sync,
             on_visibility_request=self._on_bridge_visibility,
+            on_input_enrolled=self._on_input_enrolled,
         )
         self._speaker_enroll_task = None
         self._operation_mode = operation_mode.normalize(
@@ -48,6 +49,17 @@ class TransferService:
             return
         import asyncio
         asyncio.ensure_future(self.orch.set_transfer_connectable(connectable))
+
+    async def _on_input_enrolled(self, address):
+        """Close Add Device visibility after a new Classic input is trusted.
+
+        The bridge owns A2DP/AVRCP evidence, but orchestrator owns discoverable
+        state. Keep that boundary explicit so enrolling a Mac/iPad/phone input
+        does not leave the accessory broadly discoverable after the modal closes.
+        """
+        if self.orch is None:
+            return
+        await self.orch.arm_pairing(False)
 
     async def start(self):
         """[CLAUDE 2026-06-04] ТРУБА ВСЕГДА ОТКРЫТА. Никаких режимов/кнопок/teardown.

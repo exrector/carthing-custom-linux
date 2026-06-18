@@ -305,7 +305,12 @@ def _on_pairing(enabled, role="source"):
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
                 if orch is not None:
-                    await orch.arm_pairing(True, classic_discoverable=False)
+                    # Add Device/Input must stay visible even while the Play
+                    # Now phone keeps the LE control link. This controller
+                    # rejects legacy BLE advertising in that state, so the safe
+                    # no-disconnect surface is BR/EDR discoverable with the
+                    # same runtime identity name.
+                    await orch.arm_pairing(True, classic_discoverable=True)
             else:
                 if transfer is not None:
                     await transfer.stop_speaker_enrollment()
