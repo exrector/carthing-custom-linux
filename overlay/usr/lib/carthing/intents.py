@@ -68,6 +68,8 @@ class Dispatcher:
             self._media("vol_up")
         elif intent == "media_vol_down":
             self._media("vol_down")
+        elif intent == "remote_mic_toggle":
+            self._remote_mic_toggle()
         elif intent == "open_notifications":
             self.state.active_desktop = self.state.NOTIFICATIONS   # navigate to the list
             self.state.unread_count = 0
@@ -147,7 +149,7 @@ class Dispatcher:
 
     # ── settings ───────────────────────────────────────────────────────────────
     def _settings(self, key):
-        if key in ("pairing_input", "pairing_source"):
+        if key in ("add_iphone", "pairing_input", "pairing_source"):
             self.state.pairing_role = "input"
             self.state.pairing_mode = True
             self.state.speaker_pairing_status = "advertise"
@@ -171,6 +173,8 @@ class Dispatcher:
             new = not bool(getattr(self.state, "client_enabled", False))
             self.state.client_enabled = new
             self.on_toggle_client(new)
+        elif key == "remote_mic_toggle":
+            self._remote_mic_toggle()
         elif key == "power_off_confirm":          # [CLAUDE 2026-06-13] подтверждённое мягкое выключение
             self.on_power_off()
             return
@@ -180,6 +184,17 @@ class Dispatcher:
             self.on_set_mode(key.split(":", 1)[1])
             return
         # trusted / display / about: handled by UI navigation later
+
+    def _remote_mic_toggle(self):
+        new = not bool(getattr(self.state, "remote_mic_enabled", False))
+        state = "ready" if new else "off"
+        message = "Mac ждёт голосовой канал" if new else "Микрофон Mac выключен"
+        if hasattr(self.state, "set_remote_mic"):
+            self.state.set_remote_mic(new, state=state, message=message)
+        else:
+            self.state.remote_mic_enabled = new
+            self.state.client_enabled = new
+        self.on_toggle_client(new)
 
     def _speaker_pair_select(self, address):
         if not address:
