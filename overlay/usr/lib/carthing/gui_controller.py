@@ -41,7 +41,8 @@ class GuiController:
                  on_transfer_rescan=None, on_transfer_select=None, on_speaker_pair_select=None,
                  on_trusted_remove=None, on_notif_dismiss=None,
                  on_session_select=None, on_route_input_select=None,
-                 on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None, on_set_off_timeout=None,
+                 on_route_output_select=None, on_route_activate=None, on_route_check=None,
+                 on_route_view_open=None, on_toggle_sleep=None, on_set_off_timeout=None,
                  on_toggle_notif_blink=None, on_set_brightness=None, on_set_theme=None,
                  on_power_off=None, on_set_mode=None, on_toggle_client=None):
         self.app_state = AppState()
@@ -58,6 +59,8 @@ class GuiController:
             on_route_input_select=on_route_input_select,
             on_route_output_select=on_route_output_select,
             on_route_activate=on_route_activate,
+            on_route_check=on_route_check,
+            on_route_view_open=on_route_view_open,
             on_toggle_sleep=on_toggle_sleep or (lambda *a, **k: None),   # [CLAUDE] сон экрана
             on_set_off_timeout=on_set_off_timeout or (lambda *a, **k: None),  # [CLAUDE] ±тайм-аут
             on_toggle_notif_blink=on_toggle_notif_blink or (lambda *a, **k: None),  # [CLAUDE] моргание уведомл.
@@ -95,6 +98,9 @@ class GuiController:
         self._scroll_dirty = False
         self._last_scroll_render = 0.0
         self._view_stack = []
+
+    def _enter_route_view(self):
+        self.dispatcher.dispatch("route_view_open")
 
     # ── навигация: один home + push Settings/Notifications, без свайпа ────────
     def _nav_intent(self, intent, payload=None):
@@ -141,7 +147,10 @@ class GuiController:
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
-        if intent in ("route_input_select", "route_output_select"):
+        if intent in (
+            "route_input_select", "route_output_select", "route_step",
+            "route_transport_select", "route_next", "route_back", "route_check",
+        ):
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
@@ -367,6 +376,8 @@ class GuiController:
                     # (новый въезжает слева, текущий уходит вправо) = direction -1.
                     direction = -1 if event == Input.SWIPE_RIGHT else 1
                     self.compositor.animate_switch(target, direction)
+                    if target == ROUTER:
+                        self._enter_route_view()
                     self._ensure_anim_task()
             return
         # Средние свайпы вверх/вниз (и энкодер) -> прокрутка активного вью.
@@ -507,6 +518,8 @@ class GuiController:
         self._cancel_scroll_inertia()
         self._view_stack.clear()
         self.compositor.active = index
+        if index == ROUTER:
+            self._enter_route_view()
         self.compositor.render()
 
     def show_session_screen(self):

@@ -100,10 +100,13 @@ class RuntimeModel:
         self.route_name = ""
         self.route_input = ""
         self.route_output = ""
+        self.route_source_endpoint = ""
+        self.route_sink_endpoint = ""
         self.route_protocols = []
         self.route_warnings = []
         self.route_cables = []
         self.route_active = False
+        self.route_builder = {}
         # уведомления (ANCS) — полный список зеркала iPhone: [{uid, app, text}].
         self.notifications = []
         # presence
@@ -150,8 +153,10 @@ class RuntimeModel:
         self.route_name = str(getattr(plan, "name", "") or "")
         routes = list(getattr(plan, "routes", []) or [])
         route = routes[0] if routes else None
-        self.route_input = getattr(route, "input_device_id", "") if route is not None else ""
-        self.route_output = getattr(route, "output_device_id", "") if route is not None else ""
+        self.route_input = getattr(route, "source_device_id", getattr(route, "input_device_id", "")) if route is not None else ""
+        self.route_output = getattr(route, "sink_device_id", getattr(route, "output_device_id", "")) if route is not None else ""
+        self.route_source_endpoint = getattr(route, "source_ref", "") if route is not None else ""
+        self.route_sink_endpoint = getattr(route, "sink_ref", "") if route is not None else ""
         self.route_protocols = sorted(
             str(value.value if hasattr(value, "value") else value)
             for value in getattr(plan, "required_protocols", []) or []
@@ -167,6 +172,8 @@ class RuntimeModel:
         self.route_name = ""
         self.route_input = ""
         self.route_output = ""
+        self.route_source_endpoint = ""
+        self.route_sink_endpoint = ""
         self.route_protocols = []
         self.route_warnings = []
         self.route_cables = []
@@ -216,11 +223,14 @@ class RuntimeModel:
                 "name": self.route_name,
                 "input": self.route_input,
                 "output": self.route_output,
+                "source_endpoint": self.route_source_endpoint,
+                "sink_endpoint": self.route_sink_endpoint,
                 "protocols": list(self.route_protocols),
                 "warnings": list(self.route_warnings),
                 "cables": list(self.route_cables),
                 "active": self.route_active,
             },
+            "route_builder": dict(self.route_builder),
             "notifications": {"count": len(self.notifications),
                               "last": (self.notifications[-1]["title"] if self.notifications else None)},
             "active_session": self.active_session,

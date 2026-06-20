@@ -32,7 +32,7 @@ from bumble.sdp import (
 from app_state import normalize_address
 from local_sink_client import LocalSinkClient
 import operation_mode
-from route_graph import Capability, Endpoint, EndpointDirection, Protocol
+from route_graph import Capability, Endpoint, EndpointDirection, EndpointPlane, Protocol
 from runtime_paths import device_name
 
 
@@ -840,20 +840,20 @@ class A2DPBridge:
         snapshot = set(self._standby_snapshot_addresses)
         if standby_all:
             pass
+        elif selected_address:
+            # Once a concrete external output is selected, the route owner must
+            # keep the radio focused on that sink. Snapshot standby is still
+            # useful before selection, but letting it page every discovered
+            # speaker during an active route can steal airtime from the source
+            # leg and leave the selected sink ready but silent.
+            speakers = [
+                speaker for speaker in speakers
+                if normalize_address(speaker.get("address")) == selected_address
+            ]
         elif snapshot:
             speakers = [
                 speaker for speaker in speakers
                 if normalize_address(speaker.get("address")) in snapshot
-            ]
-        elif selected_address:
-            speakers.sort(
-                key=lambda speaker: 0
-                if normalize_address(speaker.get("address")) == selected_address
-                else 1
-            )
-            speakers = [
-                speaker for speaker in speakers
-                if normalize_address(speaker.get("address")) == selected_address
             ]
         else:
             return
@@ -1147,6 +1147,7 @@ class A2DPBridge:
             asyncio.create_task(self.ensure_speaker_avrcp(speaker_connection))
 
     def _select_receiver_codec(self, protocol):
+        fallback = None
         for codec_type, codec_name, capability_factory, configuration_factory in (
             (a2dp.A2DP_MPEG_2_4_AAC_CODEC_TYPE, "AAC", make_aac_capabilities, make_aac_stream_configuration),
             (a2dp.A2DP_SBC_CODEC_TYPE, "SBC", make_sbc_capabilities, make_sbc_stream_configuration),
@@ -1155,19 +1156,31 @@ class A2DPBridge:
                 if (
                     getattr(endpoint, "in_use", False)
                     or getattr(endpoint, "media_type", None) != avdtp.AVDTP_AUDIO_MEDIA_TYPE
-                    or getattr(endpoint, "tsep", None) != avdtp.AVDTP_TSEP_SNK
                     or not _endpoint_has_media_transport(endpoint)
                 ):
                     continue
                 codec_capability = _endpoint_codec_capability(endpoint, codec_type)
                 if codec_capability is None:
                     continue
-                return (
+                candidate = (
                     endpoint,
                     capability_factory(),
                     configuration_factory(codec_capability.media_codec_information),
                     codec_name,
                 )
+                if getattr(endpoint, "tsep", None) == avdtp.AVDTP_TSEP_SNK:
+                    return candidate
+                if fallback is None:
+                    fallback = candidate
+        if fallback is not None:
+            endpoint, _, _, codec_name = fallback
+            self.logger.warning(
+                "A2DP receiver using non-SNK endpoint fallback: seid=%s tsep=%s codec=%s",
+                getattr(endpoint, "seid", "?"),
+                getattr(endpoint, "tsep", "?"),
+                codec_name,
+            )
+            return fallback
         return None, None, None, None
 
     @staticmethod
@@ -1255,11 +1268,12 @@ class A2DPBridge:
             if codec.get("codec")
         })
         endpoint = Endpoint(
-            id="audio-output",
-            direction=EndpointDirection.OUTPUT,
+            id="audio-sink",
+            direction=EndpointDirection.SINK,
+            plane=EndpointPlane.AUDIO,
             protocols={Protocol.CLASSIC_A2DP_SOURCE},
             capabilities={Capability.AUDIO_OUTPUT},
-            label="Bluetooth audio output",
+            label="Bluetooth audio sink",
             metadata={
                 "transport_adapter": "a2dp",
                 "selected_codec": selected_codec,
@@ -1293,7 +1307,7 @@ class A2DPBridge:
         address = normalize_address(address)
         event_names = sorted(getattr(event, "name", str(event)) for event in supported_events)
         endpoint_id = "remote-control" if role == "speaker" else "media-control"
-        direction = EndpointDirection.CONTROL
+        direction = EndpointDirection.SOURCE if role == "speaker" else EndpointDirection.SINK
         capabilities = {
             Capability.VOLUME_CONTROL,
             Capability.TRANSPORT_CONTROL,
@@ -1305,6 +1319,7 @@ class A2DPBridge:
         endpoint = Endpoint(
             id=endpoint_id,
             direction=direction,
+            plane=EndpointPlane.CONTROL,
             protocols={Protocol.CLASSIC_AVRCP},
             capabilities=capabilities,
             label="AVRCP control",
@@ -2200,14 +2215,28 @@ class A2DPBridge:
         address = normalize_address(address)
         if not address:
             raise RuntimeError("no bonded source address to dial")
-        self.logger.info("A2DP source classic dial (CarThing-initiated): %s", address)
-        connection = await self._gate(
-            "a2dp-source-connect",
-            lambda: asyncio.wait_for(
-                self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
-                timeout=self.connect_timeout,
-            ),
-        )
+        connection = self._find_classic_connection(address)
+        if connection is not None:
+            self.logger.info("A2DP source reuse existing classic link: %s", address)
+        else:
+            self.logger.info("A2DP source classic dial (CarThing-initiated): %s", address)
+            try:
+                connection = await self._gate(
+                    "a2dp-source-connect",
+                    lambda: asyncio.wait_for(
+                        self.device.connect(address, transport=BT_BR_EDR_TRANSPORT),
+                        timeout=self.connect_timeout,
+                    ),
+                )
+            except Exception as exc:
+                connection = self._find_classic_connection(address)
+                if connection is None:
+                    raise
+                self.logger.info(
+                    "A2DP source connect raced (%s) -> reuse existing: %s",
+                    error_text(exc),
+                    address,
+                )
         try:
             await self._gate(
                 "a2dp-source-auth",

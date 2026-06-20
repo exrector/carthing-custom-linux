@@ -70,6 +70,13 @@ class VirtualRoutePatchBay:
                 label="Remote microphone receiver",
             ),
             _RouteSocketSpec(
+                socket_id="session:usb",
+                kind=SocketKind.USB_SESSION,
+                protocols={Protocol.USB_NCM_SESSION},
+                capabilities={Capability.USB_PEER, Capability.USB_SESSION},
+                label="USB session",
+            ),
+            _RouteSocketSpec(
                 socket_id="transfer:control-input",
                 kind=SocketKind.CONTROL_INPUT,
                 protocols={Protocol.CLASSIC_AVRCP},
@@ -111,15 +118,15 @@ class VirtualRoutePatchBay:
         staged.plugs = copy.deepcopy(self.patchbay.plugs)
         connected = []
         for route in plan.routes:
-            input_device = registry.by_id(route.input_device_id)
-            output_device = registry.by_id(route.output_device_id)
-            if input_device is None:
-                raise RuntimeError(f"unknown route input device: {route.input_device_id}")
-            if output_device is None:
-                raise RuntimeError(f"unknown route output device: {route.output_device_id}")
-            self._ensure_plug_exists(input_device, route.input_endpoint_id)
-            self._ensure_plug_exists(output_device, route.output_endpoint_id)
-            for device in (input_device, output_device):
+            source_device = registry.by_id(route.source_device_id)
+            sink_device = registry.by_id(route.sink_device_id)
+            if source_device is None:
+                raise RuntimeError(f"unknown route source device: {route.source_device_id}")
+            if sink_device is None:
+                raise RuntimeError(f"unknown route sink device: {route.sink_device_id}")
+            self._ensure_plug_exists(source_device, route.source_endpoint_id)
+            self._ensure_plug_exists(sink_device, route.sink_endpoint_id)
+            for device in (source_device, sink_device):
                 for plug in device_plugs(device):
                     try:
                         socket = self._socket_for_kind(plug.kind, staged)

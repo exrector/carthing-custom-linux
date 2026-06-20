@@ -686,6 +686,8 @@ async def _apply_route_output(key):
         return
     transfer.bridge.local_sink_enabled = False
     if key and key != self_key:
+        if operation_mode.normalize(getattr(model, "operation_mode", operation_mode.DEFAULT)) != operation_mode.COMMUTATOR:
+            await _apply_operation_mode(operation_mode.COMMUTATOR, persist=True, reason="route_output")
         try:
             gui.app_state.select_active_route_output(key)
             transfer.bridge.state.select_active_route_output(key)
@@ -702,6 +704,8 @@ async def _apply_route_output(key):
         model.audio_sink = "speaker"
         logger.info("ТРУБА: выход = %s (динамик) — поток льётся туда", key)
     else:
+        if operation_mode.normalize(getattr(model, "operation_mode", operation_mode.DEFAULT)) != operation_mode.PLAYNOW:
+            await _apply_operation_mode(operation_mode.PLAYNOW, persist=True, reason="route_output")
         try:
             gui.app_state.select_active_route_output(self_key)
             transfer.bridge.state.select_active_route_output(self_key)
@@ -728,6 +732,112 @@ def _on_route_output_select(key):
     logger.info("route output selected (passive): %s", key)
 
 
+def _selected_route_row(rows, key):
+    from app_state import normalize_address
+    key = str(key or "").strip()
+    needle = key.split(":", 1)[1] if key.startswith("source:") else key
+    needle = normalize_address(needle)
+    for row in rows or []:
+        row_key = str(row.get("key") or row.get("address") or "").strip()
+        route_device_key = str(row.get("route_device_key") or row.get("device_key") or "").strip()
+        row_addr = normalize_address(row.get("address") or "")
+        if key and (row_key == key or route_device_key == key or row_addr == needle or f"source:{row_addr}" == key):
+            return row
+    return None
+
+
+def _route_selected_source_present(app_state):
+    row = _selected_route_row(getattr(app_state, "route_inputs", []), getattr(app_state, "route_input", ""))
+    if row is None:
+        return False
+    return bool(row.get("connected") or row.get("online") or row.get("presence_state") in {"seen", "attached", "present_unrouted", "standby", "route_active"})
+
+
+def _route_selected_sink_present(app_state):
+    ro = str(getattr(app_state, "route_output", "") or "").strip()
+    if not ro:
+        return False
+    if ro == getattr(app_state, "SELF_OUTPUT_KEY", "carthing"):
+        return True
+    row = _selected_route_row(getattr(app_state, "route_outputs", []), ro)
+    if row is None:
+        return False
+    return bool(row.get("connected") or row.get("online") or row.get("presence_state") in {"seen", "attached", "present_unrouted", "standby", "route_active"})
+
+
+def _on_route_view_open():
+    if power is not None:
+        power.note_activity("route_view_open")
+    asyncio.ensure_future(_refresh_route_availability(reason="view_open", selected_only=False))
+
+
+def _on_route_check():
+    if power is not None:
+        power.note_activity("route_check")
+    asyncio.ensure_future(_refresh_route_availability(reason="route_check", selected_only=True))
+    return None
+
+
+async def _refresh_route_availability(reason="route_check", selected_only=True):
+    if gui is None:
+        return
+    app_state = gui.app_state
+    if reason == "route_check":
+        app_state.begin_route_check()
+    try:
+        ro = str(getattr(app_state, "route_output", "") or "").strip()
+        self_key = getattr(app_state, "SELF_OUTPUT_KEY", "carthing")
+        external_output = bool(ro and ro != self_key)
+        external_audio_output = bool(app_state.route_speaker_address())
+        if transfer is not None and getattr(transfer, "bridge", None) is not None:
+            bridge = transfer.bridge
+            if selected_only and external_output and external_audio_output:
+                bridge.allow_standby_address(ro, reason=reason)
+                try:
+                    await bridge.request_receiver_connection(ro, force=True)
+                except Exception as exc:
+                    logger.info("route check receiver probe failed: %s", exc)
+            else:
+                try:
+                    await bridge.refresh_standby_snapshot(duration=3.0)
+                except Exception as exc:
+                    logger.info("route availability snapshot ignored: %s", exc)
+        _recompute_route_compat()
+        if reason == "route_check":
+            source_ok = _route_selected_source_present(app_state)
+            sink_ok = _route_selected_sink_present(app_state)
+            compat_ok = getattr(app_state, "route_compatible", None) is not False
+            ok = bool(source_ok and sink_ok and compat_ok)
+            if ok:
+                message = "Маршрут готов"
+            elif not compat_ok:
+                message = "Для этого пути ещё нет активного adapter"
+            elif not source_ok:
+                message = "Источник сейчас не на связи"
+            elif not sink_ok:
+                message = "Назначение сейчас не на связи"
+            else:
+                message = "Маршрут недоступен"
+            app_state.finish_route_check(ok=ok, message=message)
+            logger.info(
+                "route check result: ok=%s source=%s sink=%s compat=%s route=%s->%s",
+                ok,
+                source_ok,
+                sink_ok,
+                compat_ok,
+                getattr(app_state, "route_input", ""),
+                getattr(app_state, "route_output", ""),
+            )
+        _on_publish()
+        if gui is not None:
+            gui.render()
+    except Exception as exc:
+        logger.warning("route availability refresh failed: %s", exc)
+        if reason == "route_check":
+            app_state.finish_route_check(ok=False, message="Проверка маршрута сорвалась")
+        _on_publish()
+
+
 def _on_route_activate():
     # [CLAUDE 2026-06-11 v2] Кнопка [LNK] — НЕ toggle (решение владельца): она ТОЛЬКО
     # включает ВЫБРАННЫЙ маршрут. Гашение старого — фоновая обязанность системы:
@@ -748,6 +858,13 @@ async def _activate_selected_route_output():
     lineout_key = getattr(gui.app_state, "LINEOUT_OUTPUT_KEY", "carthing-lineout")
     lineout_enabled = os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1"
     external_output = bool(ro and ro != self_key and (ro != lineout_key or lineout_enabled))
+    if external_output and ro != lineout_key and not gui.app_state.route_speaker_address():
+        gui.app_state.finish_route_check(ok=False, message="Для этого назначения ещё нет audio adapter")
+        logger.warning("route activate rejected: selected destination has no active audio adapter: %s", ro)
+        _on_publish()
+        if gui is not None:
+            gui.render()
+        return
     await _apply_operation_mode(
         operation_mode.COMMUTATOR if external_output else operation_mode.PLAYNOW,
         persist=True,
@@ -902,8 +1019,50 @@ def _sync_model_route_selection():
         model.route_input = str(getattr(app_state, "route_input", "") or "")
         model.route_output = str(getattr(app_state, "active_route_output", "") or "")
         model.client_enabled = bool(getattr(app_state, "client_enabled", False))
+        model.route_builder = _route_builder_snapshot(app_state)
     except Exception:
         pass
+
+
+def _route_builder_row(row):
+    endpoints = row.get("endpoints") or []
+    protocols = set(str(value) for value in (row.get("protocols") or []))
+    capabilities = set(str(value) for value in (row.get("capabilities") or []))
+    for endpoint in endpoints:
+        protocols.update(str(value) for value in (endpoint.get("protocols") or []))
+        capabilities.update(str(value) for value in (endpoint.get("capabilities") or []))
+    return {
+        "key": row.get("key") or row.get("address") or "",
+        "route_device_key": row.get("route_device_key") or row.get("device_key") or "",
+        "address": row.get("address") or "",
+        "label": row.get("label") or row.get("name") or row.get("address") or "",
+        "type": row.get("type") or "",
+        "endpoint_id": row.get("endpoint_id") or "",
+        "endpoint_label": row.get("endpoint_label") or "",
+        "endpoint_direction": row.get("endpoint_direction") or row.get("direction") or "",
+        "endpoint_plane": row.get("endpoint_plane") or row.get("plane") or "",
+        "protocols": sorted(protocols),
+        "capabilities": sorted(capabilities),
+        "online": bool(row.get("online")),
+        "connected": bool(row.get("connected")),
+        "presence_state": row.get("presence_state") or "",
+    }
+
+
+def _route_builder_snapshot(app_state):
+    return {
+        "step": str(getattr(app_state, "route_builder_step", "source") or "source"),
+        "transport": str(getattr(app_state, "route_transport", "auto") or "auto"),
+        "check_state": str(getattr(app_state, "route_check_state", "idle") or "idle"),
+        "check_message": str(getattr(app_state, "route_check_message", "") or ""),
+        "compatible": getattr(app_state, "route_compatible", None),
+        "selected_source": str(getattr(app_state, "route_input", "") or ""),
+        "selected_sink": str(getattr(app_state, "route_output", "") or ""),
+        "active_sink": str(getattr(app_state, "active_route_output", "") or ""),
+        "sources": [_route_builder_row(row) for row in getattr(app_state, "route_inputs", [])],
+        "sinks": [_route_builder_row(row) for row in getattr(app_state, "route_outputs", [])],
+        "availability": list(getattr(app_state, "route_availability_snapshot", lambda: [])()),
+    }
 
 
 def _on_publish():
@@ -944,6 +1103,20 @@ async def _on_connection(connection):
 
     # Входящий classic A2DP (iPhone выбрал Car Thing аудиовыходом) -> Transfer-маршрут.
     if classic:
+        peer_addr = None
+        try:
+            from app_state import normalize_address as _norm
+            peer_addr = _norm(str(connection.peer_address))
+            if gui is not None and peer_addr and gui.app_state.is_trusted_device(peer_addr):
+                gui.app_state.note_peer_presence(
+                    address=peer_addr,
+                    event="incoming_attach",
+                    plane="audio",
+                    transport="classic",
+                    detail="classic_connection",
+                )
+        except Exception:
+            pass
         if transfer is not None:
             await transfer.on_incoming_classic(connection)
         if (
@@ -952,10 +1125,9 @@ async def _on_connection(connection):
         ):
             # CTKD — только для НОВЫХ источников. Доверенная колонка, переподключившаяся
             # в окно пары, в SMP не умеет (цикл 4 A3: SMP-запрос улетал в Fosi).
-            peer_addr = None
             try:
                 from app_state import normalize_address as _norm
-                peer_addr = _norm(str(connection.peer_address))
+                peer_addr = peer_addr or _norm(str(connection.peer_address))
             except Exception:
                 pass
             if (
@@ -1028,6 +1200,13 @@ async def _on_connection(connection):
                                 "input_enrolled": True,
                                 "probe_stage": "ams_ancs_ready",
                             },
+                        )
+                        gui.app_state.note_peer_presence(
+                            address=peer,
+                            event="incoming_attach",
+                            plane="audio",
+                            transport="ble_gatt",
+                            detail="ams_ancs_ready",
                         )
                         gui.app_state.save_trusted()
                 finally:
@@ -1267,11 +1446,31 @@ async def _apply_route_command(cmd):
             task = task_getter() if callable(task_getter) else None
             if task is not None and not task.done():
                 try:
-                    await asyncio.wait_for(asyncio.shield(task), timeout=20)
+                    await asyncio.wait_for(asyncio.shield(task), timeout=45)
                 except Exception as e:
                     logger.info("route output command receiver wait ended: %s", e)
             self_key = getattr(gui.app_state, "SELF_OUTPUT_KEY", "carthing")
-            if selected != self_key and getattr(transfer.bridge, "_source_connection", None) is None:
+            logger.info(
+                "route output command source gate: selected=%s self=%s source_active=%s source_conn=%s",
+                selected,
+                self_key,
+                bool(getattr(transfer.bridge, "source_stream_active", False)),
+                bool(getattr(transfer.bridge, "_source_connection", None)),
+            )
+            if selected != self_key and not getattr(transfer.bridge, "source_stream_active", False):
+                receiver_ready = False
+                try:
+                    connector = transfer.bridge._selected_speaker_connector()
+                    receiver_ready = bool(getattr(connector, "rtp_channel", None))
+                except Exception:
+                    receiver_ready = bool(getattr(transfer.bridge, "receiver_rtp_channel", None))
+                logger.info("route output command source gate receiver_ready=%s", receiver_ready)
+                if not receiver_ready:
+                    logger.warning("route output command source connect deferred: selected receiver not ready")
+                    return
+                if getattr(transfer.bridge, "_source_connection", None) is not None:
+                    logger.info("route output command refreshing stale source leg before connect")
+                    await transfer.bridge.disconnect_source()
                 await _apply_route_command("connect")
             return
         if cmd in ("connect", "on", "1"):
@@ -1476,6 +1675,8 @@ def _init_gui_surface():
                                 on_route_input_select=_on_route_input_select,
                                 on_route_output_select=_on_route_output_select,
                                 on_route_activate=_on_route_activate,
+                                on_route_check=_on_route_check,
+                                on_route_view_open=_on_route_view_open,
                                 on_toggle_sleep=_on_toggle_sleep,
                                 on_set_off_timeout=_on_set_off_timeout,
                                 on_toggle_notif_blink=_on_toggle_notif_blink,

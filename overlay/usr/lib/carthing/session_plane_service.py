@@ -168,6 +168,16 @@ class SessionPlaneService:
         runtime.connector.connected = True
         runtime.connector.last_seen = time.time()
         logger.info("session peer LE attached: %s", address)
+        try:
+            self.state.note_peer_presence(
+                address=address,
+                event="incoming_attach",
+                plane="session",
+                transport="ble_gatt",
+                detail="session_peer_le_attached",
+            )
+        except Exception:
+            pass
         connection.on("disconnection", lambda *_: self._on_disconnect(address))
         self._sync_model()
         self.on_change()
@@ -180,6 +190,16 @@ class SessionPlaneService:
         runtime.connector.connection = None
         runtime.connector.channel = None
         runtime.connector.connected = False
+        try:
+            self.state.note_peer_presence(
+                address=address,
+                event="disconnect",
+                plane="session",
+                transport="ble_gatt",
+                detail="session_peer_disconnected",
+            )
+        except Exception:
+            pass
         self._sync_model()
         self.on_change()
 
@@ -196,6 +216,16 @@ class SessionPlaneService:
         runtime.connector.connected = True
         runtime.connector.last_seen = time.time()
         runtime.connector.last_error = ""
+        try:
+            self.state.note_peer_presence(
+                address=address,
+                event="session_seen",
+                plane="session",
+                transport="ble_l2cap_coc",
+                detail="ctsp_channel_connected",
+            )
+        except Exception:
+            pass
         channel.sink = lambda data: self._on_channel_data(runtime, channel, data)
         logger.info("session CoC connected: peer=%s psm=%d", address or "?", self.psm)
         self._sync_model()

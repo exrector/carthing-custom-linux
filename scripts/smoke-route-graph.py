@@ -26,7 +26,7 @@ from enrollment_manager import EnrollmentEvidence, EnrollmentManager  # noqa: E4
 from link_manager import LinkAdapter, LinkManager  # noqa: E402
 from intents import Dispatcher  # noqa: E402
 from ui_components import RegionSet  # noqa: E402
-from route_graph import Capability, Constraint, Endpoint, EndpointDirection, PlannedSession, Protocol, TrustedDevice  # noqa: E402
+from route_graph import Capability, Constraint, Endpoint, EndpointDirection, EndpointPlane, PlannedSession, Protocol, TrustedDevice  # noqa: E402
 from route_planner import RoutePlanError, RoutePlanner  # noqa: E402
 from session_runner import AdapterConnector, SessionRunner  # noqa: E402
 from trusted_device_registry import TrustedDeviceRegistry  # noqa: E402
@@ -131,13 +131,15 @@ def check_planner_constraints():
         endpoints=[
             Endpoint(
                 id="in",
-                direction=EndpointDirection.INPUT,
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SINK},
                 capabilities={Capability.AUDIO_INPUT},
             ),
             Endpoint(
                 id="out",
-                direction=EndpointDirection.OUTPUT,
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SOURCE},
                 capabilities={Capability.AUDIO_OUTPUT},
             ),
@@ -168,7 +170,8 @@ def check_planner_exclusive_conflicts():
         endpoints=[
             Endpoint(
                 id="in",
-                direction=EndpointDirection.INPUT,
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SINK},
                 capabilities={Capability.AUDIO_INPUT},
             ),
@@ -182,7 +185,8 @@ def check_planner_exclusive_conflicts():
         endpoints=[
             Endpoint(
                 id="out",
-                direction=EndpointDirection.OUTPUT,
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SOURCE},
                 capabilities={Capability.AUDIO_OUTPUT},
             ),
@@ -196,7 +200,8 @@ def check_planner_exclusive_conflicts():
         endpoints=[
             Endpoint(
                 id="out",
-                direction=EndpointDirection.OUTPUT,
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SOURCE},
                 capabilities={Capability.AUDIO_OUTPUT},
             ),
@@ -320,6 +325,153 @@ def check_multirole_app_state():
         assert not any(d.get("address") == "AA:BB:CC:DD:EE:FF" for d in app_state.route_outputs)
 
 
+def check_unified_device_intake():
+    with tempfile.TemporaryDirectory() as tmp:
+        trusted_path = Path(tmp) / "trusted-devices.json"
+        os.environ["CARTHING_TRUSTED_DEVICES"] = str(trusted_path)
+        os.environ["CAR_THING_KEYSTORE"] = str(Path(tmp) / "keys.json")
+        app_state = AppState()
+        address = "66:55:44:33:22:11"
+        device = app_state.enroll_peer(
+            address=address,
+            name="MacBook",
+            service_uuids={"110a"},
+            ble_services={"ams"},
+            capabilities={"session_peer", "remote_mic_receiver", "usb_peer"},
+            metadata={
+                "classic_remote_name": "MacBook",
+                "sdp_probe": "complete",
+                "gatt_probe": "complete",
+                "ctsp_probe": "advertised",
+                "usb_identity": "ncm",
+            },
+            intake_source="smoke:full_intake",
+        )
+        assert len([row for row in app_state.trusted if row.get("address") == address]) == 1
+        assert device["metadata"]["enrollment_evidence"]["intake_pipeline"] == "unified_device_intake"
+        endpoint_ids = {endpoint["id"] for endpoint in device["endpoints"]}
+        assert {
+            "audio-source",
+            "media-control",
+            "session-source",
+            "session-sink",
+            "remote-mic-sink",
+            "usb-session-source",
+            "usb-session-sink",
+        } <= endpoint_ids
+        usage = set((device["metadata"].get("capability_profile") or {}).get("usage_hints") or [])
+        assert {"audio_source", "session_peer", "mic_sink", "usb_peer"} <= usage
+
+        app_state.upsert_speaker_candidate(
+            address,
+            name="MacBook",
+            class_of_device=0x240414,
+            audio=True,
+        )
+        device = app_state.trust_speaker(address, "MacBook")
+        assert len([row for row in app_state.trusted if row.get("address") == address]) == 1
+        assert device["role"] == "device"
+        usage = set((device["metadata"].get("capability_profile") or {}).get("usage_hints") or [])
+        assert {"audio_source", "audio_sink", "session_peer", "mic_sink", "usb_peer"} <= usage
+        nodes = [node for node in app_state.route_nodes if node["device_key"] == device["key"]]
+        node_planes = {(node["direction"], node["plane"]) for node in nodes}
+        assert ("source", "audio") in node_planes
+        assert ("sink", "audio") in node_planes
+        assert ("source", "session") in node_planes
+        assert ("sink", "session") in node_planes
+        assert ("sink", "mic") in node_planes
+        assert ("source", "usb") in node_planes
+        assert ("sink", "usb") in node_planes
+
+        app_state.trusted.append({
+            "key": "endpoint-only",
+            "address": "12:34:56:78:90:AB",
+            "label": "Endpoint Only",
+            "role": "device",
+            "capabilities": [],
+            "endpoints": [{
+                "id": "audio-source",
+                "direction": "source",
+                "plane": "audio",
+                "capabilities": ["audio_input"],
+            }],
+            "constraints": [],
+            "metadata": {},
+        })
+        assert any(row.get("key") == "endpoint-only" for row in app_state.trusted_sources)
+
+
+def check_trusted_peer_presence():
+    with tempfile.TemporaryDirectory() as tmp:
+        trusted_path = Path(tmp) / "trusted-devices.json"
+        os.environ["CARTHING_TRUSTED_DEVICES"] = str(trusted_path)
+        os.environ["CAR_THING_KEYSTORE"] = str(Path(tmp) / "keys.json")
+        app_state = AppState()
+        app_state.enroll_peer(
+            address="C4:A9:B8:70:2F:E5",
+            name="Fosi",
+            service_uuids={"110b"},
+            intake_source="smoke:presence",
+        )
+        app_state.enroll_peer(
+            address="66:55:44:33:22:11",
+            name="MacBook",
+            service_uuids={"110a"},
+            capabilities={"session_peer", "usb_peer"},
+            intake_source="smoke:presence",
+        )
+
+        app_state.note_peer_presence(
+            address="66:55:44:33:22:11",
+            event="session_seen",
+            plane="session",
+            transport="ble_l2cap_coc",
+            detail="smoke",
+        )
+        mac = next(row for row in app_state.trusted if row.get("address") == "66:55:44:33:22:11")
+        assert mac["online"] is True
+        assert mac["connected"] is True
+        assert mac["presence_state"] == "present_unrouted"
+        assert "session" in set(mac.get("presence_planes") or [])
+
+        app_state.set_speaker_connected("C4:A9:B8:70:2F:E5", True)
+        fosi = next(row for row in app_state.trusted if row.get("address") == "C4:A9:B8:70:2F:E5")
+        assert fosi["online"] is True
+        assert fosi["connected"] is True
+        assert fosi["presence_state"] == "standby"
+        snapshot = {item["address"]: item for item in app_state.route_availability_snapshot()}
+        assert snapshot["C4:A9:B8:70:2F:E5"]["state"] == "standby"
+        assert snapshot["66:55:44:33:22:11"]["state"] == "present_unrouted"
+
+        app_state.set_speaker_connected("C4:A9:B8:70:2F:E5", False)
+        assert fosi["online"] is False
+        assert fosi["connected"] is False
+        assert fosi["presence_state"] == "missing"
+
+
+def check_self_endpoint_matrix_width():
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["CARTHING_TRUSTED_DEVICES"] = str(Path(tmp) / "trusted-devices.json")
+        os.environ["CAR_THING_KEYSTORE"] = str(Path(tmp) / "keys.json")
+        app_state = AppState()
+        nodes = app_state.route_nodes
+        by_id = {node["id"]: node for node in nodes}
+        required = {
+            "carthing:playnow-metadata-sink": ("sink", "metadata"),
+            "carthing:playnow-control-source": ("source", "control"),
+            "carthing:ctsp-session-source": ("source", "session"),
+            "carthing:ctsp-session-sink": ("sink", "session"),
+            "carthing:local-mic-source": ("source", "mic"),
+            "carthing:remote-mic-sink": ("sink", "mic"),
+            "carthing:usb-session-source": ("source", "usb"),
+            "carthing:usb-session-sink": ("sink", "usb"),
+        }
+        for node_id, (direction, plane) in required.items():
+            assert node_id in by_id, f"missing self matrix node: {node_id}"
+            assert by_id[node_id]["direction"] == direction
+            assert by_id[node_id]["plane"] == plane
+
+
 def check_route_activation_intent():
     with tempfile.TemporaryDirectory() as tmp:
         trusted_path = Path(tmp) / "trusted-devices.json"
@@ -333,7 +485,7 @@ def check_route_activation_intent():
                     "role": "source",
                     "trusted": True,
                     "capabilities": ["audio_input"],
-                    "endpoints": [{"id": "audio-input", "direction": "input", "capabilities": ["audio_input"]}],
+                    "endpoints": [{"id": "audio-input", "direction": "source", "plane": "audio", "capabilities": ["audio_input"]}],
                 },
                 {
                     "id": "fosi",
@@ -342,7 +494,7 @@ def check_route_activation_intent():
                     "role": "speaker",
                     "trusted": True,
                     "capabilities": ["audio_output"],
-                    "endpoints": [{"id": "audio-output", "direction": "output", "capabilities": ["audio_output"]}],
+                    "endpoints": [{"id": "audio-output", "direction": "sink", "plane": "audio", "capabilities": ["audio_output"]}],
                 },
             ],
         }))
@@ -356,16 +508,72 @@ def check_route_activation_intent():
             on_route_output_select=lambda key: events.append(("output", key)),
             on_route_activate=lambda: events.append(("activate", None)),
         )
-        # Source rows are identity-keyed by address (`source:<MAC>`) so a
-        # stale human id like "iphone" must not be treated as a valid route key.
+        # Source rows may still accept legacy UI selectors (`source:<MAC>`), but
+        # AppState stores the planner-facing device id/address.
         dispatcher.dispatch("route_input_select", "source:10:A2:D3:83:82:50")
         dispatcher.dispatch("route_output_select", "fosi")
-        assert events == [("input", "source:10:A2:D3:83:82:50"), ("output", "fosi")]
-        assert app_state.route_input == "source:10:A2:D3:83:82:50"
+        assert events == [("input", "iphone"), ("output", "fosi")]
+        assert app_state.route_input == "iphone"
         assert app_state.route_output == "fosi"
         assert app_state.route_active is False
         dispatcher.dispatch("route_activate")
         assert events[-1] == ("activate", None)
+
+
+def check_route_wizard_destinations_and_check_callback():
+    from app_state import AppState
+    from intents import Dispatcher
+
+    with tempfile.TemporaryDirectory() as tmp:
+        trusted_path = Path(tmp) / "trusted-devices.json"
+        trusted_path.write_text(json.dumps({"schema": 2, "devices": []}))
+        os.environ["CARTHING_TRUSTED_DEVICES"] = str(trusted_path)
+        app_state = AppState()
+        app_state.trusted = []
+        app_state.enroll_peer(
+            address="10:A2:D3:83:82:50",
+            name="iPhone 15 Pro",
+            service_uuids={"110a"},
+            ble_services={"ams", "ancs"},
+            intake_source="smoke",
+        )
+        app_state.enroll_peer(
+            address="5C:E9:1E:8B:66:EE",
+            name="MacBook Pro",
+            service_uuids={"110a"},
+            ble_services={"ams"},
+            capabilities={"session_peer", "remote_mic_receiver"},
+            intake_source="smoke",
+        )
+        app_state.enroll_peer(
+            address="C4:A9:B8:70:2F:E5",
+            name="Fosi Audio ZD3",
+            service_uuids={"110b"},
+            class_of_device=0x240414,
+            intake_source="smoke",
+        )
+        labels = [row.get("label") for row in app_state.route_outputs]
+        assert "iPhone 15 Pro" not in labels
+        assert "MacBook Pro" in labels
+        assert "Fosi Audio ZD3" in labels
+        mac_sinks = [row for row in app_state.route_outputs if row.get("label") == "MacBook Pro"]
+        assert {row.get("endpoint_plane") for row in mac_sinks} >= {"usb", "session", "mic"}
+        assert any(row.get("label") == "Fosi Audio ZD3" and row.get("endpoint_plane") == "audio" for row in app_state.route_outputs)
+        mac_sources = [row for row in app_state.route_inputs if row.get("label") == "MacBook Pro"]
+        assert {row.get("endpoint_plane") for row in mac_sources} >= {"audio", "usb", "session"}
+
+        calls = []
+        dispatcher = Dispatcher(
+            app_state,
+            on_route_view_open=lambda: calls.append("open"),
+            on_route_check=lambda: calls.append("check") or None,
+        )
+        dispatcher.dispatch("route_view_open")
+        dispatcher.dispatch("route_input_select", "source:10:A2:D3:83:82:50")
+        dispatcher.dispatch("route_output_select", "C4:A9:B8:70:2F:E5")
+        dispatcher.dispatch("route_check")
+        assert calls == ["open", "check"]
+        assert app_state.route_check_state == "checking"
 
 
 def check_runtime_route_state():
@@ -378,8 +586,12 @@ def check_runtime_route_state():
         warnings=["route requires stop-before-start transition"],
     )
     plan.routes.append(type("Route", (), {
-        "input_device_id": "iphone",
-        "output_device_id": "speaker",
+        "source_device_id": "iphone",
+        "source_endpoint_id": "audio-input",
+        "sink_device_id": "speaker",
+        "sink_endpoint_id": "audio-output",
+        "source_ref": "iphone:audio-input",
+        "sink_ref": "speaker:audio-output",
     })())
     cables = [type("Cable", (), {"id": "iphone:audio-input->transfer:audio-input"})()]
     model.set_route_plan(plan, cables)
@@ -451,13 +663,15 @@ async def check_route_patchbay_router():
                     "endpoints": [
                         {
                             "id": "audio-input",
-                            "direction": "input",
+                            "direction": "source",
+                            "plane": "audio",
                             "protocols": ["classic_a2dp_sink"],
                             "capabilities": ["audio_input"],
                         },
                         {
                             "id": "media-control",
-                            "direction": "control",
+                            "direction": "sink",
+                            "plane": "control",
                             "protocols": ["ble_ams", "ble_hid"],
                             "capabilities": ["control_output", "metadata_input"],
                         },
@@ -475,13 +689,15 @@ async def check_route_patchbay_router():
                     "endpoints": [
                         {
                             "id": "audio-output",
-                            "direction": "output",
+                            "direction": "sink",
+                            "plane": "audio",
                             "protocols": ["classic_a2dp_source"],
                             "capabilities": ["audio_output"],
                         },
                         {
                             "id": "speaker-remote",
-                            "direction": "control",
+                            "direction": "source",
+                            "plane": "control",
                             "protocols": ["classic_avrcp"],
                             "capabilities": ["control_input"],
                         },
@@ -564,7 +780,11 @@ def main():
     check_enrollment()
     check_degraded_enrollment()
     check_multirole_app_state()
+    check_unified_device_intake()
+    check_trusted_peer_presence()
+    check_self_endpoint_matrix_width()
     check_route_activation_intent()
+    check_route_wizard_destinations_and_check_callback()
     check_runtime_route_state()
     check_statusbar_has_no_legacy_route_chip()
     check_patchbay()

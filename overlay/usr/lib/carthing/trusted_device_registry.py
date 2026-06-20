@@ -16,8 +16,11 @@ from route_graph import (
     Constraint,
     Endpoint,
     EndpointDirection,
+    EndpointPlane,
     Protocol,
     TrustedDevice,
+    coerce_endpoint_direction,
+    coerce_endpoint_plane,
 )
 
 
@@ -35,11 +38,16 @@ def _enum_set(enum_cls, values):
 
 
 def _endpoint_from_json(row):
+    capabilities = _enum_set(Capability, row.get("capabilities"))
+    protocols = _enum_set(Protocol, row.get("protocols"))
+    direction = coerce_endpoint_direction(row.get("direction"), capabilities)
+    plane = coerce_endpoint_plane(row.get("plane") or row.get("direction"), capabilities, protocols)
     return Endpoint(
         id=str(row.get("id") or row.get("direction") or "endpoint"),
-        direction=EndpointDirection(row.get("direction")),
-        protocols=_enum_set(Protocol, row.get("protocols")),
-        capabilities=_enum_set(Capability, row.get("capabilities")),
+        direction=direction,
+        plane=plane,
+        protocols=protocols,
+        capabilities=capabilities,
         label=str(row.get("label") or ""),
         metadata=dict(row.get("metadata") or {}),
     )
@@ -49,6 +57,7 @@ def _endpoint_to_json(endpoint: Endpoint):
     return {
         "id": endpoint.id,
         "direction": endpoint.direction.value,
+        "plane": endpoint.plane.value,
         "protocols": sorted(str(value.value if hasattr(value, "value") else value)
                             for value in endpoint.protocols),
         "capabilities": sorted(str(value.value if hasattr(value, "value") else value)
@@ -63,22 +72,33 @@ def _device_from_json(row):
     device_id = str(row.get("id") or address or row.get("name") or "device")
     capabilities = _enum_set(Capability, row.get("capabilities"))
     endpoints = [_endpoint_from_json(endpoint) for endpoint in row.get("endpoints", [])]
-    directions = {endpoint.direction for endpoint in endpoints}
-    if Capability.AUDIO_INPUT in capabilities and EndpointDirection.INPUT not in directions:
+    has_audio_source = bool([
+        endpoint for endpoint in endpoints
+        if endpoint.direction == EndpointDirection.SOURCE
+        and endpoint.plane == EndpointPlane.AUDIO
+    ])
+    has_audio_sink = bool([
+        endpoint for endpoint in endpoints
+        if endpoint.direction == EndpointDirection.SINK
+        and endpoint.plane == EndpointPlane.AUDIO
+    ])
+    if Capability.AUDIO_INPUT in capabilities and not has_audio_source:
         endpoints.append(Endpoint(
-            id="audio-input",
-            direction=EndpointDirection.INPUT,
+            id="audio-source",
+            direction=EndpointDirection.SOURCE,
+            plane=EndpointPlane.AUDIO,
             protocols={Protocol.CLASSIC_A2DP_SINK},
             capabilities={Capability.AUDIO_INPUT},
-            label="Bluetooth audio input",
+            label="Bluetooth audio source",
         ))
-    if Capability.AUDIO_OUTPUT in capabilities and EndpointDirection.OUTPUT not in directions:
+    if Capability.AUDIO_OUTPUT in capabilities and not has_audio_sink:
         endpoints.append(Endpoint(
-            id="audio-output",
-            direction=EndpointDirection.OUTPUT,
+            id="audio-sink",
+            direction=EndpointDirection.SINK,
+            plane=EndpointPlane.AUDIO,
             protocols={Protocol.CLASSIC_A2DP_SOURCE},
             capabilities={Capability.AUDIO_OUTPUT},
-            label="Bluetooth audio output",
+            label="Bluetooth audio sink",
         ))
     return TrustedDevice(
         id=device_id,
@@ -126,14 +146,16 @@ def _legacy_source(row):
         endpoints=[
             Endpoint(
                 id="media-control",
-                direction=EndpointDirection.CONTROL,
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.CONTROL,
                 protocols={Protocol.BLE_AMS, Protocol.BLE_HID},
                 capabilities={Capability.CONTROL_OUTPUT, Capability.METADATA_INPUT},
                 label="Media control",
             ),
             Endpoint(
                 id="audio-source",
-                direction=EndpointDirection.INPUT,
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SINK},
                 capabilities={Capability.AUDIO_INPUT},
                 label="Bluetooth audio source",
@@ -162,15 +184,17 @@ def _legacy_speaker(row):
         },
         endpoints=[
             Endpoint(
-                id="audio-output",
-                direction=EndpointDirection.OUTPUT,
+                id="audio-sink",
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.AUDIO,
                 protocols={Protocol.CLASSIC_A2DP_SOURCE},
                 capabilities={Capability.AUDIO_OUTPUT},
                 label="Bluetooth speaker",
             ),
             Endpoint(
                 id="speaker-remote",
-                direction=EndpointDirection.CONTROL,
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.CONTROL,
                 protocols={Protocol.CLASSIC_AVRCP},
                 capabilities={
                     Capability.CONTROL_INPUT,

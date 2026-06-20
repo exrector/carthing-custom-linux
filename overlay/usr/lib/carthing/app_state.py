@@ -15,6 +15,7 @@ from pathlib import Path
 import operation_mode
 from runtime_paths import device_name
 import state_paths
+from trusted_presence import TrustedPeerPresence
 
 
 # [CLAUDE 2026-06-03] ЕДИНЫЙ файл состояния: devices + settings в одном state.json (один источник
@@ -32,6 +33,8 @@ def _route_selector_address(value) -> str:
     text = str(value or "").strip()
     if text.lower().startswith("source:"):
         text = text.split(":", 1)[1]
+    if "#" in text:
+        text = text.split("#", 1)[0]
     return normalize_address(text)
 
 
@@ -42,10 +45,97 @@ def _route_input_key(device) -> str:
     Route ownership must instead be address-stable, otherwise selecting
     `source:<addr>` can silently clear the active input on old cards.
     """
+    if device.get("route_device_key"):
+        return device.get("route_device_key")
     address = normalize_address(device.get("address"))
     if device.get("role") == "source" and address:
         return f"source:{address}"
     return device.get("key") or address
+
+
+def _selector_device_key(value) -> str:
+    text = str(value or "").strip()
+    if "#" in text:
+        text = text.split("#", 1)[0]
+    if text.lower().startswith("source:"):
+        text = text.split(":", 1)[1]
+    return text
+
+
+def _selector_endpoint_id(value) -> str:
+    text = str(value or "").strip()
+    if "#" not in text:
+        return ""
+    return text.split("#", 1)[1]
+
+
+def _device_route_key(device) -> str:
+    address = normalize_address(device.get("address"))
+    key = str(device.get("key") or "").strip()
+    if key.lower().startswith("source:"):
+        return address or key.split(":", 1)[1]
+    return key or address
+
+
+def _endpoint_selector_key(device, endpoint) -> str:
+    device_key = _device_route_key(device)
+    endpoint_id = str((endpoint or {}).get("id") or "endpoint")
+    return f"{device_key}#{endpoint_id}" if device_key else endpoint_id
+
+
+def _route_row_for_endpoint(device, endpoint, *, selected=False, active=False):
+    endpoint = dict(endpoint or {})
+    device_key = _device_route_key(device)
+    endpoint_id = str(endpoint.get("id") or "endpoint")
+    direction = _endpoint_direction(endpoint)
+    plane = _endpoint_plane(endpoint)
+    capabilities = _merge_unique_strings(device.get("capabilities"), endpoint.get("capabilities"))
+    protocols = _merge_unique_strings([], endpoint.get("protocols"))
+    metadata = _merge_metadata(device.get("metadata"), {
+        "endpoint": {
+            "id": endpoint_id,
+            "label": endpoint.get("label") or endpoint_id,
+            "direction": direction,
+            "plane": plane,
+            "protocols": list(endpoint.get("protocols") or []),
+            "capabilities": list(endpoint.get("capabilities") or []),
+            "metadata": dict(endpoint.get("metadata") or {}),
+        },
+        "capability_profile": {
+            **(((device.get("metadata") or {}).get("capability_profile")) or {}),
+            "usage_hints": _usage_hints_for_row({
+                **dict(device),
+                "capabilities": capabilities,
+                "endpoints": [endpoint],
+            }),
+        },
+    })
+    return {
+        "key": _endpoint_selector_key(device, endpoint),
+        "route_device_key": device_key,
+        "device_key": device_key,
+        "address": normalize_address(device.get("address")),
+        "label": device.get("label") or device.get("name") or device_key or "Device",
+        "type": device.get("type") or "",
+        "role": device.get("role") or "",
+        "online": bool(device.get("online")),
+        "connected": bool(device.get("connected")),
+        "presence_state": device.get("presence_state") or "",
+        "transports": list(device.get("transports") or []),
+        "planes": list(device.get("planes") or []),
+        "capabilities": capabilities,
+        "protocols": protocols,
+        "constraints": list(device.get("constraints") or []),
+        "metadata": metadata,
+        "endpoints": [endpoint],
+        "endpoint_id": endpoint_id,
+        "endpoint_label": endpoint.get("label") or endpoint_id,
+        "endpoint_direction": direction,
+        "endpoint_plane": plane,
+        "route_input": bool(selected and direction == "source"),
+        "route_output": bool(selected and direction == "sink"),
+        "active_route_output": bool(active and direction == "sink"),
+    }
 
 
 def _dedupe_registry(devices):
@@ -96,14 +186,16 @@ def _bonded_source_endpoints():
     return [
         {
             "id": "audio-input",
-            "direction": "input",
+            "direction": "source",
+            "plane": "audio",
             "protocols": ["classic_a2dp_sink"],
             "capabilities": ["audio_input"],
-            "label": "Bluetooth audio input",
+            "label": "Bluetooth audio source",
         },
         {
             "id": "media-control",
-            "direction": "control",
+            "direction": "sink",
+            "plane": "control",
             "protocols": ["classic_avrcp"],
             "capabilities": ["control_output", "metadata_input"],
             "label": "Media control",
@@ -114,16 +206,27 @@ def _bonded_source_endpoints():
 def _session_peer_endpoints():
     return [
         {
-            "id": "session-control",
-            "direction": "session",
+            "id": "session-source",
+            "direction": "source",
+            "plane": "session",
             "protocols": ["ble_gatt_bootstrap", "ble_l2cap_coc_session"],
             "capabilities": ["session_peer"],
-            "label": "Session control/data",
-            "metadata": {"transport_adapter": "ctsp"},
+            "label": "Session source",
+            "metadata": {"transport_adapter": "ctsp", "duplex_peer": "session-sink"},
         },
         {
-            "id": "remote-mic",
-            "direction": "session",
+            "id": "session-sink",
+            "direction": "sink",
+            "plane": "session",
+            "protocols": ["ble_gatt_bootstrap", "ble_l2cap_coc_session"],
+            "capabilities": ["session_peer"],
+            "label": "Session sink",
+            "metadata": {"transport_adapter": "ctsp", "duplex_peer": "session-source"},
+        },
+        {
+            "id": "remote-mic-sink",
+            "direction": "sink",
+            "plane": "mic",
             "protocols": ["ble_l2cap_coc_session"],
             "capabilities": ["remote_mic_receiver"],
             "label": "Remote microphone receiver",
@@ -133,6 +236,29 @@ def _session_peer_endpoints():
                 "channels": 1,
                 "on_demand": True,
             },
+        },
+    ]
+
+
+def _usb_peer_endpoints():
+    return [
+        {
+            "id": "usb-session-source",
+            "direction": "source",
+            "plane": "usb",
+            "protocols": ["usb_ncm_session"],
+            "capabilities": ["usb_peer", "usb_session"],
+            "label": "USB session source",
+            "metadata": {"transport_adapter": "usb_ncm", "duplex_peer": "usb-session-sink"},
+        },
+        {
+            "id": "usb-session-sink",
+            "direction": "sink",
+            "plane": "usb",
+            "protocols": ["usb_ncm_session"],
+            "capabilities": ["usb_peer", "usb_session"],
+            "label": "USB session sink",
+            "metadata": {"transport_adapter": "usb_ncm", "duplex_peer": "usb-session-source"},
         },
     ]
 
@@ -161,14 +287,18 @@ def _ensure_session_peer_capabilities(device):
         return device
     device["capabilities"] = _merge_unique_strings(
         device.get("capabilities"),
-        ["session_peer", "remote_mic_receiver"],
+        ["session_peer", "remote_mic_receiver", "usb_peer", "usb_session"],
     )
-    device["endpoints"] = _merge_endpoints(device.get("endpoints"), _session_peer_endpoints())
+    device["endpoints"] = _merge_endpoints(
+        _merge_endpoints(device.get("endpoints"), _session_peer_endpoints()),
+        _usb_peer_endpoints(),
+    )
     metadata = dict(device.get("metadata") or {})
     evidence = dict(metadata.get("enrollment_evidence") or {})
     evidence.setdefault("session_enrolled", True)
     evidence.setdefault("session_protocol", "ctsp")
     evidence.setdefault("remote_mic", "pcm_s16le_16000_mono_on_demand")
+    evidence.setdefault("usb_session", "usb_ncm")
     metadata["enrollment_evidence"] = evidence
     device["metadata"] = metadata
     return device
@@ -255,17 +385,104 @@ def _has_capability(device, capability):
 
 def _endpoint_dirs(device):
     return {
-        endpoint.get("direction")
+        _endpoint_direction(endpoint)
         for endpoint in (device.get("endpoints") or [])
         if isinstance(endpoint, dict)
     }
+
+
+def _endpoint_direction(endpoint):
+    direction = str((endpoint or {}).get("direction") or "").strip().lower()
+    if direction in ("source", "input"):
+        return "source"
+    if direction in ("sink", "output"):
+        return "sink"
+    capabilities = set((endpoint or {}).get("capabilities") or [])
+    if capabilities & {"audio_output", "control_input", "metadata_input", "remote_mic_receiver", "playnow_metadata"}:
+        return "sink"
+    return "source"
+
+
+def _endpoint_plane(endpoint):
+    plane = str((endpoint or {}).get("plane") or "").strip().lower()
+    if plane:
+        return plane
+    direction = str((endpoint or {}).get("direction") or "").strip().lower()
+    if direction in {"session", "control", "metadata"}:
+        return direction
+    capabilities = set((endpoint or {}).get("capabilities") or [])
+    protocols = set((endpoint or {}).get("protocols") or [])
+    if capabilities & {"remote_mic_receiver", "local_mic_source"}:
+        return "mic"
+    if capabilities & {"usb_peer", "usb_session", "usb_audio"} or any(str(proto).startswith("usb_") for proto in protocols):
+        return "usb"
+    if capabilities & {"session_peer"} or "ble_l2cap_coc_session" in protocols:
+        return "session"
+    if capabilities & {"control_input", "control_output", "volume_control", "transport_control"}:
+        return "control"
+    if capabilities & {"metadata_input", "metadata_output", "notifications_input", "playnow_metadata"}:
+        return "metadata"
+    return "audio"
+
+
+def _has_endpoint(device, *, direction=None, plane=None, capability=None):
+    for endpoint in (device.get("endpoints") or []):
+        if not isinstance(endpoint, dict):
+            continue
+        if direction is not None and _endpoint_direction(endpoint) != direction:
+            continue
+        if plane is not None and _endpoint_plane(endpoint) != plane:
+            continue
+        if capability is not None and capability not in set(endpoint.get("capabilities") or []):
+            continue
+        return True
+    return False
+
+
+def _usage_hints_for_row(device):
+    capabilities = set(str(value) for value in (device.get("capabilities") or []))
+    hints = set()
+    if "audio_input" in capabilities:
+        hints.add("audio_source")
+    if "audio_output" in capabilities:
+        hints.add("audio_sink")
+    if "session_peer" in capabilities:
+        hints.add("session_peer")
+    if "local_mic_source" in capabilities:
+        hints.add("mic_source")
+    if "remote_mic_receiver" in capabilities:
+        hints.add("mic_sink")
+    if {"usb_peer", "usb_session"} & capabilities:
+        hints.add("usb_peer")
+    if "playnow_metadata" in capabilities:
+        hints.add("playnow_surface")
+    for endpoint in (device.get("endpoints") or []):
+        if not isinstance(endpoint, dict):
+            continue
+        plane = _endpoint_plane(endpoint)
+        direction = _endpoint_direction(endpoint)
+        if plane == "audio" and direction == "source":
+            hints.add("audio_source")
+        elif plane == "audio" and direction == "sink":
+            hints.add("audio_sink")
+        elif plane == "session":
+            hints.add("session_peer")
+        elif plane == "mic" and direction == "source":
+            hints.add("mic_source")
+        elif plane == "mic" and direction == "sink":
+            hints.add("mic_sink")
+        elif plane == "usb":
+            hints.add("usb_peer")
+        elif plane == "metadata":
+            hints.add("metadata_surface")
+    return sorted(hints)
 
 
 def _device_is_input(device):
     return (
         device.get("role") == "source"
         or _has_capability(device, "audio_input")
-        or "input" in _endpoint_dirs(device)
+        or _has_endpoint(device, direction="source", plane="audio", capability="audio_input")
     )
 
 
@@ -273,15 +490,28 @@ def _device_is_output(device):
     return (
         device.get("role") == "speaker"
         or _has_capability(device, "audio_output")
-        or "output" in _endpoint_dirs(device)
+        or _has_endpoint(device, direction="sink", plane="audio", capability="audio_output")
     )
+
+
+def _device_is_route_destination(device):
+    if _device_is_output(device):
+        return True
+    for endpoint in (device.get("endpoints") or []):
+        if not isinstance(endpoint, dict):
+            continue
+        if _endpoint_direction(endpoint) != "sink":
+            continue
+        if _endpoint_plane(endpoint) in {"audio", "usb", "session", "mic"}:
+            return True
+    return False
 
 
 def _device_is_session_peer(device):
     return (
         _has_capability(device, "session_peer")
         or _has_capability(device, "remote_mic_receiver")
-        or "session" in _endpoint_dirs(device)
+        or any(_endpoint_plane(endpoint) == "session" for endpoint in (device.get("endpoints") or []) if isinstance(endpoint, dict))
     )
 
 
@@ -301,6 +531,7 @@ def _endpoint_to_row(endpoint):
     return {
         "id": endpoint.id,
         "direction": _value(endpoint.direction),
+        "plane": _value(getattr(endpoint, "plane", "")) or "",
         "protocols": sorted(str(_value(value)) for value in endpoint.protocols),
         "capabilities": sorted(str(_value(value)) for value in endpoint.capabilities),
         "label": endpoint.label,
@@ -311,8 +542,16 @@ def _endpoint_to_row(endpoint):
 def _trusted_device_to_row(device):
     capabilities = sorted(str(_value(value)) for value in device.capabilities)
     endpoints = [_endpoint_to_row(endpoint) for endpoint in device.endpoints]
-    has_input = any(endpoint.get("direction") == "input" for endpoint in endpoints)
-    has_output = any(endpoint.get("direction") == "output" for endpoint in endpoints)
+    has_input = any(
+        _endpoint_direction(endpoint) == "source"
+        and _endpoint_plane(endpoint) == "audio"
+        for endpoint in endpoints
+    )
+    has_output = any(
+        _endpoint_direction(endpoint) == "sink"
+        and _endpoint_plane(endpoint) == "audio"
+        for endpoint in endpoints
+    )
     if has_input and has_output:
         role = "device"
         dtype = "Маршрутизируемое устройство"
@@ -408,7 +647,7 @@ def _merge_metadata(left, right):
     for key, value in (right or {}).items():
         if key == "capability_profile" and isinstance(value, dict):
             current = dict(result.get(key) or {})
-            for list_key in ("evidence_sources", "verified_capabilities", "protocols"):
+            for list_key in ("evidence_sources", "verified_capabilities", "protocols", "usage_hints"):
                 current[list_key] = sorted(set(current.get(list_key) or []) | set(value.get(list_key) or []))
             unknowns = set(current.get("unknowns") or []) | set(value.get("unknowns") or [])
             evidence_sources = set(current.get("evidence_sources") or [])
@@ -435,27 +674,30 @@ def _merge_metadata(left, right):
 def _default_endpoint_rows_for_capabilities(device):
     capabilities = set(device.get("capabilities") or [])
     endpoints = list(device.get("endpoints") or [])
-    directions = {
-        endpoint.get("direction")
+    audio_source = {
+        _endpoint_direction(endpoint)
         for endpoint in endpoints
         if isinstance(endpoint, dict)
+        and _endpoint_plane(endpoint) == "audio"
     }
     defaults = []
-    if "audio_input" in capabilities and "input" not in directions:
+    if "audio_input" in capabilities and "source" not in audio_source:
         defaults.append({
             "id": "audio-input",
-            "direction": "input",
+            "direction": "source",
+            "plane": "audio",
             "protocols": ["classic_a2dp_sink"],
             "capabilities": ["audio_input"],
-            "label": "Bluetooth audio input",
+            "label": "Bluetooth audio source",
         })
-    if "audio_output" in capabilities and "output" not in directions:
+    if "audio_output" in capabilities and "sink" not in audio_source:
         defaults.append({
             "id": "audio-output",
-            "direction": "output",
+            "direction": "sink",
+            "plane": "audio",
             "protocols": ["classic_a2dp_source"],
             "capabilities": ["audio_output"],
-            "label": "Bluetooth audio output",
+            "label": "Bluetooth audio sink",
         })
     return defaults
 
@@ -483,6 +725,10 @@ def _normalize_trusted_row(device):
 def _ensure_capability_profile(device):
     metadata = dict(device.get("metadata") or {})
     if metadata.get("capability_profile"):
+        profile = dict(metadata.get("capability_profile") or {})
+        if not profile.get("usage_hints"):
+            profile["usage_hints"] = _usage_hints_for_row(device)
+            metadata["capability_profile"] = profile
         device["metadata"] = metadata
         return
     evidence = dict(metadata.get("enrollment_evidence") or {})
@@ -512,6 +758,7 @@ def _ensure_capability_profile(device):
         "evidence_sources": sorted(set(sources)),
         "verified_capabilities": capabilities,
         "protocols": protocols,
+        "usage_hints": _usage_hints_for_row(device),
         "unknowns": sorted(set(unknowns)),
     }
     device["metadata"] = metadata
@@ -561,10 +808,17 @@ class AppState:
         self._route_input = ""
         self._route_output = ""
         self._active_route_output = ""
+        self._route_input_endpoint = ""
+        self._route_output_endpoint = ""
+        self._active_route_output_endpoint = ""
         # [CLAUDE 2026-06-02] какая колонка активна (для скролла/подсветки) и совместимость
         # выбранной пары вход→выход: True=зелёный, False=красный (нельзя), None=ещё не оба выбраны.
         self.route_focus = "input"
         self.route_compatible = None
+        self.route_builder_step = "source"      # source|sink|path|review
+        self.route_transport = "auto"           # auto|bluetooth|usb
+        self.route_check_state = "idle"         # idle|checking|ready|error
+        self.route_check_message = ""
         self.route_name = ""
         self.route_protocols = []
         self.route_warnings = []
@@ -576,6 +830,9 @@ class AppState:
         self.notif_blink = True         # [CLAUDE] моргание кружка уведомлений под энкодером (тумблер)
         self.screen_brightness = 100    # [CLAUDE 2026-06-10] яркость экрана, % (цикл в Settings)
         self.client_enabled = False     # 2026-06-18 owner: session/client plane toggle, separate from audio route
+        self.remote_mic_enabled = False
+        self.remote_mic_state = "off"    # off|ready|listening|unavailable
+        self.remote_mic_message = "Микрофон Mac выключен"
         self.ui_theme = "dark"          # [CLAUDE 2026-06-11] тема UI (dark|terminal); применяется рестартом runtime
         self.clock_text = "--:--"
         self.device_name = device_name()
@@ -594,6 +851,7 @@ class AppState:
         self.actual_source_connected = False   # classic-ACL к iPhone поднята
         self.actual_source_streaming = False   # iPhone реально льёт поток
         self.actual_receiver_addr = ""         # MAC колонки (если есть RTP-канал)
+        self.presence = TrustedPeerPresence(self)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.load_trusted()
 
@@ -693,6 +951,24 @@ class AppState:
     @property
     def control_source(self):
         return self.source_for(self.control_source_key)
+
+    def set_remote_mic(self, enabled, state=None, message=None):
+        self.remote_mic_enabled = bool(enabled)
+        if state is not None:
+            self.remote_mic_state = str(state or ("ready" if enabled else "off"))
+        else:
+            self.remote_mic_state = "ready" if enabled else "off"
+        if message is not None:
+            self.remote_mic_message = str(message or "")
+        elif enabled:
+            self.remote_mic_message = "Mac ждёт голосовой канал"
+        else:
+            self.remote_mic_message = "Микрофон Mac выключен"
+        self.client_enabled = bool(enabled)
+        return self.remote_mic_enabled
+
+    def toggle_remote_mic(self):
+        return self.set_remote_mic(not bool(self.remote_mic_enabled))
 
     def load_trusted(self, path=None):
         path = Path(path or os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
@@ -845,10 +1121,6 @@ class AppState:
                 pass
 
     def _ensure_route_selection(self):
-        if not self.route_input and len(self.route_inputs) == 1:
-            selected = self.route_inputs[0]
-            selected["route_input"] = True
-            self.route_input = selected.get("key") or selected.get("address")
         if not self.route_output:
             self.route_output = self.SELF_OUTPUT_KEY
         if not self._active_route_output:
@@ -927,10 +1199,18 @@ class AppState:
         existing["metadata"] = _merge_metadata(existing.get("metadata"), row.get("metadata"))
         return existing
 
-    def enroll_trusted_device(self, address, name=None, class_of_device=None,
-                              service_uuids=None, ble_services=None, metadata=None,
-                              capabilities=None, endpoints=None, constraints=None,
-                              missing_capabilities=None):
+    def enroll_peer(self, evidence=None, *, address=None, name=None,
+                    class_of_device=None, service_uuids=None, ble_services=None,
+                    metadata=None, capabilities=None, endpoints=None,
+                    constraints=None, missing_capabilities=None,
+                    intake_source="app_state"):
+        """Unified device intake.
+
+        Discovery and pairing UI modes feed evidence here. The resulting card is
+        a physical device container; route/source/sink rows are derived later
+        from endpoints and capability_profile. Older role-specific methods are
+        compatibility wrappers around this path.
+        """
         from enrollment_manager import EnrollmentEvidence, EnrollmentManager
 
         class _Registry:
@@ -939,23 +1219,60 @@ class AppState:
             def by_id(self, _device_id):
                 return None
 
-        evidence = EnrollmentEvidence(
-            address=address,
-            name=_clean_label(name),
-            class_of_device=class_of_device,
-            service_uuids=set(service_uuids or []),
-            ble_services=set(ble_services or []),
-            capabilities=set(capabilities or []),
-            endpoints=list(endpoints or []),
-            constraints=set(constraints or []),
-            missing_capabilities=set(missing_capabilities or []),
-            metadata=dict(metadata or {}),
-        )
+        if isinstance(evidence, dict):
+            address = evidence.get("address", address)
+            name = evidence.get("name", name)
+            class_of_device = evidence.get("class_of_device", class_of_device)
+            service_uuids = evidence.get("service_uuids", service_uuids)
+            ble_services = evidence.get("ble_services", ble_services)
+            capabilities = evidence.get("capabilities", capabilities)
+            endpoints = evidence.get("endpoints", endpoints)
+            constraints = evidence.get("constraints", constraints)
+            missing_capabilities = evidence.get("missing_capabilities", missing_capabilities)
+            metadata = _merge_metadata(metadata, evidence.get("metadata") or {})
+            evidence = None
+
+        if evidence is None:
+            evidence = EnrollmentEvidence(
+                address=address,
+                name=_clean_label(name),
+                class_of_device=class_of_device,
+                service_uuids=set(service_uuids or []),
+                ble_services=set(ble_services or []),
+                capabilities=set(capabilities or []),
+                endpoints=list(endpoints or []),
+                constraints=set(constraints or []),
+                missing_capabilities=set(missing_capabilities or []),
+                metadata=dict(metadata or {}),
+            )
+
+        evidence.metadata = dict(evidence.metadata or {})
+        evidence.metadata.setdefault("intake_pipeline", "unified_device_intake")
+        if intake_source:
+            evidence.metadata.setdefault("intake_source", intake_source)
         device = EnrollmentManager(_Registry()).build_device(evidence)
-        for marker in ("input_enrolled", "output_enrolled"):
+        for marker in ("input_enrolled", "output_enrolled", "session_enrolled", "usb_enrolled"):
             if marker in evidence.metadata:
                 device.metadata[marker] = bool(evidence.metadata[marker])
-        return self.upsert_trusted_device(device)
+        return _normalize_trusted_row(self.upsert_trusted_device(device))
+
+    def enroll_trusted_device(self, address, name=None, class_of_device=None,
+                              service_uuids=None, ble_services=None, metadata=None,
+                              capabilities=None, endpoints=None, constraints=None,
+                              missing_capabilities=None):
+        return self.enroll_peer(
+            address=address,
+            name=name,
+            class_of_device=class_of_device,
+            service_uuids=service_uuids,
+            ble_services=ble_services,
+            capabilities=capabilities,
+            endpoints=endpoints,
+            constraints=constraints,
+            missing_capabilities=missing_capabilities,
+            metadata=metadata,
+            intake_source="compat:enroll_trusted_device",
+        )
 
     @property
     def trusted_sources(self):
@@ -971,13 +1288,119 @@ class AppState:
 
     @property
     def route_inputs(self):
-        return self.trusted_sources
+        rows = []
+        seen = set()
+        devices = list(self.trusted) + [self._self_output_device()]
+        for device in devices:
+            for endpoint in device.get("endpoints") or []:
+                if not isinstance(endpoint, dict):
+                    continue
+                if _endpoint_direction(endpoint) != "source":
+                    continue
+                if _endpoint_plane(endpoint) not in {"audio", "mic", "usb", "session"}:
+                    continue
+                row = _route_row_for_endpoint(
+                    device,
+                    endpoint,
+                    selected=(
+                        self._route_input == _device_route_key(device)
+                        and (not self._route_input_endpoint or self._route_input_endpoint == str(endpoint.get("id") or "endpoint"))
+                    ),
+                )
+                signature = (
+                    row["route_device_key"],
+                    row["endpoint_direction"],
+                    row["endpoint_plane"],
+                    tuple(row["protocols"]),
+                    tuple(sorted(set(endpoint.get("capabilities") or []))),
+                )
+                if signature in seen:
+                    continue
+                seen.add(signature)
+                rows.append(row)
+        plane_rank = {"audio": 0, "usb": 1, "session": 2, "mic": 3}
+        return sorted(rows, key=lambda row: (
+            plane_rank.get(row.get("endpoint_plane"), 9),
+            0 if row.get("connected") else (1 if row.get("online") else 2),
+            1 if row.get("device_key") == self.SELF_OUTPUT_KEY else 0,
+            str(row.get("label") or ""),
+        ))
 
     # [CLAUDE 2026-06-03] Car Thing САМ как виртуальный выход (Play Now / control).
     # Иначе в Play Now к iPhone нечего привязать как output. Это НЕ audio-sink (нет playback-
     # железа) — это control/metadata поверхность: iPhone остаётся источником, Car Thing рулит
     # по BLE (AMS/ANCS). connected=True всегда — BLE-control постоянен.
     SELF_OUTPUT_KEY = "carthing"
+
+    def _self_device_endpoints(self):
+        return [
+            {
+                "id": "playnow-metadata-sink",
+                "direction": "sink",
+                "plane": "metadata",
+                "capabilities": ["playnow_metadata", "metadata_input"],
+                "protocols": ["playnow_ui", "ble_ams", "ble_ancs"],
+                "label": "Play Now display",
+                "metadata": {"surface": "playnow"},
+            },
+            {
+                "id": "playnow-control-source",
+                "direction": "source",
+                "plane": "control",
+                "capabilities": ["control_output", "transport_control"],
+                "protocols": ["ui_control", "ble_ams", "classic_avrcp"],
+                "label": "Play Now controls",
+                "metadata": {"surface": "playnow"},
+            },
+            {
+                "id": "ctsp-session-source",
+                "direction": "source",
+                "plane": "session",
+                "capabilities": ["session_peer"],
+                "protocols": ["ble_gatt_bootstrap", "ble_l2cap_coc_session", "usb_ncm_session"],
+                "label": "Car Thing session source",
+                "metadata": {"peer_family": "macos", "duplex_peer": "ctsp-session-sink"},
+            },
+            {
+                "id": "ctsp-session-sink",
+                "direction": "sink",
+                "plane": "session",
+                "capabilities": ["session_peer"],
+                "protocols": ["ble_gatt_bootstrap", "ble_l2cap_coc_session", "usb_ncm_session"],
+                "label": "Car Thing session sink",
+                "metadata": {"peer_family": "macos", "duplex_peer": "ctsp-session-source"},
+            },
+            {
+                "id": "local-mic-source",
+                "direction": "source",
+                "plane": "mic",
+                "capabilities": ["local_mic_source"],
+                "protocols": ["local_mic", "ble_l2cap_coc_session", "usb_ncm_session"],
+                "label": "Local microphone source",
+                "metadata": {
+                    "audio_format": "pcm_s16le",
+                    "sample_rate_hz": 16000,
+                    "channels": 1,
+                    "push_to_talk": True,
+                },
+            },
+            {
+                "id": "usb-session-source",
+                "direction": "source",
+                "plane": "usb",
+                "capabilities": ["usb_peer", "usb_session"],
+                "protocols": ["usb_ncm_session"],
+                "label": "USB session source",
+            },
+            {
+                "id": "usb-session-sink",
+                "direction": "sink",
+                "plane": "usb",
+                "capabilities": ["usb_peer", "usb_session"],
+                "protocols": ["usb_ncm_session"],
+                "label": "USB session sink",
+            },
+        ]
 
     def _self_output_device(self):
         return {
@@ -988,13 +1411,16 @@ class AppState:
             "role": "self",
             "online": True,
             "connected": True,
-            "capabilities": ["control_input", "metadata_input"],
-            "endpoints": [{
-                "id": "playnow",
-                "direction": "output",
-                "capabilities": ["control_input", "metadata_input"],
-                "protocols": ["ble_ams"],
-            }],
+            "capabilities": [
+                "playnow_metadata",
+                "metadata_input",
+                "control_output",
+                "session_peer",
+                "local_mic_source",
+                "usb_peer",
+                "usb_session",
+            ],
+            "endpoints": self._self_device_endpoints(),
             "constraints": [],
             "metadata": {"self": True},
             "route_output": self._route_output == self.SELF_OUTPUT_KEY,
@@ -1018,7 +1444,8 @@ class AppState:
             "capabilities": ["audio_output"],
             "endpoints": [{
                 "id": "lineout",
-                "direction": "output",
+                "direction": "sink",
+                "plane": "audio",
                 "capabilities": ["audio_output"],
                 "protocols": ["local_t9015"],
             }],
@@ -1029,51 +1456,256 @@ class AppState:
 
     @property
     def route_outputs(self):
-        # Car Thing-self первым в списке выходов, затем доверенные колонки.
-        outputs = [self._self_output_device()]
+        # Car Thing-self первым в списке destinations. Дальше идут не только
+        # audio speakers: гибридные USB/session peers тоже должны быть видимы в
+        # route wizard, даже если конкретный transport adapter ещё недоступен.
+        outputs = []
+        seen = set()
+        devices = [self._self_output_device()]
         if os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1":
-            outputs.append(self._lineout_output_device())
-        return outputs + self.trusted_speakers
+            devices.append(self._lineout_output_device())
+        devices.extend(self.trusted)
+        for device in devices:
+            if not _device_is_route_destination(device) and not dict(device.get("metadata") or {}).get("self"):
+                continue
+            for endpoint in device.get("endpoints") or []:
+                if not isinstance(endpoint, dict):
+                    continue
+                if _endpoint_direction(endpoint) != "sink":
+                    continue
+                plane = _endpoint_plane(endpoint)
+                if dict(device.get("metadata") or {}).get("self") and plane != "metadata":
+                    continue
+                if plane not in {"audio", "usb", "session", "mic"} and not (
+                    dict(device.get("metadata") or {}).get("self") and plane == "metadata"
+                ):
+                    continue
+                row = _route_row_for_endpoint(
+                    device,
+                    endpoint,
+                    selected=(
+                        self._route_output == _device_route_key(device)
+                        and (not self._route_output_endpoint or self._route_output_endpoint == str(endpoint.get("id") or "endpoint"))
+                    ),
+                    active=(
+                        self._active_route_output == _device_route_key(device)
+                        and (not self._active_route_output_endpoint or self._active_route_output_endpoint == str(endpoint.get("id") or "endpoint"))
+                    ),
+                )
+                signature = (
+                    row["route_device_key"],
+                    row["endpoint_direction"],
+                    row["endpoint_plane"],
+                    tuple(row["protocols"]),
+                    tuple(sorted(set(endpoint.get("capabilities") or []))),
+                )
+                if signature in seen:
+                    continue
+                seen.add(signature)
+                outputs.append(row)
+        plane_rank = {"metadata": 0, "audio": 1, "usb": 2, "session": 3, "mic": 4}
+        return sorted(outputs, key=lambda row: (
+            plane_rank.get(row.get("endpoint_plane"), 9),
+            0 if row.get("connected") else (1 if row.get("online") else 2),
+            0 if row.get("device_key") == self.SELF_OUTPUT_KEY else 1,
+            str(row.get("label") or ""),
+        ))
+
+    @property
+    def route_nodes(self):
+        """Flatten devices into matrix nodes.
+
+        This is the new graph-facing view: Device is only the container, while
+        Endpoint/Node rows carry direction and plane.
+        """
+        devices = [self._self_output_device()]
+        if os.environ.get("CARTHING_EXPERIMENTAL_LINEOUT_ENABLE") == "1":
+            devices.append(self._lineout_output_device())
+        devices.extend(self.trusted)
+        nodes = []
+        for device in devices:
+            device_key = device.get("key") or normalize_address(device.get("address")) or "device"
+            for endpoint in device.get("endpoints") or []:
+                if not isinstance(endpoint, dict):
+                    continue
+                endpoint_id = endpoint.get("id") or "endpoint"
+                nodes.append({
+                    "id": f"{device_key}:{endpoint_id}",
+                    "device_key": device_key,
+                    "device_label": device.get("label") or device_key,
+                    "endpoint_id": endpoint_id,
+                    "label": endpoint.get("label") or device.get("label") or endpoint_id,
+                    "direction": _endpoint_direction(endpoint),
+                    "plane": _endpoint_plane(endpoint),
+                    "capabilities": list(endpoint.get("capabilities") or []),
+                    "protocols": list(endpoint.get("protocols") or []),
+                    "metadata": dict(endpoint.get("metadata") or {}),
+                })
+        return nodes
 
     def select_route_input(self, key_or_address):
         selected = None
+        selected_endpoint = ""
+        selector = str(key_or_address or "").strip()
+        if not selector:
+            self._route_input = ""
+            self._route_input_endpoint = ""
+            self.route_focus = "input"
+            self.route_compatible = None
+            return ""
+        selector_device = _selector_device_key(selector)
+        selector_endpoint = _selector_endpoint_id(selector)
         needle = _route_selector_address(key_or_address)
         for device in self.route_inputs:
             route_key = _route_input_key(device)
+            row_key = str(device.get("key") or "")
             match = (
-                route_key == key_or_address
-                or device.get("key") == key_or_address
+                row_key == selector
+                or route_key == selector
+                or route_key == selector_device
+                or device.get("key") == selector
                 or normalize_address(device.get("address")) == needle
             )
+            if match and selector_endpoint and selector_endpoint != str(device.get("endpoint_id") or ""):
+                match = False
             device["route_input"] = match
             if match:
                 selected = route_key
+                selected_endpoint = str(device.get("endpoint_id") or "")
         self._route_input = selected or ""
+        self._route_input_endpoint = selected_endpoint
         self.route_focus = "input"
         self.route_compatible = None        # пересчитает рантайм
+        if selected and self.route_builder_step == "source":
+            self.route_builder_step = "sink"
         return selected
 
     def select_route_output(self, key_or_address):
         selected = None
-        needle = normalize_address(key_or_address)
+        selected_endpoint = ""
+        selector = str(key_or_address or "").strip()
+        if not selector:
+            self._route_output = ""
+            self._route_output_endpoint = ""
+            self.route_focus = "output"
+            self.route_compatible = None
+            return ""
+        selector_device = _selector_device_key(selector)
+        selector_endpoint = _selector_endpoint_id(selector)
+        needle = normalize_address(selector_device)
         for device in self.route_outputs:
-            match = device.get("key") == key_or_address or device.get("address") == needle
+            route_key = device.get("route_device_key") or device.get("key") or device.get("address")
+            row_key = str(device.get("key") or "")
+            match = (
+                row_key == selector
+                or route_key == selector
+                or route_key == selector_device
+                or device.get("address") == needle
+            )
+            if match and selector_endpoint and selector_endpoint != str(device.get("endpoint_id") or ""):
+                match = False
             device["route_output"] = match
             if match:
-                selected = device.get("key") or device.get("address")
+                selected = route_key
+                selected_endpoint = str(device.get("endpoint_id") or "")
         self._route_output = selected or ""
+        self._route_output_endpoint = selected_endpoint
         self.route_focus = "output"
         self.route_compatible = None        # пересчитает рантайм
+        if selected and self.route_builder_step in ("source", "sink"):
+            self.route_builder_step = "path"
         return selected
+
+    def set_route_builder_step(self, step):
+        step = str(step or "").strip().lower()
+        if step in {"source", "sink", "path", "review"}:
+            self.route_builder_step = step
+        return self.route_builder_step
+
+    def set_route_transport(self, transport):
+        transport = str(transport or "").strip().lower()
+        if transport not in {"auto", "bluetooth", "usb"}:
+            transport = "auto"
+        self.route_transport = transport
+        self.route_check_state = "idle"
+        self.route_check_message = ""
+        if self._route_input and self._route_output:
+            self.route_builder_step = "review"
+        return self.route_transport
+
+    def begin_route_check(self, message="Проверяем доступность"):
+        self.route_check_message = str(message or "")
+        if not self._route_input:
+            self.route_builder_step = "source"
+            self.route_check_state = "error"
+            self.route_check_message = "Выберите источник"
+        elif not self._route_output:
+            self.route_builder_step = "sink"
+            self.route_check_state = "error"
+            self.route_check_message = "Выберите назначение"
+        else:
+            self.route_builder_step = "review"
+            self.route_check_state = "checking"
+        return self.route_check_state
+
+    def finish_route_check(self, ok=True, message=""):
+        self.route_check_state = "ready" if ok else "error"
+        if message:
+            self.route_check_message = str(message)
+        elif ok:
+            self.route_check_message = "Маршрут готов"
+        elif not self.route_check_message:
+            self.route_check_message = "Маршрут недоступен"
+        self.route_builder_step = "review"
+        return self.route_check_state
+
+    def route_step_next(self):
+        step = self.set_route_builder_step(self.route_builder_step)
+        if step == "source":
+            if self._route_input:
+                self.route_builder_step = "sink"
+        elif step == "sink":
+            if self._route_output:
+                self.route_builder_step = "path"
+        elif step == "path":
+            self.route_builder_step = "review"
+        elif step == "review":
+            self.begin_route_check()
+        return self.route_builder_step
+
+    def route_step_back(self):
+        step = self.set_route_builder_step(self.route_builder_step)
+        if step == "review":
+            self.route_builder_step = "path"
+        elif step == "path":
+            self.route_builder_step = "sink"
+        elif step == "sink":
+            self.route_builder_step = "source"
+        return self.route_builder_step
 
     def select_active_route_output(self, key_or_address):
         selected = None
-        needle = normalize_address(key_or_address)
+        selected_endpoint = ""
+        selector = str(key_or_address or "").strip()
+        selector_device = _selector_device_key(selector)
+        selector_endpoint = _selector_endpoint_id(selector)
+        needle = normalize_address(selector_device)
         for device in self.route_outputs:
-            match = device.get("key") == key_or_address or device.get("address") == needle
+            route_key = device.get("route_device_key") or device.get("key") or device.get("address")
+            row_key = str(device.get("key") or "")
+            match = (
+                row_key == selector
+                or route_key == selector
+                or route_key == selector_device
+                or device.get("address") == needle
+            )
+            if match and selector_endpoint and selector_endpoint != str(device.get("endpoint_id") or ""):
+                match = False
             if match:
-                selected = device.get("key") or device.get("address")
+                selected = route_key
+                selected_endpoint = str(device.get("endpoint_id") or "")
         self._active_route_output = selected or self.SELF_OUTPUT_KEY
+        self._active_route_output_endpoint = selected_endpoint
         return self._active_route_output
 
     def is_trusted_source(self, address):
@@ -1145,8 +1777,8 @@ class AppState:
         if candidate is not None and not candidate.get("audio"):
             return None
         label = _clean_label(name) or _clean_label((candidate or {}).get("label")) or address
-        existing = self.enroll_trusted_device(
-            address,
+        existing = self.enroll_peer(
+            address=address,
             name=label,
             class_of_device=(candidate or {}).get("class_of_device"),
             service_uuids={"110b", "audio_sink"},
@@ -1156,6 +1788,7 @@ class AppState:
                 "output_enrolled": True,
                 "probe_stage": "classic_cod_provisional",
             },
+            intake_source="compat:trust_speaker",
         )
         existing["online"] = True
         for candidate in self.speaker_candidates:
@@ -1185,8 +1818,17 @@ class AppState:
         ]
         device["endpoints"] = [
             endpoint for endpoint in (device.get("endpoints") or [])
-            if endpoint.get("direction") != "output"
-            and endpoint.get("id") not in {"audio-output", "remote-control", "speaker-remote"}
+            if not (
+                isinstance(endpoint, dict)
+                and (
+                    (
+                        _endpoint_direction(endpoint) == "sink"
+                        and _endpoint_plane(endpoint) == "audio"
+                        and "audio_output" in set(endpoint.get("capabilities") or [])
+                    )
+                    or endpoint.get("id") in {"audio-output", "audio-sink", "remote-control", "speaker-remote"}
+                )
+            )
         ]
         metadata = dict(device.get("metadata") or {})
         metadata.pop("output_enrolled", None)
@@ -1261,26 +1903,58 @@ class AppState:
         return None
 
     def set_speaker_online(self, address, online=True):
-        address = normalize_address(address)
-        for device in self.trusted_speakers:
-            if device.get("address") == address:
-                device["online"] = bool(online)
+        self.note_peer_presence(
+            address=address,
+            event="seen" if online else "timeout",
+            plane="audio",
+            transport="classic",
+            detail="compat:set_speaker_online",
+        )
 
     def clear_speaker_online(self):
         for device in self.trusted_speakers:
-            device["online"] = False
+            self.note_peer_presence(
+                address=device.get("address"),
+                event="timeout",
+                plane="audio",
+                transport="classic",
+                detail="compat:clear_speaker_online",
+            )
 
     def set_connected_speaker(self, address):
         address = normalize_address(address)
         for device in self.trusted_speakers:
-            device["connected"] = device.get("address") == address
-            if device["connected"]:
-                device["online"] = True
+            self.note_peer_presence(
+                address=device.get("address"),
+                event="standby_held" if device.get("address") == address else "disconnect",
+                plane="audio",
+                transport="classic",
+                detail="compat:set_connected_speaker",
+            )
 
     def set_speaker_connected(self, address, connected=True):
-        address = normalize_address(address)
-        for device in self.trusted_speakers:
-            if device.get("address") == address:
-                device["connected"] = bool(connected)
-                if connected:
-                    device["online"] = True
+        self.note_peer_presence(
+            address=address,
+            event="standby_held" if connected else "disconnect",
+            plane="audio",
+            transport="classic",
+            detail="compat:set_speaker_connected",
+        )
+
+    def note_peer_presence(self, *, key="", address="", event="seen", plane="", transport="", detail=""):
+        """Record live presence evidence for any trusted peer.
+
+        This is the central path for sticky trusted devices. It accepts transport
+        events; it does not scan, pair, enroll, or change routes.
+        """
+        return self.presence.note(
+            key=key,
+            address=address,
+            event=event,
+            plane=plane,
+            transport=transport,
+            detail=detail,
+        )
+
+    def route_availability_snapshot(self):
+        return self.presence.snapshot()

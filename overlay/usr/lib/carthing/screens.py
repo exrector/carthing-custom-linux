@@ -165,15 +165,15 @@ class MacOSScreen(Screen):
 
 class RouteBuilderScreen(Screen):
     name = "router"
-    title = "Маршрут"
+    title = "Потоки"
     fullscreen = True
 
-    # [CLAUDE 2026-06-02] Patchbay GUI: ВХОД (слева) | ВЫХОД (справа), обе колонки СКРОЛЛЯТСЯ.
-    # Строка устройства = две строки: имя (SZ_SMALL) + MAC-адрес (мелкий, FAINT).
-    # верхняя полоса держит зазор от дуги (R1 = ARC_SAFE_X), нижний бар — на всю ширину
-    L0, L1 = 36, 352            # левая колонка (входы)
+    # Flow Map GUI: physical devices become cards with semantic points; the
+    # visible line is the route. Internally the old route_input/route_output
+    # intents remain as a compatibility bridge for this first slice.
+    L0, L1 = 36, 352
     COLX = 368                  # вертикальный штриховой разделитель колонок
-    R0, R1 = 384, T.ARC_SAFE_X  # правая колонка (выходы), не лезет под дугу/штрихи громкости
+    R0, R1 = 384, T.ARC_SAFE_X
     HEAD_Y = 18                 # заголовки колонок
     COL_TOP = 70                # верх области скролла строк
     COL_BOTTOM = T.STATUSBAR_TOP - 6   # низ области скролла (над баром)
@@ -209,6 +209,14 @@ class RouteBuilderScreen(Screen):
             return []
         return list(self.state.route_inputs if side == "input" else self.state.route_outputs)
 
+    def _route_key(self, side, dev):
+        if dev.get("endpoint_id") and dev.get("key"):
+            return dev.get("key")
+        key = dev.get("key") or dev.get("address")
+        if side == "input" and dev.get("role") == "source" and dev.get("address"):
+            return "source:" + str(dev.get("address"))
+        return key
+
     def on_input(self, event):
         # свайп влево/вправо — глобальная навигация вьюх (в gui_controller), не здесь.
         # Энкодер = громкость (глобально), сюда не доходит.
@@ -216,10 +224,13 @@ class RouteBuilderScreen(Screen):
             self.scroll_y = self.scroll_y - event[1]
             return True
         if event == Input.PRESS:
-            ri = getattr(self.state, "route_input", "") if self.state else ""
-            ro = getattr(self.state, "route_output", "") if self.state else ""
-            if ri and ro and getattr(self.state, "route_compatible", None) is True:
+            step = self._route_step()
+            if step == "review" and getattr(self.state, "route_check_state", "") == "ready":
                 self.emit("route_activate")
+            elif step == "review":
+                self.emit("route_check")
+            else:
+                self.emit("route_next")
             return True
         return False
 
@@ -230,27 +241,37 @@ class RouteBuilderScreen(Screen):
         draw.ellipse((x - 6, y - 6, x + 6, y + 6), fill=color)
 
     def _device_subline(self, dev):
+        endpoint = (dev.get("endpoints") or [None])[0] if dev.get("endpoint_id") else None
+        capability_source = endpoint if isinstance(endpoint, dict) else dev
         protos = sorted({
             str(proto)
-            for endpoint in (dev.get("endpoints") or [])
-            for proto in (endpoint.get("protocols") or [])
+            for endpoint_row in ([endpoint] if isinstance(endpoint, dict) else (dev.get("endpoints") or []))
+            for proto in (endpoint_row.get("protocols") or [])
         })
+        caps = set(str(value) for value in (capability_source.get("capabilities") or []))
+        profile = ((dev.get("metadata") or {}).get("capability_profile") or {})
+        hints = set(str(value) for value in (profile.get("usage_hints") or []))
         labels = []
         if "classic_a2dp_sink" in protos:
-            labels.append("A2DP in")
+            labels.append("music")
         if "classic_a2dp_source" in protos:
-            labels.append("A2DP out")
+            labels.append("sound")
         if "classic_avrcp" in protos:
-            labels.append("AVRCP")
+            labels.append("control")
         if "ble_gatt_bootstrap" in protos:
             labels.append("GATT")
         if "ble_l2cap_coc_session" in protos:
-            labels.append("CTSP")
+            labels.append("session")
+        if "usb_peer" in caps or "usb_peer" in hints:
+            labels.append("USB")
+        if "remote_mic_receiver" in caps or "mic_sink" in hints:
+            labels.append("mic")
+        if "playnow_metadata" in caps or "playnow_surface" in hints:
+            labels.append("screen")
         if "ble_ams" in protos:
             labels.append("AMS")
         if "ble_ancs" in protos:
             labels.append("ANCS")
-        profile = ((dev.get("metadata") or {}).get("capability_profile") or {})
         status = str(profile.get("probe_status") or "").strip()
         if status and status not in ("ready", "ok"):
             labels.append(status)
@@ -261,9 +282,75 @@ class RouteBuilderScreen(Screen):
             return " / ".join(labels)
         return str(dev.get("address") or dev.get("type") or "")
 
+    def _point_label(self, side, dev):
+        plane = str(dev.get("endpoint_plane") or "").lower()
+        if plane == "audio":
+            return "Музыка" if side == "input" else "Звук"
+        if plane == "usb":
+            return "USB"
+        if plane == "session":
+            return "Сессия"
+        if plane == "mic":
+            return "Микрофон" if side == "input" else "Голос"
+        if plane == "metadata":
+            return "Экран"
+        caps = set(str(value) for value in (dev.get("capabilities") or []))
+        profile = ((dev.get("metadata") or {}).get("capability_profile") or {})
+        hints = set(str(value) for value in (profile.get("usage_hints") or []))
+        if dev.get("key") == getattr(self.state, "SELF_OUTPUT_KEY", "carthing"):
+            return "Экран"
+        if side == "input":
+            if "audio_input" in caps or "audio_source" in hints:
+                return "Музыка"
+            if "mic_source" in hints or "local_mic_source" in caps:
+                return "Микрофон"
+            if "usb_peer" in hints or "usb_peer" in caps:
+                return "USB"
+            if "session_peer" in hints and "audio_source" not in hints:
+                return "Сессия"
+            return "Музыка"
+        if "audio_output" in caps or "audio_sink" in hints:
+            return "Звук"
+        if "usb_peer" in hints or "usb_peer" in caps:
+            return "USB"
+        if "mic_sink" in hints or "remote_mic_receiver" in caps:
+            return "Голос"
+        if "session_peer" in hints and "audio_sink" not in hints:
+            return "Сессия"
+        return "Звук"
+
+    def _plane_color(self, side, dev, selected=False, dim=False):
+        if dim:
+            return T.FAINT
+        plane = str(dev.get("endpoint_plane") or "").lower()
+        if plane == "audio":
+            return T.STATUS_OK if selected else T.MUTED
+        if plane == "usb":
+            return T.STATUS_WARN
+        if plane == "session":
+            return T.ACCENT
+        if plane == "mic":
+            return T.MUTED
+        if plane == "metadata":
+            return T.ACCENT if selected else T.MUTED
+        caps = set(str(value) for value in (dev.get("capabilities") or []))
+        profile = ((dev.get("metadata") or {}).get("capability_profile") or {})
+        hints = set(str(value) for value in (profile.get("usage_hints") or []))
+        if side == "input" and ("audio_input" in caps or "audio_source" in hints):
+            return T.STATUS_OK if selected else T.MUTED
+        if side == "output" and ("audio_output" in caps or "audio_sink" in hints):
+            return T.STATUS_OK if selected else T.MUTED
+        if "usb_peer" in caps or "usb_peer" in hints:
+            return T.STATUS_WARN
+        if "session_peer" in caps or "session_peer" in hints:
+            return T.ACCENT
+        if "remote_mic_receiver" in caps or "mic_sink" in hints:
+            return T.MUTED
+        return T.STATUS_OK if selected else T.MUTED
+
     def _column(self, draw, regions, side, x0, x1, title, sel_key, intent):
         focused = self.focus == side
-        draw.text((x0 + 12, self.HEAD_Y), title, font=T.font(28),
+        draw.text((x0 + 12, self.HEAD_Y), title, font=T.font(26),
                   fill=T.ACCENT if focused else T.MUTED)
         rows = {}
         devs = self._devices(side)
@@ -273,26 +360,23 @@ class RouteBuilderScreen(Screen):
         self._scroll[side] = max(0.0, min(float(self._max_scroll[side]), self._scroll[side]))
         scroll = self._scroll[side]
         if not devs:
-            draw.text((x0 + 12, self.COL_TOP + 6), "нет устройств",
+            draw.text((x0 + 12, self.COL_TOP + 6), "нет точек",
                       font=T.font(T.SZ_SMALL), fill=T.FAINT)
             return rows
         for idx, dev in enumerate(devs):
             y = self.COL_TOP + idx * self.ROW_H2 - scroll
             if y + self.ROW_H2 <= self.COL_TOP or y >= self.COL_BOTTOM:
                 continue                                    # вне видимой области — клип
-            key = dev.get("key") or dev.get("address")
+            key = self._route_key(side, dev)
             selected = (key == sel_key) or bool(dev.get("route_" + side))
             connected = bool(dev.get("connected"))
             mode = str(getattr(self.state, "operation_mode", "playnow") or "playnow")
             self_key = getattr(self.state, "SELF_OUTPUT_KEY", "carthing")
             dim_output = side == "output" and mode != "commutator" and key != self_key
-            # ЗЕЛЁНЫЙ = реально подключён сейчас; выбранный, но не подключён — акцент; иначе обычный
             name_col = T.FAINT if dim_output else (T.STATUS_OK if connected else (T.ACCENT if selected else T.FG))
+            point_col = self._plane_color(side, dev, selected=selected or connected, dim=dim_output)
             rect = (x0, int(y), x1, int(y + self.ROW_H2 - 8))
             if selected:
-                # 2026-06-18 owner GUI rule: Play Now is a quiet mode.  External
-                # outputs remain selectable, but they must not look active until
-                # Commutator owns the route graph and radio work.
                 draw.rectangle(
                     rect,
                     fill=(T.BG if dim_output else T.SURFACE_SEL),
@@ -300,58 +384,301 @@ class RouteBuilderScreen(Screen):
                     width=2,
                 )
             name = dev.get("label") or dev.get("address") or "Device"
-            name = C.truncate(draw, name, T.font(T.SZ_SMALL), (x1 - x0) - 44)
-            draw.text((x0 + 12, int(y) + 4), name, font=T.font(T.SZ_SMALL), fill=name_col)
-            # [CLAUDE 2026-06-11] вторая строка ВНУТРИ рамки (раньше MAC на y+30
-            # шрифтом 18 выпадал за низ rect y+48 — «явно некрасиво»). У self-выхода
-            # (Car Thing) адреса нет — показываем тип (Play Now), а не тире-подчёркивание.
+            point = self._point_label(side, dev)
+            dot_x = x1 - 18 if side == "input" else x0 + 18
+            text_x = x0 + 12 if side == "input" else x0 + 42
+            point_x = x1 - 92 if side == "input" else x0 + 42
+            name_w = (x1 - x0) - 118
+            name = C.truncate(draw, name, T.font(T.SZ_SMALL), name_w)
+            draw.text((text_x, int(y) + 4), name, font=T.font(T.SZ_SMALL), fill=name_col)
             sub = self._device_subline(dev)
-            sub = C.truncate(draw, sub, T.font(self.MAC_FONT), (x1 - x0) - 44)
-            draw.text((x0 + 12, int(y) + 28), sub, font=T.font(self.MAC_FONT), fill=T.FAINT)
-            self._dot(draw, x1 - 16, int(y) + self.ROW_H2 // 2 - 4, dev, dim=dim_output)
+            sub = C.truncate(draw, sub, T.font(self.MAC_FONT), name_w)
+            draw.text((text_x, int(y) + 28), sub, font=T.font(self.MAC_FONT), fill=T.FAINT)
+            draw.ellipse((dot_x - 8, int(y) + 18, dot_x + 8, int(y) + 34), outline=point_col, width=3)
+            if connected:
+                draw.ellipse((dot_x - 4, int(y) + 22, dot_x + 4, int(y) + 30), fill=point_col)
+            chip_w = int(draw.textlength(point, font=T.font(16))) + 18
+            chip_rect = (
+                point_x,
+                int(y) + 4,
+                min(x1 - 34, point_x + chip_w),
+                int(y) + 24,
+            )
+            if chip_rect[2] > chip_rect[0] + 8:
+                draw.rectangle(chip_rect, outline=point_col, width=1)
+                draw.text((chip_rect[0] + 7, chip_rect[1] + 1), point, font=T.font(16), fill=point_col)
             if regions is not None:
                 regions.add(rect, intent, payload=key)
-            rows[key] = int(y) + self.ROW_H2 // 2 - 4
+            rows[key] = (dot_x, int(y) + self.ROW_H2 // 2 - 4)
         return rows
+
+    def _draw_link(self, draw, a, b, active=False, compat=None):
+        x0, y0 = a
+        x1, y1 = b
+        mid = self.COLX
+        col = T.STATUS_OK if active else (T.WARN if compat is False else T.ACCENT)
+        shadow = T.FAINT if compat is not False else T.WARN
+        pts = [(x0, y0), (mid, y0), (mid, y1), (x1, y1)]
+        draw.line(pts, fill=shadow, width=7)
+        draw.line(pts, fill=col, width=3)
+        draw.ellipse((x0 - 5, y0 - 5, x0 + 5, y0 + 5), fill=col)
+        draw.ellipse((x1 - 5, y1 - 5, x1 + 5, y1 + 5), fill=col)
+
+    def _selected_device(self, side):
+        selected = getattr(self.state, "route_input" if side == "input" else "route_output", "")
+        for dev in self._devices(side):
+            key = self._route_key(side, dev)
+            if key == selected or dev.get("key") == selected or dev.get("address") == selected:
+                return dev
+        return None
+
+    def _device_title(self, dev):
+        if not dev:
+            return "—"
+        return str(dev.get("label") or dev.get("name") or dev.get("address") or "Device")
+
+    def _presence_text(self, dev):
+        if not dev:
+            return "не выбрано"
+        state = str(dev.get("presence_state") or "").replace("_", " ")
+        if bool(dev.get("connected")):
+            return "на связи"
+        if bool(dev.get("online")):
+            return state or "рядом"
+        return state or "проверим при подключении"
+
+    def _route_step(self):
+        step = str(getattr(self.state, "route_builder_step", "source") or "source")
+        if step not in {"source", "sink", "path", "review"}:
+            step = "source"
+        if not getattr(self.state, "route_input", ""):
+            return "source"
+        if not getattr(self.state, "route_output", "") and step not in {"source"}:
+            return "sink"
+        return step
+
+    def _draw_step_tabs(self, draw, regions, step):
+        tabs = [
+            ("source", "Источник"),
+            ("sink", "Куда"),
+            ("path", "Путь"),
+            ("review", "Готово"),
+        ]
+        x, y, h, gap = 40, 24, 34, 12
+        w = (T.ARC_SAFE_X - x - gap * 3) // 4
+        for key, label in tabs:
+            active = key == step
+            ready = (
+                (key == "sink" and self._selected_device("input"))
+                or (key in {"path", "review"} and self._selected_device("input") and self._selected_device("output"))
+            )
+            col = T.ACCENT if active else (T.MUTED if ready else T.FAINT)
+            rect = (x, y, x + w, y + h)
+            draw.rectangle(rect, outline=col, width=2 if active else 1)
+            text = C.truncate(draw, label, T.font(17), w - 16)
+            draw.text((x + 8, y + 7), text, font=T.font(17), fill=col)
+            if regions is not None and (key == "source" or ready):
+                regions.add(rect, "route_step", payload=key)
+            x += w + gap
+
+    def _draw_choice_list(self, draw, regions, side, title, subtitle):
+        x0, x1 = 42, T.ARC_SAFE_X
+        y = 78
+        draw.text((x0, y), title, font=T.font(32), fill=T.FG)
+        draw.text((x0, y + 42), subtitle, font=T.font(18), fill=T.MUTED)
+        y += 82
+        devs = self._devices(side)
+        if not devs:
+            draw.text((x0, y + 20), "Нет доверенных точек", font=T.font(T.SZ_BODY), fill=T.FAINT)
+            return
+        row_h = 78
+        selected = getattr(self.state, "route_input" if side == "input" else "route_output", "")
+        intent = "route_input_select" if side == "input" else "route_output_select"
+        for idx, dev in enumerate(devs[:4]):
+            yy = y + idx * row_h
+            key = self._route_key(side, dev)
+            active = key == selected or bool(dev.get("route_" + side))
+            online = bool(dev.get("online")) or bool(dev.get("connected"))
+            col = T.STATUS_OK if bool(dev.get("connected")) else (T.ACCENT if active else (T.MUTED if online else T.FAINT))
+            rect = (x0, yy, x1, yy + row_h - 12)
+            if active:
+                draw.rectangle(rect, fill=T.SURFACE_SEL, outline=col, width=2)
+            else:
+                draw.rectangle(rect, outline=T.FAINT, width=1)
+            dot_x = x0 + 22
+            draw.ellipse((dot_x - 8, yy + 24, dot_x + 8, yy + 40), outline=col, width=3)
+            if online:
+                draw.ellipse((dot_x - 4, yy + 28, dot_x + 4, yy + 36), fill=col)
+            title_text = C.truncate(draw, self._device_title(dev), T.font(T.SZ_BODY), 420)
+            draw.text((x0 + 46, yy + 10), title_text, font=T.font(T.SZ_BODY), fill=T.FG if not active else col)
+            point = self._point_label(side, dev)
+            sub = f"{point} · {self._presence_text(dev)}"
+            sub = C.truncate(draw, sub, T.font(18), x1 - x0 - 90)
+            draw.text((x0 + 46, yy + 43), sub, font=T.font(18), fill=T.MUTED)
+            if regions is not None:
+                regions.add(rect, intent, payload=key)
+
+    def _transport_options(self):
+        src = self._selected_device("input")
+        dst = self._selected_device("output")
+        labels = [("auto", "Auto", "система выберет лучший путь")]
+        src_hints = set((((src or {}).get("metadata") or {}).get("capability_profile") or {}).get("usage_hints") or [])
+        dst_hints = set((((dst or {}).get("metadata") or {}).get("capability_profile") or {}).get("usage_hints") or [])
+        src_caps = set((src or {}).get("capabilities") or [])
+        dst_caps = set((dst or {}).get("capabilities") or [])
+        labels.append(("bluetooth", "Bluetooth", "обычный беспроводной поток"))
+        if "usb_peer" in src_hints or "usb_peer" in dst_hints or "usb_peer" in src_caps or "usb_peer" in dst_caps:
+            labels.append(("usb", "USB", "проводной путь, если доступен"))
+        return labels
+
+    def _draw_transport_picker(self, draw, regions):
+        x0, x1 = 42, T.ARC_SAFE_X
+        src = self._selected_device("input")
+        dst = self._selected_device("output")
+        draw.text((x0, 78), "Как соединить", font=T.font(32), fill=T.FG)
+        summary = f"{self._device_title(src)} → {self._device_title(dst)}"
+        draw.text((x0, 120), C.truncate(draw, summary, T.font(18), x1 - x0),
+                  font=T.font(18), fill=T.MUTED)
+        y = 170
+        selected = str(getattr(self.state, "route_transport", "auto") or "auto")
+        for key, label, note in self._transport_options():
+            active = key == selected
+            col = T.ACCENT if active else T.MUTED
+            rect = (x0, y, x1, y + 58)
+            draw.rectangle(rect, fill=T.SURFACE_SEL if active else T.BG, outline=col, width=2 if active else 1)
+            draw.text((x0 + 18, y + 9), label, font=T.font(T.SZ_BODY), fill=col)
+            draw.text((x0 + 190, y + 17), C.truncate(draw, note, T.font(18), x1 - x0 - 220),
+                      font=T.font(18), fill=T.MUTED)
+            if regions is not None:
+                regions.add(rect, "route_transport_select", payload=key)
+            y += 74
+
+    def _draw_review(self, draw, regions):
+        x0, x1 = 42, T.ARC_SAFE_X
+        src = self._selected_device("input")
+        dst = self._selected_device("output")
+        transport = str(getattr(self.state, "route_transport", "auto") or "auto")
+        check = str(getattr(self.state, "route_check_state", "idle") or "idle")
+        compat = getattr(self.state, "route_compatible", None)
+        active = bool(getattr(self.state, "route_active", False))
+        draw.text((x0, 78), "Готово к запуску", font=T.font(32), fill=T.FG)
+        y_mid = 205
+        left = (112, y_mid)
+        right = (T.ARC_SAFE_X - 70, y_mid)
+        self._draw_link(draw, left, right, active=active or check == "ready", compat=compat)
+        for center, dev, side in ((left, src, "input"), (right, dst, "output")):
+            cx, cy = center
+            draw.ellipse((cx - 34, cy - 34, cx + 34, cy + 34), outline=T.ACCENT, width=3)
+            title = C.truncate(draw, self._device_title(dev), T.font(T.SZ_SMALL), 210)
+            tw = int(draw.textlength(title, font=T.font(T.SZ_SMALL)))
+            draw.text((cx - tw // 2, cy + 46), title, font=T.font(T.SZ_SMALL), fill=T.FG)
+            point = self._point_label(side, dev) if dev else ""
+            pw = int(draw.textlength(point, font=T.font(16)))
+            draw.text((cx - pw // 2, cy - 62), point, font=T.font(16), fill=T.MUTED)
+        chip = {"auto": "AUTO", "bluetooth": "BT", "usb": "USB"}.get(transport, "AUTO")
+        cw = int(draw.textlength(chip, font=T.font(20))) + 28
+        chip_rect = (T.W // 2 - cw // 2, y_mid - 16, T.W // 2 + cw // 2, y_mid + 16)
+        draw.rectangle(chip_rect, fill=T.BG, outline=T.STATUS_OK if check == "ready" else T.ACCENT, width=2)
+        draw.text((chip_rect[0] + 14, chip_rect[1] + 4), chip, font=T.font(20), fill=T.FG)
+        message = str(getattr(self.state, "route_check_message", "") or "")
+        if check == "error" or compat is False:
+            status, col = (message or "Недоступно"), T.WARN
+        elif check == "ready" or active:
+            status, col = (message or "Готово"), T.STATUS_OK
+        elif check == "checking":
+            status, col = (message or "Проверяем"), T.STATUS_WARN
+        else:
+            status, col = "Нужно проверить", T.MUTED
+        draw.text((x0, 320), C.truncate(draw, status, T.font(T.SZ_BODY), x1 - x0 - 320),
+                  font=T.font(T.SZ_BODY), fill=col)
+        note = "Проверим доступность сейчас, без постоянного фонового поиска."
+        draw.text((x0, 354), C.truncate(draw, note, T.font(17), x1 - x0), font=T.font(17), fill=T.FAINT)
+        if regions is not None:
+            check_rect = (x1 - 292, 315, x1 - 148, 368)
+            go_rect = (x1 - 136, 315, x1, 368)
+            draw.rectangle(check_rect, outline=T.ACCENT, width=2)
+            draw.text((check_rect[0] + 18, check_rect[1] + 15), "Проверить", font=T.font(18), fill=T.ACCENT)
+            go_col = T.STATUS_OK if check == "ready" and compat is not False else T.FAINT
+            draw.rectangle(go_rect, outline=go_col, width=2)
+            draw.text((go_rect[0] + 20, go_rect[1] + 15), "Включить", font=T.font(18), fill=go_col)
+            regions.add(check_rect, "route_check", payload=None)
+            if check == "ready" and compat is not False:
+                regions.add(go_rect, "route_activate", payload=None)
+
+    def _draw_context_bar(self, draw, regions, *, step, act_col, act_intent):
+        bar_top = T.STATUSBAR_TOP
+        draw.rectangle([0, bar_top, T.W, T.H], fill=T.BG)
+        T.progress_segments(draw, 0, bar_top, T.W, 0.0)
+        cy = bar_top + (T.H - bar_top) // 2 + 4
+        can_next = (
+            (step == "source" and bool(self._selected_device("input")))
+            or (step == "sink" and bool(self._selected_device("output")))
+            or step == "path"
+            or step == "review"
+        )
+        if step == "review":
+            primary = "ПУСК" if getattr(self.state, "route_check_state", "") == "ready" else "ПРОВЕР"
+            primary_intent = "route_activate" if getattr(self.state, "route_check_state", "") == "ready" else "route_check"
+            primary_col = act_col if act_intent else (T.ACCENT if primary_intent == "route_check" else T.FAINT)
+        else:
+            primary = "ДАЛЕЕ"
+            primary_intent = "route_next" if can_next else None
+            primary_col = T.ACCENT if can_next else T.FAINT
+        secondary = []
+        if step != "source":
+            secondary.append(("НАЗАД", T.MUTED, "route_back", None))
+        secondary.append((primary, primary_col, primary_intent, None))
+        secondary.append(("НАСТ", T.MUTED, "open_settings", None))
+        if T.THEME == "terminal":
+            f = T.font(T.SZ_BODY)
+            labels = ["[" + item[0] + "]" for item in secondary]
+            gap = 54
+            widths = [int(draw.textlength(label, font=f)) for label in labels]
+            total = sum(widths) + gap * (len(labels) - 1)
+            x = (T.W - total) // 2
+            for (label, col, intent, payload), text, w in zip(secondary, labels, widths):
+                draw.text((x, cy - T.SZ_BODY // 2 - 2), text, font=f, fill=col)
+                if regions is not None and intent is not None:
+                    regions.add((x - 12, cy - 30, x + w + 12, cy + 30), intent, payload=payload)
+                x += w + gap
+            return
+        R = 30
+        gap = 46
+        total = len(secondary) * 2 * R + (len(secondary) - 1) * gap
+        x = (T.W - total) // 2 + R
+        for label, col, intent, payload in secondary:
+            draw.ellipse([x - R, cy - R, x + R, cy + R], outline=col, width=3)
+            if label == "НАЗАД":
+                T.icon_chevron(draw, x, cy, R - 12, color=col, expanded=True, width=3)
+            elif label == "НАСТ":
+                T.icon_gear(draw, x, cy, R - 12, color=col, width=2)
+            else:
+                T.icon_route(draw, x, cy, R - 10, color=col, width=3)
+            if regions is not None and intent is not None:
+                regions.add((x - R, cy - R, x + R, cy + R), intent, payload=payload)
+            x += 2 * R + gap
 
     def render(self, regions=None):
         img, draw = self.blank()
         if not self.state:
             return img
+        step = self._route_step()
+        self._draw_step_tabs(draw, regions, step)
+        if step == "source":
+            self._draw_choice_list(draw, regions, "input", "Что играет", "Выберите поток или устройство, которое отдаёт звук")
+        elif step == "sink":
+            self._draw_choice_list(draw, regions, "output", "Где слышать", "Выберите устройство или поверхность, куда доставить поток")
+        elif step == "path":
+            self._draw_transport_picker(draw, regions)
+        else:
+            self._draw_review(draw, regions)
+
+        # Состояние «Активировать»: цвет кодирует статус (текста нет).
         ri = getattr(self.state, "route_input", "")
         ro = getattr(self.state, "route_output", "")
         active = bool(getattr(self.state, "route_active", False))
         compat = getattr(self.state, "route_compatible", None)
         ready = bool(ri and ro)
-
-        # штриховые делители (визуальный язык дуги/сегментов, не сплошные «секции»)
-        T.dashed_line(draw, self.L0, self.COL_TOP - 6, self.R1, self.COL_TOP - 6)
-        T.dashed_line(draw, self.COLX, self.COL_TOP, self.COLX, self.COL_BOTTOM)
-
-        in_rows = self._column(draw, regions, "input", self.L0, self.L1, "ВХОД", ri, "route_input_select")
-        out_rows = self._column(draw, regions, "output", self.R0, self.R1, "ВЫХОД", ro, "route_output_select")
-
-        # соединительный «кабель»: ЗЕЛЁНЫЙ только когда оба конца реально подключены;
-        # несовместимо -> красный; иначе (выбрано, но не подключено) -> акцент.
-        def _conn(devs, k):
-            return any(bool(d.get("connected")) for d in devs
-                       if (d.get("key") or d.get("address")) == k)
-        both_connected = _conn(self.state.route_inputs, ri) and _conn(self.state.route_outputs, ro)
-        if ri in in_rows and ro in out_rows:
-            iy, oy = in_rows[ri], out_rows[ro]
-            cable = (T.STATUS_OK if both_connected else
-                     (T.WARN if compat is False else T.ACCENT))
-            draw.line([(self.L1, iy), (self.COLX, iy), (self.COLX, oy), (self.R0, oy)],
-                      fill=cable, width=3)
-
-        # ── нижний бар: ТОЛЬКО круглые одинаковые кнопки-иконки по центру, БЕЗ текста.
-        bar_top = T.STATUSBAR_TOP
-        draw.rectangle([0, bar_top, T.W, T.H], fill=T.BG)
-        T.progress_segments(draw, 0, bar_top, T.W, 0.0)     # сегментный делитель во всю ширину
-        cy = bar_top + (T.H - bar_top) // 2 + 4
-        R = 30                                              # одинаковый радиус всех кнопок
-
-        # Состояние «Активировать»: цвет кодирует статус (текста нет).
         self_out = ro == getattr(self.state, "SELF_OUTPUT_KEY", "carthing")
         transfer_on = bool(getattr(self.state, "transfer_active", False))
         if self_out and not transfer_on:
@@ -366,97 +693,7 @@ class RouteBuilderScreen(Screen):
             act_col, act_intent = T.WARN, None             # красный = несовместимо
         else:
             act_col, act_intent = T.STATUS_OK, "route_activate"
-
-        # [настройки · LNK · add-in · add-out · ассистент] — по центру.
-        # Add In is passive advertising for sources. Add Out is active inquiry
-        # for speakers/receivers; the transport route still changes only via LNK.
-        btns = [
-            ("gear", T.MUTED, "open_settings", None),
-            ("route", act_col, act_intent, None),
-            ("add_in", T.MUTED, "settings_select", "pairing_input"),
-            ("add_out", T.MUTED, "settings_select", "pairing_output"),
-            ("orb",  T.MUTED, "assistant", None),
-        ]
-        n = len(btns)
-        gap = 36
-        if T.THEME == "terminal":
-            # [CLAUDE 2026-06-11] терминальная тема: софт-кнопки [XXX] вместо кружков
-            # (идея владельца: сокращения как на старых терминалах, без значков)
-            TERM = {"gear": "SET", "route": "LNK", "add_in": "IN+", "add_out": "OUT+", "orb": "AST"}
-            f = T.font(T.SZ_BODY)
-            labels = ["[" + TERM[k] + "]" for k, _c, _i, _p in btns]
-            widths = [int(draw.textlength(l, font=f)) for l in labels]
-            total = sum(widths) + (n - 1) * gap
-            x = (T.W - total) // 2
-            for (kind, col, intent, payload), label, w in zip(btns, labels, widths):
-                draw.text((x, cy - T.SZ_BODY // 2 - 2), label, font=f, fill=col)
-                if regions is not None and intent is not None:
-                    regions.add((x - 10, cy - R, x + w + 10, cy + R), intent, payload=payload)
-                x += w + gap
-            # 2026-06-18 owner GUI correction:
-            # This line is the user's feedback channel for explicit/manual route
-            # work.  A bare "ROUTE: -" looked like missing data while Play Now was
-            # intentionally quiet.  Show the product mode and the current action
-            # instead; if Play Now still sees an external output footprint, make
-            # that mismatch visible instead of hiding it behind the selected mode.
-            src_conn = getattr(self.state, "actual_source_connected", False)
-            src_stream = getattr(self.state, "actual_source_streaming", False)
-            recv_addr = getattr(self.state, "actual_receiver_addr", "")
-            mode = str(getattr(self.state, "operation_mode", "playnow") or "playnow")
-            status = str(getattr(self.state, "transfer_status", "") or "").lower()
-            self_key = getattr(self.state, "SELF_OUTPUT_KEY", "carthing")
-            external_connected = [
-                d for d in (getattr(self.state, "route_outputs", []) or [])
-                if (d.get("key") or d.get("address")) != self_key and d.get("connected")
-            ]
-            if mode == "commutator":
-                if getattr(self.state, "transfer_scanning", False) or "scanning" in status:
-                    route_text, route_col = "MODE: COMM SCAN", T.STATUS_WARN
-                elif recv_addr and src_conn:
-                    route_text = "MODE: COMM LINK" + (" PLAY" if src_stream else " WAIT")
-                    route_col = T.STATUS_OK if src_stream else T.ACCENT
-                elif external_connected:
-                    route_text = f"MODE: COMM HOLD {len(external_connected)}"
-                    route_col = T.STATUS_OK
-                elif "no outputs" in status:
-                    route_text, route_col = "MODE: COMM NO OUT", T.WARN
-                else:
-                    route_text, route_col = "MODE: COMM READY", T.ACCENT
-            elif recv_addr or external_connected:
-                route_text = "MODE: PLAY NOW EXT"
-                route_col = T.WARN
-            else:
-                route_text = "MODE: PLAY NOW"
-                route_col = T.STATUS_OK
-            fs = T.font(T.SZ_SMALL)
-            rtw = int(draw.textlength(route_text, font=fs))
-            draw.text((T.W // 2 - rtw // 2, bar_top + 8), route_text, font=fs, fill=route_col)
-            return img
-        total = n * 2 * R + (n - 1) * gap
-        x = (T.W - total) // 2 + R
-        for kind, col, intent, payload in btns:
-            draw.ellipse([x - R, cy - R, x + R, cy + R], outline=col, width=3)
-            if kind == "gear":
-                T.icon_gear(draw, x, cy, R - 12, color=col, width=2)
-            elif kind == "route":
-                T.icon_route(draw, x, cy, R - 10, color=col, width=3)
-            elif kind == "add_in":
-                T.icon_plus(draw, x, cy, R - 14, color=col, width=3)
-                draw.arc([x - R + 14, cy - R + 14, x + R - 14, cy + R - 14],
-                         start=140, end=250, fill=col, width=3)
-                draw.polygon([(x - 8, cy + R - 18), (x - 20, cy + R - 14), (x - 12, cy + R - 6)],
-                             fill=col)
-            elif kind == "add_out":
-                T.icon_plus(draw, x, cy, R - 14, color=col, width=3)
-                draw.arc([x - R + 14, cy - R + 14, x + R - 14, cy + R - 14],
-                         start=320, end=70, fill=col, width=3)
-                draw.polygon([(x + 8, cy - R + 18), (x + 20, cy - R + 14), (x + 12, cy - R + 6)],
-                             fill=col)
-            elif kind == "orb":
-                T.icon_ring(draw, x, cy, R - 12, color=col, width=3)
-            if regions is not None and intent is not None:
-                regions.add((x - R, cy - R, x + R, cy + R), intent, payload=payload)
-            x += 2 * R + gap
+        self._draw_context_bar(draw, regions, step=step, act_col=act_col, act_intent=act_intent)
         return img
 
 

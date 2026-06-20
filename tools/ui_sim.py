@@ -27,11 +27,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "overlay", "usr", "l
 from ui_screen import Compositor, Display, Input          # noqa: E402
 from ui_statusbar import StatusBar                          # noqa: E402
 from ui_anim import AnimDriver                              # noqa: E402
-from screens import NowPlayingScreen, MacOSScreen, SettingsScreen, NotificationsScreen, PairingModal  # noqa: E402
+from screens import NowPlayingScreen, MacOSScreen, SettingsScreen, RouteBuilderScreen, NotificationsScreen, PairingModal  # noqa: E402
 from app_state import AppState                              # noqa: E402
 from intents import Dispatcher                              # noqa: E402
 
-PORT = 8723
+PORT = int(os.environ.get("CARTHING_UI_SIM_PORT", "8723"))
 
 
 class _Sink(Display):
@@ -66,10 +66,41 @@ state.notifications = [
     {"app": "Telegram", "title": "Анна", "message": "Привет! Ты уже в машине?"},
     {"app": "Почта", "title": "GitHub", "message": "PR #42 merged into main"},
 ]
-state.trusted = [
-    {"key": "iphone", "label": "iPhone 15 Pro", "type": "iPhone"},
-    {"key": "mac", "label": "MacBook Pro", "type": "Mac"},
-]
+state.trusted = []
+state.operation_mode = "commutator"
+state.route_compatible = True
+state.enroll_peer(
+    address="10:A2:D3:83:82:50",
+    name="iPhone 15 Pro",
+    service_uuids={"110a"},
+    ble_services={"ams", "ancs", "1812"},
+    metadata={"preview": True},
+    intake_source="ui_sim",
+)
+state.enroll_peer(
+    address="66:55:44:33:22:11",
+    name="MacBook Pro",
+    service_uuids={"110a"},
+    ble_services={"ams"},
+    capabilities={"session_peer", "remote_mic_receiver", "usb_peer"},
+    metadata={"preview": True, "usb_identity": "ncm", "ctsp_probe": "advertised"},
+    intake_source="ui_sim",
+)
+state.enroll_peer(
+    address="C4:A9:B8:70:2F:E5",
+    name="Fosi Audio ZD3",
+    service_uuids={"110b"},
+    class_of_device=0x240414,
+    metadata={"preview": True},
+    intake_source="ui_sim",
+)
+for row in state.trusted:
+    if row.get("address") == "10:A2:D3:83:82:50":
+        row["connected"] = True
+    if row.get("address") == "C4:A9:B8:70:2F:E5":
+        row["connected"] = True
+state.select_route_input("source:10:A2:D3:83:82:50")
+state.select_route_output("C4:A9:B8:70:2F:E5")
 
 
 def _on_command(src, cmd):
@@ -82,7 +113,8 @@ dispatcher = Dispatcher(state, on_command=_on_command)
 
 comp = Compositor(
     sink,
-    [NowPlayingScreen(emit=dispatcher.dispatch),
+    [RouteBuilderScreen(emit=dispatcher.dispatch),
+     NowPlayingScreen(emit=dispatcher.dispatch),
      MacOSScreen(emit=dispatcher.dispatch),
      SettingsScreen(on_select=lambda key: dispatcher.dispatch("settings_select", key)),
      NotificationsScreen()],
@@ -188,6 +220,16 @@ def _handle(msg):
                 comp.handle_input(KEYMAP[key])
         elif a == "tap":
             comp.handle_input((Input.TAP, int(msg["x"]), int(msg["y"])))
+        elif a == "swipe":
+            direction = msg.get("direction")
+            event = {
+                "left": Input.SWIPE_LEFT,
+                "right": Input.SWIPE_RIGHT,
+                "up": Input.SWIPE_UP,
+                "down": Input.SWIPE_DOWN,
+            }.get(direction)
+            if event:
+                comp.handle_input(event)
 
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8><title>Car Thing Sim</title>
@@ -203,7 +245,7 @@ font-family:-apple-system,Arial;color:#888}
 <div class=k>←/→ столы&nbsp;·&nbsp;↑/↓ энкодер&nbsp;·&nbsp;Enter выбор&nbsp;·&nbsp;Esc назад&nbsp;·&nbsp;1-4 кнопки&nbsp;·&nbsp;клик=тап&nbsp;·&nbsp;n уведомл.&nbsp;·&nbsp;p play&nbsp;·&nbsp;<b>c=калибровка</b></div>
 <script>
 const img=document.getElementById('s'),cv=document.getElementById('c'),ctx=cv.getContext('2d');
-let calib=false,drag=null;
+let calib=false,drag=null,gesture=null;
 function setMode(){cv.style.pointerEvents=calib?'auto':'none';
  document.getElementById('m').textContent=calib?'КАЛИБРОВКА: обведи перекрытую зону мышью · x=сброс · c=выход':'';}
 setMode();
@@ -217,8 +259,20 @@ document.addEventListener('keydown',e=>{
  if(e.key==='x'&&calib){post({action:'calib_clear'});return;}
  post({action:'key',key:e.key});
  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();});
-img.addEventListener('click',e=>{if(calib)return;const r=img.getBoundingClientRect();
- post({action:'tap',x:(e.clientX-r.left)*800/r.width,y:(e.clientY-r.top)*480/r.height});});
+function imgPos(e){const r=img.getBoundingClientRect();
+ return [(e.clientX-r.left)*800/r.width,(e.clientY-r.top)*480/r.height];}
+img.addEventListener('pointerdown',e=>{if(calib)return;const [x,y]=imgPos(e);
+ gesture={x0:x,y0:y,x1:x,y1:y,t:Date.now()};img.setPointerCapture(e.pointerId);});
+img.addEventListener('pointermove',e=>{if(!gesture||calib)return;const [x,y]=imgPos(e);gesture.x1=x;gesture.y1=y;});
+img.addEventListener('pointerup',e=>{if(!gesture||calib)return;const g=gesture;gesture=null;
+ const dx=g.x1-g.x0,dy=g.y1-g.y0,adx=Math.abs(dx),ady=Math.abs(dy),dt=Date.now()-g.t;
+ if(Math.max(adx,ady)>55&&dt<900){
+   const direction=adx>=ady?(dx<0?'left':'right'):(dy<0?'up':'down');
+   post({action:'swipe',direction});
+ }else{
+   post({action:'tap',x:g.x1,y:g.y1});
+ }});
+img.addEventListener('pointercancel',e=>{gesture=null;});
 cv.addEventListener('mousedown',e=>{const [x,y]=pos(e);drag={x0:x,y0:y,x1:x,y1:y};});
 cv.addEventListener('mousemove',e=>{if(!drag)return;const [x,y]=pos(e);drag.x1=x;drag.y1=y;
  const rx=Math.min(drag.x0,drag.x1),ry=Math.min(drag.y0,drag.y1),w=Math.abs(drag.x1-drag.x0),h=Math.abs(drag.y1-drag.y0);

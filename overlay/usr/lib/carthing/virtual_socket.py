@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Protocol, TrustedDevice
+from route_graph import Capability, Constraint, Endpoint, EndpointDirection, EndpointPlane, Protocol, TrustedDevice
 
 
 class SocketKind(str, Enum):
@@ -23,6 +23,7 @@ class SocketKind(str, Enum):
     CONTROL_OUTPUT = "control_output"
     METADATA_INPUT = "metadata_input"
     NOTIFICATION_INPUT = "notification_input"
+    USB_SESSION = "usb_session"
 
 
 @dataclass(slots=True)
@@ -127,20 +128,15 @@ class VirtualPatchBay:
 def _socket_kind_for_endpoint(endpoint: Endpoint) -> SocketKind:
     capabilities = set(endpoint.capabilities)
     protocols = set(endpoint.protocols)
-    if Capability.REMOTE_MIC_RECEIVER in capabilities:
+    if endpoint.plane == EndpointPlane.USB or Capability.USB_PEER in capabilities or Capability.USB_SESSION in capabilities:
+        return SocketKind.USB_SESSION
+    if endpoint.plane == EndpointPlane.MIC or Capability.REMOTE_MIC_RECEIVER in capabilities or Capability.LOCAL_MIC_SOURCE in capabilities:
         return SocketKind.REMOTE_MIC
-    if Capability.SESSION_PEER in capabilities or (
-        endpoint.direction == EndpointDirection.SESSION
-        and Protocol.BLE_L2CAP_COC_SESSION in protocols
-    ):
+    if endpoint.plane == EndpointPlane.SESSION or Capability.SESSION_PEER in capabilities or Protocol.BLE_L2CAP_COC_SESSION in protocols:
         return SocketKind.SESSION
-    if Capability.AUDIO_INPUT in capabilities or (
-        endpoint.direction == EndpointDirection.INPUT and Protocol.CLASSIC_A2DP_SINK in protocols
-    ):
+    if endpoint.plane == EndpointPlane.AUDIO and endpoint.direction == EndpointDirection.SOURCE:
         return SocketKind.AUDIO_INPUT
-    if Capability.AUDIO_OUTPUT in capabilities or (
-        endpoint.direction == EndpointDirection.OUTPUT and Protocol.CLASSIC_A2DP_SOURCE in protocols
-    ):
+    if endpoint.plane == EndpointPlane.AUDIO and endpoint.direction == EndpointDirection.SINK:
         return SocketKind.AUDIO_OUTPUT
     if Capability.CONTROL_OUTPUT in capabilities:
         return SocketKind.CONTROL_OUTPUT
@@ -165,6 +161,7 @@ def device_plugs(device: TrustedDevice) -> list[VirtualPlug]:
                 "device_name": device.name,
                 "endpoint_id": endpoint.id,
                 "endpoint_direction": endpoint.direction.value,
+                "endpoint_plane": endpoint.plane.value,
             },
         ))
     return plugs

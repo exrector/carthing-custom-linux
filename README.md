@@ -33,6 +33,8 @@ On this host, the first recovery action is:
 ./scripts/bring-up-device1-normal-boot-macos.sh
 ```
 
+Dedicated runbook: [docs/MACOS-VPN-NCM-ROUTE-RUNBOOK-2026-06-19.md](docs/MACOS-VPN-NCM-ROUTE-RUNBOOK-2026-06-19.md)
+
 Reason:
 
 - `NCM Gadget` may already be present in `ioreg`

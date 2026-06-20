@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app_state import normalize_address
-from route_graph import Capability, Constraint, Endpoint, EndpointDirection, Protocol, TrustedDevice
+from route_graph import Capability, Constraint, Endpoint, EndpointDirection, EndpointPlane, Protocol, TrustedDevice
 
 
 COD_MAJOR_AUDIO_VIDEO = 0x0400
@@ -70,11 +70,12 @@ class EnrollmentManager:
                 Capability.TRANSPORT_CONTROL,
             })
             endpoints.append(Endpoint(
-                id="audio-output",
-                direction=EndpointDirection.OUTPUT,
+                id="audio-sink",
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.AUDIO,
                 protocols=output_protocols,
                 capabilities={Capability.AUDIO_OUTPUT},
-                label="Bluetooth audio output",
+                label="Bluetooth audio sink",
                 metadata={
                     "transport_adapter": "a2dp"
                     if Protocol.CLASSIC_A2DP_SOURCE in output_protocols
@@ -84,7 +85,8 @@ class EnrollmentManager:
             if Protocol.CLASSIC_A2DP_SOURCE in output_protocols:
                 endpoints.append(Endpoint(
                     id="remote-control",
-                    direction=EndpointDirection.CONTROL,
+                    direction=EndpointDirection.SOURCE,
+                    plane=EndpointPlane.CONTROL,
                     protocols={Protocol.CLASSIC_AVRCP},
                     capabilities={
                         Capability.CONTROL_INPUT,
@@ -103,15 +105,17 @@ class EnrollmentManager:
                 Capability.METADATA_INPUT,
             })
             endpoints.append(Endpoint(
-                id="audio-input",
-                direction=EndpointDirection.INPUT,
+                id="audio-source",
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.AUDIO,
                 protocols=input_protocols,
                 capabilities={Capability.AUDIO_INPUT},
-                label="Bluetooth audio input",
+                label="Bluetooth audio source",
             ))
             endpoints.append(Endpoint(
                 id="media-control",
-                direction=EndpointDirection.CONTROL,
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.CONTROL,
                 protocols={Protocol.BLE_AMS, Protocol.BLE_HID},
                 capabilities={Capability.CONTROL_OUTPUT, Capability.METADATA_INPUT},
                 label="Media control",
@@ -124,21 +128,35 @@ class EnrollmentManager:
         ):
             capabilities.add(Capability.SESSION_PEER)
             endpoints.append(Endpoint(
-                id="session-control",
-                direction=EndpointDirection.SESSION,
+                id="session-source",
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.SESSION,
                 protocols={
                     Protocol.BLE_GATT_BOOTSTRAP,
                     Protocol.BLE_L2CAP_COC_SESSION,
                 },
                 capabilities={Capability.SESSION_PEER},
-                label="Session control/data",
-                metadata={"transport_adapter": "ctsp"},
+                label="Session source",
+                metadata={"transport_adapter": "ctsp", "duplex_peer": "session-sink"},
+            ))
+            endpoints.append(Endpoint(
+                id="session-sink",
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.SESSION,
+                protocols={
+                    Protocol.BLE_GATT_BOOTSTRAP,
+                    Protocol.BLE_L2CAP_COC_SESSION,
+                },
+                capabilities={Capability.SESSION_PEER},
+                label="Session sink",
+                metadata={"transport_adapter": "ctsp", "duplex_peer": "session-source"},
             ))
         if Capability.REMOTE_MIC_RECEIVER in explicit_capabilities:
             capabilities.add(Capability.REMOTE_MIC_RECEIVER)
             endpoints.append(Endpoint(
-                id="remote-mic",
-                direction=EndpointDirection.SESSION,
+                id="remote-mic-sink",
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.MIC,
                 protocols={Protocol.BLE_L2CAP_COC_SESSION},
                 capabilities={Capability.REMOTE_MIC_RECEIVER},
                 label="Remote microphone receiver",
@@ -150,11 +168,37 @@ class EnrollmentManager:
                 },
             ))
 
+        if (
+            Capability.USB_PEER in explicit_capabilities
+            or Capability.USB_SESSION in explicit_capabilities
+        ):
+            capabilities.update({Capability.USB_PEER, Capability.USB_SESSION})
+            constraints.add(Constraint.FULL_DUPLEX_ALLOWED)
+            endpoints.append(Endpoint(
+                id="usb-session-source",
+                direction=EndpointDirection.SOURCE,
+                plane=EndpointPlane.USB,
+                protocols={Protocol.USB_NCM_SESSION},
+                capabilities={Capability.USB_PEER, Capability.USB_SESSION},
+                label="USB session source",
+                metadata={"transport_adapter": "usb_ncm", "duplex_peer": "usb-session-sink"},
+            ))
+            endpoints.append(Endpoint(
+                id="usb-session-sink",
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.USB,
+                protocols={Protocol.USB_NCM_SESSION},
+                capabilities={Capability.USB_PEER, Capability.USB_SESSION},
+                label="USB session sink",
+                metadata={"transport_adapter": "usb_ncm", "duplex_peer": "usb-session-source"},
+            ))
+
         if self._has_ancs(evidence):
             capabilities.add(Capability.NOTIFICATIONS_INPUT)
             endpoints.append(Endpoint(
-                id="notifications",
-                direction=EndpointDirection.METADATA,
+                id="notifications-sink",
+                direction=EndpointDirection.SINK,
+                plane=EndpointPlane.METADATA,
                 protocols={Protocol.BLE_ANCS},
                 capabilities={Capability.NOTIFICATIONS_INPUT},
                 label="Notifications",
@@ -219,6 +263,7 @@ class EnrollmentManager:
                     "evidence_sources": sorted(evidence_sources),
                     "verified_capabilities": sorted(str(self._enum_value(value)) for value in capabilities),
                     "protocols": sorted(endpoint_protocols),
+                    "usage_hints": self._usage_hints(capabilities, endpoints),
                     "unknowns": sorted(unknowns),
                 },
             },
@@ -293,6 +338,40 @@ class EnrollmentManager:
         return "ancs" in ble or "7905f431-b5ce-4e99-a40f-4b1e122d00d0" in ble
 
     @staticmethod
+    def _usage_hints(capabilities: set[Capability], endpoints: list[Endpoint]) -> list[str]:
+        hints = set()
+        if Capability.AUDIO_INPUT in capabilities:
+            hints.add("audio_source")
+        if Capability.AUDIO_OUTPUT in capabilities:
+            hints.add("audio_sink")
+        if Capability.SESSION_PEER in capabilities:
+            hints.add("session_peer")
+        if Capability.LOCAL_MIC_SOURCE in capabilities:
+            hints.add("mic_source")
+        if Capability.REMOTE_MIC_RECEIVER in capabilities:
+            hints.add("mic_sink")
+        if Capability.USB_PEER in capabilities or Capability.USB_SESSION in capabilities:
+            hints.add("usb_peer")
+        if Capability.PLAYNOW_METADATA in capabilities:
+            hints.add("playnow_surface")
+        for endpoint in endpoints:
+            if endpoint.plane == EndpointPlane.AUDIO and endpoint.direction == EndpointDirection.SOURCE:
+                hints.add("audio_source")
+            elif endpoint.plane == EndpointPlane.AUDIO and endpoint.direction == EndpointDirection.SINK:
+                hints.add("audio_sink")
+            elif endpoint.plane == EndpointPlane.SESSION:
+                hints.add("session_peer")
+            elif endpoint.plane == EndpointPlane.MIC and endpoint.direction == EndpointDirection.SOURCE:
+                hints.add("mic_source")
+            elif endpoint.plane == EndpointPlane.MIC and endpoint.direction == EndpointDirection.SINK:
+                hints.add("mic_sink")
+            elif endpoint.plane == EndpointPlane.USB:
+                hints.add("usb_peer")
+            elif endpoint.plane == EndpointPlane.METADATA:
+                hints.add("metadata_surface")
+        return sorted(hints)
+
+    @staticmethod
     def _enum_value(value):
         return value.value if hasattr(value, "value") else value
 
@@ -332,7 +411,7 @@ class EnrollmentManager:
         for key, value in (extra or {}).items():
             if key == "capability_profile" and isinstance(value, dict):
                 current = dict(merged.get(key) or {})
-                for list_key in ("evidence_sources", "verified_capabilities", "protocols"):
+                for list_key in ("evidence_sources", "verified_capabilities", "protocols", "usage_hints"):
                     current[list_key] = sorted(set(current.get(list_key) or []) | set(value.get(list_key) or []))
                 unknowns = set(current.get("unknowns") or []) | set(value.get("unknowns") or [])
                 evidence_sources = set(current.get("evidence_sources") or [])
