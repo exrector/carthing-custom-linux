@@ -22,6 +22,7 @@ import collections
 import dataclasses
 import enum
 import logging
+import os
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -56,6 +57,13 @@ logger = logging.getLogger(__name__)
 
 RFCOMM_PSM = 0x0003
 DEFAULT_RX_QUEUE_SIZE = 32
+
+
+def _env_bit(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return 1 if value.strip().lower() in ('1', 'true', 'yes', 'on') else 0
 
 class FrameType(enum.IntEnum):
     SABM = 0x2F  # Control field [1,1,1,1,_,1,0,0] LSB-first
@@ -370,9 +378,9 @@ class RFCOMM_MCC_PN:
     initial_credits: int
 
     def __post_init__(self) -> None:
-        if self.initial_credits < 1 or self.initial_credits > 7:
+        if self.initial_credits < 0 or self.initial_credits > 7:
             logger.warning(
-                f'Initial credits {self.initial_credits} is out of range [1, 7].'
+                f'Initial credits {self.initial_credits} is out of range [0, 7].'
             )
 
     @staticmethod
@@ -473,7 +481,11 @@ class DLC(utils.EventEmitter):
         self.tx_buffer = b''
         self.state = DLC.State.INIT
         self.role = multiplexer.role
-        self.c_r = 1 if self.role == Multiplexer.Role.INITIATOR else 0
+        self.c_r = (
+            _env_bit('BUMBLE_RFCOMM_INITIATOR_DLC_CR', 1)
+            if self.role == Multiplexer.Role.INITIATOR
+            else 0
+        )
         self.connection_result: asyncio.Future | None = None
         self.disconnection_result: asyncio.Future | None = None
         self.drained = asyncio.Event()
@@ -979,7 +991,12 @@ class Multiplexer(utils.EventEmitter):
             raise InvalidStateError('not connected')
 
         self.open_pn = RFCOMM_MCC_PN(
-            dlci=channel << 1,
+            dlci=(channel << 1)
+            | (
+                _env_bit('BUMBLE_RFCOMM_INITIATOR_DLCI_DIRECTION', 1)
+                if self.role == Multiplexer.Role.INITIATOR
+                else 0
+            ),
             cl=0xF0,
             priority=7,
             ack_timer=0,

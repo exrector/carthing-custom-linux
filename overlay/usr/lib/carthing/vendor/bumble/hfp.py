@@ -769,7 +769,7 @@ class HfProtocol(utils.EventEmitter):
     async def execute_command(
         self,
         cmd: str,
-        timeout: float = 1.0,
+        timeout: float = 5.0,
         *,
         response_type: Literal[AtResponseType.NONE] = AtResponseType.NONE,
     ) -> None: ...
@@ -778,7 +778,7 @@ class HfProtocol(utils.EventEmitter):
     async def execute_command(
         self,
         cmd: str,
-        timeout: float = 1.0,
+        timeout: float = 5.0,
         *,
         response_type: Literal[AtResponseType.SINGLE],
     ) -> AtResponse: ...
@@ -787,7 +787,7 @@ class HfProtocol(utils.EventEmitter):
     async def execute_command(
         self,
         cmd: str,
-        timeout: float = 1.0,
+        timeout: float = 5.0,
         *,
         response_type: Literal[AtResponseType.MULTIPLE],
     ) -> list[AtResponse]: ...
@@ -795,7 +795,7 @@ class HfProtocol(utils.EventEmitter):
     async def execute_command(
         self,
         cmd: str,
-        timeout: float = 1.0,
+        timeout: float = 5.0,
         response_type: AtResponseType = AtResponseType.NONE,
     ) -> None | AtResponse | list[AtResponse]:
         """
