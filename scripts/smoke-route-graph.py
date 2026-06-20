@@ -454,6 +454,14 @@ def check_self_endpoint_matrix_width():
         os.environ["CARTHING_TRUSTED_DEVICES"] = str(Path(tmp) / "trusted-devices.json")
         os.environ["CAR_THING_KEYSTORE"] = str(Path(tmp) / "keys.json")
         app_state = AppState()
+        app_state.enroll_peer(
+            address="66:55:44:33:22:11",
+            name="MacBook Pro",
+            service_uuids={"110a"},
+            ble_services={"ams"},
+            capabilities={"session_peer", "remote_mic_receiver"},
+            intake_source="smoke:self_endpoint_matrix",
+        )
         nodes = app_state.route_nodes
         by_id = {node["id"]: node for node in nodes}
         required = {
@@ -462,9 +470,9 @@ def check_self_endpoint_matrix_width():
             "carthing:ctsp-session-source": ("source", "session"),
             "carthing:ctsp-session-sink": ("sink", "session"),
             "carthing:local-mic-source": ("source", "mic"),
-            "carthing:remote-mic-sink": ("sink", "mic"),
             "carthing:usb-session-source": ("source", "usb"),
             "carthing:usb-session-sink": ("sink", "usb"),
+            "66:55:44:33:22:11:remote-mic-sink": ("sink", "mic"),
         }
         for node_id, (direction, plane) in required.items():
             assert node_id in by_id, f"missing self matrix node: {node_id}"

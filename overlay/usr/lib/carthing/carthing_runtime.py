@@ -1031,7 +1031,11 @@ def _sync_model_route_selection():
         app_state = gui.app_state
         model.route_input = str(getattr(app_state, "route_input", "") or "")
         model.route_output = str(getattr(app_state, "active_route_output", "") or "")
-        model.client_enabled = bool(getattr(app_state, "client_enabled", False))
+        model.set_remote_mic(
+            bool(getattr(app_state, "remote_mic_enabled", getattr(app_state, "client_enabled", False))),
+            state=getattr(app_state, "remote_mic_state", None),
+            message=getattr(app_state, "remote_mic_message", None),
+        )
         model.route_builder = _route_builder_snapshot(app_state)
     except Exception:
         pass
@@ -1720,7 +1724,15 @@ def _init_gui_surface():
             gui.app_state.notif_blink = bool(settings.get("notif_blink", True))  # [CLAUDE] персист моргания
             gui.app_state.screen_brightness = int(settings.get("screen_brightness_pct", 100))
             gui.app_state.client_enabled = bool(settings.get("client_enabled", False))
-            model.client_enabled = gui.app_state.client_enabled
+            gui.app_state.set_remote_mic(
+                gui.app_state.client_enabled,
+                state="ready" if gui.app_state.client_enabled else "off",
+                message="Mac ждёт голосовой канал" if gui.app_state.client_enabled else "Микрофон Mac выключен",
+            )
+            model.set_remote_mic(
+                gui.app_state.client_enabled,
+                state="ready" if gui.app_state.client_enabled else "off",
+            )
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
             _select_boot_play_now(gui.app_state)
@@ -1748,7 +1760,11 @@ async def main():
     hw_caps = hardware_inventory.probe()
     _boot_milestone("hardware_inventory.ready", enabled_caps=sum(1 for v in hw_caps.values() if v))
     settings = SettingsService()
-    model.client_enabled = bool(settings.get("client_enabled", False))
+    _remote_mic_boot_enabled = bool(settings.get("client_enabled", False))
+    model.set_remote_mic(
+        _remote_mic_boot_enabled,
+        state="ready" if _remote_mic_boot_enabled else "off",
+    )
     from resource_policy import RuntimeResourcePolicy
     resource_policy = RuntimeResourcePolicy(settings=settings, hw_caps=hw_caps)
     _apply_resource_policy(operation_mode.current(settings), reason="boot")
@@ -1817,7 +1833,14 @@ async def main():
             app_state_for_runtime = app_state
             app_state.operation_mode = operation_mode.current(settings)  # режим из settings ДО старта циклов
             app_state.client_enabled = bool(settings.get("client_enabled", False))
-            model.client_enabled = app_state.client_enabled
+            app_state.set_remote_mic(
+                app_state.client_enabled,
+                state="ready" if app_state.client_enabled else "off",
+            )
+            model.set_remote_mic(
+                app_state.client_enabled,
+                state="ready" if app_state.client_enabled else "off",
+            )
             model.set_operation_mode(
                 app_state.operation_mode,
                 operation_mode.resources(app_state.operation_mode).as_dict(),
