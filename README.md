@@ -1,5 +1,49 @@
 # Car Thing Custom Linux
 
+Открытый R&D-репозиторий: превращение **Spotify Car Thing (Superbird)** в собственное
+устройство на кастомном Linux. Здесь заменяется закрытый userspace-контракт стока на
+явный, минимальный и полностью контролируемый: свой Buildroot-rootfs, свои init-скрипты,
+документированный runtime-контракт. Сток-загрузчик, ядро и dtb пока переиспользуются
+осознанно.
+
+> ⚠️ Личный исследовательский проект. Это не продукт и не релиз — это набор веток с
+> **разными реализациями и экспериментами**, чтобы показать, что можно сделать с этим
+> железом. Ветки самостоятельны и расходятся по подходам; читайте их как параллельные
+> исследования, а не как линейную историю.
+
+## Что внутри устройства
+
+Car Thing / Superbird — это Amlogic-плата с экраном, энкодером, кнопками и микрофоном.
+В репозитории — наработки по: кастомному rootfs, Bluetooth-стеку на Bumble (BLE GATT,
+AMS/ANCS, A2DP-мост), аудиоинтерфейсу/роутеру, GUI поверх DRM, реверсу MFi/iAP2 и
+инструментам прошивки из burn mode.
+
+## Карта веток
+
+| Ветка | О чём она |
+|-------|-----------|
+| `master` | Базовый контракт userspace + общая документация проекта (точка входа). |
+| `release-integration` | Самая полная интегрированная сборка: единый runtime, dual-mode Bluetooth, доктрина и инварианты (`INVARIANTS.md`, `docs/SYSTEM-STATE-*`). |
+| `playnow-minimal-remote-mic` | Минимальный сценарий: стрим микрофона устройства в macOS (Loopback) по TCP. |
+| `services-experiment` | Сервис-ориентированная архитектура: мир как endpoints/capabilities, карта SAR ADC. |
+| `vfat-restore` | Реставрация безопасных фич поверх vfat-базлайна (точка невозврата `2136ace`), по одной фиче — коммит. |
+| `state-on-p2` | Вариант хранения состояния на отдельном разделе p2; плоскость CTSP-сессий. |
+| `route-endpoint-graph` | Модель маршрутизации «граф endpoint'ов» (та же вершина, что у `state-on-p2`). |
+| `fix/ancs-solicitation-reconnect` | Фикс устойчивого BLE-реконнекта через ANCS solicitation. |
+| `research/mfi-auth-chip` | Реверс MFi-аутентификационного чипа (WIP). |
+| `research/iphone-service-surface` | Исследование сервис-поверхности iPhone, iAP2-mini (WIP). |
+| `tmp-wt-2136ace-20260615` | Архивный снимок WIP-наработок (тема/state). |
+
+## Доступ к устройству
+
+SSH-доступ к собранному устройству намеренно открыт с универсальным паролем
+(`root` / пароль задаётся в `buildroot-external/board/carthing/superbird/post-build.sh`).
+Это исследовательский девкит, не носитель личных данных — пароль и публичные ключи
+в репозитории публичны осознанно.
+
+---
+
+
 This repository replaces the upstream userspace contract for Superbird with an explicit, minimal contract that we control.
 
 Current project stage:
