@@ -14,6 +14,7 @@ accessory_orchestrator; идентичность — только через ide
 import asyncio
 import logging
 import os
+import subprocess
 import time
 
 # Часы: CTS синкает системное время в UTC -> выставляем локальную зону для strftime.
@@ -144,6 +145,7 @@ session_runner = None    # SessionRunner
 link_manager = None      # LinkManager
 hci_gate = None          # HciOperationGate
 route_patchbay = None    # VirtualRoutePatchBay
+remote_mic_process = None
 _classic_probe_done = set()
 ACTIVE_ROUTE_PROTOCOLS = {
     Protocol.CLASSIC_A2DP_SINK,
@@ -905,26 +907,115 @@ def _on_toggle_notif_blink(on):
         settings.set("notif_blink", bool(on))
 
 
+def _remote_mic_sender_args():
+    script = os.environ.get("CARTHING_REMOTE_MIC_SENDER", "/usr/lib/carthing/remote_mic_sender.py")
+    host = os.environ.get("CARTHING_MIC_HOST", "172.16.42.1")
+    port = os.environ.get("CARTHING_MIC_PORT", "49321")
+    device = os.environ.get("CARTHING_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
+    rate = os.environ.get("CARTHING_MIC_RATE", "48000")
+    channels = os.environ.get("CARTHING_MIC_CHANNELS", "2")
+    return [
+        "python3",
+        script,
+        "--host", host,
+        "--port", port,
+        "--device", device,
+        "--rate", rate,
+        "--channels", channels,
+    ]
+
+
+def _remote_mic_sender_running():
+    return remote_mic_process is not None and remote_mic_process.poll() is None
+
+
+async def _remote_mic_sender_monitor(process):
+    await asyncio.sleep(1.0)
+    if process is not remote_mic_process or process.poll() is None:
+        return
+    if gui is not None and bool(getattr(gui.app_state, "remote_mic_enabled", False)):
+        gui.app_state.set_remote_mic(
+            True,
+            state="unavailable",
+            message="Mac agent недоступен",
+        )
+    model.set_remote_mic(
+        True,
+        state="unavailable",
+        message=f"remote mic sender exited rc={process.returncode}",
+    )
+    logger.warning("remote mic sender exited early: rc=%s", process.returncode)
+    _on_publish()
+
+
+def _start_remote_mic_sender():
+    global remote_mic_process
+    if _remote_mic_sender_running():
+        return True
+    args = _remote_mic_sender_args()
+    try:
+        remote_mic_process = subprocess.Popen(
+            args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+    except Exception as exc:
+        logger.warning("remote mic sender start failed: %s", exc)
+        remote_mic_process = None
+        return False
+    logger.info("remote mic sender started pid=%s args=%s", remote_mic_process.pid, " ".join(args))
+    asyncio.ensure_future(_remote_mic_sender_monitor(remote_mic_process))
+    return True
+
+
+def _stop_remote_mic_sender():
+    global remote_mic_process
+    process = remote_mic_process
+    remote_mic_process = None
+    if process is None or process.poll() is not None:
+        return
+    logger.info("remote mic sender stopping pid=%s", process.pid)
+    try:
+        process.terminate()
+    except Exception:
+        return
+
+    async def _finish_stop():
+        await asyncio.sleep(0.8)
+        if process.poll() is None:
+            try:
+                process.kill()
+            except Exception:
+                pass
+    asyncio.ensure_future(_finish_stop())
+
+
 def _on_toggle_client(on):
     # Minimal PlayNow branch: the old CTSP client toggle is now the user-visible
-    # "Mac microphone" switch. It exposes the session plane and publishes mic
-    # lifecycle state, but the actual HFP/SCO audio adapter is still a later
-    # transport implementation, not faked here.
+    # "Mac microphone" switch. The first working transport is USB/NCM TCP PCM
+    # into the macOS Loopback agent; CTSP remains the peer/session state plane.
     enabled = bool(on)
+    sender_ok = _start_remote_mic_sender() if enabled else True
+    if not enabled:
+        _stop_remote_mic_sender()
+    state = "listening" if enabled and sender_ok else ("unavailable" if enabled else "off")
+    ui_message = (
+        "Говорите: Car Thing → Mac"
+        if enabled and sender_ok else
+        ("Mac agent недоступен" if enabled else "Микрофон Mac выключен")
+    )
     if gui is not None:
         gui.app_state.set_remote_mic(
             enabled,
-            state="ready" if enabled else "off",
-            message="Mac ждёт голосовой канал" if enabled else "Микрофон Mac выключен",
+            state=state,
+            message=ui_message,
         )
     model.set_remote_mic(
         enabled,
-        state="ready" if enabled else "off",
-        message=(
-            "Session plane включён; HFP/SCO audio adapter ещё не подключён"
-            if enabled else
-            "Микрофон Mac выключен"
-        ),
+        state=state,
+        message="USB/NCM PCM -> macOS Loopback" if enabled and sender_ok else ui_message,
     )
     if session_plane is not None:
         session_plane.set_enabled(enabled)
@@ -932,7 +1023,7 @@ def _on_toggle_client(on):
         asyncio.ensure_future(orch.set_session_advertising(enabled))
     if settings is not None:
         settings.set("client_enabled", enabled)
-    logger.info("remote mic/session plane -> %s", "on" if enabled else "off")
+    logger.info("remote mic/session plane -> %s sender=%s", "on" if enabled else "off", sender_ok)
     _on_publish()
 
 
@@ -1908,9 +1999,13 @@ async def main():
             on_client_toggle=_on_toggle_client,
         )
         session_plane.install()
-        session_plane.set_enabled(bool(settings.get("client_enabled", False)))
-        await orch.set_session_advertising(bool(settings.get("client_enabled", False)))
-        _boot_milestone("session_plane.ready", enabled=bool(settings.get("client_enabled", False)))
+        _boot_remote_mic_enabled = bool(settings.get("client_enabled", False))
+        if _boot_remote_mic_enabled:
+            _on_toggle_client(True)
+        else:
+            session_plane.set_enabled(False)
+            await orch.set_session_advertising(False)
+        _boot_milestone("session_plane.ready", enabled=_boot_remote_mic_enabled)
     except Exception as e:
         session_plane = None
         _boot_milestone("session_plane.disabled", error=type(e).__name__)
