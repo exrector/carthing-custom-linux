@@ -46,6 +46,8 @@ class NowPlayingScreen(Screen):
         self.state = state
 
     def on_input(self, event):
+        if event == Input.BTN_1:
+            self.emit("remote_mic_toggle"); return True
         if event in (Input.PRESS, Input.BTN_4):
             self.emit("media_play_pause"); return True
         if event == Input.ENCODER_CW:
@@ -111,6 +113,18 @@ class NowPlayingScreen(Screen):
         if artist:
             y += 10
             self._draw_artist_line(img, draw, artist, y)
+        mic_state = str(getattr(self.state, "remote_mic_state", "off") or "off")
+        if mic_state != "off":
+            message = str(getattr(self.state, "remote_mic_message", "") or "Mac mic ready")
+            color = T.STATUS_OK if mic_state in ("ready", "listening") else T.STATUS_WARN
+            C.text_centered(
+                draw,
+                C.truncate(draw, message, T.font(T.SZ_SMALL), T.CONTENT_W),
+                T.font(T.SZ_SMALL),
+                color,
+                T.STATUSBAR_TOP - 42,
+                cx=T.CONTENT_CX,
+            )
         return img
 
 
@@ -713,16 +727,14 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
-            # [CLAUDE 2026-06-03] «Добавить устройство» убрано — сопряжение запускается
-            # отдельной кнопкой [Сопряжение] в баре Routes, дублировать в настройках не нужно.
+            {"key": "add_iphone", "label": "Добавить iPhone"},
+            {"key": "remote_mic_toggle", "label": "Микрофон Mac"},
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
                 # статическая заглушка: живой render-путь display строит единые
                 # строки «− значение +» (DISPLAY_ADJUST ниже)
                 ("brightness", "Яркость"),
             ]},
-            {"key": "mode", "label": "Режим", "children": []},
-            {"key": "client_toggle", "label": "Клиент"},
             {"key": "power_off", "label": "Отключение USB", "children": []},
             {"key": "about", "label": "О системе"},
         ]
@@ -853,16 +865,12 @@ class SettingsScreen(Screen):
 
     def _visible(self):
         """Flatten to rows: (level, key, label, expandable, expanded)."""
-        import operation_mode as _om
-        cur_mode = getattr(self.state, "operation_mode", _om.DEFAULT) if self.state else _om.DEFAULT
         rows = []
         for it in self.items:
             has_children = "children" in it
             plabel = it["label"]
-            if it["key"] == "mode":          # [CLAUDE 2026-06-13] показываем активный режим на самом пункте
-                plabel = f'{it["label"]}: {_om.label(cur_mode)}'
-            elif it["key"] == "client_toggle":
-                on = bool(getattr(self.state, "client_enabled", False)) if self.state else False
+            if it["key"] == "remote_mic_toggle":
+                on = bool(getattr(self.state, "remote_mic_enabled", False)) if self.state else False
                 plabel = f'{it["label"]}: {"Вкл" if on else "Выкл"}'
             rows.append((0, it["key"], plabel, has_children, it["key"] in self.expanded, None))
             if has_children and it["key"] in self.expanded:

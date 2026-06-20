@@ -83,8 +83,8 @@ class GuiController:
             DRMDisplayAdapter(display), screens,
             status_bar=StatusBar(), anim=AnimDriver(),
             state=self.app_state, on_intent=self._nav_intent,
-            show_dots=True,                        # [CLAUDE] 3 точки-индикатора: ‹Маршруты · Play Now · Уведомления›
-            nav_order=[ROUTER, HOME, NOTIF],        # [CLAUDE 2026-06-03] слева-направо: Маршруты | Play Now | Уведомления
+            show_dots=True,
+            nav_order=[HOME, NOTIF],
             pairing_modal=PairingModal(emit=emit),
         )
         self.app_state.active_desktop = HOME
@@ -147,15 +147,19 @@ class GuiController:
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
+        if intent == "remote_mic_toggle":
+            self.dispatcher.dispatch(intent, payload)
+            self.compositor.render()
+            return
         if intent in (
             "route_input_select", "route_output_select", "route_step",
             "route_transport_select", "route_next", "route_back", "route_check",
         ):
-            self.dispatcher.dispatch(intent, payload)
+            logger.info("minimal PlayNow branch: route UI intent ignored: %s", intent)
             self.compositor.render()
             return
         if intent == "route_activate":
-            self.dispatcher.dispatch(intent, payload)
+            logger.info("minimal PlayNow branch: route activation ignored")
             self.compositor.render()
             return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
@@ -364,9 +368,7 @@ class GuiController:
             self._handle_back()
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
-            # [CLAUDE 2026-06-03] Горизонталь: [Маршруты] <- Play Now -> [Уведомления].
-            # Настройки больше НЕ свайп-вью — вход по круглой кнопке в Routes (intent open_settings).
-            order = [ROUTER, HOME, NOTIF]
+            order = [HOME, NOTIF]
             if self.compositor.active in order:
                 i = order.index(self.compositor.active)
                 j = max(0, min(len(order) - 1, i + (1 if event == Input.SWIPE_RIGHT else -1)))
@@ -376,8 +378,6 @@ class GuiController:
                     # (новый въезжает слева, текущий уходит вправо) = direction -1.
                     direction = -1 if event == Input.SWIPE_RIGHT else 1
                     self.compositor.animate_switch(target, direction)
-                    if target == ROUTER:
-                        self._enter_route_view()
                     self._ensure_anim_task()
             return
         # Средние свайпы вверх/вниз (и энкодер) -> прокрутка активного вью.
@@ -425,13 +425,16 @@ class GuiController:
         if a.iphone.connected and not self._prev_iphone_connected:
             a.active_desktop = HOME                 # подключился iPhone -> на home
         self._prev_iphone_connected = a.iphone.connected
-        # [CLAUDE 2026-06-03] После создания пары (сканер закрылся: pairing_mode True->False)
-        # возвращаемся на view Входы/Выходы (Routes), а НЕ на главный. Ставится ПОСЛЕ iPhone-флипа,
-        # чтобы перебить «подключился iPhone -> HOME», случившийся во время сопряжения.
         pm = bool(getattr(a, "pairing_mode", False))
         if self._prev_pairing_mode and not pm:
-            a.active_desktop = ROUTER
+            a.active_desktop = HOME
         self._prev_pairing_mode = pm
+        remote_mic = dict(getattr(model, "remote_mic", {}) or {})
+        a.set_remote_mic(
+            bool(remote_mic.get("enabled", getattr(model, "client_enabled", False))),
+            state=remote_mic.get("state") or ("ready" if getattr(model, "client_enabled", False) else "off"),
+            message=remote_mic.get("message") or "",
+        )
         if a.iphone.connected:
             if s.title != a.iphone.title:          # смена трека -> сбросить локальный «лайк»
                 a.iphone.liked = False
@@ -526,13 +529,13 @@ class GuiController:
         self.show_screen(SESSIONS)
 
     def show_router_screen(self):
-        self.show_screen(ROUTER)
+        self.show_home()
 
     def show_transfer_screen(self):
         self.show_router_screen()
 
     def show_mac_screen(self):
-        self.show_screen(MAC)
+        self.show_home()
 
     def show_home(self):
         self.show_screen(HOME)
