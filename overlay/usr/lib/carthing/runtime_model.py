@@ -92,6 +92,12 @@ class RuntimeModel:
         self.speaker_connected = False
         self.speakers = []
         self.session_peers = []
+        self.remote_mic = {
+            "enabled": False,
+            "state": "off",
+            "transport": "ctsp",
+            "message": "Микрофон Mac выключен",
+        }
         self.transfer_active = False
         # ControlRoute: кто рулит источником (local/speaker_remote -> source).
         self.control_routes = []             # list[(controller, source)]
@@ -186,6 +192,16 @@ class RuntimeModel:
     def set_resource_policy(self, policy=None):
         self.resource_policy = dict(policy or {})
 
+    def set_remote_mic(self, enabled, state=None, message=None, transport="ctsp"):
+        enabled = bool(enabled)
+        self.client_enabled = enabled
+        self.remote_mic = {
+            "enabled": enabled,
+            "state": str(state or ("ready" if enabled else "off")),
+            "transport": str(transport or "ctsp"),
+            "message": str(message or ("Mac ждёт голосовой канал" if enabled else "Микрофон Mac выключен")),
+        }
+
     # ── уведомления (зеркало iPhone) ─────────────────────────────────────────
     def add_notification(self, uid, app, title, body=""):
         # title = содержание (у Напоминаний — сам текст; у Сообщений — отправитель);
@@ -219,6 +235,7 @@ class RuntimeModel:
             "speaker": {"connected": self.speaker_connected, "name": self.speaker_name},
             "speakers": list(self.speakers),
             "session_peers": list(self.session_peers),
+            "remote_mic": dict(self.remote_mic),
             "route": {
                 "name": self.route_name,
                 "input": self.route_input,

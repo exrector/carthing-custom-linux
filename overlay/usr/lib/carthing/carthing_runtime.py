@@ -906,20 +906,33 @@ def _on_toggle_notif_blink(on):
 
 
 def _on_toggle_client(on):
-    # 2026-06-18 owner: Client ON/OFF is a product setting for session/client
-    # plane only. It does not switch Play Now/Commutator and does not touch the
-    # media/audio path. CTSP/GATT/L2CAP session visibility is gated here.
+    # Minimal PlayNow branch: the old CTSP client toggle is now the user-visible
+    # "Mac microphone" switch. It exposes the session plane and publishes mic
+    # lifecycle state, but the actual HFP/SCO audio adapter is still a later
+    # transport implementation, not faked here.
     enabled = bool(on)
     if gui is not None:
-        gui.app_state.client_enabled = enabled
-    model.client_enabled = enabled
+        gui.app_state.set_remote_mic(
+            enabled,
+            state="ready" if enabled else "off",
+            message="Mac ждёт голосовой канал" if enabled else "Микрофон Mac выключен",
+        )
+    model.set_remote_mic(
+        enabled,
+        state="ready" if enabled else "off",
+        message=(
+            "Session plane включён; HFP/SCO audio adapter ещё не подключён"
+            if enabled else
+            "Микрофон Mac выключен"
+        ),
+    )
     if session_plane is not None:
         session_plane.set_enabled(enabled)
     if orch is not None:
         asyncio.ensure_future(orch.set_session_advertising(enabled))
     if settings is not None:
         settings.set("client_enabled", enabled)
-    logger.info("session client plane -> %s", "on" if enabled else "off")
+    logger.info("remote mic/session plane -> %s", "on" if enabled else "off")
     _on_publish()
 
 
