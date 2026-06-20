@@ -95,7 +95,7 @@ class RuntimeModel:
         self.remote_mic = {
             "enabled": False,
             "state": "off",
-            "transport": "ctsp",
+            "transport": "none",
             "message": "Микрофон Mac выключен",
         }
         self.transfer_active = False
@@ -192,13 +192,13 @@ class RuntimeModel:
     def set_resource_policy(self, policy=None):
         self.resource_policy = dict(policy or {})
 
-    def set_remote_mic(self, enabled, state=None, message=None, transport="ctsp"):
+    def set_remote_mic(self, enabled, state=None, message=None, transport="none"):
         enabled = bool(enabled)
         self.client_enabled = enabled
         self.remote_mic = {
             "enabled": enabled,
             "state": str(state or ("ready" if enabled else "off")),
-            "transport": str(transport or "ctsp"),
+            "transport": str(transport or "none"),
             "message": str(message or ("Mac ждёт голосовой канал" if enabled else "Микрофон Mac выключен")),
         }
 

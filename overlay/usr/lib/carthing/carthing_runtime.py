@@ -929,6 +929,10 @@ def _remote_mic_sender_running():
     return remote_mic_process is not None and remote_mic_process.poll() is None
 
 
+def _remote_mic_transport(enabled):
+    return "usb_ncm_tcp" if enabled and _remote_mic_sender_running() else "none"
+
+
 async def _remote_mic_sender_monitor(process):
     await asyncio.sleep(1.0)
     if process is not remote_mic_process or process.poll() is None:
@@ -943,6 +947,7 @@ async def _remote_mic_sender_monitor(process):
         True,
         state="unavailable",
         message=f"remote mic sender exited rc={process.returncode}",
+        transport="none",
     )
     logger.warning("remote mic sender exited early: rc=%s", process.returncode)
     _on_publish()
@@ -1002,7 +1007,7 @@ def _on_toggle_client(on):
         _stop_remote_mic_sender()
     state = "listening" if enabled and sender_ok else ("unavailable" if enabled else "off")
     ui_message = (
-        "Говорите: Car Thing → Mac"
+        "USB/NCM fallback -> Mac"
         if enabled and sender_ok else
         ("Mac agent недоступен" if enabled else "Микрофон Mac выключен")
     )
@@ -1015,7 +1020,8 @@ def _on_toggle_client(on):
     model.set_remote_mic(
         enabled,
         state=state,
-        message="USB/NCM PCM -> macOS Loopback" if enabled and sender_ok else ui_message,
+        message="USB/NCM PCM -> macOS Loopback fallback" if enabled and sender_ok else ui_message,
+        transport=_remote_mic_transport(enabled),
     )
     if session_plane is not None:
         session_plane.set_enabled(enabled)
@@ -1122,10 +1128,12 @@ def _sync_model_route_selection():
         app_state = gui.app_state
         model.route_input = str(getattr(app_state, "route_input", "") or "")
         model.route_output = str(getattr(app_state, "active_route_output", "") or "")
+        mic_enabled = bool(getattr(app_state, "remote_mic_enabled", getattr(app_state, "client_enabled", False)))
         model.set_remote_mic(
-            bool(getattr(app_state, "remote_mic_enabled", getattr(app_state, "client_enabled", False))),
+            mic_enabled,
             state=getattr(app_state, "remote_mic_state", None),
             message=getattr(app_state, "remote_mic_message", None),
+            transport=_remote_mic_transport(mic_enabled),
         )
         model.route_builder = _route_builder_snapshot(app_state)
     except Exception:
@@ -1823,6 +1831,7 @@ def _init_gui_surface():
             model.set_remote_mic(
                 gui.app_state.client_enabled,
                 state="ready" if gui.app_state.client_enabled else "off",
+                transport="none",
             )
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
@@ -1855,6 +1864,7 @@ async def main():
     model.set_remote_mic(
         _remote_mic_boot_enabled,
         state="ready" if _remote_mic_boot_enabled else "off",
+        transport="none",
     )
     from resource_policy import RuntimeResourcePolicy
     resource_policy = RuntimeResourcePolicy(settings=settings, hw_caps=hw_caps)
@@ -1931,6 +1941,7 @@ async def main():
             model.set_remote_mic(
                 app_state.client_enabled,
                 state="ready" if app_state.client_enabled else "off",
+                transport="none",
             )
             model.set_operation_mode(
                 app_state.operation_mode,
