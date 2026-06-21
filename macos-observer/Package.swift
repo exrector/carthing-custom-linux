@@ -23,6 +23,7 @@ let package = Package(
         .executable(name: "CarThingObserver", targets: ["ObserverApp"]),
         // ВРЕМЕННЫЙ CLI для loopback-проб связки клиент-сервер (см. MANIFEST.md).
         .executable(name: "CTSPProbe", targets: ["CTSPProbe"]),
+        .executable(name: "CarThingBTAudioCap", targets: ["CarThingBTAudioCap"]),
         .library(name: "ProtocolCore", targets: ["ProtocolCore"]),
         .library(name: "DeviceRegistry", targets: ["DeviceRegistry"]),
         .library(name: "SessionState", targets: ["SessionState"]),
@@ -80,6 +81,19 @@ let package = Package(
             dependencies: ["ProtocolCore", "LinkKit", "SessionState", "AudioPipeline"]
         ),
 
+        // audiocap-compatible source for voice-assistant: BLE CTSP input, local TTS playback.
+        .executableTarget(
+            name: "CarThingBTAudioCap",
+            dependencies: ["TransportCore", "ProtocolCore", "SessionState"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Sources/ObserverApp/Info.plist",
+                ])
+            ]
+        ),
         // Headless-тесты кодека CTSP (запускаются без устройства и без BT).
         .testTarget(
             name: "ProtocolCoreTests",
