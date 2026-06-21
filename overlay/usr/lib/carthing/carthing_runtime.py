@@ -934,23 +934,33 @@ def _remote_mic_transport(enabled):
 
 
 async def _remote_mic_sender_monitor(process):
+    global remote_mic_process
     await asyncio.sleep(1.0)
     if process is not remote_mic_process or process.poll() is None:
         return
-    if gui is not None and bool(getattr(gui.app_state, "remote_mic_enabled", False)):
+    still_enabled = bool(
+        (gui is not None and getattr(gui.app_state, "remote_mic_enabled", False))
+        or (settings is not None and settings.get("client_enabled", False))
+    )
+    if process is remote_mic_process:
+        remote_mic_process = None
+    if gui is not None and still_enabled:
         gui.app_state.set_remote_mic(
             True,
-            state="unavailable",
-            message="Mac agent недоступен",
+            state="reconnecting",
+            message="Переподключаю Mac mic",
         )
     model.set_remote_mic(
         True,
-        state="unavailable",
+        state="reconnecting" if still_enabled else "unavailable",
         message=f"remote mic sender exited rc={process.returncode}",
         transport="none",
     )
     logger.warning("remote mic sender exited early: rc=%s", process.returncode)
     _on_publish()
+    if still_enabled:
+        retry_sec = float(os.environ.get("CARTHING_MIC_RETRY_SEC", "2.0"))
+        asyncio.get_event_loop().call_later(retry_sec, _start_remote_mic_sender)
 
 
 def _start_remote_mic_sender():
