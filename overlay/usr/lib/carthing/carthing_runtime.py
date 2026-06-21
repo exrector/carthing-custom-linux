@@ -935,9 +935,12 @@ def _remote_mic_transport(enabled):
 
 async def _remote_mic_sender_monitor(process):
     global remote_mic_process
-    await asyncio.sleep(1.0)
-    if process is not remote_mic_process or process.poll() is None:
-        return
+    while True:
+        await asyncio.sleep(1.0)
+        if process is not remote_mic_process:
+            return
+        if process.poll() is not None:
+            break
     still_enabled = bool(
         (gui is not None and getattr(gui.app_state, "remote_mic_enabled", False))
         or (settings is not None and settings.get("client_enabled", False))
