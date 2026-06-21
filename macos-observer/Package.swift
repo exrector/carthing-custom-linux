@@ -24,6 +24,7 @@ let package = Package(
         // ВРЕМЕННЫЙ CLI для loopback-проб связки клиент-сервер (см. MANIFEST.md).
         .executable(name: "CTSPProbe", targets: ["CTSPProbe"]),
         .executable(name: "CTSPBluetoothProbe", targets: ["CTSPBluetoothProbe"]),
+        .executable(name: "CarThingBTAudioCap", targets: ["CarThingBTAudioCap"]),
         .library(name: "ProtocolCore", targets: ["ProtocolCore"]),
         .library(name: "DeviceRegistry", targets: ["DeviceRegistry"]),
         .library(name: "SessionState", targets: ["SessionState"]),
@@ -85,6 +86,20 @@ let package = Package(
         .executableTarget(
             name: "CTSPBluetoothProbe",
             dependencies: ["TransportCore", "ProtocolCore", "SessionState", "AudioPipeline"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Sources/ObserverApp/Info.plist",
+                ])
+            ]
+        ),
+
+        // audiocap-compatible source for voice-assistant: BLE CTSP input, local TTS playback.
+        .executableTarget(
+            name: "CarThingBTAudioCap",
+            dependencies: ["TransportCore", "ProtocolCore", "SessionState"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
