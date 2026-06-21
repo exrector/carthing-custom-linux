@@ -13,9 +13,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import struct
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app_state import normalize_address
 from bumble.core import UUID
@@ -41,7 +42,13 @@ T_CAPABILITIES = 0x02
 T_STATUS = 0x03
 T_ROUTE_STATE = 0x04
 T_COMMAND = 0x05
+T_AUDIO_PCM16 = 0x06
 T_ERROR = 0x08
+
+try:
+    from remote_mic_sender import AlsaPcmCapture
+except Exception:  # pragma: no cover - device runtime fallback only
+    AlsaPcmCapture = None
 
 
 @dataclass
@@ -49,9 +56,11 @@ class SessionConnector:
     address: str
     connection: object | None = None
     channel: object | None = None
+    mic_task: object | None = None
     connected: bool = False
     last_seen: float = 0.0
     last_error: str = ""
+    rx_buffer: bytearray = field(default_factory=bytearray)
 
 
 @dataclass
@@ -139,6 +148,9 @@ class SessionPlaneService:
 
     def set_enabled(self, enabled: bool):
         self.enabled = bool(enabled)
+        if not self.enabled:
+            for runtime in self._runtimes.values():
+                self._stop_mic(runtime)
         self._sync_model()
         self._notify_status()
 
@@ -189,6 +201,7 @@ class SessionPlaneService:
             return
         runtime.connector.connection = None
         runtime.connector.channel = None
+        self._stop_mic(runtime)
         runtime.connector.connected = False
         try:
             self.state.note_peer_presence(
@@ -234,11 +247,35 @@ class SessionPlaneService:
 
     def _on_channel_data(self, runtime, channel, data: bytes):
         runtime.connector.last_seen = time.time()
-        if not data.startswith(CTSP_MAGIC) or len(data) < 16:
-            runtime.connector.last_error = "bad_ctsp_frame"
-            self._write(channel, T_ERROR, b"bad_ctsp_frame")
-            self._sync_model()
-            return
+        runtime.connector.rx_buffer.extend(data)
+        while runtime.connector.rx_buffer:
+            buffer = runtime.connector.rx_buffer
+            magic_at = buffer.find(CTSP_MAGIC)
+            if magic_at < 0:
+                buffer.clear()
+                runtime.connector.last_error = "bad_ctsp_frame"
+                self._write(channel, T_ERROR, b"bad_ctsp_frame")
+                self._sync_model()
+                return
+            if magic_at > 0:
+                del buffer[:magic_at]
+            if len(buffer) < 16:
+                return
+            payload_len = struct.unpack(">I", buffer[12:16])[0]
+            frame_len = 16 + payload_len
+            if payload_len > 65536:
+                buffer.clear()
+                runtime.connector.last_error = "ctsp_frame_too_large"
+                self._write(channel, T_ERROR, b"ctsp_frame_too_large")
+                self._sync_model()
+                return
+            if len(buffer) < frame_len:
+                return
+            frame = bytes(buffer[:frame_len])
+            del buffer[:frame_len]
+            self._handle_frame(runtime, channel, frame)
+
+    def _handle_frame(self, runtime, channel, data: bytes):
         frame_type = data[5]
         seq = struct.unpack(">I", data[8:12])[0]
         if frame_type == T_HELLO:
@@ -251,9 +288,16 @@ class SessionPlaneService:
             self._write(channel, T_ROUTE_STATE, self._route_state_bytes(), seq=seq)
         elif frame_type == T_COMMAND:
             payload_len = struct.unpack(">I", data[12:16])[0]
-            payload = data[16:16 + payload_len]
+            payload = data[16:16 + payload_len].strip()
             logger.info("session command from %s: %r", runtime.address, payload[:80])
-            self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            if payload == b"start_mic":
+                self._start_mic(runtime, channel)
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            elif payload == b"stop_mic":
+                self._stop_mic(runtime)
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            else:
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
         else:
             self._write(channel, T_ERROR, b"unsupported_frame_type", seq=seq)
 
@@ -268,6 +312,85 @@ class SessionPlaneService:
         enabled = bool(bytes(value or b"\x00")[0])
         logger.info("session client_toggle via GATT -> %s", enabled)
         self.on_client_toggle(enabled)
+
+    def _start_mic(self, runtime, channel):
+        self._stop_mic(runtime)
+        if AlsaPcmCapture is None:
+            runtime.connector.last_error = "mic_capture_unavailable"
+            self._write(channel, T_ERROR, b"mic_capture_unavailable")
+            self._sync_model()
+            return
+        runtime.connector.mic_task = asyncio.create_task(self._mic_loop(runtime, channel))
+        logger.info("session remote mic started: peer=%s", runtime.address)
+        self._sync_model()
+
+    def _stop_mic(self, runtime):
+        task = getattr(runtime.connector, "mic_task", None)
+        runtime.connector.mic_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    async def _mic_loop(self, runtime, channel):
+        device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
+        source_rate = int(os.environ.get("CARTHING_BT_MIC_SOURCE_RATE", "48000"))
+        source_channels = int(os.environ.get("CARTHING_BT_MIC_SOURCE_CHANNELS", "2"))
+        target_rate = 16000
+        read_frames = int(os.environ.get("CARTHING_BT_MIC_READ_FRAMES", "960"))
+        cap = AlsaPcmCapture(device, source_rate, source_channels)
+        try:
+            info = cap.open()
+            logger.info(
+                "session remote mic capture open: peer=%s device=%s rate=%s channels=%s info=%s",
+                runtime.address,
+                device,
+                source_rate,
+                source_channels,
+                info,
+            )
+            while getattr(runtime.connector, "channel", None) is channel:
+                raw = await asyncio.to_thread(cap.read, read_frames)
+                if not raw:
+                    await asyncio.sleep(0.01)
+                    continue
+                pcm16 = self._downmix_resample_16k(raw, source_rate, source_channels, target_rate)
+                if pcm16:
+                    self._write(channel, T_AUDIO_PCM16, pcm16)
+                await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            runtime.connector.last_error = f"mic_capture_error:{type(exc).__name__}"
+            logger.warning("session remote mic failed: peer=%s error=%s", runtime.address, exc)
+            self._write(channel, T_ERROR, runtime.connector.last_error.encode("utf-8"))
+            self._sync_model()
+        finally:
+            try:
+                cap.close()
+            except Exception:
+                pass
+            if getattr(runtime.connector, "mic_task", None) is asyncio.current_task():
+                runtime.connector.mic_task = None
+            logger.info("session remote mic stopped: peer=%s", runtime.address)
+
+    @staticmethod
+    def _downmix_resample_16k(raw: bytes, source_rate: int, channels: int, target_rate: int) -> bytes:
+        if channels <= 0 or source_rate <= 0:
+            return b""
+        bytes_per_frame = channels * 2
+        frame_count = len(raw) // bytes_per_frame
+        if frame_count <= 0:
+            return b""
+        step = max(1, int(round(source_rate / target_rate)))
+        out = bytearray()
+        for frame in range(0, frame_count, step):
+            base = frame * bytes_per_frame
+            total = 0
+            for ch in range(channels):
+                offset = base + ch * 2
+                total += struct.unpack_from("<h", raw, offset)[0]
+            sample = int(total / channels)
+            out += struct.pack("<h", max(-32768, min(32767, sample)))
+        return bytes(out)
 
     def _capabilities_bytes(self) -> bytes:
         return json.dumps({
@@ -287,10 +410,15 @@ class SessionPlaneService:
             runtime.address for runtime in self._runtimes.values()
             if runtime.connector.connected or runtime.connector.channel is not None
         ]
+        streaming = [
+            runtime.address for runtime in self._runtimes.values()
+            if runtime.connector.mic_task is not None
+        ]
         return json.dumps({
             "client_enabled": bool(self.enabled),
             "psm": int(self.psm),
             "connected": connected,
+            "streaming_mic": streaming,
         }, separators=(",", ":")).encode("utf-8")
 
     def _route_state_bytes(self) -> bytes:

@@ -26,6 +26,7 @@ public final class TransportCore: NSObject {
     private var pendingPSM: UInt16?
     private var bootstrapEmitted = false
     private var clientEnabled = false
+    private var l2capOpening = false
     private var seqCounter: UInt32 = 0
 
     // Прочитанные при bootstrap значения.
@@ -138,6 +139,7 @@ public final class TransportCore: NSObject {
             ch.outputStream.remove(from: .main, forMode: .default)
         }
         channel = nil
+        l2capOpening = false
         decoder.reset()
         outQueue.removeAll(keepingCapacity: true)
     }
@@ -162,7 +164,7 @@ public final class TransportCore: NSObject {
             emit(.log("Client ON: ждём current_psm"))
             return
         }
-        guard channel == nil else { return }
+        guard channel == nil, !l2capOpening else { return }
         openL2CAP(psm: psm)
     }
 }
@@ -291,6 +293,7 @@ extension TransportCore: CBPeripheralDelegate {
 
     private func openL2CAP(psm: UInt16) {
         guard let peripheral else { return }
+        l2capOpening = true
         emit(.phaseChanged(.l2capOpening))
         emit(.log("openL2CAPChannel psm=\(psm)"))
         peripheral.openL2CAPChannel(CBL2CAPPSM(psm))
@@ -300,11 +303,13 @@ extension TransportCore: CBPeripheralDelegate {
                           didOpen channel: CBL2CAPChannel?,
                           error: Error?) {
         if let error {
+            l2capOpening = false
             emit(.phaseChanged(.failed))
             emit(.error("openL2CAP: \(error.localizedDescription)"))
             return
         }
         guard let channel else { return }
+        l2capOpening = false
         self.channel = channel
         channel.inputStream.delegate = self
         channel.outputStream.delegate = self

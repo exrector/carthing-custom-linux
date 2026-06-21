@@ -23,6 +23,7 @@ let package = Package(
         .executable(name: "CarThingObserver", targets: ["ObserverApp"]),
         // ВРЕМЕННЫЙ CLI для loopback-проб связки клиент-сервер (см. MANIFEST.md).
         .executable(name: "CTSPProbe", targets: ["CTSPProbe"]),
+        .executable(name: "CTSPBluetoothProbe", targets: ["CTSPBluetoothProbe"]),
         .library(name: "ProtocolCore", targets: ["ProtocolCore"]),
         .library(name: "DeviceRegistry", targets: ["DeviceRegistry"]),
         .library(name: "SessionState", targets: ["SessionState"]),
@@ -78,6 +79,20 @@ let package = Package(
         .executableTarget(
             name: "CTSPProbe",
             dependencies: ["ProtocolCore", "LinkKit", "SessionState", "AudioPipeline"]
+        ),
+
+        // Headless BLE probe: scan/connect/GATT bootstrap/L2CAP CoC/start_mic.
+        .executableTarget(
+            name: "CTSPBluetoothProbe",
+            dependencies: ["TransportCore", "ProtocolCore", "SessionState", "AudioPipeline"],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-sectcreate",
+                    "-Xlinker", "__TEXT",
+                    "-Xlinker", "__info_plist",
+                    "-Xlinker", "Sources/ObserverApp/Info.plist",
+                ])
+            ]
         ),
 
         // Headless-тесты кодека CTSP (запускаются без устройства и без BT).

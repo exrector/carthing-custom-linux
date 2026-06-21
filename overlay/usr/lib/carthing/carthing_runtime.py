@@ -1012,15 +1012,16 @@ def _stop_remote_mic_sender():
 
 def _on_toggle_client(on):
     # Minimal PlayNow branch: the old CTSP client toggle is now the user-visible
-    # "Mac microphone" switch. The first working transport is USB/NCM TCP PCM
-    # into the macOS Loopback agent; CTSP remains the peer/session state plane.
+    # "Mac microphone" switch. It must default to the Bluetooth session plane,
+    # not to the USB/NCM fallback; the fallback is a lab escape hatch only.
     enabled = bool(on)
-    sender_ok = _start_remote_mic_sender() if enabled else True
-    if not enabled:
+    usb_fallback = os.environ.get("CARTHING_USB_REMOTE_MIC_ENABLE", "0") == "1"
+    sender_ok = _start_remote_mic_sender() if enabled and usb_fallback else True
+    if not enabled or not usb_fallback:
         _stop_remote_mic_sender()
     state = "listening" if enabled and sender_ok else ("unavailable" if enabled else "off")
     ui_message = (
-        "USB/NCM fallback -> Mac"
+        ("USB/NCM fallback -> Mac" if usb_fallback else "Bluetooth mic session")
         if enabled and sender_ok else
         ("Mac agent недоступен" if enabled else "Микрофон Mac выключен")
     )
@@ -1033,8 +1034,8 @@ def _on_toggle_client(on):
     model.set_remote_mic(
         enabled,
         state=state,
-        message="USB/NCM PCM -> macOS Loopback fallback" if enabled and sender_ok else ui_message,
-        transport=_remote_mic_transport(enabled),
+        message=ui_message,
+        transport=_remote_mic_transport(enabled) if usb_fallback else ("ble_l2cap_coc" if enabled else "none"),
     )
     if session_plane is not None:
         session_plane.set_enabled(enabled)
