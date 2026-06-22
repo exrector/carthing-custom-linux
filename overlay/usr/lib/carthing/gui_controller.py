@@ -21,6 +21,7 @@ from ui_screen import Compositor, DRMDisplayAdapter, Input
 from ui_statusbar import StatusBar
 from ui_anim import AnimDriver
 from screens import (
+    AssistantScreen,
     MacOSScreen,
     NowPlayingScreen,
     SettingsScreen,
@@ -31,7 +32,7 @@ from screens import (
 
 logger = logging.getLogger(__name__)
 
-HOME, SETTINGS, NOTIF, SESSIONS, ROUTER, MAC = 0, 1, 2, 3, 4, 5
+HOME, SETTINGS, NOTIF, SESSIONS, ROUTER, MAC, ASSISTANT = 0, 1, 2, 3, 4, 5, 6
 MODES = SESSIONS      # compatibility alias
 TRANSFER = ROUTER    # compatibility alias
 
@@ -78,13 +79,14 @@ class GuiController:
             RouteBuilderScreen(emit=emit),                                         # 3 (был SessionsScreen — режимы удалены; слот сохранён, чтобы не сдвигать индексы)
             RouteBuilderScreen(emit=emit),                                         # 4
             MacOSScreen(emit=emit),                                                # 5 (режим macOS)
+            AssistantScreen(emit=emit),                                             # 6 (отдельный view ассистента)
         ]
         self.compositor = Compositor(
             DRMDisplayAdapter(display), screens,
             status_bar=StatusBar(), anim=AnimDriver(),
             state=self.app_state, on_intent=self._nav_intent,
             show_dots=True,
-            nav_order=[HOME, NOTIF],
+            nav_order=[ASSISTANT, HOME, NOTIF],
             pairing_modal=PairingModal(emit=emit),
         )
         self.app_state.active_desktop = HOME
@@ -118,7 +120,9 @@ class GuiController:
             self.compositor.render()
             return
         if intent == StatusBar.INTENT_ASSISTANT:
-            logger.info("assistant tap (Фаза 5 — логика позже)")
+            self._push_view(self.compositor.active)
+            self.compositor.active = ASSISTANT
+            self.compositor.render()
             return
         if intent == "notif_dismiss":
             self._on_notif_dismiss(payload)         # payload = uid; очистить и на iPhone
@@ -368,7 +372,7 @@ class GuiController:
             self._handle_back()
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
-            order = [HOME, NOTIF]
+            order = [ASSISTANT, HOME, NOTIF]
             if self.compositor.active in order:
                 i = order.index(self.compositor.active)
                 j = max(0, min(len(order) - 1, i + (1 if event == Input.SWIPE_RIGHT else -1)))
