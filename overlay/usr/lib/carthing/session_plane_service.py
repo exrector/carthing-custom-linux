@@ -79,12 +79,21 @@ def _ctsp_frame(frame_type: int, payload: bytes = b"", seq: int = 0, flags: int 
 
 
 class SessionPlaneService:
-    def __init__(self, device, app_state, model, on_change=None, on_client_toggle=None):
+    def __init__(
+        self,
+        device,
+        app_state,
+        model,
+        on_change=None,
+        on_client_toggle=None,
+        on_disconnect=None,
+    ):
         self.device = device
         self.state = app_state
         self.model = model
         self.on_change = on_change or (lambda: None)
         self.on_client_toggle = on_client_toggle or (lambda enabled: None)
+        self.on_disconnect = on_disconnect or (lambda address: None)
         self.enabled = False
         self.psm = 0
         self._server = None
@@ -215,6 +224,12 @@ class SessionPlaneService:
             pass
         self._sync_model()
         self.on_change()
+        try:
+            result = self.on_disconnect(address)
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
+        except Exception as exc:
+            logger.warning("session disconnect callback failed: %s", exc)
 
     def _on_l2cap_channel(self, channel):
         address = normalize_address(getattr(getattr(channel, "connection", None), "peer_address", ""))

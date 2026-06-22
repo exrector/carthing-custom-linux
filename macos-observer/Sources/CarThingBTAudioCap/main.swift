@@ -13,6 +13,7 @@ final class CarThingBTAudioCap {
     private var streaming = false
     private var frames = 0
     private var lastReport = Date()
+    private var scanRetryTimer: Timer?
 
     init() {
         mixer = engine.mainMixerNode
@@ -42,10 +43,13 @@ final class CarThingBTAudioCap {
             fputs("carthing-bt-audiocap: phase=\(phase.rawValue)\n", stderr)
             if phase == .idle, !connected {
                 transport.startScan()
+            } else if phase == .scanning {
+                scheduleScanRetry()
             }
         case .discovered(let peripheral):
             guard !connected else { return }
             connected = true
+            stopScanRetry()
             fputs("carthing-bt-audiocap: discovered name=\"\(peripheral.name)\" rssi=\(peripheral.rssi)\n", stderr)
             transport.stopScan()
             transport.connect(peripheralID: peripheral.id)
@@ -65,6 +69,7 @@ final class CarThingBTAudioCap {
         case .l2capClosed:
             streaming = false
             connected = false
+            stopScanRetry()
             fputs("carthing-bt-audiocap: l2cap_closed\n", stderr)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.transport.startScan()
@@ -78,6 +83,21 @@ final class CarThingBTAudioCap {
         case .bytesIn, .bytesOut:
             break
         }
+    }
+
+    private func scheduleScanRetry() {
+        guard scanRetryTimer == nil else { return }
+        scanRetryTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
+            guard let self, !self.connected else { return }
+            fputs("carthing-bt-audiocap: scan retry\n", stderr)
+            self.transport.stopScan()
+            self.transport.startScan()
+        }
+    }
+
+    private func stopScanRetry() {
+        scanRetryTimer?.invalidate()
+        scanRetryTimer = nil
     }
 
     private func handle(_ frame: CTSPFrame) {

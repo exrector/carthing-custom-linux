@@ -2041,12 +2041,19 @@ async def main():
     try:
         _boot_milestone("session_plane.start")
         from session_plane_service import SessionPlaneService
+
+        def _on_session_disconnect(_address):
+            if orch is not None:
+                return orch.on_disconnect()
+            return None
+
         session_plane = SessionPlaneService(
             device,
             app_state_for_runtime,
             model,
             on_change=_on_publish,
             on_client_toggle=_on_toggle_client,
+            on_disconnect=_on_session_disconnect,
         )
         session_plane.install()
         _boot_remote_mic_enabled = bool(settings.get("client_enabled", False))
