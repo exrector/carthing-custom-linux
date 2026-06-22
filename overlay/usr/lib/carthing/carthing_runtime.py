@@ -1891,6 +1891,31 @@ async def main():
     logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
     _init_gui_surface()
 
+    input_scheduled = False
+
+    def _schedule_gui_input(phase="runtime"):
+        nonlocal input_scheduled
+        if input_scheduled or gui is None:
+            return
+        try:
+            import input_handler
+
+            def _on_input(event):
+                if power is not None:
+                    power.note_activity("input")
+                gui.handle_input(event)
+
+            asyncio.ensure_future(input_handler.start(on_event=_on_input))
+            input_scheduled = True
+            _boot_milestone("input.scheduled", mode="gui", phase=phase)
+        except Exception as e:
+            _boot_milestone("input.disabled", error=type(e).__name__, phase=phase)
+            logger.warning("input disabled: %s", e)
+
+    # Touch/buttons must not wait for Bluetooth. BLE init can block/retry while
+    # the display is already alive, so schedule physical input as soon as GUI exists.
+    _schedule_gui_input("early")
+
     def _configure(device):
         global orch
         _boot_milestone("accessory_orchestrator.import_start")
@@ -2147,20 +2172,7 @@ async def main():
 
     # Физический ввод (энкодер/кнопки/тач) -> GUI (параллельно рендеру).
     if gui is not None:
-        try:
-            import input_handler
-            def _on_input(event):
-                if power is not None:
-                    power.note_activity("input")
-                # [CLAUDE 2026-06-11] кнопка 1 ОСВОБОЖДЕНА: тумблер маршрута переехал
-                # на экранную кнопку (route_activate в нижнем баре Routes).
-                # Headless-режим ниже сохраняет btn_1 (там экрана нет).
-                gui.handle_input(event)
-            asyncio.ensure_future(input_handler.start(on_event=_on_input))
-            _boot_milestone("input.scheduled", mode="gui")
-        except Exception as e:
-            _boot_milestone("input.disabled", error=type(e).__name__)
-            logger.warning("input disabled: %s", e)
+        _schedule_gui_input("late")
     else:
         # Headless: пресет-кнопка 1 = тумблер маршрута (решение владельца 2026-06-10).
         try:
