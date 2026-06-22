@@ -382,7 +382,9 @@ class HfpHandsFreeLab:
             config,
         )
         records[SERVICE_RECORD_DID] = _did_records()
-        records[SERVICE_RECORD_HSP_HS] = _hsp_headset_records()
+        enable_hsp = _bool_env("CARTHING_HFP_ENABLE_HSP", False)
+        if enable_hsp:
+            records[SERVICE_RECORD_HSP_HS] = _hsp_headset_records()
         sds_record = _sds_records(records)
         records[SERVICE_RECORD_SDS] = sds_record
         records[0] = _sdp_zero_handle_records(sds_record)
@@ -407,7 +409,10 @@ class HfpHandsFreeLab:
             DID_VERSION,
             DID_VENDOR_ID_SOURCE,
         )
-        LOG.info("HSP Headset SDP ready: channel=%d", RFCOMM_CHANNEL)
+        if enable_hsp:
+            LOG.info("HSP Headset SDP ready: channel=%d", RFCOMM_CHANNEL)
+        else:
+            LOG.info("HSP Headset SDP disabled for HFP-only macOS probe")
 
     def accept_rfcomm(self, dlc) -> None:
         peer = getattr(getattr(dlc, "multiplexer", None), "connection", None)
