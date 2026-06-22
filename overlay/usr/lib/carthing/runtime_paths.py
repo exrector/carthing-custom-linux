@@ -11,7 +11,10 @@ KEYSTORE_PATH = Path(
     os.environ.get("CAR_THING_KEYSTORE", str(REMOTE_DIR / "keys.json"))
 ).expanduser()
 
-TRANSPORT = os.environ.get("CAR_THING_TRANSPORT", "serial:/dev/ttyS1,3000000")
+TRANSPORT = os.environ.get(
+    "CAR_THING_TRANSPORT",
+    os.environ.get("CARTHING_BT_BUMBLE_TRANSPORT", "hci-socket:0"),
+)
 BD_ADDRESS = os.environ.get("CAR_THING_BD_ADDRESS", "30:E3:D6:00:5F:A4")
 
 EFUSE_USID_PATH = Path(os.environ.get("CARTHING_EFUSE_USID_PATH", "/sys/class/efuse/usid"))
