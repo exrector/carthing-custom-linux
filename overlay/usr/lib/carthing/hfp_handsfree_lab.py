@@ -81,6 +81,8 @@ SERVICE_RECORD_DID = int(os.environ.get("CARTHING_HFP_DID_RECORD", "0x10031"), 0
 SERVICE_RECORD_HSP_HS = int(os.environ.get("CARTHING_HSP_RECORD", "0x10032"), 0)
 SERVICE_RECORD_SDS = int(os.environ.get("CARTHING_HFP_SDS_RECORD", "0x10005"), 0)
 RFCOMM_CHANNEL = int(os.environ.get("CARTHING_HFP_RFCOMM_CHANNEL", "9"))
+RFCOMM_OUTGOING_MAX_FRAME_SIZE = int(os.environ.get("CARTHING_HFP_RFCOMM_MAX_FRAME_SIZE", "2000"))
+RFCOMM_OUTGOING_INITIAL_CREDITS = int(os.environ.get("CARTHING_HFP_RFCOMM_INITIAL_CREDITS", "7"))
 SDP_VERSION_NUMBER_LIST_ATTRIBUTE_ID = 0x0200
 SDP_SERVICE_DATABASE_STATE_ATTRIBUTE_ID = 0x0201
 DID_SPECIFICATION_ID_ATTRIBUTE_ID = 0x0200
@@ -278,6 +280,40 @@ def _hfp_configuration(wideband: bool) -> HfConfiguration:
     )
 
 
+def _hfp_handsfree_records(
+    service_record_handle: int,
+    channel: int,
+    config: HfConfiguration,
+) -> list[ServiceAttribute]:
+    records = list(make_hf_sdp_records(service_record_handle, channel, config))
+    existing_ids = {attribute.id for attribute in records}
+    if SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID not in existing_ids:
+        records.append(
+            ServiceAttribute(
+                SDP_BROWSE_GROUP_LIST_ATTRIBUTE_ID,
+                DataElement.sequence([DataElement.uuid(SDP_PUBLIC_BROWSE_ROOT)]),
+            )
+        )
+    if SDP_LANGUAGE_BASE_ATTRIBUTE_ID_LIST_ATTRIBUTE_ID not in existing_ids:
+        records.append(
+            ServiceAttribute(
+                SDP_LANGUAGE_BASE_ATTRIBUTE_ID_LIST_ATTRIBUTE_ID,
+                DataElement.sequence(
+                    [
+                        DataElement.unsigned_integer_16(0x656E),
+                        DataElement.unsigned_integer_16(0x006A),
+                        DataElement.unsigned_integer_16(0x0100),
+                    ]
+                ),
+            )
+        )
+    if 0x0100 not in existing_ids:
+        records.append(
+            ServiceAttribute(0x0100, DataElement.text_string(b"Car Thing Hands-Free"))
+        )
+    return records
+
+
 def _esco_params_for_codec(codec: AudioCodec) -> dict[str, Any]:
     key = (
         DefaultCodecParameters.ESCO_MSBC_T2
@@ -374,13 +410,15 @@ class HfpHandsFreeLab:
         actual_cod = int(getattr(params, "class_of_device", 0))
         LOG.info("Classic CoD active: 0x%06x", actual_cod)
 
+        enable_hfp = _bool_env("CARTHING_HFP_ENABLE_HFP", True)
         config = _hfp_configuration(self.args.wideband)
         records = dict(self.device.sdp_service_records)
-        records[SERVICE_RECORD_HFP_HF] = make_hf_sdp_records(
-            SERVICE_RECORD_HFP_HF,
-            RFCOMM_CHANNEL,
-            config,
-        )
+        if enable_hfp:
+            records[SERVICE_RECORD_HFP_HF] = _hfp_handsfree_records(
+                SERVICE_RECORD_HFP_HF,
+                RFCOMM_CHANNEL,
+                config,
+            )
         records[SERVICE_RECORD_DID] = _did_records()
         enable_hsp = _bool_env("CARTHING_HFP_ENABLE_HSP", False)
         if enable_hsp:
@@ -396,12 +434,15 @@ class HfpHandsFreeLab:
             raise RuntimeError(f"RFCOMM channel {RFCOMM_CHANNEL} unavailable")
         await self.device.set_connectable(True)
         await self.device.set_discoverable(bool(self.args.discoverable))
-        LOG.info(
-            "HFP HF SDP/RFCOMM ready: channel=%d wideband=%s discoverable=%s",
-            RFCOMM_CHANNEL,
-            self.args.wideband,
-            self.args.discoverable,
-        )
+        if enable_hfp:
+            LOG.info(
+                "HFP HF SDP/RFCOMM ready: channel=%d wideband=%s discoverable=%s",
+                RFCOMM_CHANNEL,
+                self.args.wideband,
+                self.args.discoverable,
+            )
+        else:
+            LOG.info("HFP HF SDP disabled for HSP-only macOS probe")
         LOG.info(
             "HFP DID SDP ready: vendor=0x%04x product=0x%04x version=0x%04x source=0x%04x",
             DID_VENDOR_ID,
@@ -444,7 +485,11 @@ class HfpHandsFreeLab:
             )
             client = RFCOMMClient(connection)
             multiplexer = await client.start()
-            dlc = await multiplexer.open_dlc(channel)
+            dlc = await multiplexer.open_dlc(
+                channel,
+                max_frame_size=RFCOMM_OUTGOING_MAX_FRAME_SIZE,
+                initial_credits=RFCOMM_OUTGOING_INITIAL_CREDITS,
+            )
             LOG.info("outgoing HFP RFCOMM DLC open peer=%s channel=%d", connection.peer_address, channel)
             try:
                 await self.run_hfp_protocol(dlc)

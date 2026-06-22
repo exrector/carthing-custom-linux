@@ -1100,15 +1100,18 @@ class Server:
         # service's attribute values (NOTE: the value search recurses into sequences)
         matching_services = {}
         for handle, service in self.service_records.items():
+            matched_all_uuids = True
             for uuid in search_pattern.value:
                 found = False
                 for attribute in service:
                     if ServiceAttribute.is_uuid_in_value(uuid.value, attribute.value):
                         found = True
                         break
-                if found:
-                    matching_services[handle] = service
+                if not found:
+                    matched_all_uuids = False
                     break
+            if matched_all_uuids:
+                matching_services[handle] = service
 
         return matching_services
 
