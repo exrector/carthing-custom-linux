@@ -311,6 +311,9 @@ class SessionPlaneService:
             elif payload == b"stop_mic":
                 self._stop_mic(runtime)
                 self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            elif payload.startswith(b"text:"):
+                self._show_screen_text(payload[5:])
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
             else:
                 self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
         else:
@@ -344,6 +347,18 @@ class SessionPlaneService:
         runtime.connector.mic_task = None
         if task is not None and not task.done():
             task.cancel()
+
+    def _show_screen_text(self, raw):
+        try:
+            txt = bytes(raw).decode("utf-8", "replace").strip()[:200]
+            if not txt:
+                return
+            self.state.assistant_text = txt
+            self.state.set_remote_mic(True, state="listening", message=txt)
+            self._sync_model()
+            logger.info("session screen text: %r", txt[:60])
+        except Exception as exc:
+            logger.warning("session screen text failed: %s", exc)
 
     async def _mic_loop(self, runtime, channel):
         device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
@@ -462,19 +477,36 @@ class SessionPlaneService:
             return b""
         step = max(1, int(round(source_rate / target_rate)))
         gain = max(0.1, min(float(gain), 12.0))
-        out = bytearray()
-        for frame in range(0, frame_count, step):
-            base = frame * bytes_per_frame
-            samples = []
+        # 1) downmix всех каналов -> моно @source_rate СРЕДНИМ (не maxabs: maxabs
+        #    сшивает куски разных миков и плодит широкополосный треск).
+        unpack = struct.unpack_from
+        inv_ch = 1.0 / channels
+        mono = [0.0] * frame_count
+        for f in range(frame_count):
+            base = f * bytes_per_frame
+            s = 0
             for ch in range(channels):
-                offset = base + ch * 2
-                samples.append(struct.unpack_from("<h", raw, offset)[0])
-            if mix_mode == "maxabs":
-                sample = max(samples, key=lambda s: abs(s))
-            else:
-                sample = int(sum(samples) / channels)
-            sample = int(sample * gain)
-            out += struct.pack("<h", max(-32768, min(32767, sample)))
+                s += unpack("<h", raw, base + ch * 2)[0]
+            mono[f] = s * inv_ch
+        # 2) box-FIR анти-алиас окном 2*step (нуль АЧХ на целевом Nyquist) + хоп step.
+        #    Без него дециммация "каждый 3-й" заворачивает 8-24кГц в речь как шипящий
+        #    пол -> эндпоинтер/Whisper принимают паузу за голос.
+        win = max(1, step * 2)
+        inv_win = 1.0 / win
+        out = bytearray()
+        i = 0
+        limit = frame_count - win
+        while i <= limit:
+            acc = 0.0
+            for k in range(win):
+                acc += mono[i + k]
+            sample = int(acc * inv_win * gain)
+            if sample > 32767:
+                sample = 32767
+            elif sample < -32768:
+                sample = -32768
+            out += struct.pack("<h", sample)
+            i += step
         return bytes(out)
 
     def _capabilities_bytes(self) -> bytes:

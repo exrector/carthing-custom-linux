@@ -465,3 +465,49 @@ Mac: агент при `l2cap_closed`/таймауте сам перескани
 KeepAlive ловит полный краш. ⚠️ Если Mac-процесс умирает грязно (SIGKILL/sleep) без
 дисконнекта — устройство может залипнуть на фантомной LE-сессии и не ре-рекламить;
 лечится self-heal рестартом runtime (kill runtime-py, НЕ btattach; init start).
+
+---
+
+## 16. ✅ ЧАСТЬ 2 ЦЕЛИКОМ: BT-аудио → Whisper → текст на экране (2026-06-25)
+
+Прямой канал без прокладок (НЕТ wake/LLM/TTS/голосовых ответов) работает end-to-end:
+```
+Car Thing мик → BLE L2CAP CoC → агент (TCP :49500) → bt_whisper.py:
+   Silero-VAD эндпоинт → Whisper(ru, + DeepFilterNet) → "text <...>" → агент →
+   T_COMMAND "text:" по L2CAP → device _show_screen_text → set_remote_mic(message)
+   + assistant_text → экран (NowPlaying remote_mic_message / AssistantScreen)
+```
+Результат: короткие осмысленные фразы (0.6–3с), напр. «Ладно.», «даже если не понимаю,
+о чём говорят.» — вместо 12-секундных галлюцинаций до фиксов.
+
+### Ключевые открытия и фиксы
+1. **TCC: CoreBluetooth работает ТОЛЬКО под launchd.** Бинарь, запущенный из шелла/
+   subprocess, падает SIGABRT (TCC: «NSBluetoothAlwaysUsageDescription must be present»),
+   даже со встроенным Info.plist. Поэтому агент = launchd-демон, а потребитель цепляется
+   по TCP. (Вывод: bt_whisper НЕ спавнит агент, а коннектится к :49500.)
+2. **TCC на ~/Documents морозит dyld.** Background-launchd-агент, читающий бинарь из
+   ~/Documents, виснет в `dyld __open` (TCC проверка чтения Documents). Лечилось бы
+   переносом в ~/Library, НО там теряется BT-грант (TCC ключует по пути для ad-hoc).
+   Сейчас бинарь остаётся в `.build/debug` (грант есть), first-launch assessment разовый.
+3. **Агент: TCP-режим** (`CARTHING_BT_TCP_PORT`): отдаёт float32 PCM 16k + принимает
+   строки команд (`text <utf8>` → `T_COMMAND "text:"`). + always-on keepalive RunLoop,
+   unbuffered stderr, чистый дисконнект по SIGTERM (см. §15).
+4. **⭐ Корень галлюцинаций = device-ресемпл (investigation §4.3).** `_downmix_resample_16k`
+   брал «каждый 3-й» сэмпл без анти-алиаса → 8–24кГц заворачивались в речевую полосу как
+   шипящий пол → Silero ВИДЕЛ голос 12с подряд, Whisper галлюцинировал. Фикс (на устройстве
+   нет numpy/scipy — чистый Python): avg-downmix + box-FIR окном `2*step` (нуль АЧХ на
+   целевом Nyquist) + хоп `step`. После — Silero корректно видит тишину, эндпоинтинг точный.
+5. **Device-хук текста:** `_dispatch` T_COMMAND `text:<utf8>` → `_show_screen_text` →
+   `state.assistant_text` + `state.set_remote_mic(True, "listening", message)`.
+
+### Файлы
+- `overlay/usr/lib/carthing/session_plane_service.py` — _show_screen_text + box-FIR ресемпл.
+- `macos-observer/Sources/CarThingBTAudioCap/main.swift` — TCP-режим + text-команда.
+- `macos-observer/launchd/com.carthing.btlink.plist` — `CARTHING_BT_TCP_PORT=49500`.
+- `voice-assistant/bt_whisper.py` — оркестратор (Silero-VAD → Whisper → text), TCP-клиент.
+
+### TODO/known
+- Длинная непрерывная речь без пауз всё ещё копится до MAX_UTT (12с) — осмысленно, но
+  можно резать по тишине/гипотезе. Мик ловит и фоновый звук комнаты (ТВ).
+- assistant_text виден на AssistantScreen; remote_mic_message — мелкой строкой на NowPlaying.
+  Авто-переключение на AssistantScreen при тексте не делалось.
