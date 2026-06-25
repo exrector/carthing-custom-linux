@@ -13,6 +13,9 @@ final class CarThingBTAudioCap {
     private var streaming = false
     private var frames = 0
     private var lastReport = Date()
+    private var scanRetryTimer: Timer?
+    private var signalSources: [DispatchSourceSignal] = []
+    private let headless = ProcessInfo.processInfo.environment["CARTHING_BT_HEADLESS"] == "1"
 
     init() {
         mixer = engine.mainMixerNode
@@ -22,6 +25,7 @@ final class CarThingBTAudioCap {
     }
 
     func start() {
+        setvbuf(stderr, nil, _IONBF, 0)   // без буферизации: видеть логи под launchd (stderr=файл)
         var sampleRate = Int32(16_000).littleEndian
         output.write(Data(bytes: &sampleRate, count: 4))
 
@@ -32,8 +36,34 @@ final class CarThingBTAudioCap {
             fputs("carthing-bt-audiocap: playback engine error: \(error)\n", stderr)
         }
 
-        installCommandReader()
+        if headless {
+            // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
+            // EOF → exit(0); это и был флап). Держим линк, реконнект — внутренний (scanRetry/
+            // l2capClosed). Чистый дисконнект по SIGTERM, чтобы устройство не залипало.
+            installSignalHandlers()
+            // Без source main RunLoop.run() возвращается сразу → процесс выходит, а
+            // CBCentralManager(queue: .main) вообще не включается. Держим RunLoop живым.
+            Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+            fputs("carthing-bt-audiocap: headless link-keeper (stdin reader disabled)\n", stderr)
+        } else {
+            installCommandReader()
+        }
         fputs("carthing-bt-audiocap: ready sample_rate=16000 source=bluetooth_ctsp\n", stderr)
+    }
+
+    private func installSignalHandlers() {
+        for sig in [SIGTERM, SIGINT] {
+            signal(sig, SIG_IGN)
+            let src = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            src.setEventHandler { [weak self] in
+                fputs("carthing-bt-audiocap: signal -> clean disconnect\n", stderr)
+                self?.stopMic()
+                self?.transport.disconnect()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { exit(0) }
+            }
+            src.resume()
+            signalSources.append(src)
+        }
     }
 
     private func handle(_ event: TransportEvent) {
@@ -42,10 +72,13 @@ final class CarThingBTAudioCap {
             fputs("carthing-bt-audiocap: phase=\(phase.rawValue)\n", stderr)
             if phase == .idle, !connected {
                 transport.startScan()
+            } else if phase == .scanning {
+                scheduleScanRetry()
             }
         case .discovered(let peripheral):
             guard !connected else { return }
             connected = true
+            stopScanRetry()
             fputs("carthing-bt-audiocap: discovered name=\"\(peripheral.name)\" rssi=\(peripheral.rssi)\n", stderr)
             transport.stopScan()
             transport.connect(peripheralID: peripheral.id)
@@ -65,6 +98,7 @@ final class CarThingBTAudioCap {
         case .l2capClosed:
             streaming = false
             connected = false
+            stopScanRetry()
             fputs("carthing-bt-audiocap: l2cap_closed\n", stderr)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
                 self?.transport.startScan()
@@ -78,6 +112,21 @@ final class CarThingBTAudioCap {
         case .bytesIn, .bytesOut:
             break
         }
+    }
+
+    private func scheduleScanRetry() {
+        guard scanRetryTimer == nil else { return }
+        scanRetryTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
+            guard let self, !self.connected else { return }
+            fputs("carthing-bt-audiocap: scan retry\n", stderr)
+            self.transport.stopScan()
+            self.transport.startScan()
+        }
+    }
+
+    private func stopScanRetry() {
+        scanRetryTimer?.invalidate()
+        scanRetryTimer = nil
     }
 
     private func handle(_ frame: CTSPFrame) {
