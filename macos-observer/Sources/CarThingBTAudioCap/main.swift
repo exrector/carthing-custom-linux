@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import Network
 import ProtocolCore
 import TransportCore
 
@@ -16,6 +17,13 @@ final class CarThingBTAudioCap {
     private var scanRetryTimer: Timer?
     private var signalSources: [DispatchSourceSignal] = []
     private let headless = ProcessInfo.processInfo.environment["CARTHING_BT_HEADLESS"] == "1"
+    // TCP-режим: агент живёт под launchd (там CB/TCC работают), а потребитель (bt_whisper)
+    // цепляется по локальному TCP — отдаём аудио, принимаем команды (text ...).
+    private let tcpPort = ProcessInfo.processInfo.environment["CARTHING_BT_TCP_PORT"].flatMap { UInt16($0) }
+    private var listener: NWListener?
+    private var conns: [NWConnection] = []        // доступ только с main
+    private var rxText = Data()
+    private let netQueue = DispatchQueue(label: "carthing.bt.tcp")
 
     init() {
         mixer = engine.mainMixerNode
@@ -26,8 +34,10 @@ final class CarThingBTAudioCap {
 
     func start() {
         setvbuf(stderr, nil, _IONBF, 0)   // без буферизации: видеть логи под launchd (stderr=файл)
-        var sampleRate = Int32(16_000).littleEndian
-        output.write(Data(bytes: &sampleRate, count: 4))
+        if tcpPort == nil {
+            var sampleRate = Int32(16_000).littleEndian
+            output.write(Data(bytes: &sampleRate, count: 4))   // в TCP-режиме SR шлём по коннекту
+        }
 
         engine.connect(mixer, to: engine.outputNode, format: nil)
         do {
@@ -36,14 +46,18 @@ final class CarThingBTAudioCap {
             fputs("carthing-bt-audiocap: playback engine error: \(error)\n", stderr)
         }
 
-        if headless {
-            // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
-            // EOF → exit(0); это и был флап). Держим линк, реконнект — внутренний (scanRetry/
-            // l2capClosed). Чистый дисконнект по SIGTERM, чтобы устройство не залипало.
+        // ВСЕГДА: без source main RunLoop.run() возвращается сразу → процесс выходит ещё
+        // до того, как CBCentralManager(queue:.main) включится. Под launchd что-то держало
+        // RunLoop, но в subprocess/foreground — нет. Явный keepalive-Timer надёжен везде.
+        Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+        if let p = tcpPort {
             installSignalHandlers()
-            // Без source main RunLoop.run() возвращается сразу → процесс выходит, а
-            // CBCentralManager(queue: .main) вообще не включается. Держим RunLoop живым.
-            Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+            startTCP(p)               // аудио + команды через локальный TCP, stdin не нужен
+        } else if headless {
+            // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
+            // EOF → exit(0); это и был флап). Реконнект — внутренний (scanRetry/l2capClosed).
+            // Чистый дисконнект по SIGTERM, чтобы устройство не залипало.
+            installSignalHandlers()
             fputs("carthing-bt-audiocap: headless link-keeper (stdin reader disabled)\n", stderr)
         } else {
             installCommandReader()
@@ -165,7 +179,78 @@ final class CarThingBTAudioCap {
             let sample = Int16(bitPattern: hi | lo)
             floats.append(max(-1.0, min(1.0, Float(sample) / 32768.0)))
         }
-        output.write(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
+        emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
+    }
+
+    // MARK: - Аудио-синк + локальный TCP-сервер (для bt_whisper)
+
+    private func emitAudio(_ data: Data) {
+        if tcpPort != nil {
+            for c in conns { c.send(content: data, completion: .idempotent) }
+        } else {
+            output.write(data)
+        }
+    }
+
+    private func startTCP(_ port: UInt16) {
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        guard let l = try? NWListener(using: params, on: NWEndpoint.Port(rawValue: port)!) else {
+            fputs("carthing-bt-audiocap: TCP listen failed port=\(port)\n", stderr)
+            return
+        }
+        listener = l
+        l.newConnectionHandler = { [weak self] conn in self?.acceptConn(conn) }
+        l.start(queue: netQueue)
+        fputs("carthing-bt-audiocap: TCP server on 127.0.0.1:\(port)\n", stderr)
+    }
+
+    private func acceptConn(_ conn: NWConnection) {
+        conn.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                var sr = Int32(16_000).littleEndian
+                conn.send(content: Data(bytes: &sr, count: 4), completion: .idempotent)
+                DispatchQueue.main.async { self?.conns.append(conn) }
+                self?.receiveText(conn)
+                fputs("carthing-bt-audiocap: TCP client connected\n", stderr)
+            case .failed, .cancelled:
+                self?.removeConn(conn)
+            default:
+                break
+            }
+        }
+        conn.start(queue: netQueue)
+    }
+
+    private func removeConn(_ conn: NWConnection) {
+        DispatchQueue.main.async { [weak self] in
+            self?.conns.removeAll { $0 === conn }
+        }
+    }
+
+    private func receiveText(_ conn: NWConnection) {
+        conn.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, isComplete, error in
+            if let data, !data.isEmpty {
+                DispatchQueue.main.async { self?.ingestText(data) }
+            }
+            if isComplete || error != nil {
+                self?.removeConn(conn)
+                return
+            }
+            self?.receiveText(conn)
+        }
+    }
+
+    private func ingestText(_ data: Data) {
+        rxText.append(data)
+        while let nl = rxText.firstIndex(of: 0x0A) {
+            let line = Data(rxText[rxText.startIndex..<nl])
+            rxText.removeSubrange(rxText.startIndex...nl)
+            if let s = String(data: line, encoding: .utf8) {
+                handleCommand(s.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
+        }
     }
 
     private func installCommandReader() {
@@ -191,6 +276,10 @@ final class CarThingBTAudioCap {
             play(String(command.dropFirst(5)))
         } else if command == "stop" {
             playerNode?.stop()
+        } else if command.hasPrefix("text ") {
+            // Текст распознавания вниз на экран устройства: T_COMMAND "text:<utf8>".
+            let txt = String(command.dropFirst(5))
+            transport.send(CTSPFrame(type: .command, payload: Data(("text:" + txt).utf8)))
         }
     }
 
@@ -223,4 +312,8 @@ final class CarThingBTAudioCap {
 
 let cap = CarThingBTAudioCap()
 cap.start()
-RunLoop.main.run()
+// run() может вернуться сразу, если в RunLoop нет input-source (только Timer не всегда
+// держит). Цикл run(until:) гарантирует, что процесс не выйдет ни в каком контексте.
+while true {
+    RunLoop.main.run(until: Date(timeIntervalSinceNow: 3600))
+}

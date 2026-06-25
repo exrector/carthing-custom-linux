@@ -12,6 +12,8 @@
     <dict>
         <key>CARTHING_BT_HEADLESS</key>
         <string>1</string>
+        <key>CARTHING_BT_TCP_PORT</key>
+        <string>49500</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
