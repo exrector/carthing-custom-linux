@@ -141,73 +141,47 @@ class AssistantScreen(Screen):
         self.state = state
 
     def on_input(self, event):
-        if event in (Input.PRESS, Input.BTN_1, Input.BTN_4):
-            self.emit("remote_mic_toggle")
-            return True
+        # Никаких кнопок: микрофон включается самим фактом показа этого экрана.
         return False
-
-    def _status(self):
-        st = self.state
-        enabled = bool(getattr(st, "remote_mic_enabled", False)) if st else False
-        mic_state = str(getattr(st, "remote_mic_state", "off") or "off") if st else "off"
-        assistant_state = str(getattr(st, "assistant_state", "idle") or "idle") if st else "idle"
-        if not enabled or mic_state == "off":
-            return "Микрофоны выключены", "Ассистент слушает Mac-вход, но Car Thing сейчас молчит", T.STATUS_OFF
-        if mic_state == "unavailable":
-            return "Канал недоступен", getattr(st, "remote_mic_message", "") or "Проверьте связь с Mac", T.STATUS_WARN
-        if assistant_state == "thinking":
-            return "Думаю", getattr(st, "remote_mic_message", "") or "Запрос ушёл ассистенту", T.STATUS_WARN
-        if assistant_state == "responding":
-            return "Отвечаю", getattr(st, "remote_mic_message", "") or "Ответ готовится для экрана", T.STATUS_OK
-        return "Микрофоны включены", getattr(st, "remote_mic_message", "") or "Голос идёт в ассистент", T.STATUS_OK
 
     def render(self, regions=None):
         img, draw = self.blank()
         right = T.ARC_SAFE_X
         x0 = 32
-        cx = right // 2
-        title, subtitle, color = self._status()
-        enabled = bool(getattr(self.state, "remote_mic_enabled", False)) if self.state else False
+        listening = bool(getattr(self.state, "remote_mic_enabled", False)) if self.state else False
 
-        draw.text((x0, 16), "Ассистент", font=T.font(34), fill=T.MUTED)
+        # Шапка + индикатор «слушаю» (свайп на этот экран = микрофон включён).
+        draw.text((x0, 16), "Диалог", font=T.font(34), fill=T.MUTED)
+        dot = T.STATUS_OK if listening else T.FAINT
+        draw.ellipse([right - 28, 22, right - 12, 38], fill=dot)
         draw.line([x0, 60, right, 60], fill=T.HAIRLINE, width=2)
 
-        C.text_centered(draw, title, T.font(T.SZ_TITLE), color, 116, cx=cx)
-        sub_lines = C.wrap_lines(draw, subtitle, T.font(T.SZ_META), right - x0 * 2)
-        y = 178
-        for line in sub_lines[:2]:
-            C.text_centered(draw, line, T.font(T.SZ_META), T.MUTED, y, cx=cx)
-            y += 34
+        transcript = list(getattr(self.state, "assistant_transcript", []) or []) if self.state else []
+        f = T.font(T.SZ_BODY)
+        LH = 40
+        maxw = right - x0 * 2
+        top = 76
+        bottom = T.STATUSBAR_TOP - 12
+        fit = max(1, (bottom - top) // LH)
 
-        toggle_w, toggle_h = 300, 86
-        tx0 = cx - toggle_w // 2
-        ty0 = 258
-        tx1 = tx0 + toggle_w
-        ty1 = ty0 + toggle_h
-        fill = T.STATUS_OK if enabled else T.SURFACE
-        outline = T.STATUS_OK if enabled else T.HAIRLINE
-        draw.rounded_rectangle([tx0, ty0, tx1, ty1], radius=8, fill=fill, outline=outline, width=2)
-        label = "ВКЛ" if enabled else "ВЫКЛ"
-        label_color = T.BG if enabled else T.FG
-        C.text_centered(draw, label, T.font(T.SZ_BODY), label_color, ty0 + 24, cx=cx)
-        if regions is not None:
-            regions.add((tx0, ty0, tx1, ty1), "remote_mic_toggle")
-
-        text = str(getattr(self.state, "assistant_text", "") or "").strip() if self.state else ""
-        if text:
-            f = T.font(T.SZ_META)
-            y = 380
-            maxw = right - x0 * 2
-            fit = max(1, (T.H - y - 28) // 34)
-            all_lines = C.wrap_lines(draw, text, f, maxw)
-            lines = all_lines[:fit]
-            if len(all_lines) > fit:
-                lines[-1] = C.truncate(draw, lines[-1] + "…", f, maxw)
-            for line in lines:
-                draw.text((x0, y), line, font=f, fill=T.FG)
-                y += 34
-        else:
-            C.text_centered(draw, "Ответы ассистента появятся здесь", T.font(T.SZ_META), T.FAINT, 392, cx=cx)
+        # Разворачиваем фразы в строки (старые сверху) и показываем последние, что влезли,
+        # новейшее — у нижнего края (как лента диалога).
+        all_lines = []
+        for utt in transcript:
+            wl = C.wrap_lines(draw, utt, f, maxw)
+            all_lines.extend(wl if wl else [utt])
+        shown = all_lines[-fit:]
+        if not shown:
+            C.text_centered(draw, "Слушаю. Говорите…", T.font(T.SZ_META), T.FAINT,
+                            (top + bottom) // 2, cx=right // 2)
+            return img
+        y = bottom - len(shown) * LH
+        if y < top:
+            y = top
+        last = len(shown) - 1
+        for idx, line in enumerate(shown):
+            draw.text((x0, y), line, font=f, fill=(T.FG if idx == last else T.MUTED))
+            y += LH
         return img
 
 

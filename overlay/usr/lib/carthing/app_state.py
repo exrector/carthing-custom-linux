@@ -834,6 +834,7 @@ class AppState:
         self.remote_mic_state = "off"    # off|ready|listening|unavailable
         self.remote_mic_message = "Микрофон Mac выключен"
         self.assistant_text = ""
+        self.assistant_transcript = []  # живой транскрипт диалога (новейшее в конце), для AssistantScreen
         self.ui_theme = "dark"          # [CLAUDE 2026-06-11] тема UI (dark|terminal); применяется рестартом runtime
         self.clock_text = "--:--"
         self.device_name = device_name()

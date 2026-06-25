@@ -354,6 +354,12 @@ class SessionPlaneService:
             if not txt:
                 return
             self.state.assistant_text = txt
+            tr = getattr(self.state, "assistant_transcript", None)
+            if not isinstance(tr, list):
+                tr = []
+                self.state.assistant_transcript = tr
+            tr.append(txt)
+            del tr[:-40]          # держим последние 40 реплик
             self.state.set_remote_mic(True, state="listening", message=txt)
             self._sync_model()
             logger.info("session screen text: %r", txt[:60])
