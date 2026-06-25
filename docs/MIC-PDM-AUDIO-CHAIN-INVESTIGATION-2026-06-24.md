@@ -369,3 +369,53 @@ Car Thing PDM-мик → HCIC gain=1 → mic_server :49400 (устройство
 стримит (CTSP-сессия не поднята). Часть 2 = поднять BT-паринг + CTSP мик-стрим, тогда
 `VA_AUDIOCAP_CMD` указывает на `CarThingBTAudioCap` вместо TCP-обёртки. Остальной тракт (шумодав
 / Whisper / LLM / GUI) — тот же.
+
+---
+
+## 14. ✅ ЧАСТЬ 2 — BLE L2CAP CoC канал device↔Mac ПОДНЯТ (2026-06-25)
+
+**Канал работает.** Mac (`CarThingBTAudioCap`) подключается к Car Thing по BLE и стримит мик
+по L2CAP CoC. Подтверждено device-логом:
+```
+connected <MAC>/P classic=False → session peer LE attached → session CoC connected psm=128
+→ session client_toggle via GATT -> True → session command 'start_mic' → remote mic started
+→ session remote mic hardware gain set
+```
+
+### Что было реальным блокером (не то, что я думал)
+- НЕ TCC на Mac (бинарь имеет встроенный Info.plist с NSBluetoothAlwaysUsageDescription —
+  Package.swift `-sectcreate __info_plist`; запускается без промпта).
+- НЕ «BLE-транспорт не реализован» — он реализован с обеих сторон.
+- **Реальный блокер: устройство не рекламило session-сервис C7C5.** Реклама C7C5
+  (`COMPLETE_LIST_OF_128_BIT_SERVICE_CLASS_UUIDS = SESSION_SERVICE_UUID`) включается в
+  `_adv_payload()` ТОЛЬКО при `session_advertising=True`, а это = **Client ON**.
+
+### КАК ПОДНЯТЬ (рабочая процедура)
+1. **Device — Client ON:** `settings.client_enabled=True` в
+   `/run/carthing-state/carthing/state.json` (это **персистентный vfat-раздел mmcblk0p1** —
+   переживает ребут). На boot `_on_toggle_client(True)` → `set_session_advertising(True)` →
+   `_adv_payload()` включает C7C5 → устройство видно Mac-скану по service-UUID.
+   - usb_fallback OFF (`CARTHING_USB_REMOTE_MIC_ENABLE` НЕ задан) → транспорт `ble_l2cap_coc`.
+2. **Mac:** запустить `macos-observer/.build/debug/CarThingBTAudioCap` (headless авто-коннект:
+   scan по C7C5 → connect → GATT bootstrap → PSM → openL2CAPChannel → `start_mic`). Single-peer
+   (один инстанс держит сессию).
+3. Архитектура: device = BLE Peripheral + GATT server + L2CAP listener (psm=128, через
+   `accessory_orchestrator` + `HciOperationGate` сериализует HCI); Mac = Central + L2CAP opener
+   (`TransportCore`: CBCentralManager scan→connect→GATT→openL2CAPChannel→CoC). Протокол CTSP
+   (framed, см. `Sources/ProtocolCore/CTSPFrame.swift` + `session_plane_service.py`).
+
+### ⚠️ Грабли, которые я создал (НЕ повторять)
+- **НЕ убивать `carthing-btattach-mini`** — он держит `hci0` (HCI-сокет для Bumble через
+  `hci-socket:0`). Убил → рантайм крашится `BrokenPipeError` в `bumble/transport/hci_socket.py`
+  → супервизор в петле. Краши `client_enabled=True` были ИЗ-ЗА этого, не из-за флага.
+- Рестарт рантайма: `kill` python НЕ респаунит (обёртка `run-media-remote` виснет). Правильно:
+  kill супервизора (`/run/carthing/media-remote-supervisor.pid`) + rm pidfile + kill рантайма/
+  обёртки (НЕ btattach), затем `/etc/init.d/disabled-S50-carthing-remote start`. hci0 поднимает
+  `/etc/init.d/S20-bt-init`.
+- Счётчики процессов через `grep carthing_runtime` дают **самоматч** (cmdline grep содержит
+  паттерн) — фильтровать `/proc/` и матчить точную строку.
+
+### TODO часть 2 (поверх живого канала)
+- Whisper-only consumer: сырое PCM из CTSP → Whisper → текст (без wake/LLM/TTS).
+- Текст-вниз: кадр TEXT_FINAL Mac→device по L2CAP → рендер на экране устройства.
+- Mac LaunchAgent (не Daemon — CoreBluetooth) для авто-запуска+реконнекта.
