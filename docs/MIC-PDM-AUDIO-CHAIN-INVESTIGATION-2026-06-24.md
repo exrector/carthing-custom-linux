@@ -419,3 +419,49 @@ connected <MAC>/P classic=False → session peer LE attached → session CoC con
 - Whisper-only consumer: сырое PCM из CTSP → Whisper → текст (без wake/LLM/TTS).
 - Текст-вниз: кадр TEXT_FINAL Mac→device по L2CAP → рендер на экране устройства.
 - Mac LaunchAgent (не Daemon — CoreBluetooth) для авто-запуска+реконнекта.
+
+---
+
+## 15. ✅ АВТО-ПРИЛИПАНИЕ BT-мика — РАБОТАЕТ И ДЕРЖИТСЯ (2026-06-25)
+
+Беспроводной BT-мик поднимается **сам** при логине Mac и держит линк стабильно
+(проверено: один pid 45с+ без обрывов, `audio_frames` растёт ровно, device:
+`session remote mic capture open ... rate=48000 channels=4`).
+
+### Mac-сторона: headless LaunchAgent (`com.carthing.btlink`)
+`macos-observer/launchd/com.carthing.btlink.plist` (→ `~/Library/LaunchAgents/`):
+`CarThingBTAudioCap` с `CARTHING_BT_HEADLESS=1`, `RunAtLoad`+`KeepAlive`, stdout→
+`/dev/null`. Загрузка: `launchctl bootstrap gui/$(id -u) <plist>`; снять:
+`launchctl bootout gui/$(id -u)/com.carthing.btlink`.
+
+### 3 бага агента, которые чинились (commit рядом)
+`Sources/CarThingBTAudioCap/main.swift`:
+1. **stdin EOF → exit(0).** `installCommandReader` выходил по пустому stdin. Под
+   LaunchAgent stdin=/dev/null → мгновенный EOF → процесс умирал ДО сканирования,
+   KeepAlive перезапускал = флап. Фикс: headless-режим не вешает stdin-ридер.
+2. **Пустой RunLoop.** `RunLoop.main.run()` возвращается сразу, если в нём нет ни
+   одного source. Без stdin-ридера RunLoop пуст → возврат → exit, а
+   `CBCentralManager(queue:.main)` даже не включается. Фикс: keepalive-Timer.
+3. **stderr block-buffered в файл** — логи не видны под launchd. Фикс:
+   `setvbuf(stderr,_IONBF)`.
+   + Чистый дисконнект по SIGTERM (`transport.disconnect()`), чтобы устройство не
+   залипало на фантомной LE-сессии при остановке агента.
+
+### ⭐ КОРЕНЬ обрыва CoC (важно): ALSA-мик ЭКСКЛЮЗИВЕН
+CoC-канал рвался через ~1с после `start_mic`. Причина: device-`_mic_loop` зовёт
+`cap.open()` **синхронно в async-корутине** (не через `to_thread`). Когда
+`/dev/snd/pcmC0D1c` занят другим капчером (остался `/tmp/mic_server.py` с USB-этапа,
+PID держал PCM) — `cap.open()` блокирует **весь bumble event-loop** → L2CAP credits
+не обрабатываются → Mac видит `l2cap_closed`. В логе при этом: есть `remote mic
+started`+`gain set`, но НЕТ `capture open` (завис на open).
+**Правило: перед BLE-миком убедиться, что pcmC0D1c свободен** (`for p in /proc/[0-9]*;
+do ls -l $p/fd 2>/dev/null|grep -q pcmC0D1c && echo $p; done`); один капчер за раз.
+TODO device-fix: обернуть `cap.open()` в `asyncio.to_thread`, чтобы занятый ALSA не
+морозил event-loop (тогда вместо тихого обрыва будет честный таймаут/ошибка).
+
+### Sticky-цикл
+Device: `client_enabled=True` персистентен (vfat mmcblk0p1) → на boot рекламит C7C5.
+Mac: агент при `l2cap_closed`/таймауте сам пересканирует (внутренний reconnect-loop) +
+KeepAlive ловит полный краш. ⚠️ Если Mac-процесс умирает грязно (SIGKILL/sleep) без
+дисконнекта — устройство может залипнуть на фантомной LE-сессии и не ре-рекламить;
+лечится self-heal рестартом runtime (kill runtime-py, НЕ btattach; init start).

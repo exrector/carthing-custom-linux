@@ -14,6 +14,8 @@ final class CarThingBTAudioCap {
     private var frames = 0
     private var lastReport = Date()
     private var scanRetryTimer: Timer?
+    private var signalSources: [DispatchSourceSignal] = []
+    private let headless = ProcessInfo.processInfo.environment["CARTHING_BT_HEADLESS"] == "1"
 
     init() {
         mixer = engine.mainMixerNode
@@ -23,6 +25,7 @@ final class CarThingBTAudioCap {
     }
 
     func start() {
+        setvbuf(stderr, nil, _IONBF, 0)   // без буферизации: видеть логи под launchd (stderr=файл)
         var sampleRate = Int32(16_000).littleEndian
         output.write(Data(bytes: &sampleRate, count: 4))
 
@@ -33,8 +36,34 @@ final class CarThingBTAudioCap {
             fputs("carthing-bt-audiocap: playback engine error: \(error)\n", stderr)
         }
 
-        installCommandReader()
+        if headless {
+            // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
+            // EOF → exit(0); это и был флап). Держим линк, реконнект — внутренний (scanRetry/
+            // l2capClosed). Чистый дисконнект по SIGTERM, чтобы устройство не залипало.
+            installSignalHandlers()
+            // Без source main RunLoop.run() возвращается сразу → процесс выходит, а
+            // CBCentralManager(queue: .main) вообще не включается. Держим RunLoop живым.
+            Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+            fputs("carthing-bt-audiocap: headless link-keeper (stdin reader disabled)\n", stderr)
+        } else {
+            installCommandReader()
+        }
         fputs("carthing-bt-audiocap: ready sample_rate=16000 source=bluetooth_ctsp\n", stderr)
+    }
+
+    private func installSignalHandlers() {
+        for sig in [SIGTERM, SIGINT] {
+            signal(sig, SIG_IGN)
+            let src = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            src.setEventHandler { [weak self] in
+                fputs("carthing-bt-audiocap: signal -> clean disconnect\n", stderr)
+                self?.stopMic()
+                self?.transport.disconnect()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { exit(0) }
+            }
+            src.resume()
+            signalSources.append(src)
+        }
     }
 
     private func handle(_ event: TransportEvent) {
