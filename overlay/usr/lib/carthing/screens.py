@@ -144,6 +144,14 @@ class AssistantScreen(Screen):
         # Никаких кнопок: микрофон включается самим фактом показа этого экрана.
         return False
 
+    def on_show(self):
+        # Свайп на этот экран = начать слушать (без кнопок и wake-word).
+        self.emit("remote_mic_set", True)
+
+    def on_hide(self):
+        # Уход с экрана = перестать слушать.
+        self.emit("remote_mic_set", False)
+
     def render(self, regions=None):
         img, draw = self.blank()
         right = T.ARC_SAFE_X

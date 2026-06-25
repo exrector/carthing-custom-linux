@@ -157,7 +157,14 @@ class SessionPlaneService:
 
     def set_enabled(self, enabled: bool):
         self.enabled = bool(enabled)
-        if not self.enabled:
+        if self.enabled:
+            # Вкл: запустить мик на уже подключённых каналах. Нужно для повторного входа
+            # на экран «Ассистент», когда Mac остался на линии и start_mic заново не придёт.
+            for runtime in self._runtimes.values():
+                ch = getattr(runtime.connector, "channel", None)
+                if ch is not None and getattr(runtime.connector, "mic_task", None) is None:
+                    self._start_mic(runtime, ch)
+        else:
             for runtime in self._runtimes.values():
                 self._stop_mic(runtime)
         self._sync_model()

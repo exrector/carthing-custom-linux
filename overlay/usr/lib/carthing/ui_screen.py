@@ -185,10 +185,35 @@ class Compositor:
 
     @active.setter
     def active(self, v):
+        try:
+            old = self.active
+        except Exception:
+            old = None
         if self.state is not None and hasattr(self.state, "active_desktop"):
             self.state.active_desktop = v
         else:
             self._active = v
+        if v != old:
+            self._fire_screen_lifecycle(old, v)
+
+    def _fire_screen_lifecycle(self, old, new):
+        # Жизненный цикл экрана: on_hide(старый)/on_show(новый). Так свайп на экран
+        # «Ассистент» сам включает микрофон (через AssistantScreen.on_show), а уход — гасит.
+        try:
+            screens = self.screens
+        except AttributeError:
+            return
+        try:
+            if old is not None and 0 <= old < len(screens):
+                h = getattr(screens[old], "on_hide", None)
+                if callable(h):
+                    h()
+            if new is not None and 0 <= new < len(screens):
+                s = getattr(screens[new], "on_show", None)
+                if callable(s):
+                    s()
+        except Exception:
+            pass
 
     def _sync_modal(self):
         """Derive the modal from state (unidirectional): show the pairing modal

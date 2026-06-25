@@ -70,6 +70,8 @@ class Dispatcher:
             self._media("vol_down")
         elif intent == "remote_mic_toggle":
             self._remote_mic_toggle()
+        elif intent == "remote_mic_set":
+            self._remote_mic_set(bool(payload))
         elif intent == "open_notifications":
             self.state.active_desktop = self.state.NOTIFICATIONS   # navigate to the list
             self.state.unread_count = 0
@@ -195,6 +197,20 @@ class Dispatcher:
             self.state.remote_mic_enabled = new
             self.state.client_enabled = new
         self.on_toggle_client(new)
+
+    def _remote_mic_set(self, on):
+        # Явный вкл/выкл (без тоггла): мик привязан к показу экрана «Ассистент».
+        on = bool(on)
+        if bool(getattr(self.state, "remote_mic_enabled", False)) == on:
+            return
+        state = "ready" if on else "off"
+        message = "Слушаю" if on else "Микрофон Mac выключен"
+        if hasattr(self.state, "set_remote_mic"):
+            self.state.set_remote_mic(on, state=state, message=message)
+        else:
+            self.state.remote_mic_enabled = on
+            self.state.client_enabled = on
+        self.on_toggle_client(on)
 
     def _speaker_pair_select(self, address):
         if not address:

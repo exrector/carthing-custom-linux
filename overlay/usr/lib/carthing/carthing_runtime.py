@@ -2056,7 +2056,9 @@ async def main():
             on_disconnect=_on_session_disconnect,
         )
         session_plane.install()
-        _boot_remote_mic_enabled = bool(settings.get("client_enabled", False))
+        # Мик всегда стартует ВЫКЛЮЧЕННЫМ: его включает показ экрана «Ассистент»
+        # (AssistantScreen.on_show -> remote_mic_set), а не персист client_enabled.
+        _boot_remote_mic_enabled = False
         if _boot_remote_mic_enabled:
             _on_toggle_client(True)
         else:
