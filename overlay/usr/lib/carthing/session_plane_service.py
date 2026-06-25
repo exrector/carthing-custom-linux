@@ -348,18 +348,23 @@ class SessionPlaneService:
     async def _mic_loop(self, runtime, channel):
         device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
         source_rate = int(os.environ.get("CARTHING_BT_MIC_SOURCE_RATE", "48000"))
-        source_channels = int(os.environ.get("CARTHING_BT_MIC_SOURCE_CHANNELS", "2"))
+        source_channels = int(os.environ.get("CARTHING_BT_MIC_SOURCE_CHANNELS", "4"))
         target_rate = 16000
         read_frames = int(os.environ.get("CARTHING_BT_MIC_READ_FRAMES", "960"))
+        gain = float(os.environ.get("CARTHING_BT_MIC_GAIN", "2.0"))
+        mix_mode = os.environ.get("CARTHING_BT_MIC_MIX", "maxabs").strip().lower()
+        self._set_device_mic_gain()
         cap = AlsaPcmCapture(device, source_rate, source_channels)
         try:
             info = cap.open()
             logger.info(
-                "session remote mic capture open: peer=%s device=%s rate=%s channels=%s info=%s",
+                "session remote mic capture open: peer=%s device=%s rate=%s channels=%s gain=%.2f mix=%s info=%s",
                 runtime.address,
                 device,
                 source_rate,
                 source_channels,
+                gain,
+                mix_mode,
                 info,
             )
             while getattr(runtime.connector, "channel", None) is channel:
@@ -367,7 +372,7 @@ class SessionPlaneService:
                 if not raw:
                     await asyncio.sleep(0.01)
                     continue
-                pcm16 = self._downmix_resample_16k(raw, source_rate, source_channels, target_rate)
+                pcm16 = self._downmix_resample_16k(raw, source_rate, source_channels, target_rate, gain, mix_mode)
                 if pcm16:
                     self._write(channel, T_AUDIO_PCM16, pcm16)
                 await asyncio.sleep(0)
@@ -388,7 +393,67 @@ class SessionPlaneService:
             logger.info("session remote mic stopped: peer=%s", runtime.address)
 
     @staticmethod
-    def _downmix_resample_16k(raw: bytes, source_rate: int, channels: int, target_rate: int) -> bytes:
+    def _set_device_mic_gain():
+        # Железное усиление PDM-миков = ALSA-контрол "PDM HCIC shift gain" в SoC, index 1 = +16 дБ.
+        # НЕ tlv320adc3101 lr_gain — того чипа на плате НЕТ (доказано: I2C-скан, привязка драйверов,
+        # инвентарь, T9015-capture=тишина). См. docs/MIC-PDM-AUDIO-CHAIN-INVESTIGATION-2026-06-24.md.
+        import ctypes
+        import fcntl
+        target = int(os.environ.get("CARTHING_BT_MIC_HCIC_GAIN", "1"))
+
+        class _Id(ctypes.Structure):
+            _fields_ = [("numid", ctypes.c_uint), ("iface", ctypes.c_int), ("device", ctypes.c_uint),
+                        ("subdevice", ctypes.c_uint), ("name", ctypes.c_char * 44), ("index", ctypes.c_uint)]
+
+        class _List(ctypes.Structure):
+            _fields_ = [("offset", ctypes.c_uint), ("space", ctypes.c_uint), ("used", ctypes.c_uint),
+                        ("count", ctypes.c_uint), ("pids", ctypes.c_void_p), ("reserved", ctypes.c_ubyte * 50)]
+
+        class _Val(ctypes.Structure):
+            _fields_ = [("id", _Id), ("indirect", ctypes.c_uint),
+                        ("value", ctypes.c_long * 128), ("reserved", ctypes.c_ubyte * 128)]
+
+        def _ioc(nr, size):
+            return (3 << 30) | (size << 16) | (ord("U") << 8) | nr
+
+        LIST = _ioc(0x10, ctypes.sizeof(_List))
+        WRITE = _ioc(0x13, ctypes.sizeof(_Val))
+        try:
+            fd = os.open("/dev/snd/controlC0", os.O_RDWR)
+        except OSError as exc:
+            logger.warning("mic HCIC gain: open controlC0 failed: %s", exc)
+            return
+        try:
+            el = _List(); fcntl.ioctl(fd, LIST, el)
+            arr = (_Id * el.count)()
+            el2 = _List(); el2.space = el.count; el2.pids = ctypes.cast(arr, ctypes.c_void_p)
+            fcntl.ioctl(fd, LIST, el2)
+            numid = None
+            for i in range(el2.used):
+                nm = arr[i].name.decode("ascii", "replace").lower()
+                if "hcic" in nm and "gain" in nm:
+                    numid = arr[i].numid
+                    break
+            if numid is None:
+                logger.warning("mic HCIC gain: control not found")
+                return
+            ev = _Val(); ev.id.numid = numid; ev.value[0] = target
+            fcntl.ioctl(fd, WRITE, ev)
+            logger.info("mic HCIC gain set: numid=%d value=%d", numid, target)
+        except Exception as exc:
+            logger.warning("mic HCIC gain ignored: %s", exc)
+        finally:
+            os.close(fd)
+
+    @staticmethod
+    def _downmix_resample_16k(
+        raw: bytes,
+        source_rate: int,
+        channels: int,
+        target_rate: int,
+        gain: float = 1.0,
+        mix_mode: str = "avg",
+    ) -> bytes:
         if channels <= 0 or source_rate <= 0:
             return b""
         bytes_per_frame = channels * 2
@@ -396,14 +461,19 @@ class SessionPlaneService:
         if frame_count <= 0:
             return b""
         step = max(1, int(round(source_rate / target_rate)))
+        gain = max(0.1, min(float(gain), 12.0))
         out = bytearray()
         for frame in range(0, frame_count, step):
             base = frame * bytes_per_frame
-            total = 0
+            samples = []
             for ch in range(channels):
                 offset = base + ch * 2
-                total += struct.unpack_from("<h", raw, offset)[0]
-            sample = int(total / channels)
+                samples.append(struct.unpack_from("<h", raw, offset)[0])
+            if mix_mode == "maxabs":
+                sample = max(samples, key=lambda s: abs(s))
+            else:
+                sample = int(sum(samples) / channels)
+            sample = int(sample * gain)
             out += struct.pack("<h", max(-32768, min(32767, sample)))
         return bytes(out)
 
