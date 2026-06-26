@@ -13,9 +13,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import struct
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app_state import normalize_address
 from bumble.core import UUID
@@ -41,7 +42,13 @@ T_CAPABILITIES = 0x02
 T_STATUS = 0x03
 T_ROUTE_STATE = 0x04
 T_COMMAND = 0x05
+T_AUDIO_PCM16 = 0x06
 T_ERROR = 0x08
+
+try:
+    from remote_mic_sender import AlsaPcmCapture
+except Exception:  # pragma: no cover - device runtime fallback only
+    AlsaPcmCapture = None
 
 
 @dataclass
@@ -49,9 +56,11 @@ class SessionConnector:
     address: str
     connection: object | None = None
     channel: object | None = None
+    mic_task: object | None = None
     connected: bool = False
     last_seen: float = 0.0
     last_error: str = ""
+    rx_buffer: bytearray = field(default_factory=bytearray)
 
 
 @dataclass
@@ -70,12 +79,21 @@ def _ctsp_frame(frame_type: int, payload: bytes = b"", seq: int = 0, flags: int 
 
 
 class SessionPlaneService:
-    def __init__(self, device, app_state, model, on_change=None, on_client_toggle=None):
+    def __init__(
+        self,
+        device,
+        app_state,
+        model,
+        on_change=None,
+        on_client_toggle=None,
+        on_disconnect=None,
+    ):
         self.device = device
         self.state = app_state
         self.model = model
         self.on_change = on_change or (lambda: None)
         self.on_client_toggle = on_client_toggle or (lambda enabled: None)
+        self.on_disconnect = on_disconnect or (lambda address: None)
         self.enabled = False
         self.psm = 0
         self._server = None
@@ -83,6 +101,7 @@ class SessionPlaneService:
         self._status_char: Characteristic | None = None
         self._psm_char: Characteristic | None = None
         self._installed = False
+        self._listening = False   # гейт микрофона: труба открыта всегда, звук течёт только при True
 
     def install(self):
         if self._installed:
@@ -138,7 +157,22 @@ class SessionPlaneService:
         logger.info("session plane GATT/CoC installed: psm=%d", self.psm)
 
     def set_enabled(self, enabled: bool):
+        # enabled = линк/сессия активна (труба открыта). Сам микрофон НЕ стартуется здесь —
+        # им управляет self._listening (показ экрана «Ассистент»).
         self.enabled = bool(enabled)
+        if not self.enabled:
+            self.set_listening(False)
+        self._sync_model()
+        self._notify_status()
+
+    def set_listening(self, on: bool):
+        # Гейт микрофона от состояния активного view. Труба остаётся открытой; работающий
+        # _mic_loop сам открывает/закрывает ALSA по этому флагу (мгновенно, без реконнекта).
+        on = bool(on)
+        if self._listening == on:
+            return
+        self._listening = on
+        logger.info("session listening -> %s", on)
         self._sync_model()
         self._notify_status()
 
@@ -189,6 +223,7 @@ class SessionPlaneService:
             return
         runtime.connector.connection = None
         runtime.connector.channel = None
+        self._stop_mic(runtime)
         runtime.connector.connected = False
         try:
             self.state.note_peer_presence(
@@ -202,6 +237,12 @@ class SessionPlaneService:
             pass
         self._sync_model()
         self.on_change()
+        try:
+            result = self.on_disconnect(address)
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
+        except Exception as exc:
+            logger.warning("session disconnect callback failed: %s", exc)
 
     def _on_l2cap_channel(self, channel):
         address = normalize_address(getattr(getattr(channel, "connection", None), "peer_address", ""))
@@ -234,11 +275,35 @@ class SessionPlaneService:
 
     def _on_channel_data(self, runtime, channel, data: bytes):
         runtime.connector.last_seen = time.time()
-        if not data.startswith(CTSP_MAGIC) or len(data) < 16:
-            runtime.connector.last_error = "bad_ctsp_frame"
-            self._write(channel, T_ERROR, b"bad_ctsp_frame")
-            self._sync_model()
-            return
+        runtime.connector.rx_buffer.extend(data)
+        while runtime.connector.rx_buffer:
+            buffer = runtime.connector.rx_buffer
+            magic_at = buffer.find(CTSP_MAGIC)
+            if magic_at < 0:
+                buffer.clear()
+                runtime.connector.last_error = "bad_ctsp_frame"
+                self._write(channel, T_ERROR, b"bad_ctsp_frame")
+                self._sync_model()
+                return
+            if magic_at > 0:
+                del buffer[:magic_at]
+            if len(buffer) < 16:
+                return
+            payload_len = struct.unpack(">I", buffer[12:16])[0]
+            frame_len = 16 + payload_len
+            if payload_len > 65536:
+                buffer.clear()
+                runtime.connector.last_error = "ctsp_frame_too_large"
+                self._write(channel, T_ERROR, b"ctsp_frame_too_large")
+                self._sync_model()
+                return
+            if len(buffer) < frame_len:
+                return
+            frame = bytes(buffer[:frame_len])
+            del buffer[:frame_len]
+            self._handle_frame(runtime, channel, frame)
+
+    def _handle_frame(self, runtime, channel, data: bytes):
         frame_type = data[5]
         seq = struct.unpack(">I", data[8:12])[0]
         if frame_type == T_HELLO:
@@ -251,9 +316,19 @@ class SessionPlaneService:
             self._write(channel, T_ROUTE_STATE, self._route_state_bytes(), seq=seq)
         elif frame_type == T_COMMAND:
             payload_len = struct.unpack(">I", data[12:16])[0]
-            payload = data[16:16 + payload_len]
+            payload = data[16:16 + payload_len].strip()
             logger.info("session command from %s: %r", runtime.address, payload[:80])
-            self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            if payload == b"start_mic":
+                self._start_mic(runtime, channel)
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            elif payload == b"stop_mic":
+                self._stop_mic(runtime)
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            elif payload.startswith(b"text:"):
+                self._show_screen_text(payload[5:])
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+            else:
+                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
         else:
             self._write(channel, T_ERROR, b"unsupported_frame_type", seq=seq)
 
@@ -268,6 +343,217 @@ class SessionPlaneService:
         enabled = bool(bytes(value or b"\x00")[0])
         logger.info("session client_toggle via GATT -> %s", enabled)
         self.on_client_toggle(enabled)
+
+    def _start_mic(self, runtime, channel):
+        self._stop_mic(runtime)
+        if AlsaPcmCapture is None:
+            runtime.connector.last_error = "mic_capture_unavailable"
+            self._write(channel, T_ERROR, b"mic_capture_unavailable")
+            self._sync_model()
+            return
+        runtime.connector.mic_task = asyncio.create_task(self._mic_loop(runtime, channel))
+        logger.info("session remote mic started: peer=%s", runtime.address)
+        self._sync_model()
+
+    def _stop_mic(self, runtime):
+        task = getattr(runtime.connector, "mic_task", None)
+        runtime.connector.mic_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _show_screen_text(self, raw):
+        # Формат payload: "<R>|<text>", R = U(я)/A(ассистент)/S(статус). Без префикса —
+        # просто строка (обратная совместимость).
+        try:
+            s = bytes(raw).decode("utf-8", "replace")
+            role = ""
+            if len(s) >= 2 and s[1] == "|":
+                role = s[0]
+                s = s[2:]
+            s = s.strip()[:300]
+            if role == "S":
+                self.state.assistant_status = s     # живой статус (Слушаю…/Думаю…)
+                self._sync_model()
+                return
+            if not s:
+                return
+            label = "Вы" if role == "U" else ("Ассистент" if role == "A" else "")
+            line = f"{label}: {s}" if label else s
+            self.state.assistant_text = line
+            tr = getattr(self.state, "assistant_transcript", None)
+            if not isinstance(tr, list):
+                tr = []
+                self.state.assistant_transcript = tr
+            tr.append(line)
+            del tr[:-40]
+            if role == "A":
+                self.state.assistant_status = ""    # ответ пришёл — статус снят
+            self._sync_model()
+            logger.info("session screen text [%s]: %r", role or "?", s[:60])
+        except Exception as exc:
+            logger.warning("session screen text failed: %s", exc)
+
+    async def _mic_loop(self, runtime, channel):
+        device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
+        source_rate = int(os.environ.get("CARTHING_BT_MIC_SOURCE_RATE", "48000"))
+        source_channels = int(os.environ.get("CARTHING_BT_MIC_SOURCE_CHANNELS", "4"))
+        target_rate = 16000
+        read_frames = int(os.environ.get("CARTHING_BT_MIC_READ_FRAMES", "960"))
+        gain = float(os.environ.get("CARTHING_BT_MIC_GAIN", "2.0"))
+        mix_mode = os.environ.get("CARTHING_BT_MIC_MIX", "avg").strip().lower()
+        cap = None
+        try:
+            # Труба к Mac держится постоянно (задача жива весь коннект), но ALSA-захват
+            # включается ТОЛЬКО когда self._listening (показан экран «Ассистент»). Вход на
+            # view = звук мгновенно, без реконнекта; уход = ALSA освобождается.
+            while getattr(runtime.connector, "channel", None) is channel:
+                if not self._listening:
+                    if cap is not None:
+                        try:
+                            cap.close()
+                        except Exception:
+                            pass
+                        cap = None
+                        logger.info("session remote mic paused (view off): peer=%s", runtime.address)
+                    await asyncio.sleep(0.05)
+                    continue
+                if cap is None:
+                    self._set_device_mic_gain()
+                    cap = AlsaPcmCapture(device, source_rate, source_channels)
+                    info = cap.open()
+                    logger.info(
+                        "session remote mic capture open: peer=%s device=%s rate=%s channels=%s gain=%.2f info=%s",
+                        runtime.address, device, source_rate, source_channels, gain, info,
+                    )
+                raw = await asyncio.to_thread(cap.read, read_frames)
+                if not raw:
+                    await asyncio.sleep(0.01)
+                    continue
+                pcm16 = self._downmix_resample_16k(raw, source_rate, source_channels, target_rate, gain, mix_mode)
+                if pcm16:
+                    self._write(channel, T_AUDIO_PCM16, pcm16)
+                await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            runtime.connector.last_error = f"mic_capture_error:{type(exc).__name__}"
+            logger.warning("session remote mic failed: peer=%s error=%s", runtime.address, exc)
+            try:
+                self._write(channel, T_ERROR, runtime.connector.last_error.encode("utf-8"))
+            except Exception:
+                pass
+            self._sync_model()
+        finally:
+            if cap is not None:
+                try:
+                    cap.close()
+                except Exception:
+                    pass
+            if getattr(runtime.connector, "mic_task", None) is asyncio.current_task():
+                runtime.connector.mic_task = None
+            logger.info("session remote mic stopped: peer=%s", runtime.address)
+
+    @staticmethod
+    def _set_device_mic_gain():
+        # Железное усиление PDM-миков = ALSA-контрол "PDM HCIC shift gain" в SoC, index 1 = +16 дБ.
+        # НЕ tlv320adc3101 lr_gain — того чипа на плате НЕТ (доказано: I2C-скан, привязка драйверов,
+        # инвентарь, T9015-capture=тишина). См. docs/MIC-PDM-AUDIO-CHAIN-INVESTIGATION-2026-06-24.md.
+        import ctypes
+        import fcntl
+        target = int(os.environ.get("CARTHING_BT_MIC_HCIC_GAIN", "1"))
+
+        class _Id(ctypes.Structure):
+            _fields_ = [("numid", ctypes.c_uint), ("iface", ctypes.c_int), ("device", ctypes.c_uint),
+                        ("subdevice", ctypes.c_uint), ("name", ctypes.c_char * 44), ("index", ctypes.c_uint)]
+
+        class _List(ctypes.Structure):
+            _fields_ = [("offset", ctypes.c_uint), ("space", ctypes.c_uint), ("used", ctypes.c_uint),
+                        ("count", ctypes.c_uint), ("pids", ctypes.c_void_p), ("reserved", ctypes.c_ubyte * 50)]
+
+        class _Val(ctypes.Structure):
+            _fields_ = [("id", _Id), ("indirect", ctypes.c_uint),
+                        ("value", ctypes.c_long * 128), ("reserved", ctypes.c_ubyte * 128)]
+
+        def _ioc(nr, size):
+            return (3 << 30) | (size << 16) | (ord("U") << 8) | nr
+
+        LIST = _ioc(0x10, ctypes.sizeof(_List))
+        WRITE = _ioc(0x13, ctypes.sizeof(_Val))
+        try:
+            fd = os.open("/dev/snd/controlC0", os.O_RDWR)
+        except OSError as exc:
+            logger.warning("mic HCIC gain: open controlC0 failed: %s", exc)
+            return
+        try:
+            el = _List(); fcntl.ioctl(fd, LIST, el)
+            arr = (_Id * el.count)()
+            el2 = _List(); el2.space = el.count; el2.pids = ctypes.cast(arr, ctypes.c_void_p)
+            fcntl.ioctl(fd, LIST, el2)
+            numid = None
+            for i in range(el2.used):
+                nm = arr[i].name.decode("ascii", "replace").lower()
+                if "hcic" in nm and "gain" in nm:
+                    numid = arr[i].numid
+                    break
+            if numid is None:
+                logger.warning("mic HCIC gain: control not found")
+                return
+            ev = _Val(); ev.id.numid = numid; ev.value[0] = target
+            fcntl.ioctl(fd, WRITE, ev)
+            logger.info("mic HCIC gain set: numid=%d value=%d", numid, target)
+        except Exception as exc:
+            logger.warning("mic HCIC gain ignored: %s", exc)
+        finally:
+            os.close(fd)
+
+    @staticmethod
+    def _downmix_resample_16k(
+        raw: bytes,
+        source_rate: int,
+        channels: int,
+        target_rate: int,
+        gain: float = 1.0,
+        mix_mode: str = "avg",
+    ) -> bytes:
+        if channels <= 0 or source_rate <= 0:
+            return b""
+        bytes_per_frame = channels * 2
+        frame_count = len(raw) // bytes_per_frame
+        if frame_count <= 0:
+            return b""
+        step = max(1, int(round(source_rate / target_rate)))
+        gain = max(0.1, min(float(gain), 12.0))
+        # 1) downmix всех каналов -> моно @source_rate СРЕДНИМ (не maxabs: maxabs
+        #    сшивает куски разных миков и плодит широкополосный треск).
+        unpack = struct.unpack_from
+        inv_ch = 1.0 / channels
+        mono = [0.0] * frame_count
+        for f in range(frame_count):
+            base = f * bytes_per_frame
+            s = 0
+            for ch in range(channels):
+                s += unpack("<h", raw, base + ch * 2)[0]
+            mono[f] = s * inv_ch
+        # 2) box-FIR анти-алиас окном 2*step (нуль АЧХ на целевом Nyquist) + хоп step.
+        #    Без него дециммация "каждый 3-й" заворачивает 8-24кГц в речь как шипящий
+        #    пол -> эндпоинтер/Whisper принимают паузу за голос.
+        win = max(1, step * 2)
+        inv_win = 1.0 / win
+        out = bytearray()
+        i = 0
+        limit = frame_count - win
+        while i <= limit:
+            acc = 0.0
+            for k in range(win):
+                acc += mono[i + k]
+            sample = int(acc * inv_win * gain)
+            if sample > 32767:
+                sample = 32767
+            elif sample < -32768:
+                sample = -32768
+            out += struct.pack("<h", sample)
+            i += step
+        return bytes(out)
 
     def _capabilities_bytes(self) -> bytes:
         return json.dumps({
@@ -287,10 +573,15 @@ class SessionPlaneService:
             runtime.address for runtime in self._runtimes.values()
             if runtime.connector.connected or runtime.connector.channel is not None
         ]
+        streaming = [
+            runtime.address for runtime in self._runtimes.values()
+            if runtime.connector.mic_task is not None
+        ]
         return json.dumps({
             "client_enabled": bool(self.enabled),
             "psm": int(self.psm),
             "connected": connected,
+            "streaming_mic": streaming,
         }, separators=(",", ":")).encode("utf-8")
 
     def _route_state_bytes(self) -> bytes:

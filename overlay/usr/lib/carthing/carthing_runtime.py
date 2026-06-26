@@ -14,6 +14,7 @@ accessory_orchestrator; идентичность — только через ide
 import asyncio
 import logging
 import os
+import subprocess
 import time
 
 # Часы: CTS синкает системное время в UTC -> выставляем локальную зону для strftime.
@@ -144,6 +145,7 @@ session_runner = None    # SessionRunner
 link_manager = None      # LinkManager
 hci_gate = None          # HciOperationGate
 route_patchbay = None    # VirtualRoutePatchBay
+remote_mic_process = None
 _classic_probe_done = set()
 ACTIVE_ROUTE_PROTOCOLS = {
     Protocol.CLASSIC_A2DP_SINK,
@@ -905,34 +907,131 @@ def _on_toggle_notif_blink(on):
         settings.set("notif_blink", bool(on))
 
 
-def _on_toggle_client(on):
-    # Minimal PlayNow branch: the old CTSP client toggle is now the user-visible
-    # "Mac microphone" switch. It exposes the session plane and publishes mic
-    # lifecycle state, but the actual HFP/SCO audio adapter is still a later
-    # transport implementation, not faked here.
-    enabled = bool(on)
-    if gui is not None:
+def _remote_mic_sender_args():
+    script = os.environ.get("CARTHING_REMOTE_MIC_SENDER", "/usr/lib/carthing/remote_mic_sender.py")
+    host = os.environ.get("CARTHING_MIC_HOST", "172.16.42.1")
+    port = os.environ.get("CARTHING_MIC_PORT", "49321")
+    device = os.environ.get("CARTHING_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
+    rate = os.environ.get("CARTHING_MIC_RATE", "48000")
+    channels = os.environ.get("CARTHING_MIC_CHANNELS", "2")
+    return [
+        "python3",
+        script,
+        "--host", host,
+        "--port", port,
+        "--device", device,
+        "--rate", rate,
+        "--channels", channels,
+    ]
+
+
+def _remote_mic_sender_running():
+    return remote_mic_process is not None and remote_mic_process.poll() is None
+
+
+def _remote_mic_transport(enabled):
+    return "usb_ncm_tcp" if enabled and _remote_mic_sender_running() else "none"
+
+
+async def _remote_mic_sender_monitor(process):
+    global remote_mic_process
+    while True:
+        await asyncio.sleep(1.0)
+        if process is not remote_mic_process:
+            return
+        if process.poll() is not None:
+            break
+    still_enabled = bool(
+        (gui is not None and getattr(gui.app_state, "remote_mic_enabled", False))
+        or (settings is not None and settings.get("client_enabled", False))
+    )
+    if process is remote_mic_process:
+        remote_mic_process = None
+    if gui is not None and still_enabled:
         gui.app_state.set_remote_mic(
-            enabled,
-            state="ready" if enabled else "off",
-            message="Mac ждёт голосовой канал" if enabled else "Микрофон Mac выключен",
+            True,
+            state="reconnecting",
+            message="Переподключаю Mac mic",
         )
     model.set_remote_mic(
+        True,
+        state="reconnecting" if still_enabled else "unavailable",
+        message=f"remote mic sender exited rc={process.returncode}",
+        transport="none",
+    )
+    logger.warning("remote mic sender exited early: rc=%s", process.returncode)
+    _on_publish()
+    if still_enabled:
+        retry_sec = float(os.environ.get("CARTHING_MIC_RETRY_SEC", "2.0"))
+        asyncio.get_event_loop().call_later(retry_sec, _start_remote_mic_sender)
+
+
+def _start_remote_mic_sender():
+    global remote_mic_process
+    if _remote_mic_sender_running():
+        return True
+    args = _remote_mic_sender_args()
+    try:
+        remote_mic_process = subprocess.Popen(
+            args,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+    except Exception as exc:
+        logger.warning("remote mic sender start failed: %s", exc)
+        remote_mic_process = None
+        return False
+    logger.info("remote mic sender started pid=%s args=%s", remote_mic_process.pid, " ".join(args))
+    asyncio.ensure_future(_remote_mic_sender_monitor(remote_mic_process))
+    return True
+
+
+def _stop_remote_mic_sender():
+    global remote_mic_process
+    process = remote_mic_process
+    remote_mic_process = None
+    if process is None or process.poll() is not None:
+        return
+    logger.info("remote mic sender stopping pid=%s", process.pid)
+    try:
+        process.terminate()
+    except Exception:
+        return
+
+    async def _finish_stop():
+        await asyncio.sleep(0.8)
+        if process.poll() is None:
+            try:
+                process.kill()
+            except Exception:
+                pass
+    asyncio.ensure_future(_finish_stop())
+
+
+def _on_toggle_client(on):
+    # Теперь это ГЕЙТ МИКРОФОНА (слушать/нет), управляемый показом экрана «Ассистент»
+    # (active view), а НЕ управление линком. Труба/реклама поднимаются на boot и держатся
+    # постоянно — Mac всегда на связи и ждёт. Вход на view = звук мгновенно. USB-fallback цел.
+    enabled = bool(on)
+    usb_fallback = os.environ.get("CARTHING_USB_REMOTE_MIC_ENABLE", "0") == "1"
+    sender_ok = _start_remote_mic_sender() if enabled and usb_fallback else True
+    if not enabled or not usb_fallback:
+        _stop_remote_mic_sender()
+    state = "listening" if enabled and sender_ok else ("unavailable" if enabled else "ready")
+    ui_message = "Слушаю" if enabled and sender_ok else ("Mac agent недоступен" if enabled else "Готов")
+    if gui is not None:
+        gui.app_state.set_remote_mic(enabled, state=state, message=ui_message)
+    model.set_remote_mic(
         enabled,
-        state="ready" if enabled else "off",
-        message=(
-            "Session plane включён; HFP/SCO audio adapter ещё не подключён"
-            if enabled else
-            "Микрофон Mac выключен"
-        ),
+        state=state,
+        message=ui_message,
+        transport=_remote_mic_transport(enabled) if usb_fallback else "ble_l2cap_coc",
     )
     if session_plane is not None:
-        session_plane.set_enabled(enabled)
-    if orch is not None:
-        asyncio.ensure_future(orch.set_session_advertising(enabled))
-    if settings is not None:
-        settings.set("client_enabled", enabled)
-    logger.info("remote mic/session plane -> %s", "on" if enabled else "off")
+        session_plane.set_listening(enabled)   # гейт мика, линк не трогаем
+    logger.info("remote mic listening -> %s sender=%s", "on" if enabled else "off", sender_ok)
     _on_publish()
 
 
@@ -1031,10 +1130,12 @@ def _sync_model_route_selection():
         app_state = gui.app_state
         model.route_input = str(getattr(app_state, "route_input", "") or "")
         model.route_output = str(getattr(app_state, "active_route_output", "") or "")
+        mic_enabled = bool(getattr(app_state, "remote_mic_enabled", getattr(app_state, "client_enabled", False)))
         model.set_remote_mic(
-            bool(getattr(app_state, "remote_mic_enabled", getattr(app_state, "client_enabled", False))),
+            mic_enabled,
             state=getattr(app_state, "remote_mic_state", None),
             message=getattr(app_state, "remote_mic_message", None),
+            transport=_remote_mic_transport(mic_enabled),
         )
         model.route_builder = _route_builder_snapshot(app_state)
     except Exception:
@@ -1732,6 +1833,7 @@ def _init_gui_surface():
             model.set_remote_mic(
                 gui.app_state.client_enabled,
                 state="ready" if gui.app_state.client_enabled else "off",
+                transport="none",
             )
             import ui_theme as _T
             gui.app_state.ui_theme = _T.THEME      # фактическая активная тема (после импорта)
@@ -1764,6 +1866,7 @@ async def main():
     model.set_remote_mic(
         _remote_mic_boot_enabled,
         state="ready" if _remote_mic_boot_enabled else "off",
+        transport="none",
     )
     from resource_policy import RuntimeResourcePolicy
     resource_policy = RuntimeResourcePolicy(settings=settings, hw_caps=hw_caps)
@@ -1775,6 +1878,31 @@ async def main():
         session_runner.register(CompatibilityConnector(protocol))
     logger.info("hw capabilities: %s", {k: v for k, v in hw_caps.items() if v})
     _init_gui_surface()
+
+    input_scheduled = False
+
+    def _schedule_gui_input(phase="runtime"):
+        nonlocal input_scheduled
+        if input_scheduled or gui is None:
+            return
+        try:
+            import input_handler
+
+            def _on_input(event):
+                if power is not None:
+                    power.note_activity("input")
+                gui.handle_input(event)
+
+            asyncio.ensure_future(input_handler.start(on_event=_on_input))
+            input_scheduled = True
+            _boot_milestone("input.scheduled", mode="gui", phase=phase)
+        except Exception as e:
+            _boot_milestone("input.disabled", error=type(e).__name__, phase=phase)
+            logger.warning("input disabled: %s", e)
+
+    # Touch/buttons must not wait for Bluetooth. BLE init can block/retry while
+    # the display is already alive, so schedule physical input as soon as GUI exists.
+    _schedule_gui_input("early")
 
     def _configure(device):
         global orch
@@ -1840,6 +1968,7 @@ async def main():
             model.set_remote_mic(
                 app_state.client_enabled,
                 state="ready" if app_state.client_enabled else "off",
+                transport="none",
             )
             model.set_operation_mode(
                 app_state.operation_mode,
@@ -1900,17 +2029,32 @@ async def main():
     try:
         _boot_milestone("session_plane.start")
         from session_plane_service import SessionPlaneService
+
+        def _on_session_disconnect(_address):
+            if orch is not None:
+                return orch.on_disconnect()
+            return None
+
         session_plane = SessionPlaneService(
             device,
             app_state_for_runtime,
             model,
             on_change=_on_publish,
-            on_client_toggle=_on_toggle_client,
+            # GATT client_toggle от Mac игнорируем: мик включается ТОЛЬКО показом view
+            # «Ассистент», а не фактом подключения Mac (труба всегда открыта).
+            on_client_toggle=(lambda on: logger.info("session client_toggle from Mac ignored (mic is view-driven): %s", on)),
+            on_disconnect=_on_session_disconnect,
         )
         session_plane.install()
-        session_plane.set_enabled(bool(settings.get("client_enabled", False)))
-        await orch.set_session_advertising(bool(settings.get("client_enabled", False)))
-        _boot_milestone("session_plane.ready", enabled=bool(settings.get("client_enabled", False)))
+        # Мик всегда стартует ВЫКЛЮЧЕННЫМ: его включает показ экрана «Ассистент»
+        # Труба к Mac открыта ВСЕГДА: линк + реклама C7C5 держатся постоянно (Mac на связи и
+        # ждёт пустую трубу). МИКРОФОН открывается только показом экрана «Ассистент» (active
+        # view) через session_plane.set_listening — мгновенно, без реконнекта.
+        session_plane.set_enabled(True)
+        await orch.set_session_advertising(True)
+        session_plane.set_listening(False)
+        _boot_remote_mic_enabled = False
+        _boot_milestone("session_plane.ready", enabled=_boot_remote_mic_enabled)
     except Exception as e:
         session_plane = None
         _boot_milestone("session_plane.disabled", error=type(e).__name__)
@@ -2027,20 +2171,7 @@ async def main():
 
     # Физический ввод (энкодер/кнопки/тач) -> GUI (параллельно рендеру).
     if gui is not None:
-        try:
-            import input_handler
-            def _on_input(event):
-                if power is not None:
-                    power.note_activity("input")
-                # [CLAUDE 2026-06-11] кнопка 1 ОСВОБОЖДЕНА: тумблер маршрута переехал
-                # на экранную кнопку (route_activate в нижнем баре Routes).
-                # Headless-режим ниже сохраняет btn_1 (там экрана нет).
-                gui.handle_input(event)
-            asyncio.ensure_future(input_handler.start(on_event=_on_input))
-            _boot_milestone("input.scheduled", mode="gui")
-        except Exception as e:
-            _boot_milestone("input.disabled", error=type(e).__name__)
-            logger.warning("input disabled: %s", e)
+        _schedule_gui_input("late")
     else:
         # Headless: пресет-кнопка 1 = тумблер маршрута (решение владельца 2026-06-10).
         try:

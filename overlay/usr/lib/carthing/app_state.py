@@ -786,7 +786,7 @@ class MediaSession:
 
 class AppState:
     # screen indices (navigation is explicit; no desktop swipe ring)
-    IPHONE, SETTINGS, NOTIFICATIONS, SESSIONS, ROUTER, MAC = 0, 1, 2, 3, 4, 5
+    IPHONE, SETTINGS, NOTIFICATIONS, SESSIONS, ROUTER, MAC, ASSISTANT = 0, 1, 2, 3, 4, 5, 6
     MODES = SESSIONS      # compatibility alias
     TRANSFER = ROUTER     # compatibility alias
     # index -> media source. Один home (0)=iPhone; прочие view (Settings/Notifications)
@@ -833,6 +833,9 @@ class AppState:
         self.remote_mic_enabled = False
         self.remote_mic_state = "off"    # off|ready|listening|unavailable
         self.remote_mic_message = "Микрофон Mac выключен"
+        self.assistant_text = ""
+        self.assistant_transcript = []  # живой транскрипт диалога (новейшее в конце), для AssistantScreen
+        self.assistant_status = ""      # живая строка статуса (Слушаю…/Думаю…), не в ленте
         self.ui_theme = "dark"          # [CLAUDE 2026-06-11] тема UI (dark|terminal); применяется рестартом runtime
         self.clock_text = "--:--"
         self.device_name = device_name()
@@ -965,6 +968,12 @@ class AppState:
         else:
             self.remote_mic_message = "Микрофон Mac выключен"
         self.client_enabled = bool(enabled)
+        if not enabled:
+            self.assistant_state = "idle"
+        elif self.remote_mic_state in ("ready", "listening"):
+            self.assistant_state = "listening"
+        elif self.remote_mic_state == "unavailable":
+            self.assistant_state = "idle"
         return self.remote_mic_enabled
 
     def toggle_remote_mic(self):

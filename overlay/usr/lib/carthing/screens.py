@@ -128,6 +128,71 @@ class NowPlayingScreen(Screen):
         return img
 
 
+class AssistantScreen(Screen):
+    name = "assistant"
+    title = "Ассистент"
+    fullscreen = True
+
+    def __init__(self, emit=None):
+        self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
+
+    def on_state(self, state):
+        self.state = state
+
+    def on_input(self, event):
+        # Никаких кнопок: микрофон включается самим фактом показа этого экрана.
+        return False
+
+    def on_show(self):
+        # Свайп на этот экран = начать слушать (без кнопок и wake-word).
+        self.emit("remote_mic_set", True)
+
+    def on_hide(self):
+        # Уход с экрана = перестать слушать.
+        self.emit("remote_mic_set", False)
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        right = T.ARC_SAFE_X
+        x0 = 32
+        listening = bool(getattr(self.state, "remote_mic_enabled", False)) if self.state else False
+
+        # Шапка + индикатор «слушаю» (свайп на этот экран = микрофон включён).
+        draw.text((x0, 16), "Диалог", font=T.font(34), fill=T.MUTED)
+        dot = T.STATUS_OK if listening else T.FAINT
+        draw.ellipse([right - 28, 22, right - 12, 38], fill=dot)
+        draw.line([x0, 60, right, 60], fill=T.HAIRLINE, width=2)
+
+        transcript = list(getattr(self.state, "assistant_transcript", []) or []) if self.state else []
+        f = T.font(T.SZ_BODY)
+        LH = 40
+        maxw = right - x0 * 2
+        top = 76
+        bottom = T.STATUSBAR_TOP - 12
+        fit = max(1, (bottom - top) // LH)
+
+        # Разворачиваем фразы в строки (старые сверху) и показываем последние, что влезли,
+        # новейшее — у нижнего края (как лента диалога).
+        all_lines = []
+        for utt in transcript:
+            wl = C.wrap_lines(draw, utt, f, maxw)
+            all_lines.extend(wl if wl else [utt])
+        shown = all_lines[-fit:]
+        if not shown:
+            C.text_centered(draw, "Слушаю. Говорите…", T.font(T.SZ_META), T.FAINT,
+                            (top + bottom) // 2, cx=right // 2)
+            return img
+        y = bottom - len(shown) * LH
+        if y < top:
+            y = top
+        last = len(shown) - 1
+        for idx, line in enumerate(shown):
+            draw.text((x0, y), line, font=f, fill=(T.FG if idx == last else T.MUTED))
+            y += LH
+        return img
+
+
 class MacOSScreen(Screen):
     name = "macos"
     title = "macOS"
