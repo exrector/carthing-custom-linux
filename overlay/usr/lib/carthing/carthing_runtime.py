@@ -1011,9 +1011,10 @@ def _stop_remote_mic_sender():
 
 
 def _on_toggle_client(on):
-    # Теперь это ГЕЙТ МИКРОФОНА (слушать/нет), управляемый показом экрана «Ассистент»
-    # (active view), а НЕ управление линком. Труба/реклама поднимаются на boot и держатся
-    # постоянно — Mac всегда на связи и ждёт. Вход на view = звук мгновенно. USB-fallback цел.
+    # ГЕЙТ АССИСТЕНТА от показа экрана (active view). HCI-БЕЗОПАСНО: реклама C7C5 поднимается
+    # ТОЛЬКО на время показа экрана и снимается при уходе — когда ассистент не открыт, у мика
+    # ноль HCI-следа, базовый BLE/iPhone/bumble не трогаются. Вход на view → реклама → Mac
+    # коннектится → мик. USB-fallback цел.
     enabled = bool(on)
     usb_fallback = os.environ.get("CARTHING_USB_REMOTE_MIC_ENABLE", "0") == "1"
     sender_ok = _start_remote_mic_sender() if enabled and usb_fallback else True
@@ -1030,7 +1031,10 @@ def _on_toggle_client(on):
         transport=_remote_mic_transport(enabled) if usb_fallback else "ble_l2cap_coc",
     )
     if session_plane is not None:
-        session_plane.set_listening(enabled)   # гейт мика, линк не трогаем
+        session_plane.set_listening(enabled)   # гейт мика
+    if orch is not None:
+        # Реклама C7C5 строго по показу экрана — никаких HCI-команд, пока ассистент закрыт.
+        asyncio.ensure_future(orch.set_session_advertising(enabled))
     logger.info("remote mic listening -> %s sender=%s", "on" if enabled else "off", sender_ok)
     _on_publish()
 
@@ -2047,11 +2051,12 @@ async def main():
         )
         session_plane.install()
         # Мик всегда стартует ВЫКЛЮЧЕННЫМ: его включает показ экрана «Ассистент»
-        # Труба к Mac открыта ВСЕГДА: линк + реклама C7C5 держатся постоянно (Mac на связи и
-        # ждёт пустую трубу). МИКРОФОН открывается только показом экрана «Ассистент» (active
-        # view) через session_plane.set_listening — мгновенно, без реконнекта.
+        # HCI-БЕЗОПАСНО: session-plane готов, но C7C5 НЕ рекламится и мик выключен. Пока экран
+        # «Ассистент» не открыт — у мика НОЛЬ HCI-следа, базовый BLE/iPhone/bumble не трогаются.
+        # Реклама C7C5 + мик поднимаются строго показом экрана (_on_toggle_client) и снимаются
+        # при уходе. Так моя надстройка не может помешать работе HCI/bumble.
         session_plane.set_enabled(True)
-        await orch.set_session_advertising(True)
+        await orch.set_session_advertising(False)
         session_plane.set_listening(False)
         _boot_remote_mic_enabled = False
         _boot_milestone("session_plane.ready", enabled=_boot_remote_mic_enabled)
