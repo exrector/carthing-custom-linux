@@ -186,7 +186,7 @@ class AccessoryOrchestrator:
                     "iphone-advertising",
                     lambda: self.device.start_advertising(
                         own_address_type=OwnAddressType.PUBLIC,
-                        auto_restart=True,
+                        auto_restart=False,
                         advertising_filter_policy=0x00,
                     ),
                 )
@@ -299,6 +299,9 @@ class AccessoryOrchestrator:
     async def on_disconnect(self):
         self.media_connected = False
         await asyncio.sleep(0.5)
+        if self.media_connected:
+            logger.info("stale iPhone disconnect recovery cancelled")
+            return
         if self.pairing_armed:
             await self.apply_visibility()
             return

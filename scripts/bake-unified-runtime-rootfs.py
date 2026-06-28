@@ -26,9 +26,11 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "338a2728ee81dec1609beaac55448d777a1682b4"
+EXPECTED_RUNTIME_TREE_SHA1 = "4cc79537e0ae085dbdd0c2c66cf21f7e42410416"
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
+    "libcarthing_voice_dsp.so",
+    "libspeexdsp.so.1",
 )
 RETIRED_RUNTIME_FILES = (
     "a2dp_bridge.py",

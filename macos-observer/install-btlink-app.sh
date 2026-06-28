@@ -4,7 +4,8 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_DIR=${CARTHING_BTLINK_APP_DIR:-"$HOME/Applications/CarThingBTLink.app"}
 SOURCE_BIN=${1:-"$ROOT/.build/release/CarThingBTLink"}
-IDENTITY=${CARTHING_CODESIGN_IDENTITY:--}
+SIGNING_TEAM=${CARTHING_CODESIGN_TEAM:-66CSVZPSDT}
+IDENTITY=${CARTHING_CODESIGN_IDENTITY:-}
 AGENT_TEMPLATE="$ROOT/launchd/com.carthing.btlink.plist"
 AGENT_PATH="$HOME/Library/LaunchAgents/com.carthing.btlink.plist"
 LOAD_AGENT=${CARTHING_BTLINK_LOAD_AGENT:-1}
@@ -12,6 +13,17 @@ DOMAIN="gui/$(id -u)"
 
 [ -x "$SOURCE_BIN" ] || {
     echo "missing release binary: $SOURCE_BIN" >&2
+    exit 1
+}
+
+if [ -z "$IDENTITY" ]; then
+    IDENTITY=$(
+        security find-identity -v -p codesigning \
+            | awk -v team="$SIGNING_TEAM" 'index($0, team) { print $2; exit }'
+    )
+fi
+[ -n "$IDENTITY" ] || {
+    echo "missing Apple Development signing identity for team $SIGNING_TEAM" >&2
     exit 1
 }
 

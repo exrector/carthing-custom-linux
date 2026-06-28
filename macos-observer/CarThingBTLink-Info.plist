@@ -22,7 +22,9 @@
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>Bluetooth connects Car Thing microphones to the voice assistant.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Bluetooth connects Car Thing microphones to the voice assistant.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition transcribes audio streamed from Car Thing.</string>
 </dict>
 </plist>

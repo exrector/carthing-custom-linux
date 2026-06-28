@@ -14,6 +14,8 @@
         <string>1</string>
         <key>CARTHING_BT_TCP_PORT</key>
         <string>49500</string>
+        <key>CARTHING_BT_EVENT_PORT</key>
+        <string>49501</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
@@ -22,7 +24,7 @@
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>ProcessType</key>
-    <string>Background</string>
+    <string>Interactive</string>
     <key>StandardOutPath</key>
     <string>/dev/null</string>
     <key>StandardErrorPath</key>

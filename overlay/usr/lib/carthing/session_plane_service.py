@@ -37,22 +37,11 @@ T_AUDIO_PCM16 = 0x06
 T_ERROR = 0x08
 T_AUDIO_IMA_ADPCM = 0x09
 
-IMA_INDEX_TABLE = (-1, -1, -1, -1, 2, 4, 6, 8) * 2
-IMA_STEP_TABLE = (
-    7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31,
-    34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130,
-    143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449,
-    494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411,
-    1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026,
-    4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442,
-    11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623,
-    27086, 29794, 32767,
-)
-
 try:
-    from remote_mic_sender import AlsaPcmCapture
+    from remote_mic_sender import AlsaPcmCapture, CarThingVoiceDsp
 except Exception:  # pragma: no cover - device runtime fallback only
     AlsaPcmCapture = None
+    CarThingVoiceDsp = None
 
 
 @dataclass
@@ -65,8 +54,6 @@ class SessionConnector:
     last_seen: float = 0.0
     last_error: str = ""
     rx_buffer: bytearray = field(default_factory=bytearray)
-    adpcm_predictor: int = 0
-    adpcm_index: int = 0
 
 
 @dataclass
@@ -93,6 +80,7 @@ class SessionPlaneService:
         on_change=None,
         on_client_toggle=None,
         on_disconnect=None,
+        hci_gate=None,
     ):
         self.device = device
         self.state = app_state
@@ -100,6 +88,7 @@ class SessionPlaneService:
         self.on_change = on_change or (lambda: None)
         self.on_client_toggle = on_client_toggle or (lambda enabled: None)
         self.on_disconnect = on_disconnect or (lambda address: None)
+        self.hci_gate = hci_gate
         self.enabled = False
         self.psm = 0
         self._server = None
@@ -108,6 +97,11 @@ class SessionPlaneService:
         self._psm_char: Characteristic | None = None
         self._installed = False
         self._listening = False   # гейт микрофона: труба открыта всегда, звук течёт только при True
+
+    async def _gate(self, label, operation):
+        if self.hci_gate is None:
+            return await operation()
+        return await self.hci_gate.run(label, operation)
 
     def install(self):
         if self._installed:
@@ -164,7 +158,7 @@ class SessionPlaneService:
 
     def set_enabled(self, enabled: bool):
         # enabled = линк/сессия активна (труба открыта). Сам микрофон НЕ стартуется здесь —
-        # им управляет self._listening (показ экрана «Ассистент»).
+        # им управляет сохранённый пользовательский переключатель self._listening.
         self.enabled = bool(enabled)
         if not self.enabled:
             self.set_listening(False)
@@ -172,8 +166,8 @@ class SessionPlaneService:
         self._notify_status()
 
     def set_listening(self, on: bool):
-        # Гейт микрофона от состояния активного view. Труба остаётся открытой; работающий
-        # _mic_loop сам открывает/закрывает ALSA по этому флагу (мгновенно, без реконнекта).
+        # Труба остаётся открытой; _mic_loop открывает/закрывает ALSA по этому
+        # флагу мгновенно, без переподключения Bluetooth.
         on = bool(on)
         if self._listening == on:
             return
@@ -229,24 +223,33 @@ class SessionPlaneService:
     async def _tune_connection(self, connection):
         try:
             from bumble.hci import Phy
-            await connection.set_phy([Phy.LE_2M], [Phy.LE_2M])
+            await self._gate(
+                "session-set-phy",
+                lambda: connection.set_phy([Phy.LE_2M], [Phy.LE_2M]),
+            )
             logger.info("session LE 2M PHY requested")
         except Exception as exc:
             logger.info("session LE PHY unchanged: %s", exc)
         try:
-            await connection.update_parameters(
-                connection_interval_min=15.0,
-                connection_interval_max=15.0,
-                max_latency=0,
-                supervision_timeout=6000.0,
-                use_l2cap=True,
+            await self._gate(
+                "session-update-parameters",
+                lambda: connection.update_parameters(
+                    connection_interval_min=30.0,
+                    connection_interval_max=30.0,
+                    max_latency=0,
+                    supervision_timeout=6000.0,
+                    use_l2cap=True,
+                ),
             )
-            logger.info("session LE interval requested: 15ms")
+            logger.info("session LE interval requested: 30ms")
         except Exception as exc:
             logger.info("session LE interval unchanged: %s", exc)
         await asyncio.sleep(0.75)
         try:
-            await connection.set_data_length(251, 2120)
+            await self._gate(
+                "session-set-data-length",
+                lambda: connection.set_data_length(251, 2120),
+            )
             logger.info("session LE data length requested: 251 octets")
         except Exception as exc:
             logger.info("session LE data length unchanged: %s", exc)
@@ -432,13 +435,11 @@ class SessionPlaneService:
 
     def _start_mic(self, runtime, channel):
         self._stop_mic(runtime)
-        if AlsaPcmCapture is None:
+        if AlsaPcmCapture is None or CarThingVoiceDsp is None:
             runtime.connector.last_error = "mic_capture_unavailable"
             self._write(channel, T_ERROR, b"mic_capture_unavailable")
             self._sync_model()
             return
-        runtime.connector.adpcm_predictor = 0
-        runtime.connector.adpcm_index = 0
         runtime.connector.mic_task = asyncio.create_task(self._mic_loop(runtime, channel))
         logger.info("session remote mic started: peer=%s", runtime.address)
         self._sync_model()
@@ -490,12 +491,16 @@ class SessionPlaneService:
         target_rate = 8000
         read_frames = int(os.environ.get("CARTHING_BT_MIC_READ_FRAMES", "4800"))
         gain = float(os.environ.get("CARTHING_BT_MIC_GAIN", "2.0"))
-        mix_mode = os.environ.get("CARTHING_BT_MIC_MIX", "avg").strip().lower()
+        noise_suppress_db = int(
+            os.environ.get("CARTHING_BT_MIC_NOISE_SUPPRESS_DB", "-24")
+        )
         cap = None
+        preprocessor = None
+        pending_audio = bytearray()
+        process_bytes = read_frames * source_channels * 2
         try:
-            # Труба к Mac держится постоянно (задача жива весь коннект), но ALSA-захват
-            # включается ТОЛЬКО когда self._listening (показан экран «Ассистент»). Вход на
-            # view = звук мгновенно, без реконнекта; уход = ALSA освобождается.
+            # Труба к Mac держится постоянно, а ALSA-захват управляется сохранённым
+            # переключателем микрофона без разрыва Bluetooth-сессии.
             while getattr(runtime.connector, "channel", None) is channel:
                 if not self._listening:
                     if cap is not None:
@@ -504,6 +509,13 @@ class SessionPlaneService:
                         except Exception:
                             pass
                         cap = None
+                        if preprocessor is not None:
+                            try:
+                                preprocessor.close()
+                            except Exception:
+                                pass
+                            preprocessor = None
+                        pending_audio.clear()
                         logger.info("session remote mic paused (view off): peer=%s", runtime.address)
                     await asyncio.sleep(0.05)
                     continue
@@ -511,24 +523,40 @@ class SessionPlaneService:
                     self._set_device_mic_gain()
                     cap = AlsaPcmCapture(device, source_rate, source_channels)
                     info = cap.open()
+                    if CarThingVoiceDsp is not None:
+                        preprocessor = await asyncio.to_thread(
+                            CarThingVoiceDsp,
+                            noise_suppress_db,
+                        )
                     logger.info(
-                        "session remote mic capture open: peer=%s device=%s rate=%s channels=%s gain=%.2f info=%s",
-                        runtime.address, device, source_rate, source_channels, gain, info,
+                        "session remote mic capture open: peer=%s device=%s rate=%s channels=%s target_rate=%s gain=%.2f denoise=%s info=%s",
+                        runtime.address,
+                        device,
+                        source_rate,
+                        source_channels,
+                        target_rate,
+                        gain,
+                        preprocessor.backend,
+                        info,
                     )
                 raw = await asyncio.to_thread(cap.read, read_frames)
                 if not raw:
                     await asyncio.sleep(0.01)
                     continue
-                pcm16 = self._downmix_resample_16k(raw, source_rate, source_channels, target_rate, gain, mix_mode)
-                if pcm16:
-                    payload, predictor, index = self._ima_adpcm_encode(
-                        pcm16,
-                        runtime.connector.adpcm_predictor,
-                        runtime.connector.adpcm_index,
-                    )
-                    runtime.connector.adpcm_predictor = predictor
-                    runtime.connector.adpcm_index = index
-                    self._write(channel, T_AUDIO_IMA_ADPCM, payload)
+                pending_audio.extend(raw)
+                while len(pending_audio) >= process_bytes:
+                    block = bytes(pending_audio[:process_bytes])
+                    del pending_audio[:process_bytes]
+                    if preprocessor is not None:
+                        payload = preprocessor.process(
+                            block,
+                            source_channels,
+                            gain,
+                        )
+                    else:
+                        payload = b""
+                    if payload:
+                        self._write(channel, T_AUDIO_IMA_ADPCM, payload)
                 await asyncio.sleep(0)
         except asyncio.CancelledError:
             raise
@@ -544,6 +572,11 @@ class SessionPlaneService:
             if cap is not None:
                 try:
                     cap.close()
+                except Exception:
+                    pass
+            if preprocessor is not None:
+                try:
+                    preprocessor.close()
                 except Exception:
                     pass
             if getattr(runtime.connector, "mic_task", None) is asyncio.current_task():
@@ -602,96 +635,6 @@ class SessionPlaneService:
             logger.warning("mic HCIC gain ignored: %s", exc)
         finally:
             os.close(fd)
-
-    @staticmethod
-    def _downmix_resample_16k(
-        raw: bytes,
-        source_rate: int,
-        channels: int,
-        target_rate: int,
-        gain: float = 1.0,
-        mix_mode: str = "avg",
-    ) -> bytes:
-        if channels <= 0 or source_rate <= 0:
-            return b""
-        bytes_per_frame = channels * 2
-        frame_count = len(raw) // bytes_per_frame
-        if frame_count <= 0:
-            return b""
-        step = max(1, int(round(source_rate / target_rate)))
-        gain = max(0.1, min(float(gain), 12.0))
-        # 1) downmix всех каналов -> моно @source_rate СРЕДНИМ (не maxabs: maxabs
-        #    сшивает куски разных миков и плодит широкополосный треск).
-        unpack = struct.unpack_from
-        inv_ch = 1.0 / channels
-        mono = [0.0] * frame_count
-        for f in range(frame_count):
-            base = f * bytes_per_frame
-            s = 0
-            for ch in range(channels):
-                s += unpack("<h", raw, base + ch * 2)[0]
-            mono[f] = s * inv_ch
-        # 2) box-FIR анти-алиас окном 2*step (нуль АЧХ на целевом Nyquist) + хоп step.
-        #    Без него дециммация "каждый 3-й" заворачивает 8-24кГц в речь как шипящий
-        #    пол -> эндпоинтер/Whisper принимают паузу за голос.
-        win = max(1, step * 2)
-        inv_win = 1.0 / win
-        out = bytearray()
-        i = 0
-        limit = frame_count - win
-        while i <= limit:
-            acc = 0.0
-            for k in range(win):
-                acc += mono[i + k]
-            sample = int(acc * inv_win * gain)
-            if sample > 32767:
-                sample = 32767
-            elif sample < -32768:
-                sample = -32768
-            out += struct.pack("<h", sample)
-            i += step
-        return bytes(out)
-
-    @staticmethod
-    def _ima_adpcm_encode(pcm16: bytes, predictor: int = 0, index: int = 0):
-        count = len(pcm16) // 2
-        if count <= 0:
-            return b"", predictor, index
-        samples = struct.unpack("<%dh" % count, pcm16[:count * 2])
-        if predictor == 0 and index == 0:
-            predictor = int(samples[0])
-        start_predictor = predictor
-        start_index = max(0, min(88, int(index)))
-        nibbles = []
-        for sample in samples:
-            step = IMA_STEP_TABLE[index]
-            diff = int(sample) - predictor
-            code = 0
-            if diff < 0:
-                code = 8
-                diff = -diff
-            delta = step >> 3
-            if diff >= step:
-                code |= 4
-                diff -= step
-                delta += step
-            if diff >= (step >> 1):
-                code |= 2
-                diff -= step >> 1
-                delta += step >> 1
-            if diff >= (step >> 2):
-                code |= 1
-                delta += step >> 2
-            predictor += -delta if code & 8 else delta
-            predictor = max(-32768, min(32767, predictor))
-            index = max(0, min(88, index + IMA_INDEX_TABLE[code]))
-            nibbles.append(code)
-        packed = bytearray()
-        for offset in range(0, len(nibbles), 2):
-            low = nibbles[offset]
-            high = nibbles[offset + 1] if offset + 1 < len(nibbles) else 0
-            packed.append(low | (high << 4))
-        return struct.pack("<hBB", start_predictor, start_index, 0) + bytes(packed), predictor, index
 
     def _capabilities_bytes(self) -> bytes:
         return json.dumps({

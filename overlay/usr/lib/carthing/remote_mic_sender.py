@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import errno
 import fcntl
 import os
+from pathlib import Path
 import socket
 import struct
 import sys
@@ -148,6 +150,67 @@ class AlsaPcmCapture:
             pass
         os.close(self.fd)
         self.fd = -1
+
+
+class CarThingVoiceDsp:
+    """Native 48 kHz/4ch to 8 kHz/mono/Speex/IMA-ADPCM pipeline."""
+
+    def __init__(self, noise_suppress_db=-24):
+        library = Path(__file__).with_name("libcarthing_voice_dsp.so")
+        self.lib = ctypes.CDLL(str(library))
+        self.lib.carthing_voice_dsp_create.argtypes = [ctypes.c_int]
+        self.lib.carthing_voice_dsp_create.restype = ctypes.c_void_p
+        self.lib.carthing_voice_dsp_destroy.argtypes = [ctypes.c_void_p]
+        self.lib.carthing_voice_dsp_backend.argtypes = [ctypes.c_void_p]
+        self.lib.carthing_voice_dsp_backend.restype = ctypes.c_char_p
+        self.lib.carthing_voice_dsp_process.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int16),
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_int,
+        ]
+        self.lib.carthing_voice_dsp_process.restype = ctypes.c_int
+        self.state = self.lib.carthing_voice_dsp_create(
+            int(noise_suppress_db)
+        )
+        if not self.state:
+            raise RuntimeError("carthing_voice_dsp_create failed")
+        self.backend = self.lib.carthing_voice_dsp_backend(self.state).decode(
+            "ascii", "replace"
+        )
+
+    def process(self, raw, channels, gain):
+        channels = int(channels)
+        sample_count = len(raw) // 2
+        input_frames = sample_count // channels
+        if input_frames <= 0:
+            return b""
+        samples_8k = input_frames // 6
+        output_capacity = 4 + (samples_8k + 1) // 2
+        input_buffer = (ctypes.c_int16 * sample_count).from_buffer_copy(
+            raw[:sample_count * 2]
+        )
+        output_buffer = (ctypes.c_uint8 * output_capacity)()
+        size = self.lib.carthing_voice_dsp_process(
+            self.state,
+            input_buffer,
+            input_frames,
+            channels,
+            int(float(gain) * 256),
+            output_buffer,
+            output_capacity,
+        )
+        if size < 0:
+            raise RuntimeError(f"carthing_voice_dsp_process failed: {size}")
+        return bytes(output_buffer[:size])
+
+    def close(self):
+        if self.state:
+            self.lib.carthing_voice_dsp_destroy(self.state)
+            self.state = None
 
 
 def send_header(sock: socket.socket, rate: int, channels: int) -> None:

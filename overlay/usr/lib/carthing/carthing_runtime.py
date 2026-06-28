@@ -32,6 +32,7 @@ PUBLISH_EVERY = 5
 model = RuntimeModel()
 orch = None
 iphone = None
+iphone_connection = None
 gui = None
 settings = None
 power = None
@@ -241,8 +242,32 @@ async def _sync_trusted_iphone(connection):
         logger.warning("trusted iPhone sync failed: %s", error)
 
 
+def _is_trusted_iphone_peer(peer):
+    if gui is None:
+        return False
+    try:
+        from app_state import normalize_address
+
+        address = normalize_address(peer)
+        return any(
+            normalize_address(source.get("address")) == address
+            for source in gui.app_state.trusted_sources
+        )
+    except Exception:
+        return False
+
+
+def _connection_is_active(connection):
+    if connection is None or orch is None:
+        return False
+    try:
+        return orch.device.connections.get(connection.handle) is connection
+    except Exception:
+        return False
+
+
 async def _on_connection(connection):
-    global iphone
+    global iphone, iphone_connection
 
     peer = getattr(connection, "peer_address", "?")
     if _is_classic(connection):
@@ -263,11 +288,25 @@ async def _on_connection(connection):
         orch is not None
         and session_plane is not None
         and orch.is_session_connection()
+        and not _is_trusted_iphone_peer(peer)
         and session_plane.on_connection(connection)
     ):
         await orch.on_session_connection_started()
         return
 
+    if (
+        iphone_connection is not None
+        and iphone_connection is not connection
+        and _connection_is_active(iphone_connection)
+    ):
+        logger.warning("duplicate iPhone connection rejected: %s", peer)
+        try:
+            await connection.disconnect()
+        except Exception:
+            pass
+        return
+
+    iphone_connection = connection
     await orch.on_le_connection_started()
 
     from iphone_service import IPhoneService
@@ -277,7 +316,12 @@ async def _on_connection(connection):
 
     async def start_iphone_services(reason):
         nonlocal started
-        if started or not getattr(connection, "is_encrypted", False):
+        if (
+            started
+            or iphone_connection is not connection
+            or not _connection_is_active(connection)
+            or not getattr(connection, "is_encrypted", False)
+        ):
             return
         started = True
         logger.info("iPhone services start (%s)", reason)
@@ -287,13 +331,22 @@ async def _on_connection(connection):
             started = False
             logger.warning("iPhone services failed: %s", error)
             return
+        if iphone_connection is not connection or not _connection_is_active(connection):
+            return
         await _sync_trusted_iphone(connection)
         await orch.on_bonded()
         await orch.start_session_bootstrap()
 
-    def disconnected(*_args):
+    def disconnected(reason=None, *_args):
+        global iphone, iphone_connection
+        if iphone_connection is not connection:
+            logger.info("stale iPhone disconnect ignored: %s reason=%s", peer, reason)
+            return
+        logger.info("iPhone disconnected: %s reason=%s", peer, reason)
+        iphone_connection = None
         if iphone is not None:
             iphone.reset()
+            iphone = None
         if orch is not None:
             asyncio.create_task(orch.on_disconnect())
 
@@ -514,6 +567,7 @@ async def main():
             on_change=_publish,
             on_client_toggle=_on_toggle_client,
             on_disconnect=lambda _address: orch.on_session_disconnect(),
+            hci_gate=hci_gate,
         )
         session_plane.install()
         session_plane.set_enabled(True)

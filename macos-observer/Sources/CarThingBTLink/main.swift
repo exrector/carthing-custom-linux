@@ -17,8 +17,8 @@ private final class TCPAudioClient {
 final class CarThingBTLink {
     private let transport = TransportCore()
     private let output = FileHandle.standardOutput
-    private let engine = AVAudioEngine()
-    private let mixer: AVAudioMixerNode
+    private var engine: AVAudioEngine?
+    private var mixer: AVAudioMixerNode?
     private var playerNode: AVAudioPlayerNode?
     private var connected = false
     private var streaming = false
@@ -34,13 +34,20 @@ final class CarThingBTLink {
     // TCP-режим: агент живёт под launchd (там CB/TCC работают), а потребитель (bt_whisper)
     // цепляется по локальному TCP — отдаём аудио, принимаем команды (text ...).
     private let tcpPort = ProcessInfo.processInfo.environment["CARTHING_BT_TCP_PORT"].flatMap { UInt16($0) }
+    private let eventPort = ProcessInfo.processInfo.environment["CARTHING_BT_EVENT_PORT"].flatMap { UInt16($0) }
     private var listener: NWListener?
+    private var eventListener: NWListener?
     private var clients: [TCPAudioClient] = []    // доступ только с main
+    private var eventClients: [NWConnection] = [] // доступ только с main
     private var rxText = Data()
     private let netQueue = DispatchQueue(label: "carthing.bt.tcp")
+    private lazy var speechPipeline = AppleSpeechPipeline { [weak self] text, isFinal in
+        DispatchQueue.main.async {
+            self?.broadcastSpeech(text: text, isFinal: isFinal)
+        }
+    }
 
     init() {
-        mixer = engine.mainMixerNode
         transport.onEvent = { [weak self] event in
             self?.handle(event)
         }
@@ -53,15 +60,8 @@ final class CarThingBTLink {
             output.write(Data(bytes: &sampleRate, count: 4))   // в TCP-режиме SR шлём по коннекту
         }
 
-        // The launchd/TCP path is capture-only. Starting AVAudioEngine here can
-        // block on the current system output and delays the Bluetooth server.
-        if tcpPort == nil {
-            engine.connect(mixer, to: engine.outputNode, format: nil)
-            do {
-                try engine.start()
-            } catch {
-                fputs("carthing-btlink: playback engine error: \(error)\n", stderr)
-            }
+        if tcpPort == nil, !startPlaybackEngine() {
+            fputs("carthing-btlink: playback engine unavailable\n", stderr)
         }
 
         // ВСЕГДА: без source main RunLoop.run() возвращается сразу → процесс выходит ещё
@@ -71,6 +71,10 @@ final class CarThingBTLink {
         if let p = tcpPort {
             installSignalHandlers()
             startTCP(p)               // аудио + команды через локальный TCP, stdin не нужен
+            if let eventPort {
+                startEventTCP(eventPort)
+                speechPipeline.start()
+            }
         } else if headless {
             // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
             // EOF → exit(0); это и был флап). Реконнект — внутренний (scanRetry/l2capClosed).
@@ -232,6 +236,8 @@ final class CarThingBTLink {
     private func writeFloat32PCM(from pcm16: Data) {
         let sampleCount = pcm16.count / 2
         guard sampleCount > 0 else { return }
+        var samples = [Int16]()
+        samples.reserveCapacity(sampleCount)
         var floats = [Float]()
         floats.reserveCapacity(sampleCount)
         for index in 0..<sampleCount {
@@ -239,8 +245,10 @@ final class CarThingBTLink {
             let lo = UInt16(pcm16[offset])
             let hi = UInt16(pcm16[offset + 1]) << 8
             let sample = Int16(bitPattern: hi | lo)
+            samples.append(sample)
             floats.append(max(-1.0, min(1.0, Float(sample) / 32768.0)))
         }
+        speechPipeline.append(samples: samples, sampleRate: 16_000)
         emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
     }
 
@@ -263,6 +271,8 @@ final class CarThingBTLink {
         guard data.count >= 4 else { return }
         var predictor = Int(Int16(bitPattern: UInt16(data[0]) | (UInt16(data[1]) << 8)))
         var index = max(0, min(88, Int(data[2])))
+        var samples: [Int16] = []
+        samples.reserveCapacity((data.count - 4) * 2)
         var floats: [Float] = []
         floats.reserveCapacity((data.count - 4) * 4)
         for byte in data.dropFirst(4) {
@@ -275,11 +285,13 @@ final class CarThingBTLink {
                 predictor += code & 8 != 0 ? -delta : delta
                 predictor = max(-32768, min(32767, predictor))
                 index = max(0, min(88, index + Self.imaIndexTable[code]))
+                samples.append(Int16(predictor))
                 let value = max(-1.0, min(1.0, Float(predictor) / 32768.0))
                 floats.append(value)
                 floats.append(value)
             }
         }
+        speechPipeline.append(samples: samples, sampleRate: 8_000)
         emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
     }
 
@@ -307,7 +319,11 @@ final class CarThingBTLink {
     private func startTCP(_ port: UInt16) {
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
-        guard let l = try? NWListener(using: params, on: NWEndpoint.Port(rawValue: port)!) else {
+        params.requiredLocalEndpoint = .hostPort(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port)!
+        )
+        guard let l = try? NWListener(using: params) else {
             fputs("carthing-btlink: TCP listen failed port=\(port)\n", stderr)
             return
         }
@@ -315,6 +331,25 @@ final class CarThingBTLink {
         l.newConnectionHandler = { [weak self] conn in self?.acceptConn(conn) }
         l.start(queue: netQueue)
         fputs("carthing-btlink: TCP server on 127.0.0.1:\(port)\n", stderr)
+    }
+
+    private func startEventTCP(_ port: UInt16) {
+        let params = NWParameters.tcp
+        params.allowLocalEndpointReuse = true
+        params.requiredLocalEndpoint = .hostPort(
+            host: "127.0.0.1",
+            port: NWEndpoint.Port(rawValue: port)!
+        )
+        guard let listener = try? NWListener(using: params) else {
+            fputs("carthing-btlink: event TCP listen failed port=\(port)\n", stderr)
+            return
+        }
+        eventListener = listener
+        listener.newConnectionHandler = { [weak self] connection in
+            self?.acceptEventConn(connection)
+        }
+        listener.start(queue: netQueue)
+        fputs("carthing-btlink: speech events on 127.0.0.1:\(port)\n", stderr)
     }
 
     private func acceptConn(_ conn: NWConnection) {
@@ -339,9 +374,47 @@ final class CarThingBTLink {
         conn.start(queue: netQueue)
     }
 
+    private func acceptEventConn(_ conn: NWConnection) {
+        conn.stateUpdateHandler = { [weak self] state in
+            switch state {
+            case .ready:
+                DispatchQueue.main.async {
+                    self?.eventClients.append(conn)
+                    self?.receiveText(conn)
+                }
+                fputs("carthing-btlink: speech event client connected\n", stderr)
+            case .failed, .cancelled:
+                self?.removeConn(conn)
+            default:
+                break
+            }
+        }
+        conn.start(queue: netQueue)
+    }
+
     private func removeConn(_ conn: NWConnection) {
         DispatchQueue.main.async { [weak self] in
             self?.clients.removeAll { $0.connection === conn }
+            self?.eventClients.removeAll { $0 === conn }
+        }
+    }
+
+    private func broadcastSpeech(text: String, isFinal: Bool) {
+        let object: [String: Any] = [
+            "type": isFinal ? "final" : "partial",
+            "text": text,
+            "timestamp": Date().timeIntervalSince1970,
+        ]
+        guard var data = try? JSONSerialization.data(withJSONObject: object) else {
+            return
+        }
+        data.append(0x0A)
+        for connection in eventClients {
+            connection.send(content: data, completion: .contentProcessed { [weak self] error in
+                if error != nil {
+                    self?.removeConn(connection)
+                }
+            })
         }
     }
 
@@ -400,6 +473,14 @@ final class CarThingBTLink {
     }
 
     private func play(_ path: String) {
+        guard tcpPort == nil else {
+            fputs("carthing-btlink: play ignored in capture-only TCP mode\n", stderr)
+            return
+        }
+        guard startPlaybackEngine(), let engine, let mixer else {
+            fputs("carthing-btlink: playback engine unavailable\n", stderr)
+            return
+        }
         let url = URL(fileURLWithPath: path)
         guard let file = try? AVAudioFile(forReading: url) else {
             fputs("carthing-btlink: cannot open \(path)\n", stderr)
@@ -417,6 +498,34 @@ final class CarThingBTLink {
         }
         node.play()
         playerNode = node
+    }
+
+    private func startPlaybackEngine() -> Bool {
+        if let engine {
+            if engine.isRunning {
+                return true
+            }
+            do {
+                try engine.start()
+                return true
+            } catch {
+                fputs("carthing-btlink: playback engine error: \(error)\n", stderr)
+                return false
+            }
+        }
+
+        let newEngine = AVAudioEngine()
+        let newMixer = newEngine.mainMixerNode
+        newEngine.connect(newMixer, to: newEngine.outputNode, format: nil)
+        do {
+            try newEngine.start()
+            engine = newEngine
+            mixer = newMixer
+            return true
+        } catch {
+            fputs("carthing-btlink: playback engine error: \(error)\n", stderr)
+            return false
+        }
     }
 
     private func stopMic() {

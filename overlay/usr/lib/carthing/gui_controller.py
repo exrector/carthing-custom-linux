@@ -43,7 +43,6 @@ class GuiController:
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self._volume_touch_ts = 0.0
-        self._previous_iphone_connected = False
 
         self.dispatcher = Dispatcher(
             self.app_state,
@@ -162,10 +161,6 @@ class GuiController:
             state.iphone.position = 0.0
             state.iphone.playing = False
             state.iphone.supported_commands = set()
-
-        if state.iphone.connected and not self._previous_iphone_connected:
-            self.show_home()
-        self._previous_iphone_connected = state.iphone.connected
 
         remote_mic = dict(getattr(model, "remote_mic", {}) or {})
         state.set_remote_mic(
