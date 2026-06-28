@@ -153,16 +153,35 @@ class AlsaPcmCapture:
 
 
 class CarThingVoiceDsp:
-    """Native 48 kHz/4ch to 8 kHz/mono/Speex/IMA-ADPCM pipeline."""
+    """Native 48 kHz/4ch to mono/Speex/IMA-ADPCM pipeline."""
 
-    def __init__(self, noise_suppress_db=-24):
+    def __init__(
+        self,
+        noise_suppress_db=-24,
+        target_rate=8000,
+        codec="ima_adpcm",
+        bitrate=20000,
+    ):
         library = Path(__file__).with_name("libcarthing_voice_dsp.so")
         self.lib = ctypes.CDLL(str(library))
-        self.lib.carthing_voice_dsp_create.argtypes = [ctypes.c_int]
+        self.lib.carthing_voice_dsp_create.argtypes = [
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
         self.lib.carthing_voice_dsp_create.restype = ctypes.c_void_p
         self.lib.carthing_voice_dsp_destroy.argtypes = [ctypes.c_void_p]
         self.lib.carthing_voice_dsp_backend.argtypes = [ctypes.c_void_p]
         self.lib.carthing_voice_dsp_backend.restype = ctypes.c_char_p
+        self.lib.carthing_voice_dsp_target_rate.argtypes = [ctypes.c_void_p]
+        self.lib.carthing_voice_dsp_target_rate.restype = ctypes.c_int
+        self.lib.carthing_voice_dsp_get_stats.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int32),
+            ctypes.c_int,
+        ]
+        self.lib.carthing_voice_dsp_get_stats.restype = ctypes.c_int
         self.lib.carthing_voice_dsp_process.argtypes = [
             ctypes.c_void_p,
             ctypes.POINTER(ctypes.c_int16),
@@ -173,14 +192,25 @@ class CarThingVoiceDsp:
             ctypes.c_int,
         ]
         self.lib.carthing_voice_dsp_process.restype = ctypes.c_int
+        codec_id = {"ima_adpcm": 0, "opus": 1}.get(str(codec))
+        if codec_id is None:
+            raise ValueError(f"unsupported voice codec: {codec}")
+        self.codec = str(codec)
         self.state = self.lib.carthing_voice_dsp_create(
-            int(noise_suppress_db)
+            int(noise_suppress_db),
+            int(target_rate),
+            codec_id,
+            int(bitrate),
         )
         if not self.state:
             raise RuntimeError("carthing_voice_dsp_create failed")
         self.backend = self.lib.carthing_voice_dsp_backend(self.state).decode(
             "ascii", "replace"
         )
+        self.target_rate = int(
+            self.lib.carthing_voice_dsp_target_rate(self.state)
+        )
+        self.last_stats = {}
 
     def process(self, raw, channels, gain):
         channels = int(channels)
@@ -188,8 +218,13 @@ class CarThingVoiceDsp:
         input_frames = sample_count // channels
         if input_frames <= 0:
             return b""
-        samples_8k = input_frames // 6
-        output_capacity = 4 + (samples_8k + 1) // 2
+        decimation = 48000 // self.target_rate
+        output_samples = input_frames // decimation
+        output_capacity = (
+            512
+            if self.codec == "opus"
+            else 4 + (output_samples + 1) // 2
+        )
         input_buffer = (ctypes.c_int16 * sample_count).from_buffer_copy(
             raw[:sample_count * 2]
         )
@@ -205,6 +240,17 @@ class CarThingVoiceDsp:
         )
         if size < 0:
             raise RuntimeError(f"carthing_voice_dsp_process failed: {size}")
+        stats = (ctypes.c_int32 * 13)()
+        if self.lib.carthing_voice_dsp_get_stats(self.state, stats, 13) == 13:
+            channel_count = max(0, min(4, int(stats[0])))
+            self.last_stats = {
+                "channel_rms": [int(stats[1 + i]) for i in range(channel_count)],
+                "channel_peak": [int(stats[5 + i]) for i in range(channel_count)],
+                "mono_pre_rms": int(stats[9]),
+                "mono_post_rms": int(stats[10]),
+                "mono_peak": int(stats[11]),
+                "clipped_samples": int(stats[12]),
+            }
         return bytes(output_buffer[:size])
 
     def close(self):

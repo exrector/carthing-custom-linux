@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import COpus
 import Foundation
 import Network
 import ProtocolCore
@@ -46,6 +47,51 @@ private func bigEndianData(_ value: UInt64) -> Data {
     return Data(bytes: &bigEndian, count: MemoryLayout<UInt64>.size)
 }
 
+private final class OpusAudioDecoder {
+    private var decoder: OpaquePointer?
+
+    init?() {
+        var error: Int32 = OPUS_OK
+        decoder = opus_decoder_create(16_000, 1, &error)
+        if decoder == nil || error != OPUS_OK {
+            if let decoder {
+                opus_decoder_destroy(decoder)
+            }
+            return nil
+        }
+    }
+
+    deinit {
+        if let decoder {
+            opus_decoder_destroy(decoder)
+        }
+    }
+
+    func decode(_ packet: Data) -> [Int16]? {
+        guard let decoder, !packet.isEmpty else { return nil }
+        var pcm = [Int16](repeating: 0, count: 960)
+        let decoded: Int32 = packet.withUnsafeBytes { bytes in
+            guard let base = bytes.bindMemory(to: UInt8.self).baseAddress else {
+                return Int32(OPUS_BAD_ARG)
+            }
+            return opus_decode(
+                decoder,
+                base,
+                Int32(packet.count),
+                &pcm,
+                Int32(pcm.count),
+                0
+            )
+        }
+        guard decoded > 0 else {
+            fputs("carthing-btlink: opus decode error=\(decoded)\n", stderr)
+            return nil
+        }
+        pcm.removeSubrange(Int(decoded)..<pcm.count)
+        return pcm
+    }
+}
+
 final class CarThingBTLink {
     private let transport = TransportCore()
     private let output = FileHandle.standardOutput
@@ -83,6 +129,7 @@ final class CarThingBTLink {
     private var firstAudioReceived = false
     private var lastPartialSentAt = Date.distantPast
     private var lastPartialText = ""
+    private var opusDecoder = OpusAudioDecoder()
     private let netQueue = DispatchQueue(label: "carthing.bt.tcp")
     private lazy var speechPipeline = AppleSpeechPipeline { [weak self] text, isFinal in
         DispatchQueue.main.async {
@@ -198,6 +245,7 @@ final class CarThingBTLink {
             latestAudioReceivedNs = nil
             lastPartialText = ""
             lastPartialSentAt = .distantPast
+            opusDecoder = OpusAudioDecoder()
             if let lost = linkLostNs {
                 fputs(
                     "carthing-btlink: reconnect_l2cap_ms=\(Self.ms(now, since: lost))\n",
@@ -272,6 +320,9 @@ final class CarThingBTLink {
             reportAudioFrame()
         case .audioIMAADPCM:
             writeFloat32ADPCM(from: frame)
+            reportAudioFrame()
+        case .audioOpus:
+            writeFloat32Opus(from: frame)
             reportAudioFrame()
         case .latencyProbe:
             handleLatencyProbe(frame)
@@ -355,7 +406,7 @@ final class CarThingBTLink {
         27086, 29794, 32767,
     ]
 
-    private func writeFloat32ADPCM(from frame: CTSPFrame) {
+    private func audioPayload(from frame: CTSPFrame) -> Data {
         let receivedNs = DispatchTime.now().uptimeNanoseconds
         latestAudioReceivedNs = receivedNs
         var data = frame.payload
@@ -379,13 +430,22 @@ final class CarThingBTLink {
             )
             data = Data(data.dropFirst(20))
         }
+        return data
+    }
+
+    private func writeFloat32ADPCM(from frame: CTSPFrame) {
+        let sampleRate = frame.flags & CTSPFrame.Flag.audioRate16K != 0
+            ? 16_000
+            : 8_000
+        let data = audioPayload(from: frame)
         guard data.count >= 4 else { return }
         var predictor = Int(Int16(bitPattern: UInt16(data[0]) | (UInt16(data[1]) << 8)))
         var index = max(0, min(88, Int(data[2])))
         var samples: [Int16] = []
         samples.reserveCapacity((data.count - 4) * 2)
         var floats: [Float] = []
-        floats.reserveCapacity((data.count - 4) * 4)
+        let outputCopies = sampleRate == 8_000 ? 2 : 1
+        floats.reserveCapacity((data.count - 4) * 2 * outputCopies)
         for byte in data.dropFirst(4) {
             for code in [Int(byte & 0x0F), Int(byte >> 4)] {
                 let step = Self.imaStepTable[index]
@@ -398,11 +458,24 @@ final class CarThingBTLink {
                 index = max(0, min(88, index + Self.imaIndexTable[code]))
                 samples.append(Int16(predictor))
                 let value = max(-1.0, min(1.0, Float(predictor) / 32768.0))
-                floats.append(value)
-                floats.append(value)
+                for _ in 0..<outputCopies {
+                    floats.append(value)
+                }
             }
         }
-        speechPipeline.append(samples: samples, sampleRate: 8_000)
+        speechPipeline.append(samples: samples, sampleRate: sampleRate)
+        emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
+    }
+
+    private func writeFloat32Opus(from frame: CTSPFrame) {
+        let packet = audioPayload(from: frame)
+        guard let samples = opusDecoder?.decode(packet), !samples.isEmpty else {
+            return
+        }
+        speechPipeline.append(samples: samples, sampleRate: 16_000)
+        let floats = samples.map {
+            max(-1.0, min(1.0, Float($0) / 32768.0))
+        }
         emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
     }
 
@@ -538,13 +611,24 @@ final class CarThingBTLink {
         let shouldSendToDevice = isFinal
             || (text != lastPartialText && Date().timeIntervalSince(lastPartialSentAt) >= 0.15)
         if shouldSendToDevice {
-            lastPartialText = text
+            let displayText = String(text.prefix(4_000))
+            let previous = lastPartialText
+            lastPartialText = displayText
             lastPartialSentAt = Date()
-            let role = isFinal ? "U" : "P"
+            let command: String
+            if isFinal {
+                command = "text:U|\(displayText)"
+            } else if previous.isEmpty {
+                command = "text:P|\(displayText)"
+            } else {
+                let prefix = commonPrefixLength(previous, displayText)
+                let suffix = String(displayText.dropFirst(prefix))
+                command = "text:D|\(prefix)|\(suffix)"
+            }
             transport.send(
                 CTSPFrame(
                     type: .command,
-                    payload: Data("text:\(role)|\(text)".utf8)
+                    payload: Data(command.utf8)
                 )
             )
         }
@@ -559,6 +643,18 @@ final class CarThingBTLink {
                 }
             })
         }
+    }
+
+    private func commonPrefixLength(_ lhs: String, _ rhs: String) -> Int {
+        var count = 0
+        var left = lhs.makeIterator()
+        var right = rhs.makeIterator()
+        while let leftCharacter = left.next(),
+              let rightCharacter = right.next(),
+              leftCharacter == rightCharacter {
+            count += 1
+        }
+        return count
     }
 
     private func metricsSummary(_ object: [String: Any]) -> String {

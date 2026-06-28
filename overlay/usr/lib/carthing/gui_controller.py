@@ -92,7 +92,11 @@ class GuiController:
             self.compositor.render()
 
     def needs_fast_render(self):
-        return False
+        state = self.app_state
+        return bool(
+            self.compositor.active == ASSISTANT
+            and state.assistant_live_text != state.assistant_live_target
+        )
 
     def handle_input(self, event):
         if isinstance(event, tuple) and event:
@@ -141,6 +145,7 @@ class GuiController:
 
     def apply(self, model):
         state = self.app_state
+        state.advance_assistant_live()
         session = model.session
         state.iphone.connected = bool(session.source == "iphone" and session.connected)
         if state.iphone.connected:

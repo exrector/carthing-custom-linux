@@ -145,6 +145,9 @@ class AssistantScreen(Screen):
 
         transcript = list(getattr(self.state, "assistant_transcript", []) or [])
         live_text = str(getattr(self.state, "assistant_live_text", "") or "").strip()
+        live_target = str(
+            getattr(self.state, "assistant_live_target", "") or ""
+        ).strip()
         font = T.font(T.SZ_BODY)
         lines = []
         for utterance in transcript:
@@ -154,9 +157,10 @@ class AssistantScreen(Screen):
             )
         committed_line_count = len(lines)
         if live_text:
+            cursor = "_" if live_target else ""
             lines.extend(
-                C.wrap_lines(draw, f"Вы: {live_text}", font, right - 64)
-                or [f"Вы: {live_text}"]
+                C.wrap_lines(draw, f"Вы: {live_text}{cursor}", font, right - 64)
+                or [f"Вы: {live_text}{cursor}"]
             )
         top = 128
         bottom = T.H - 18

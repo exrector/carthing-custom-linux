@@ -492,6 +492,8 @@ async def _render_loop():
                 if power is None
                 else power.render_interval
             )
+            if gui is not None and gui.needs_fast_render():
+                interval = min(interval, 0.05)
             await asyncio.sleep(interval)
         except asyncio.CancelledError:
             raise

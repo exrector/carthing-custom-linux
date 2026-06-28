@@ -37,8 +37,10 @@ T_AUDIO_PCM16 = 0x06
 T_ERROR = 0x08
 T_AUDIO_IMA_ADPCM = 0x09
 T_LATENCY_PROBE = 0x0A
+T_AUDIO_OPUS = 0x0B
 
 AUDIO_TIMING_FLAG = 1 << 8
+AUDIO_RATE_16K_FLAG = 1 << 9
 AUDIO_TIMING_HEADER = struct.Struct(">QQI")
 
 try:
@@ -277,14 +279,14 @@ class SessionPlaneService:
             await self._gate(
                 "session-update-parameters",
                 lambda: connection.update_parameters(
-                    connection_interval_min=30.0,
-                    connection_interval_max=30.0,
+                    connection_interval_min=15.0,
+                    connection_interval_max=15.0,
                     max_latency=0,
                     supervision_timeout=6000.0,
                     use_l2cap=True,
                 ),
             )
-            logger.info("session LE interval requested: 30ms")
+            logger.info("session LE interval requested: 15ms")
         except Exception as exc:
             logger.info("session LE interval unchanged: %s", exc)
         await asyncio.sleep(0.75)
@@ -528,16 +530,27 @@ class SessionPlaneService:
             if len(s) >= 2 and s[1] == "|":
                 role = s[0]
                 s = s[2:]
-            s = s.strip()[:300]
+            s = s.strip()[:4000]
             if role == "S":
                 self.state.assistant_status = s     # живой статус (Слушаю…/Думаю…)
                 self._sync_model()
                 self.on_change()
                 return
             if role == "P":
-                self.state.assistant_live_text = s
+                self.state.set_assistant_live_target(s)
                 self._sync_model()
                 self.on_change()
+                return
+            if role == "D":
+                prefix_raw, separator, suffix = s.partition("|")
+                if separator and prefix_raw.isdigit():
+                    current = self.state.assistant_live_target
+                    prefix = min(int(prefix_raw), len(current))
+                    self.state.set_assistant_live_target(
+                        current[:prefix] + suffix
+                    )
+                    self._sync_model()
+                    self.on_change()
                 return
             if not s:
                 return
@@ -545,7 +558,7 @@ class SessionPlaneService:
             line = f"{label}: {s}" if label else s
             self.state.assistant_text = line
             if role == "U":
-                self.state.assistant_live_text = ""
+                self.state.clear_assistant_live()
             tr = getattr(self.state, "assistant_transcript", None)
             if not isinstance(tr, list):
                 tr = []
@@ -564,16 +577,37 @@ class SessionPlaneService:
         device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
         source_rate = int(os.environ.get("CARTHING_BT_MIC_SOURCE_RATE", "48000"))
         source_channels = int(os.environ.get("CARTHING_BT_MIC_SOURCE_CHANNELS", "4"))
-        target_rate = 8000
-        read_frames = int(os.environ.get("CARTHING_BT_MIC_READ_FRAMES", "4800"))
+        codec = os.environ.get("CARTHING_BT_MIC_CODEC", "opus").strip().lower()
+        if codec not in ("opus", "ima_adpcm"):
+            raise ValueError("CARTHING_BT_MIC_CODEC must be opus or ima_adpcm")
+        target_rate = int(
+            os.environ.get(
+                "CARTHING_BT_MIC_TARGET_RATE",
+                "16000" if codec == "opus" else "8000",
+            )
+        )
+        if target_rate not in (8000, 16000):
+            raise ValueError("CARTHING_BT_MIC_TARGET_RATE must be 8000 or 16000")
+        frame_ms = int(os.environ.get("CARTHING_BT_MIC_FRAME_MS", "20"))
+        if frame_ms not in (10, 20):
+            raise ValueError("CARTHING_BT_MIC_FRAME_MS must be 10 or 20")
+        default_read_frames = source_rate * frame_ms // 1000
+        read_frames = int(
+            os.environ.get(
+                "CARTHING_BT_MIC_READ_FRAMES",
+                str(default_read_frames),
+            )
+        )
+        bitrate = int(os.environ.get("CARTHING_BT_MIC_OPUS_BITRATE", "20000"))
         gain = float(os.environ.get("CARTHING_BT_MIC_GAIN", "2.0"))
         noise_suppress_db = int(
-            os.environ.get("CARTHING_BT_MIC_NOISE_SUPPRESS_DB", "-24")
+            os.environ.get("CARTHING_BT_MIC_NOISE_SUPPRESS_DB", "-15")
         )
         cap = None
         preprocessor = None
         pending_audio = bytearray()
         process_bytes = read_frames * source_channels * 2
+        audio_blocks = 0
         try:
             # Труба к Mac держится постоянно, а ALSA-захват управляется сохранённым
             # переключателем микрофона без разрыва Bluetooth-сессии.
@@ -600,17 +634,42 @@ class SessionPlaneService:
                     cap = AlsaPcmCapture(device, source_rate, source_channels)
                     info = cap.open()
                     if CarThingVoiceDsp is not None:
-                        preprocessor = await asyncio.to_thread(
-                            CarThingVoiceDsp,
-                            noise_suppress_db,
-                        )
+                        try:
+                            preprocessor = await asyncio.to_thread(
+                                CarThingVoiceDsp,
+                                noise_suppress_db,
+                                target_rate,
+                                codec,
+                                bitrate,
+                            )
+                        except Exception:
+                            if codec != "opus":
+                                raise
+                            logger.exception(
+                                "Opus init failed; falling back to 8 kHz IMA-ADPCM"
+                            )
+                            codec = "ima_adpcm"
+                            target_rate = 8000
+                            frame_ms = 20
+                            read_frames = source_rate * frame_ms // 1000
+                            process_bytes = read_frames * source_channels * 2
+                            preprocessor = await asyncio.to_thread(
+                                CarThingVoiceDsp,
+                                noise_suppress_db,
+                                target_rate,
+                                codec,
+                                bitrate,
+                            )
                     logger.info(
-                        "session remote mic capture open: peer=%s device=%s rate=%s channels=%s target_rate=%s gain=%.2f denoise=%s info=%s",
+                        "session remote mic capture open: peer=%s device=%s rate=%s channels=%s target_rate=%s frame_ms=%s codec=%s bitrate=%s gain=%.2f denoise=%s info=%s",
                         runtime.address,
                         device,
                         source_rate,
                         source_channels,
                         target_rate,
+                        frame_ms,
+                        codec,
+                        bitrate if codec == "opus" else 0,
                         gain,
                         preprocessor.backend,
                         info,
@@ -636,6 +695,20 @@ class SessionPlaneService:
                         payload = b""
                         dsp_us = 0
                     if payload:
+                        audio_blocks += 1
+                        if audio_blocks % max(1, 5000 // frame_ms) == 0:
+                            stats = dict(
+                                getattr(preprocessor, "last_stats", {}) or {}
+                            )
+                            logger.info(
+                                "mic levels: channel_rms=%s channel_peak=%s mono_pre_rms=%s mono_post_rms=%s mono_peak=%s clipped=%s",
+                                stats.get("channel_rms"),
+                                stats.get("channel_peak"),
+                                stats.get("mono_pre_rms"),
+                                stats.get("mono_post_rms"),
+                                stats.get("mono_peak"),
+                                stats.get("clipped_samples"),
+                            )
                         send_ns = time.monotonic_ns()
                         runtime.connector.audio_seq = (
                             runtime.connector.audio_seq + 1
@@ -647,10 +720,21 @@ class SessionPlaneService:
                         ) + payload
                         self._write(
                             channel,
-                            T_AUDIO_IMA_ADPCM,
+                            (
+                                T_AUDIO_OPUS
+                                if codec == "opus"
+                                else T_AUDIO_IMA_ADPCM
+                            ),
                             timed_payload,
                             seq=runtime.connector.audio_seq,
-                            flags=AUDIO_TIMING_FLAG,
+                            flags=(
+                                AUDIO_TIMING_FLAG
+                                | (
+                                    AUDIO_RATE_16K_FLAG
+                                    if target_rate == 16000
+                                    else 0
+                                )
+                            ),
                         )
                 await asyncio.sleep(0)
         except asyncio.CancelledError:
@@ -737,10 +821,18 @@ class SessionPlaneService:
             "protocol_version": CTSP_VERSION,
             "transports": ["ble_gatt_bootstrap", "ble_l2cap_coc_session"],
             "remote_mic": {
-                "format": "ima_adpcm",
-                "sample_rate_hz": 8000,
+                "format": os.environ.get("CARTHING_BT_MIC_CODEC", "opus"),
+                "sample_rate_hz": int(
+                    os.environ.get(
+                        "CARTHING_BT_MIC_TARGET_RATE",
+                        "16000",
+                    )
+                ),
                 "channels": 1,
                 "mode": "on_demand",
+                "frame_ms": int(
+                    os.environ.get("CARTHING_BT_MIC_FRAME_MS", "20")
+                ),
                 "audio_timing": "capture_end_ns,send_ns,dsp_us",
                 "latency_probe": True,
             },

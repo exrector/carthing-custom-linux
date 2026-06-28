@@ -2,6 +2,7 @@
 
 import json
 import os
+import time
 from pathlib import Path
 
 from runtime_paths import device_name
@@ -120,6 +121,9 @@ class AppState:
         self.assistant_status = ""
         self.assistant_text = ""
         self.assistant_live_text = ""
+        self.assistant_live_target = ""
+        self._assistant_typewriter_at = time.monotonic()
+        self._assistant_typewriter_credit = 0.0
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False
@@ -158,6 +162,45 @@ class AppState:
         else:
             self.remote_mic_message = "Микрофон выключен"
         return self.remote_mic_enabled
+
+    def set_assistant_live_target(self, text):
+        target = str(text or "")
+        current = self.assistant_live_text
+        was_idle = not self.assistant_live_target and not current
+        if not target.startswith(current):
+            common = 0
+            limit = min(len(current), len(target))
+            while common < limit and current[common] == target[common]:
+                common += 1
+            self.assistant_live_text = current[:common]
+            self._assistant_typewriter_credit = 0.0
+            self._assistant_typewriter_at = time.monotonic()
+        self.assistant_live_target = target
+        if was_idle:
+            self._assistant_typewriter_at = time.monotonic()
+
+    def clear_assistant_live(self):
+        self.assistant_live_text = ""
+        self.assistant_live_target = ""
+        self._assistant_typewriter_credit = 0.0
+        self._assistant_typewriter_at = time.monotonic()
+
+    def advance_assistant_live(self, now=None):
+        now = time.monotonic() if now is None else float(now)
+        elapsed = max(0.0, min(0.25, now - self._assistant_typewriter_at))
+        self._assistant_typewriter_at = now
+        backlog = len(self.assistant_live_target) - len(self.assistant_live_text)
+        if backlog <= 0:
+            return False
+        chars_per_second = min(120.0, 24.0 + backlog * 1.5)
+        self._assistant_typewriter_credit += elapsed * chars_per_second
+        count = min(backlog, int(self._assistant_typewriter_credit))
+        if count <= 0:
+            return False
+        self._assistant_typewriter_credit -= count
+        end = len(self.assistant_live_text) + count
+        self.assistant_live_text = self.assistant_live_target[:end]
+        return True
 
     def load_trusted(self, path=None):
         path = Path(path or self.trusted_path)

@@ -48,5 +48,7 @@ public extension CTSPFrame {
         public static let needsAck: UInt16 = 1 << 1
         /// Первые 20 байт audio payload: capture_end_ns, send_ns, dsp_us.
         public static let audioTiming: UInt16 = 1 << 8
+        /// IMA-ADPCM содержит mono 16 kHz вместо совместимого режима 8 kHz.
+        public static let audioRate16K: UInt16 = 1 << 9
     }
 }

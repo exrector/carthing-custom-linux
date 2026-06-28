@@ -12,6 +12,13 @@ let package = Package(
         .library(name: "TransportCore", targets: ["TransportCore"]),
     ],
     targets: [
+        .systemLibrary(
+            name: "COpus",
+            pkgConfig: "opus",
+            providers: [
+                .brew(["opus"])
+            ]
+        ),
         .target(name: "ProtocolCore"),
         .target(
             name: "TransportCore",
@@ -19,7 +26,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "CarThingBTLink",
-            dependencies: ["TransportCore", "ProtocolCore"],
+            dependencies: ["TransportCore", "ProtocolCore", "COpus"],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
