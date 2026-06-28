@@ -1,25 +1,17 @@
-"""settings_service — persistent пользовательские/продуктовые настройки (runtime-contract §settings_service).
+"""Persistent settings used by the minimal product."""
 
-Хранит settings.json на persistent-разделе (state_paths). Доверенные источники/динамики —
-отдельный реестр (trusted-devices.json, им владеет AppState/трекинг), здесь — скалярные
-настройки: предпочитаемый view, активная сессия, политика сна.
-"""
-
-import json
 import logging
-import os
 
 import state_paths
+
 
 logger = logging.getLogger(__name__)
 
 _DEFAULTS = {
-    "preferred_view": "now_playing",   # стартовый view (gui-contract)
-    "active_session": "remote",        # route-graph session preset
-    "sleep_on_idle": True,             # сон когда нет BT-трафика (ideas-log)
-    "notif_blink": True,               # [CLAUDE 2026-06-03] моргание уведомлений (раньше НЕ грузился -> сбрасывался)
-    "volume": 0.5,                     # [CLAUDE 2026-06-03] последняя громкость (восстанавливается на буст)
-    "screen_dim_after_sec": 45,         # сначала только подсветка, без BT/suspend
+    "client_enabled": False,
+    "notif_blink": True,
+    "screen_brightness_pct": 100,
+    "sleep_on_idle": True,
     "screen_off_after_sec": 150,
     "screen_active_brightness": 100,
     "screen_dim_brightness": 12,
@@ -30,9 +22,6 @@ _DEFAULTS = {
     "publish_interval_active_sec": 1.0,
     "publish_interval_quiet_sec": 10.0,
     "publish_interval_off_sec": 30.0,
-    "cpu_policy_enable": True,
-    "cpu_governor_playnow": "schedutil",
-    "cpu_governor_commutator": "performance",
 }
 
 
@@ -42,32 +31,26 @@ class SettingsService:
         self.load()
 
     def load(self):
-        # [CLAUDE 2026-06-03] Настройки — секция "settings" ЕДИНОГО state.json (один источник
-        # правды вместе с devices). Грузим ВСЕ ключи (а не только дефолты), иначе notif_blink и пр.
-        # сбрасывались на ребуте.
         try:
-            data = state_paths.read_state().get("settings", {})
-            if isinstance(data, dict):
-                if "active_session" not in data and "device_mode" in data:
-                    data["active_session"] = data["device_mode"]
-                self.values.update(data)
-        except Exception as e:
-            logger.warning("settings load failed: %s", e)
+            stored = state_paths.read_state().get("settings", {})
+            if isinstance(stored, dict):
+                for key in _DEFAULTS:
+                    if key in stored:
+                        self.values[key] = stored[key]
+        except Exception as error:
+            logger.warning("settings load failed: %s", error)
 
     def save(self):
-        # [CLAUDE 2026-06-03] Пишем секцию settings в единый state.json (write_state делает
-        # read-modify-write + atomic + сохраняет секцию devices). Полный отпечаток всех значений.
         try:
             state_paths.write_state({"settings": dict(self.values)})
-        except Exception as e:
-            logger.warning("settings save failed (degraded?): %s", e)
+        except Exception as error:
+            logger.warning("settings save failed: %s", error)
 
     def get(self, key, default=None):
         return self.values.get(key, default)
 
     def set(self, key, value):
-        if key == "device_mode":
-            # Legacy write path from older callers: map to active_session.
-            key = "active_session"
+        if key not in _DEFAULTS:
+            raise KeyError(f"unsupported setting: {key}")
         self.values[key] = value
         self.save()

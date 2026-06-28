@@ -10,29 +10,26 @@ public enum CTSPFrameType: UInt8, CaseIterable, Sendable, CustomStringConvertibl
     case hello = 0x01
     /// Описание возможностей endpoint (роли, поддерживаемые транспорты, audio форматы).
     case capabilities = 0x02
-    /// Краткий статус session/route plane.
+    /// Краткий статус Bluetooth microphone session.
     case status = 0x03
-    /// Полное состояние RouteGraph (mode/input/output/session/client_enabled).
-    case routeState = 0x04
-    /// Команда (toggle client, выбор input/output, запрос mic и т.п.).
+    /// Команда управления микрофоном или экранным текстом.
     case command = 0x05
     /// Кадр аудио: PCM16LE 16 kHz mono. Только on-demand.
     case audioPCM16 = 0x06
-    /// Телеметрия/метрики (счётчики, RTT-эхо, состояние очередей).
-    case telemetry = 0x07
     /// Ошибка протокольного уровня.
     case error = 0x08
+    /// Блочный IMA-ADPCM, mono 8 kHz; каждый блок содержит predictor/index.
+    case audioIMAADPCM = 0x09
 
     public var description: String {
         switch self {
         case .hello: return "hello"
         case .capabilities: return "capabilities"
         case .status: return "status"
-        case .routeState: return "route_state"
         case .command: return "command"
         case .audioPCM16: return "audio_pcm16"
-        case .telemetry: return "telemetry"
         case .error: return "error"
+        case .audioIMAADPCM: return "audio_ima_adpcm"
         }
     }
 }

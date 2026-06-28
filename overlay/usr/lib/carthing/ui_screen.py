@@ -247,14 +247,7 @@ class Compositor:
         hit = self._regions.hit(x, y)
         if not hit:
             return False
-        if hit.intent == "session_focus" and isinstance(hit.payload, dict):
-            self.on_intent("session_select", hit.payload.get("session"))
-        elif hit.intent == "route_activate":
-            self.on_intent("session_select", "router")
-        elif hit.intent == "trusted_remove":
-            self.on_intent(hit.intent, hit.payload)
-        else:
-            self.on_intent(hit.intent, hit.payload)
+        self.on_intent(hit.intent, hit.payload)
         return True
 
     def _switch(self, delta):

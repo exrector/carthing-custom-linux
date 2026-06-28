@@ -1,17 +1,4 @@
-"""identity_service — ЕДИНСТВЕННЫЙ источник видимого имени устройства.
-
-runtime-contract.md §Identity. Корень боли «два устройства в рекламе» был в том,
-что BLE звался одним именем, classic — другим («Car Thing Audio»). Здесь — ОДНО имя
-на ВСЕ транспорты (BLE adv + BLE device.name + classic Local Name + hostname).
-
-Приоритет (по контракту):
-  1. CARTHING_BT_ALIAS — только если ЯВНО задан (ручной override).
-  2. /sys/class/efuse/usid -> "Car Thing (SN: XXXX)" (заводская идентичность, из кремния).
-  3. CARTHING_DEVICE_NAME_FALLBACK.
-  4. "Car Thing".
-
-A2DP берёт то же имя через classic_audio_name() — НЕ "Car Thing Audio".
-"""
+"""Single visible identity for the LE accessory."""
 
 import os
 from pathlib import Path
@@ -48,11 +35,5 @@ def visible_name() -> str:
     return DEFAULT_NAME
 
 
-def classic_audio_name() -> str:
-    """Имя для A2DP/classic = ТО ЖЕ видимое имя. Никаких отдельных персон."""
-    return visible_name()
-
-
 def hostname() -> str:
-    """Имя для ОС/SSH-приглашения. То же имя (скобки/пробелы busybox разворачивает в PS1)."""
     return visible_name()

@@ -6,7 +6,7 @@
     <string>com.carthing.btlink</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/exrector/Documents/ПРОЕКТЫ/carthing-release-integration/macos-observer/.build/debug/CarThingBTAudioCap</string>
+        <string>__CARTHING_BTLINK_EXECUTABLE__</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>

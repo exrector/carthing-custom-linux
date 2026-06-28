@@ -36,11 +36,8 @@ class IdlePowerController:
         self._last_publish = 0.0
         self._last_content_signature = None
         self._display_state = "init"
-        self._runtime_tier = "boot"
-        self._active_session = "remote"
+        self._runtime_tier = "interactive"
         self._pairing_armed = False
-        self._transfer_active = False
-        self._transfer_scanning_until = 0.0
         self._max_brightness = self._read_int("max_brightness", default=255)
         self._active_brightness = self.active_brightness
         self._active_brightness = max(1, min(self._active_brightness, self._max_brightness))
@@ -217,34 +214,12 @@ class IdlePowerController:
         self._last_activity = time.monotonic()   # перезапустить отсчёт от изменения
         logger.info("Power: screen-off timeout -> %ss", self.off_after)
 
-    def set_active_session(self, session: str) -> None:
-        session = session or "remote"
-        if session == self._active_session:
-            return
-        self._active_session = session
-        if session != "quiet":
-            self.note_activity(f"session:{session}")
-
-    def set_device_mode(self, mode: str) -> None:
-        # Legacy wrapper while callers migrate to set_active_session.
-        self.set_active_session(mode)
-
-    def note_transfer_scan(self, hold_sec: float = 20.0) -> None:
-        if not self.enabled:
-            return
-        self._transfer_scanning_until = max(
-            self._transfer_scanning_until,
-            time.monotonic() + max(1.0, float(hold_sec)),
-        )
-        self.note_activity("transfer_scan")
-
     def note_model(self, model) -> None:
         """Wake briefly for meaningful content changes, not for position ticks."""
         if not self.enabled or model is None:
             return
         session = getattr(model, "session", None)
         notifications = getattr(model, "notifications", []) or []
-        self._transfer_active = bool(getattr(model, "transfer_active", False))
         signature = (
             getattr(session, "source", None),
             getattr(session, "connected", None),
@@ -265,14 +240,8 @@ class IdlePowerController:
             return self._display_state
         now = time.monotonic()
         idle = now - self._last_activity
-        if self._active_session == "quiet":
-            idle = max(idle, self.quiet_after)
-        scanning = now < self._transfer_scanning_until
-
         if self._pairing_armed:
             self._set_runtime_tier("pairing")
-        elif self._transfer_active or scanning:
-            self._set_runtime_tier("transfer")
         elif idle >= self.off_after:
             self._set_runtime_tier("screen_off")
         elif idle >= self.quiet_after:

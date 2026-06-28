@@ -1,6 +1,19 @@
 import Foundation
 import ProtocolCore
-import SessionState
+
+public enum TransportPhase: String, Codable, Sendable {
+    case poweredOff
+    case unauthorized
+    case idle
+    case scanning
+    case connecting
+    case discoveringGATT
+    case bootstrapped
+    case l2capOpening
+    case l2capOpen
+    case disconnected
+    case failed
+}
 
 /// Обнаруженное в эфире устройство (кандидат на подключение).
 public struct DiscoveredPeripheral: Identifiable, Equatable, Sendable {
@@ -14,9 +27,7 @@ public struct DiscoveredPeripheral: Identifiable, Equatable, Sendable {
     }
 }
 
-/// События транспортного слоя, поднимаемые наверх (в AppModel/observer UI).
-///
-/// Один поток событий вместо набора делегатов — проще завести в SwiftUI.
+/// Events consumed by the headless Bluetooth link.
 public enum TransportEvent: Sendable {
     case phaseChanged(TransportPhase)
     case discovered(DiscoveredPeripheral)

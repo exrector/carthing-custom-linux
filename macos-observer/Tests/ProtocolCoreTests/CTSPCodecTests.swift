@@ -68,7 +68,7 @@ final class CTSPCodecTests: XCTestCase {
 
     func testHeaderSplitAcrossFeeds() throws {
         let decoder = CTSPFrameDecoder()
-        let frame = makeFrame(type: .telemetry, seq: 9, payload: Data("xyz".utf8))
+        let frame = makeFrame(type: .capabilities, seq: 9, payload: Data("xyz".utf8))
         let encoded = CTSPEncoder.encode(frame)
 
         // Заголовок приходит частями, payload отдельно.
@@ -84,7 +84,7 @@ final class CTSPCodecTests: XCTestCase {
         let decoder = CTSPFrameDecoder()
         let f1 = makeFrame(type: .hello, seq: 1, payload: Data("a".utf8))
         let f2 = makeFrame(type: .status, seq: 2, payload: Data())
-        let f3 = makeFrame(type: .routeState, seq: 3, payload: Data("ccc".utf8))
+        let f3 = makeFrame(type: .command, seq: 3, payload: Data("ccc".utf8))
 
         var blob = Data()
         blob.append(CTSPEncoder.encode(f1))

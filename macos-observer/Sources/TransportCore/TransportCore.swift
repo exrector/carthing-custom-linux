@@ -1,18 +1,11 @@
 import Foundation
 import CoreBluetooth
 import ProtocolCore
-import SessionState
 
 /// CoreBluetooth-слой: scan → connect → GATT bootstrap → L2CAP CoC stream.
 ///
-/// Контракт ресурсной политики (Play Now должен молчать):
-///  - НЕ сканирует постоянно: `startScan()` — явное действие, `stopScan()` по
-///    обнаружении/подключении;
-///  - НЕ открывает session, пока вызывающий не решит подключиться;
-///  - НЕ стримит mic сам — это делает устройство по команде.
-///
-/// Все CoreBluetooth-callbacks приходят на main-очередь (manager создан с
-/// `queue: .main`), поэтому события безопасно потреблять в SwiftUI.
+/// The link scans for the CTSP bootstrap service, opens its L2CAP channel,
+/// and forwards microphone frames to the local assistant bridge.
 public final class TransportCore: NSObject {
     /// Колбэк событий. Вызывается на main-очереди.
     public var onEvent: ((TransportEvent) -> Void)?
@@ -20,6 +13,7 @@ public final class TransportCore: NSObject {
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
     private var channel: CBL2CAPChannel?
+    private var l2capOpening = false
 
     private let decoder = CTSPFrameDecoder()
     private var outQueue = Data()       // байты, ждущие записи в OutputStream
@@ -138,6 +132,7 @@ public final class TransportCore: NSObject {
             ch.outputStream.remove(from: .main, forMode: .default)
         }
         channel = nil
+        l2capOpening = false
         decoder.reset()
         outQueue.removeAll(keepingCapacity: true)
     }
@@ -162,7 +157,7 @@ public final class TransportCore: NSObject {
             emit(.log("Client ON: ждём current_psm"))
             return
         }
-        guard channel == nil else { return }
+        guard channel == nil, !l2capOpening else { return }
         openL2CAP(psm: psm)
     }
 }
@@ -228,11 +223,13 @@ extension TransportCore: CBCentralManagerDelegate {
 extension TransportCore: CBPeripheralDelegate {
     public func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error {
+            emit(.phaseChanged(.failed))
             emit(.error("discoverServices: \(error.localizedDescription)"))
             return
         }
         guard let service = peripheral.services?
             .first(where: { $0.uuid == CarThingGATT.serviceUUID }) else {
+            emit(.phaseChanged(.failed))
             emit(.error("сервис Car Thing не найден"))
             return
         }
@@ -243,6 +240,7 @@ extension TransportCore: CBPeripheralDelegate {
                           didDiscoverCharacteristicsFor service: CBService,
                           error: Error?) {
         if let error {
+            emit(.phaseChanged(.failed))
             emit(.error("discoverCharacteristics: \(error.localizedDescription)"))
             return
         }
@@ -263,6 +261,7 @@ extension TransportCore: CBPeripheralDelegate {
                           didUpdateValueFor characteristic: CBCharacteristic,
                           error: Error?) {
         if let error {
+            emit(.phaseChanged(.failed))
             emit(.error("read \(characteristic.uuid): \(error.localizedDescription)"))
             return
         }
@@ -291,6 +290,7 @@ extension TransportCore: CBPeripheralDelegate {
 
     private func openL2CAP(psm: UInt16) {
         guard let peripheral else { return }
+        l2capOpening = true
         emit(.phaseChanged(.l2capOpening))
         emit(.log("openL2CAPChannel psm=\(psm)"))
         peripheral.openL2CAPChannel(CBL2CAPPSM(psm))
@@ -299,12 +299,17 @@ extension TransportCore: CBPeripheralDelegate {
     public func peripheral(_ peripheral: CBPeripheral,
                           didOpen channel: CBL2CAPChannel?,
                           error: Error?) {
+        l2capOpening = false
         if let error {
             emit(.phaseChanged(.failed))
             emit(.error("openL2CAP: \(error.localizedDescription)"))
             return
         }
-        guard let channel else { return }
+        guard let channel else {
+            emit(.phaseChanged(.failed))
+            emit(.error("openL2CAP: канал не создан"))
+            return
+        }
         self.channel = channel
         channel.inputStream.delegate = self
         channel.outputStream.delegate = self
@@ -337,6 +342,8 @@ extension TransportCore: StreamDelegate {
             flushOutput()
         case .errorOccurred:
             emit(.error("stream error: \(aStream.streamError?.localizedDescription ?? "?")"))
+            closeChannel()
+            emit(.l2capClosed)
         case .endEncountered:
             emit(.l2capClosed)
             closeChannel()

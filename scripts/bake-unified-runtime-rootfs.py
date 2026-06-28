@@ -26,21 +26,47 @@ DEFAULT_BASE_BUNDLE = Path(
     "kernel-build-gcc6-nixos-20260524/flash-stock-plus-rescue-profile-20260525"
 )
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "70fca5213c2c3b23df05307f1d6aa27dc2de520f"
+EXPECTED_RUNTIME_TREE_SHA1 = "338a2728ee81dec1609beaac55448d777a1682b4"
 NATIVE_RUNTIME_FILES = (
     "libcarthing_frame.so",
-    "libhelixaac.so",
-    "libsbc.so",
-    "sbc_synth.so",
 )
 RETIRED_RUNTIME_FILES = (
+    "a2dp_bridge.py",
+    "aac_to_sbc_transcoder.py",
+    "audio_local_sink.py",
+    "audio_out_t9015.py",
+    "carthing_link.py",
     "classic_profile_probe.py",
+    "enrollment_manager.py",
+    "ge2d.py",
+    "ge2d_test.py",
+    "helix_aac_decoder.py",
     "hid_pair.py",
+    "iap2_service.py",
+    "keyboard_hid.py",
+    "libhelixaac.so",
+    "libsbc.so",
+    "link_manager.py",
+    "local_sink_client.py",
+    "mac_service.py",
     "media_remote.py",
     "media_remote_v3.py",
     "now_playing_ui.py",
+    "operation_mode.py",
+    "resource_policy.py",
+    "route_graph.py",
+    "route_planner.py",
+    "sbc_decoder.py",
+    "sbc_encoder.py",
+    "sbc_synth.so",
+    "session_runner.py",
     "system_menu.py",
+    "transfer_control.py",
+    "transfer_service.py",
+    "trusted_device_registry.py",
     "trusted_devices.py",
+    "virtual_connectors.py",
+    "virtual_socket.py",
 )
 RETIRED_INIT_FILES = (
     ":S50-carthing-remote.disabled",
