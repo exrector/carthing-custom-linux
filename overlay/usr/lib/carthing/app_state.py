@@ -418,9 +418,8 @@ class MediaSession:
 
 class AppState:
     # screen indices (navigation is explicit; no desktop swipe ring)
-    IPHONE, SETTINGS, NOTIFICATIONS, SESSIONS, ROUTER, MAC = 0, 1, 2, 3, 4, 5
-    MODES = SESSIONS      # compatibility alias
-    TRANSFER = ROUTER     # compatibility alias
+    IPHONE, SETTINGS, NOTIFICATIONS, ASSISTANT = 0, 1, 2, 3
+    SESSIONS = ROUTER = MAC = MODES = TRANSFER = IPHONE
     # index -> media source. Один home (0)=iPhone; прочие view (Settings/Notifications)
     # не медиа -> control_source падает на last_media_source (=iphone), бар рулит реальным источником.
     DESKTOP_SOURCE = {IPHONE: "iphone", TRANSFER: "iphone", MAC: "mac"}
@@ -454,6 +453,11 @@ class AppState:
         self.screen_off_sec = 150       # [CLAUDE] тайм-аут полного гашения (настройка ± в Settings)
         self.notif_blink = True         # [CLAUDE] моргание кружка уведомлений под энкодером (тумблер)
         self.screen_brightness = 100    # [CLAUDE 2026-06-10] яркость экрана, % (цикл в Settings)
+        self.remote_mic_enabled = False
+        self.remote_mic_state = "off"
+        self.remote_mic_message = "Микрофон выключен"
+        self.assistant_transcript = []
+        self.assistant_status = ""
         self.ui_theme = "dark"          # [CLAUDE 2026-06-11] тема UI (dark|terminal); применяется рестартом runtime
         self.clock_text = "--:--"
         self.device_name = device_name()
@@ -474,6 +478,17 @@ class AppState:
         self.actual_receiver_addr = ""         # MAC колонки (если есть RTP-канал)
         self.trusted_path = Path(os.environ.get("CARTHING_TRUSTED_DEVICES", DEFAULT_TRUSTED_DEVICES_PATH))
         self.load_trusted()
+
+    def set_remote_mic(self, enabled, state=None, message=None):
+        self.remote_mic_enabled = bool(enabled)
+        self.remote_mic_state = str(state or ("listening" if enabled else "off"))
+        if message is not None:
+            self.remote_mic_message = str(message)
+        elif enabled:
+            self.remote_mic_message = "Подключение к Mac"
+        else:
+            self.remote_mic_message = "Микрофон выключен"
+        return self.remote_mic_enabled
 
     @staticmethod
     def _normalize_session(value):

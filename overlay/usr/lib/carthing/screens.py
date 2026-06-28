@@ -114,6 +114,71 @@ class NowPlayingScreen(Screen):
         return img
 
 
+class AssistantScreen(Screen):
+    name = "assistant"
+    title = "Ассистент"
+    fullscreen = True
+
+    def __init__(self, emit=None):
+        self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
+
+    def on_state(self, state):
+        self.state = state
+
+    def on_input(self, event):
+        if event in (Input.PRESS, Input.BTN_4):
+            self.emit("remote_mic_toggle")
+            return True
+        return False
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        x0 = 32
+        right = T.ARC_SAFE_X
+        enabled = bool(getattr(self.state, "remote_mic_enabled", False)) if self.state else False
+        state = str(getattr(self.state, "remote_mic_state", "off") or "off") if self.state else "off"
+
+        draw.text((x0, 16), "Ассистент", font=T.font(34), fill=T.MUTED)
+        button = (right - 184, 12, right - 12, 58)
+        fill = T.STATUS_OK if enabled else T.SURFACE_SEL
+        draw.rectangle(button, fill=fill)
+        label = "МИКРОФОН ВКЛ" if enabled else "МИКРОФОН ВЫКЛ"
+        C.text_centered(draw, label, T.font(T.SZ_SMALL), T.BG if enabled else T.FG,
+                        25, cx=(button[0] + button[2]) // 2)
+        if regions is not None:
+            regions.add(button, "remote_mic_toggle")
+        draw.line([x0, 70, right, 70], fill=T.HAIRLINE, width=2)
+
+        status = {
+            "off": "Микрофон выключен",
+            "connecting": "Подключение к Mac",
+            "ready": "Готов",
+            "listening": "Слушаю",
+            "unavailable": "Mac недоступен",
+        }.get(state, state)
+        live_status = str(getattr(self.state, "assistant_status", "") or "") if self.state else ""
+        draw.text((x0, 84), live_status or status, font=T.font(T.SZ_META),
+                  fill=T.ACCENT if enabled else T.FAINT)
+
+        transcript = list(getattr(self.state, "assistant_transcript", []) or []) if self.state else []
+        font = T.font(T.SZ_BODY)
+        line_h = 40
+        top = 132
+        bottom = T.STATUSBAR_TOP - 14
+        max_width = right - x0 * 2
+        lines = []
+        for utterance in transcript:
+            lines.extend(C.wrap_lines(draw, str(utterance), font, max_width) or [str(utterance)])
+        visible = lines[-max(1, (bottom - top) // line_h):]
+        y = bottom - len(visible) * line_h
+        for index, line in enumerate(visible):
+            draw.text((x0, y), line, font=font,
+                      fill=T.FG if index == len(visible) - 1 else T.MUTED)
+            y += line_h
+        return img
+
+
 class MacOSScreen(Screen):
     name = "macos"
     title = "macOS"
@@ -444,15 +509,13 @@ class SettingsScreen(Screen):
     def __init__(self, on_select=None):
         self.on_select = on_select or (lambda key: None)
         self.items = [
-            # [CLAUDE 2026-06-03] «Добавить устройство» убрано — сопряжение запускается
-            # отдельной кнопкой [Сопряжение] в баре Routes, дублировать в настройках не нужно.
+            {"key": "add_iphone", "label": "Добавить iPhone"},
             {"key": "trusted", "label": "Доверенные устройства", "children": []},
             {"key": "display", "label": "Дисплей и яркость", "children": [
                 # статическая заглушка: живой render-путь display строит единые
                 # строки «− значение +» (DISPLAY_ADJUST ниже)
                 ("brightness", "Яркость"),
             ]},
-            {"key": "mode", "label": "Режим", "children": []},
             {"key": "power_off", "label": "Отключение USB", "children": []},
             {"key": "about", "label": "О системе"},
         ]

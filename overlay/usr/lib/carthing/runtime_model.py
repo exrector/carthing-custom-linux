@@ -107,6 +107,12 @@ class RuntimeModel:
         # presence
         self.rssi = None
         self.proximity_zone = "gone"
+        self.remote_mic = {
+            "enabled": False,
+            "state": "off",
+            "message": "Микрофон выключен",
+            "transport": "none",
+        }
 
     @property
     def active_session(self):
@@ -177,6 +183,14 @@ class RuntimeModel:
     def set_resource_policy(self, policy=None):
         self.resource_policy = dict(policy or {})
 
+    def set_remote_mic(self, enabled, state=None, message=None, transport=None):
+        self.remote_mic = {
+            "enabled": bool(enabled),
+            "state": str(state or ("listening" if enabled else "off")),
+            "message": str(message or ""),
+            "transport": str(transport or self.remote_mic.get("transport", "none")),
+        }
+
     # ── уведомления (зеркало iPhone) ─────────────────────────────────────────
     def add_notification(self, uid, app, title, body=""):
         # title = содержание (у Напоминаний — сам текст; у Сообщений — отправитель);
@@ -229,6 +243,7 @@ class RuntimeModel:
             "power_tier": self.power_tier,
             "transfer_active": self.transfer_active,
             "transfer_control_available": self.transfer_control_available,
+            "remote_mic": dict(self.remote_mic),
         }
 
     def write_bt_json(self, path: Path = RUNTIME_BT_JSON):

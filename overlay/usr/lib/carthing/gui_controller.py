@@ -21,19 +21,17 @@ from ui_screen import Compositor, DRMDisplayAdapter, Input
 from ui_statusbar import StatusBar
 from ui_anim import AnimDriver
 from screens import (
-    MacOSScreen,
+    AssistantScreen,
     NowPlayingScreen,
     SettingsScreen,
-    RouteBuilderScreen,
     NotificationsScreen,
     PairingModal,
 )
 
 logger = logging.getLogger(__name__)
 
-HOME, SETTINGS, NOTIF, SESSIONS, ROUTER, MAC = 0, 1, 2, 3, 4, 5
-MODES = SESSIONS      # compatibility alias
-TRANSFER = ROUTER    # compatibility alias
+HOME, SETTINGS, NOTIF, ASSISTANT = 0, 1, 2, 3
+SESSIONS = ROUTER = MAC = MODES = TRANSFER = HOME
 
 
 class GuiController:
@@ -43,7 +41,7 @@ class GuiController:
                  on_session_select=None, on_route_input_select=None,
                  on_route_output_select=None, on_route_activate=None, on_toggle_sleep=None, on_set_off_timeout=None,
                  on_toggle_notif_blink=None, on_set_brightness=None, on_set_theme=None,
-                 on_power_off=None, on_set_mode=None):
+                 on_power_off=None, on_set_mode=None, on_toggle_client=None):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self.dispatcher = Dispatcher(
@@ -65,22 +63,21 @@ class GuiController:
             on_set_theme=on_set_theme or (lambda name: None),  # [CLAUDE 2026-06-11] тема UI
             on_power_off=on_power_off or (lambda: None),
             on_set_mode=on_set_mode or (lambda mode: None),
+            on_toggle_client=on_toggle_client or (lambda on: None),
         )
         emit = self.dispatcher.dispatch
         screens = [
-            NowPlayingScreen(emit=emit),                                          # 0 HOME
-            SettingsScreen(on_select=lambda key: emit("settings_select", key)),   # 1 (по кнопке)
-            NotificationsScreen(emit=self._nav_intent),                           # 2 (свайп вниз)
-            RouteBuilderScreen(emit=emit),                                         # 3 (был SessionsScreen — режимы удалены; слот сохранён, чтобы не сдвигать индексы)
-            RouteBuilderScreen(emit=emit),                                         # 4
-            MacOSScreen(emit=emit),                                                # 5 (режим macOS)
+            NowPlayingScreen(emit=emit),
+            SettingsScreen(on_select=lambda key: emit("settings_select", key)),
+            NotificationsScreen(emit=self._nav_intent),
+            AssistantScreen(emit=emit),
         ]
         self.compositor = Compositor(
             DRMDisplayAdapter(display), screens,
             status_bar=StatusBar(), anim=AnimDriver(),
             state=self.app_state, on_intent=self._nav_intent,
-            show_dots=True,                        # [CLAUDE] 3 точки-индикатора: ‹Маршруты · Play Now · Уведомления›
-            nav_order=[ROUTER, HOME, NOTIF],        # [CLAUDE 2026-06-03] слева-направо: Маршруты | Play Now | Уведомления
+            show_dots=True,
+            nav_order=[HOME, ASSISTANT, NOTIF],
             pairing_modal=PairingModal(emit=emit),
         )
         self.app_state.active_desktop = HOME
@@ -111,7 +108,8 @@ class GuiController:
             self.compositor.render()
             return
         if intent == StatusBar.INTENT_ASSISTANT:
-            logger.info("assistant tap (Фаза 5 — логика позже)")
+            self.compositor.active = ASSISTANT
+            self.compositor.render()
             return
         if intent == "notif_dismiss":
             self._on_notif_dismiss(payload)         # payload = uid; очистить и на iPhone
@@ -140,13 +138,16 @@ class GuiController:
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
-        if intent in ("route_input_select", "route_output_select"):
+        if intent in ("remote_mic_toggle", "remote_mic_set"):
             self.dispatcher.dispatch(intent, payload)
             self.compositor.render()
             return
-        if intent == "route_activate":
-            self.dispatcher.dispatch(intent, payload)
+        if intent in ("route_input_select", "route_output_select"):
+            logger.info("minimal Play Now: ignored route UI intent %s", intent)
             self.compositor.render()
+            return
+        if intent == "route_activate":
+            logger.info("minimal Play Now: ignored route activation")
             return
         self.dispatcher.dispatch(intent, payload)   # медиа/transfer/pairing
 
@@ -354,9 +355,7 @@ class GuiController:
             self._handle_back()
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
-            # [CLAUDE 2026-06-03] Горизонталь: [Маршруты] <- Play Now -> [Уведомления].
-            # Настройки больше НЕ свайп-вью — вход по круглой кнопке в Routes (intent open_settings).
-            order = [ROUTER, HOME, NOTIF]
+            order = [HOME, ASSISTANT, NOTIF]
             if self.compositor.active in order:
                 i = order.index(self.compositor.active)
                 j = max(0, min(len(order) - 1, i + (1 if event == Input.SWIPE_RIGHT else -1)))
@@ -413,13 +412,16 @@ class GuiController:
         if a.iphone.connected and not self._prev_iphone_connected:
             a.active_desktop = HOME                 # подключился iPhone -> на home
         self._prev_iphone_connected = a.iphone.connected
-        # [CLAUDE 2026-06-03] После создания пары (сканер закрылся: pairing_mode True->False)
-        # возвращаемся на view Входы/Выходы (Routes), а НЕ на главный. Ставится ПОСЛЕ iPhone-флипа,
-        # чтобы перебить «подключился iPhone -> HOME», случившийся во время сопряжения.
         pm = bool(getattr(a, "pairing_mode", False))
         if self._prev_pairing_mode and not pm:
-            a.active_desktop = ROUTER
+            a.active_desktop = HOME
         self._prev_pairing_mode = pm
+        remote_mic = dict(getattr(model, "remote_mic", {}) or {})
+        a.set_remote_mic(
+            bool(remote_mic.get("enabled", False)),
+            state=remote_mic.get("state"),
+            message=remote_mic.get("message"),
+        )
         if a.iphone.connected:
             if s.title != a.iphone.title:          # смена трека -> сбросить локальный «лайк»
                 a.iphone.liked = False
@@ -512,13 +514,13 @@ class GuiController:
         self.show_screen(SESSIONS)
 
     def show_router_screen(self):
-        self.show_screen(ROUTER)
+        self.show_home()
 
     def show_transfer_screen(self):
         self.show_router_screen()
 
     def show_mac_screen(self):
-        self.show_screen(MAC)
+        self.show_home()
 
     def show_home(self):
         self.show_screen(HOME)
