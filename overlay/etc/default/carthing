@@ -54,6 +54,10 @@ CARTHING_NAME_BASE=CarThing
 # second classic-audio identity next to the BLE media remote on iOS/macOS.
 CARTHING_A2DP_BRIDGE_ENABLE=0
 CARTHING_A2DP_AUTOCONNECT=0
+CARTHING_TRANSFER_ENABLE=0
+CARTHING_CLASSIC_ENABLE=0
+CARTHING_CLASSIC_AUDIO_RECONNECT=0
+CARTHING_IAP2_ENABLE=0
 CARTHING_TRUSTED_DEVICES=/run/carthing-state/carthing/state.json
 
 # Release audio relay: use native AAC->SBC transcode only when a selected

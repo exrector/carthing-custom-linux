@@ -39,6 +39,7 @@ if [ -f /run/carthing/media-remote-supervisor.pid ]; then
 fi
 
 (
+    set +e
     while true; do
         /usr/libexec/carthing/run-media-remote >> "$CARTHING_RUNTIME_LOG" 2>&1
         rc=$?

@@ -1512,12 +1512,9 @@ async def main():
         _boot_milestone("accessory_orchestrator.import_ready")
         orch = AccessoryOrchestrator(device, on_phase_change=lambda p: logger.info("phase=%s", p),
                                      hci_gate=hci_gate)
-        orch.install()  # CTKD pairing config + classic enabled (для CTKD)
-        # [CLAUDE 2026-06-04] CoD до power_on() — iOS запоминает CoD при ПЕРВОМ сопряжении.
-        # Если CoD=0 в момент pairing, iPhone не поймёт что это аудиоустройство и не покажет
-        # в списке аудиовыходов. 0x240414 = Audio/Video Major + Loudspeaker minor + Audio service.
-        from a2dp_bridge import COD_AUDIO_LOUDSPEAKER
-        device.class_of_device = COD_AUDIO_LOUDSPEAKER
+        orch.install()
+        from hid_remote_service import install_hid_remote_profile
+        install_hid_remote_profile(device)
 
     # Cold-boot: hci0 (btattach) может быть ещё не готов -> Errno 16 busy. Терпеливый retry.
     device = None
