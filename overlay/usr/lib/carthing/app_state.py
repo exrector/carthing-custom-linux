@@ -119,6 +119,7 @@ class AppState:
         self.assistant_transcript = []
         self.assistant_status = ""
         self.assistant_text = ""
+        self.assistant_live_text = ""
         self.clock_text = "--:--"
         self.device_name = device_name()
         self.pairing_mode = False

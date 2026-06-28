@@ -20,6 +20,8 @@ public enum CTSPFrameType: UInt8, CaseIterable, Sendable, CustomStringConvertibl
     case error = 0x08
     /// Блочный IMA-ADPCM, mono 8 kHz; каждый блок содержит predictor/index.
     case audioIMAADPCM = 0x09
+    /// NTP-подобная синхронизация monotonic clock и измерение CTSP RTT.
+    case latencyProbe = 0x0A
 
     public var description: String {
         switch self {
@@ -30,6 +32,7 @@ public enum CTSPFrameType: UInt8, CaseIterable, Sendable, CustomStringConvertibl
         case .audioPCM16: return "audio_pcm16"
         case .error: return "error"
         case .audioIMAADPCM: return "audio_ima_adpcm"
+        case .latencyProbe: return "latency_probe"
         }
     }
 }

@@ -46,5 +46,7 @@ public extension CTSPFrame {
         public static let fragment: UInt16 = 1 << 0
         /// Кадр требует подтверждения (для будущего reliability-слоя).
         public static let needsAck: UInt16 = 1 << 1
+        /// Первые 20 байт audio payload: capture_end_ns, send_ns, dsp_us.
+        public static let audioTiming: UInt16 = 1 << 8
     }
 }

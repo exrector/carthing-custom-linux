@@ -36,6 +36,10 @@ T_COMMAND = 0x05
 T_AUDIO_PCM16 = 0x06
 T_ERROR = 0x08
 T_AUDIO_IMA_ADPCM = 0x09
+T_LATENCY_PROBE = 0x0A
+
+AUDIO_TIMING_FLAG = 1 << 8
+AUDIO_TIMING_HEADER = struct.Struct(">QQI")
 
 try:
     from remote_mic_sender import AlsaPcmCapture, CarThingVoiceDsp
@@ -54,6 +58,8 @@ class SessionConnector:
     last_seen: float = 0.0
     last_error: str = ""
     rx_buffer: bytearray = field(default_factory=bytearray)
+    audio_seq: int = 0
+    handshake_task: object | None = None
 
 
 @dataclass
@@ -214,11 +220,48 @@ class SessionPlaneService:
             )
         except Exception:
             pass
-        connection.on("disconnection", lambda *_: self._on_disconnect(address))
+        connection.on(
+            "disconnection",
+            lambda *_, attached=connection: self._on_disconnect(address, attached),
+        )
         asyncio.create_task(self._tune_connection(connection))
+        old_watchdog = runtime.connector.handshake_task
+        if old_watchdog is not None and not old_watchdog.done():
+            old_watchdog.cancel()
+        runtime.connector.handshake_task = asyncio.create_task(
+            self._handshake_watchdog(runtime, connection)
+        )
         self._sync_model()
         self.on_change()
         return True
+
+    async def _handshake_watchdog(self, runtime, connection):
+        try:
+            await asyncio.sleep(
+                float(os.environ.get("CARTHING_SESSION_HANDSHAKE_TIMEOUT_S", "6.0"))
+            )
+            if (
+                runtime.connector.connection is not connection
+                or runtime.connector.channel is not None
+            ):
+                return
+            logger.warning(
+                "session handshake timeout: peer=%s; dropping orphan LE ACL",
+                runtime.address,
+            )
+            await self._gate(
+                "session-handshake-timeout-disconnect",
+                connection.disconnect,
+            )
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.warning("session handshake timeout disconnect failed: %s", exc)
+            if runtime.connector.connection is connection:
+                self._on_disconnect(runtime.address)
+        finally:
+            if runtime.connector.handshake_task is asyncio.current_task():
+                runtime.connector.handshake_task = None
 
     async def _tune_connection(self, connection):
         try:
@@ -254,9 +297,15 @@ class SessionPlaneService:
         except Exception as exc:
             logger.info("session LE data length unchanged: %s", exc)
 
-    def _on_disconnect(self, address):
+    def _on_disconnect(self, address, connection=None):
         runtime = self._runtime(address, create=False)
         if runtime is None:
+            return
+        if (
+            connection is not None
+            and runtime.connector.connection is not connection
+        ):
+            logger.info("stale session disconnect ignored: %s", address)
             return
         was_active = bool(
             runtime.connector.connected
@@ -265,6 +314,10 @@ class SessionPlaneService:
         )
         runtime.connector.connection = None
         runtime.connector.channel = None
+        watchdog = runtime.connector.handshake_task
+        runtime.connector.handshake_task = None
+        if watchdog is not None and not watchdog.done():
+            watchdog.cancel()
         self._stop_mic(runtime)
         runtime.connector.connected = False
         try:
@@ -303,6 +356,10 @@ class SessionPlaneService:
         runtime.connector.connected = True
         runtime.connector.last_seen = time.time()
         runtime.connector.last_error = ""
+        watchdog = runtime.connector.handshake_task
+        runtime.connector.handshake_task = None
+        if watchdog is not None and not watchdog.done():
+            watchdog.cancel()
         try:
             self.state.note_peer_presence(
                 address=address,
@@ -392,9 +449,21 @@ class SessionPlaneService:
                 asyncio.create_task(self._disconnect_peer(channel))
             elif payload.startswith(b"text:"):
                 self._show_screen_text(payload[5:])
-                self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
             else:
                 self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
+        elif frame_type == T_LATENCY_PROBE:
+            payload_len = struct.unpack(">I", data[12:16])[0]
+            payload = data[16:16 + payload_len]
+            if len(payload) >= 8:
+                device_receive_ns = time.monotonic_ns()
+                mac_send_ns = struct.unpack(">Q", payload[:8])[0]
+                device_send_ns = time.monotonic_ns()
+                self._write(
+                    channel,
+                    T_LATENCY_PROBE,
+                    struct.pack(">QQQ", mac_send_ns, device_receive_ns, device_send_ns),
+                    seq=seq,
+                )
         else:
             self._write(channel, T_ERROR, b"unsupported_frame_type", seq=seq)
 
@@ -422,9 +491,9 @@ class SessionPlaneService:
             logger.info("session ACL already closing: %s", exc)
 
     @staticmethod
-    def _write(channel, frame_type: int, payload: bytes, seq: int = 0):
+    def _write(channel, frame_type: int, payload: bytes, seq: int = 0, flags: int = 0):
         try:
-            channel.write(_ctsp_frame(frame_type, payload, seq=seq))
+            channel.write(_ctsp_frame(frame_type, payload, seq=seq, flags=flags))
         except Exception as exc:
             logger.warning("session CoC write failed: %s", exc)
 
@@ -465,11 +534,18 @@ class SessionPlaneService:
                 self._sync_model()
                 self.on_change()
                 return
+            if role == "P":
+                self.state.assistant_live_text = s
+                self._sync_model()
+                self.on_change()
+                return
             if not s:
                 return
             label = "Вы" if role == "U" else ("Ассистент" if role == "A" else "")
             line = f"{label}: {s}" if label else s
             self.state.assistant_text = line
+            if role == "U":
+                self.state.assistant_live_text = ""
             tr = getattr(self.state, "assistant_transcript", None)
             if not isinstance(tr, list):
                 tr = []
@@ -540,6 +616,7 @@ class SessionPlaneService:
                         info,
                     )
                 raw = await asyncio.to_thread(cap.read, read_frames)
+                capture_end_ns = time.monotonic_ns()
                 if not raw:
                     await asyncio.sleep(0.01)
                     continue
@@ -548,15 +625,33 @@ class SessionPlaneService:
                     block = bytes(pending_audio[:process_bytes])
                     del pending_audio[:process_bytes]
                     if preprocessor is not None:
+                        dsp_started_ns = time.monotonic_ns()
                         payload = preprocessor.process(
                             block,
                             source_channels,
                             gain,
                         )
+                        dsp_us = (time.monotonic_ns() - dsp_started_ns) // 1000
                     else:
                         payload = b""
+                        dsp_us = 0
                     if payload:
-                        self._write(channel, T_AUDIO_IMA_ADPCM, payload)
+                        send_ns = time.monotonic_ns()
+                        runtime.connector.audio_seq = (
+                            runtime.connector.audio_seq + 1
+                        ) & 0xFFFFFFFF
+                        timed_payload = AUDIO_TIMING_HEADER.pack(
+                            capture_end_ns,
+                            send_ns,
+                            min(dsp_us, 0xFFFFFFFF),
+                        ) + payload
+                        self._write(
+                            channel,
+                            T_AUDIO_IMA_ADPCM,
+                            timed_payload,
+                            seq=runtime.connector.audio_seq,
+                            flags=AUDIO_TIMING_FLAG,
+                        )
                 await asyncio.sleep(0)
         except asyncio.CancelledError:
             raise
@@ -646,6 +741,8 @@ class SessionPlaneService:
                 "sample_rate_hz": 8000,
                 "channels": 1,
                 "mode": "on_demand",
+                "audio_timing": "capture_end_ns,send_ns,dsp_us",
+                "latency_probe": True,
             },
         }, separators=(",", ":")).encode("utf-8")
 

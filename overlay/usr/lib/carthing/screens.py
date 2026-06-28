@@ -144,6 +144,7 @@ class AssistantScreen(Screen):
         )
 
         transcript = list(getattr(self.state, "assistant_transcript", []) or [])
+        live_text = str(getattr(self.state, "assistant_live_text", "") or "").strip()
         font = T.font(T.SZ_BODY)
         lines = []
         for utterance in transcript:
@@ -151,17 +152,27 @@ class AssistantScreen(Screen):
                 C.wrap_lines(draw, str(utterance), font, right - 64)
                 or [str(utterance)]
             )
+        committed_line_count = len(lines)
+        if live_text:
+            lines.extend(
+                C.wrap_lines(draw, f"Вы: {live_text}", font, right - 64)
+                or [f"Вы: {live_text}"]
+            )
         top = 128
         bottom = T.H - 18
         line_height = 40
         visible = lines[-max(1, (bottom - top) // line_height):]
         y = bottom - len(visible) * line_height
         for index, line in enumerate(visible):
+            absolute_index = len(lines) - len(visible) + index
+            is_live = live_text and absolute_index >= committed_line_count
             draw.text(
                 (28, y),
                 line,
                 font=font,
-                fill=T.FG if index == len(visible) - 1 else T.MUTED,
+                fill=T.ACCENT if is_live else (
+                    T.FG if index == len(visible) - 1 else T.MUTED
+                ),
             )
             y += line_height
         return img

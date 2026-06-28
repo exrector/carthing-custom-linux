@@ -14,6 +14,38 @@ private final class TCPAudioClient {
     }
 }
 
+private struct AudioLatencySample {
+    let sequence: UInt32
+    let dspMs: Double
+    let devicePipelineMs: Double
+    let bluetoothMs: Double
+    let captureToMacMs: Double
+    let ctspRTTMs: Double?
+}
+
+private func readUInt64BE(_ data: Data, at offset: Int) -> UInt64? {
+    guard offset >= 0, data.count >= offset + 8 else { return nil }
+    var value: UInt64 = 0
+    for byte in data[offset..<(offset + 8)] {
+        value = (value << 8) | UInt64(byte)
+    }
+    return value
+}
+
+private func readUInt32BE(_ data: Data, at offset: Int) -> UInt32? {
+    guard offset >= 0, data.count >= offset + 4 else { return nil }
+    var value: UInt32 = 0
+    for byte in data[offset..<(offset + 4)] {
+        value = (value << 8) | UInt32(byte)
+    }
+    return value
+}
+
+private func bigEndianData(_ value: UInt64) -> Data {
+    var bigEndian = value.bigEndian
+    return Data(bytes: &bigEndian, count: MemoryLayout<UInt64>.size)
+}
+
 final class CarThingBTLink {
     private let transport = TransportCore()
     private let output = FileHandle.standardOutput
@@ -25,6 +57,7 @@ final class CarThingBTLink {
     private var frames = 0
     private var lastReport = Date()
     private var scanRetryTimer: Timer?
+    private var latencyProbeTimer: Timer?
     private var reconnectWorkItem: DispatchWorkItem?
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
@@ -40,6 +73,16 @@ final class CarThingBTLink {
     private var clients: [TCPAudioClient] = []    // доступ только с main
     private var eventClients: [NWConnection] = [] // доступ только с main
     private var rxText = Data()
+    private var latencyProbeSequence: UInt32 = 0
+    private var clockOffsetDeviceMinusMacNs: Double?
+    private var latestCTSPRTTMs: Double?
+    private var latestAudioLatency: AudioLatencySample?
+    private var latestAudioReceivedNs: UInt64?
+    private var linkLostNs: UInt64?
+    private var linkOpenedNs: UInt64?
+    private var firstAudioReceived = false
+    private var lastPartialSentAt = Date.distantPast
+    private var lastPartialText = ""
     private let netQueue = DispatchQueue(label: "carthing.bt.tcp")
     private lazy var speechPipeline = AppleSpeechPipeline { [weak self] text, isFinal in
         DispatchQueue.main.async {
@@ -98,6 +141,7 @@ final class CarThingBTLink {
             src.setEventHandler { [weak self] in
                 self?.shuttingDown = true
                 self?.stopScanRetry()
+                self?.stopLatencyProbes()
                 self?.cancelReconnect()
                 self?.transport.stopScan()
                 fputs("carthing-btlink: signal -> clean disconnect\n", stderr)
@@ -145,6 +189,22 @@ final class CarThingBTLink {
             transport.setClientEnabled(true)
         case .l2capOpened(let psm):
             fputs("carthing-btlink: l2cap_open psm=\(psm)\n", stderr)
+            let now = DispatchTime.now().uptimeNanoseconds
+            linkOpenedNs = now
+            firstAudioReceived = false
+            clockOffsetDeviceMinusMacNs = nil
+            latestCTSPRTTMs = nil
+            latestAudioLatency = nil
+            latestAudioReceivedNs = nil
+            lastPartialText = ""
+            lastPartialSentAt = .distantPast
+            if let lost = linkLostNs {
+                fputs(
+                    "carthing-btlink: reconnect_l2cap_ms=\(Self.ms(now, since: lost))\n",
+                    stderr
+                )
+            }
+            startLatencyProbes()
             transport.send(CTSPFrame(type: .hello, payload: Data("\(Date().timeIntervalSince1970)".utf8)))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 fputs("carthing-btlink: command=start_mic\n", stderr)
@@ -153,6 +213,9 @@ final class CarThingBTLink {
         case .l2capClosed:
             streaming = false
             connected = false
+            linkLostNs = DispatchTime.now().uptimeNanoseconds
+            linkOpenedNs = nil
+            stopLatencyProbes()
             stopScanRetry()
             fputs("carthing-btlink: l2cap_closed\n", stderr)
             if !shuttingDown {
@@ -208,8 +271,10 @@ final class CarThingBTLink {
             writeFloat32PCM(from: frame.payload)
             reportAudioFrame()
         case .audioIMAADPCM:
-            writeFloat32ADPCM(from: frame.payload)
+            writeFloat32ADPCM(from: frame)
             reportAudioFrame()
+        case .latencyProbe:
+            handleLatencyProbe(frame)
         case .status:
             let text = String(data: frame.payload, encoding: .utf8) ?? "\(frame.payload.count) bytes"
             if !streaming, text.contains("\"streaming_mic\":[\"") {
@@ -227,9 +292,32 @@ final class CarThingBTLink {
     private func reportAudioFrame() {
         frames += 1
         let now = Date()
+        if !firstAudioReceived {
+            firstAudioReceived = true
+            if let opened = linkOpenedNs {
+                let elapsed = Self.ms(DispatchTime.now().uptimeNanoseconds, since: opened)
+                fputs("carthing-btlink: first_audio_after_l2cap_ms=\(elapsed)\n", stderr)
+            }
+        }
         if now.timeIntervalSince(lastReport) >= 2.0 {
             lastReport = now
-            fputs("carthing-btlink: audio_frames=\(frames)\n", stderr)
+            if let latency = latestAudioLatency {
+                fputs(
+                    String(
+                        format: "carthing-btlink: audio_frames=%d seq=%u dsp_ms=%.1f device_ms=%.1f bluetooth_ms=%.1f capture_to_mac_ms=%.1f ctsp_rtt_ms=%.1f\n",
+                        frames,
+                        latency.sequence,
+                        latency.dspMs,
+                        latency.devicePipelineMs,
+                        latency.bluetoothMs,
+                        latency.captureToMacMs,
+                        latency.ctspRTTMs ?? -1
+                    ),
+                    stderr
+                )
+            } else {
+                fputs("carthing-btlink: audio_frames=\(frames)\n", stderr)
+            }
         }
     }
 
@@ -267,7 +355,30 @@ final class CarThingBTLink {
         27086, 29794, 32767,
     ]
 
-    private func writeFloat32ADPCM(from data: Data) {
+    private func writeFloat32ADPCM(from frame: CTSPFrame) {
+        let receivedNs = DispatchTime.now().uptimeNanoseconds
+        latestAudioReceivedNs = receivedNs
+        var data = frame.payload
+        if frame.flags & CTSPFrame.Flag.audioTiming != 0,
+           let captureEndNs = readUInt64BE(data, at: 0),
+           let deviceSendNs = readUInt64BE(data, at: 8),
+           let dspUs = readUInt32BE(data, at: 16),
+           data.count >= 20,
+           deviceSendNs >= captureEndNs,
+           let offset = clockOffsetDeviceMinusMacNs {
+            let captureMacNs = Double(captureEndNs) - offset
+            let sendMacNs = Double(deviceSendNs) - offset
+            let receiveMacNs = Double(receivedNs)
+            latestAudioLatency = AudioLatencySample(
+                sequence: frame.seq,
+                dspMs: Double(dspUs) / 1000,
+                devicePipelineMs: max(0, Double(deviceSendNs - captureEndNs) / 1_000_000),
+                bluetoothMs: max(0, (receiveMacNs - sendMacNs) / 1_000_000),
+                captureToMacMs: max(0, (receiveMacNs - captureMacNs) / 1_000_000),
+                ctspRTTMs: latestCTSPRTTMs
+            )
+            data = Data(data.dropFirst(20))
+        }
         guard data.count >= 4 else { return }
         var predictor = Int(Int16(bitPattern: UInt16(data[0]) | (UInt16(data[1]) << 8)))
         var index = max(0, min(88, Int(data[2])))
@@ -400,11 +511,43 @@ final class CarThingBTLink {
     }
 
     private func broadcastSpeech(text: String, isFinal: Bool) {
-        let object: [String: Any] = [
+        let nowNs = DispatchTime.now().uptimeNanoseconds
+        let audioTailToTextMs = latestAudioReceivedNs.map { Self.ms(nowNs, since: $0) }
+        var object: [String: Any] = [
             "type": isFinal ? "final" : "partial",
             "text": text,
             "timestamp": Date().timeIntervalSince1970,
         ]
+        if let latency = latestAudioLatency {
+            object["audio_sequence"] = latency.sequence
+            object["dsp_ms"] = latency.dspMs
+            object["device_pipeline_ms"] = latency.devicePipelineMs
+            object["bluetooth_ms"] = latency.bluetoothMs
+            object["capture_to_mac_ms"] = latency.captureToMacMs
+            object["ctsp_rtt_ms"] = latency.ctspRTTMs
+            if let tail = audioTailToTextMs {
+                object["audio_tail_to_text_ms"] = tail
+                object["capture_to_text_edge_ms"] = latency.captureToMacMs + tail
+            }
+        }
+        let kind = isFinal ? "final" : "partial"
+        fputs(
+            "carthing-btlink: speech_\(kind) metrics=\(metricsSummary(object)) text=\(text.prefix(80))\n",
+            stderr
+        )
+        let shouldSendToDevice = isFinal
+            || (text != lastPartialText && Date().timeIntervalSince(lastPartialSentAt) >= 0.15)
+        if shouldSendToDevice {
+            lastPartialText = text
+            lastPartialSentAt = Date()
+            let role = isFinal ? "U" : "P"
+            transport.send(
+                CTSPFrame(
+                    type: .command,
+                    payload: Data("text:\(role)|\(text)".utf8)
+                )
+            )
+        }
         guard var data = try? JSONSerialization.data(withJSONObject: object) else {
             return
         }
@@ -416,6 +559,84 @@ final class CarThingBTLink {
                 }
             })
         }
+    }
+
+    private func metricsSummary(_ object: [String: Any]) -> String {
+        let keys = [
+            "dsp_ms",
+            "device_pipeline_ms",
+            "bluetooth_ms",
+            "capture_to_mac_ms",
+            "audio_tail_to_text_ms",
+            "capture_to_text_edge_ms",
+            "ctsp_rtt_ms",
+        ]
+        return keys.compactMap { key in
+            guard let value = object[key] as? Double else { return nil }
+            return String(format: "%@=%.1f", key, value)
+        }.joined(separator: " ")
+    }
+
+    private func startLatencyProbes() {
+        stopLatencyProbes()
+        sendLatencyProbe()
+        latencyProbeTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) {
+            [weak self] _ in
+            self?.sendLatencyProbe()
+        }
+    }
+
+    private func stopLatencyProbes() {
+        latencyProbeTimer?.invalidate()
+        latencyProbeTimer = nil
+    }
+
+    private func sendLatencyProbe() {
+        latencyProbeSequence &+= 1
+        let sentNs = DispatchTime.now().uptimeNanoseconds
+        transport.send(
+            CTSPFrame(
+                type: .latencyProbe,
+                seq: latencyProbeSequence,
+                payload: bigEndianData(sentNs)
+            )
+        )
+    }
+
+    private func handleLatencyProbe(_ frame: CTSPFrame) {
+        let receivedNs = DispatchTime.now().uptimeNanoseconds
+        guard let macSendNs = readUInt64BE(frame.payload, at: 0),
+              let deviceReceiveNs = readUInt64BE(frame.payload, at: 8),
+              let deviceSendNs = readUInt64BE(frame.payload, at: 16),
+              receivedNs >= macSendNs,
+              deviceSendNs >= deviceReceiveNs else {
+            return
+        }
+        let processingNs = Double(deviceSendNs - deviceReceiveNs)
+        let rttNs = max(0, Double(receivedNs - macSendNs) - processingNs)
+        let measuredOffset = (
+            (Double(deviceReceiveNs) - Double(macSendNs))
+            + (Double(deviceSendNs) - Double(receivedNs))
+        ) / 2
+        if let current = clockOffsetDeviceMinusMacNs {
+            clockOffsetDeviceMinusMacNs = current * 0.8 + measuredOffset * 0.2
+        } else {
+            clockOffsetDeviceMinusMacNs = measuredOffset
+        }
+        latestCTSPRTTMs = rttNs / 1_000_000
+        fputs(
+            String(
+                format: "carthing-btlink: ctsp_probe seq=%u rtt_ms=%.1f\n",
+                frame.seq,
+                latestCTSPRTTMs ?? -1
+            ),
+            stderr
+        )
+    }
+
+    private static func ms(_ end: UInt64, since start: UInt64) -> Double {
+        guard end >= start else { return 0 }
+        return Double(end - start) / 1_000_000
     }
 
     private func receiveText(_ conn: NWConnection) {
