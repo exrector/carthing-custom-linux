@@ -22,7 +22,7 @@ public enum CTSPFrameType: UInt8, CaseIterable, Sendable, CustomStringConvertibl
     case audioIMAADPCM = 0x09
     /// NTP-подобная синхронизация monotonic clock и измерение CTSP RTT.
     case latencyProbe = 0x0A
-    /// Один raw Opus packet, mono 16 kHz, VOIP, 10 или 20 ms.
+    /// Один raw Opus packet, mono 16 kHz, VOIP, 10, 20 или 40 ms.
     case audioOpus = 0x0B
 
     public var description: String {

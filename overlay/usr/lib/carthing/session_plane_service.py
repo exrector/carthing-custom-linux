@@ -279,14 +279,14 @@ class SessionPlaneService:
             await self._gate(
                 "session-update-parameters",
                 lambda: connection.update_parameters(
-                    connection_interval_min=15.0,
-                    connection_interval_max=15.0,
+                    connection_interval_min=30.0,
+                    connection_interval_max=30.0,
                     max_latency=0,
                     supervision_timeout=6000.0,
                     use_l2cap=True,
                 ),
             )
-            logger.info("session LE interval requested: 15ms")
+            logger.info("session LE interval requested: 30ms")
         except Exception as exc:
             logger.info("session LE interval unchanged: %s", exc)
         await asyncio.sleep(0.75)
@@ -588,9 +588,9 @@ class SessionPlaneService:
         )
         if target_rate not in (8000, 16000):
             raise ValueError("CARTHING_BT_MIC_TARGET_RATE must be 8000 or 16000")
-        frame_ms = int(os.environ.get("CARTHING_BT_MIC_FRAME_MS", "20"))
-        if frame_ms not in (10, 20):
-            raise ValueError("CARTHING_BT_MIC_FRAME_MS must be 10 or 20")
+        frame_ms = int(os.environ.get("CARTHING_BT_MIC_FRAME_MS", "40"))
+        if frame_ms not in (10, 20, 40):
+            raise ValueError("CARTHING_BT_MIC_FRAME_MS must be 10, 20, or 40")
         default_read_frames = source_rate * frame_ms // 1000
         read_frames = int(
             os.environ.get(
@@ -650,7 +650,7 @@ class SessionPlaneService:
                             )
                             codec = "ima_adpcm"
                             target_rate = 8000
-                            frame_ms = 20
+                            frame_ms = 40
                             read_frames = source_rate * frame_ms // 1000
                             process_bytes = read_frames * source_channels * 2
                             preprocessor = await asyncio.to_thread(
@@ -831,7 +831,7 @@ class SessionPlaneService:
                 "channels": 1,
                 "mode": "on_demand",
                 "frame_ms": int(
-                    os.environ.get("CARTHING_BT_MIC_FRAME_MS", "20")
+                    os.environ.get("CARTHING_BT_MIC_FRAME_MS", "40")
                 ),
                 "audio_timing": "capture_end_ns,send_ns,dsp_us",
                 "latency_probe": True,
