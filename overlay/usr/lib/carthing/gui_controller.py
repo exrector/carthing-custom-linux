@@ -5,10 +5,12 @@ transport remain in the runtime services.
 """
 
 import logging
+import os
 import time
 
 import identity_service
 from app_state import AppState
+from connection_journal import record_connection_event
 from intents import Dispatcher
 from screens import (
     AssistantScreen,
@@ -43,6 +45,13 @@ class GuiController:
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self._volume_touch_ts = 0.0
+        self._iphone_transport_connected = False
+        self._iphone_grace_until = 0.0
+        self._iphone_disconnect_at = 0.0
+        self._iphone_disconnect_grace = max(
+            0.0,
+            float(os.environ.get("CARTHING_IPHONE_UI_GRACE_S", "3.0")),
+        )
 
         self.dispatcher = Dispatcher(
             self.app_state,
@@ -147,19 +156,66 @@ class GuiController:
         state = self.app_state
         state.advance_assistant_live()
         session = model.session
-        state.iphone.connected = bool(session.source == "iphone" and session.connected)
-        if state.iphone.connected:
+        now = time.monotonic()
+        transport_connected = bool(
+            session.source == "iphone" and session.connected
+        )
+
+        if transport_connected and not self._iphone_transport_connected:
+            if self._iphone_disconnect_at:
+                record_connection_event(
+                    "gui_iphone_recovered",
+                    outage_ms=round(
+                        (now - self._iphone_disconnect_at) * 1000.0,
+                        1,
+                    ),
+                    preserved=bool(now < self._iphone_grace_until),
+                )
+            self._iphone_transport_connected = True
+            self._iphone_disconnect_at = 0.0
+        elif not transport_connected and self._iphone_transport_connected:
+            self._iphone_transport_connected = False
+            self._iphone_disconnect_at = now
+            self._iphone_grace_until = now + self._iphone_disconnect_grace
+            record_connection_event(
+                "gui_iphone_grace_started",
+                grace_ms=round(self._iphone_disconnect_grace * 1000.0, 1),
+            )
+
+        hold_presentation = bool(
+            not transport_connected
+            and state.iphone.connected
+            and now < self._iphone_grace_until
+        )
+        state.iphone.connected = bool(transport_connected or hold_presentation)
+
+        if transport_connected:
             if session.title != state.iphone.title:
-                state.iphone.liked = False
-            state.iphone.title = session.title
-            state.iphone.artist = session.artist
-            state.iphone.duration = session.duration
-            state.iphone.position = session.elapsed
-            state.iphone.playing = session.playing
-            state.iphone.supported_commands = set(session.supported_commands)
-            if time.monotonic() - self._volume_touch_ts > 0.8:
-                state.iphone.volume = session.volume
-        else:
+                if (
+                    session.title
+                    or not state.iphone.title
+                    or now >= self._iphone_grace_until
+                ):
+                    state.iphone.liked = False
+            preserve_stale_metadata = bool(
+                not session.title
+                and state.iphone.title
+                and now < self._iphone_grace_until
+            )
+            if not preserve_stale_metadata:
+                state.iphone.title = session.title
+                state.iphone.artist = session.artist
+                state.iphone.duration = session.duration
+                state.iphone.position = session.elapsed
+                state.iphone.playing = session.playing
+                state.iphone.supported_commands = set(session.supported_commands)
+                if now - self._volume_touch_ts > 0.8:
+                    state.iphone.volume = session.volume
+                self._iphone_grace_until = 0.0
+        elif not hold_presentation:
+            if state.iphone.title and self._iphone_grace_until:
+                record_connection_event("gui_iphone_grace_expired")
+            self._iphone_grace_until = 0.0
             state.iphone.title = ""
             state.iphone.artist = ""
             state.iphone.duration = 0.0

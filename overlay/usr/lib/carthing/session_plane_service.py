@@ -16,6 +16,7 @@ from bumble.gatt import Characteristic, Service
 from bumble import l2cap
 
 import identity_service
+from connection_journal import record_connection_event
 
 logger = logging.getLogger(__name__)
 
@@ -212,6 +213,7 @@ class SessionPlaneService:
         runtime.connector.connected = True
         runtime.connector.last_seen = time.time()
         logger.info("session peer LE attached: %s", address)
+        record_connection_event("session_le_attached", peer=address)
         try:
             self.state.note_peer_presence(
                 address=address,
@@ -250,6 +252,10 @@ class SessionPlaneService:
             logger.warning(
                 "session handshake timeout: peer=%s; dropping orphan LE ACL",
                 runtime.address,
+            )
+            record_connection_event(
+                "session_handshake_timeout",
+                peer=runtime.address,
             )
             await self._gate(
                 "session-handshake-timeout-disconnect",
@@ -308,6 +314,10 @@ class SessionPlaneService:
             and runtime.connector.connection is not connection
         ):
             logger.info("stale session disconnect ignored: %s", address)
+            record_connection_event(
+                "session_stale_disconnect",
+                peer=address,
+            )
             return
         was_active = bool(
             runtime.connector.connected
@@ -322,6 +332,11 @@ class SessionPlaneService:
             watchdog.cancel()
         self._stop_mic(runtime)
         runtime.connector.connected = False
+        record_connection_event(
+            "session_disconnected",
+            peer=address,
+            was_active=was_active,
+        )
         try:
             self.state.note_peer_presence(
                 address=address,
@@ -351,6 +366,11 @@ class SessionPlaneService:
         if not self.enabled:
             runtime.connector.last_error = "client_off"
             logger.info("session CoC rejected while Client OFF: %s", address or "?")
+            record_connection_event(
+                "session_coc_rejected",
+                peer=address or "?",
+                reason="client_off",
+            )
             asyncio.create_task(channel.disconnect())
             self._sync_model()
             return
@@ -378,6 +398,11 @@ class SessionPlaneService:
             lambda *_: self._on_channel_close(runtime, channel),
         )
         logger.info("session CoC connected: peer=%s psm=%d", address or "?", self.psm)
+        record_connection_event(
+            "session_coc_connected",
+            peer=address or "?",
+            psm=self.psm,
+        )
         self._sync_model()
         self.on_change()
         self._write(channel, T_HELLO, self._status_bytes())
@@ -389,6 +414,10 @@ class SessionPlaneService:
         runtime.connector.connected = False
         self._stop_mic(runtime)
         logger.info("session CoC closed: peer=%s", runtime.address)
+        record_connection_event(
+            "session_coc_closed",
+            peer=runtime.address,
+        )
         self._sync_model()
         self.on_change()
         self._notify_disconnect(runtime.address)

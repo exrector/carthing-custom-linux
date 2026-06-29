@@ -16,6 +16,7 @@ except Exception:
 import runtime_paths  # noqa: F401
 import identity_service
 import state_paths
+from connection_journal import record_connection_event
 from hci_operation_gate import HciOperationGate
 from runtime_model import RuntimeModel
 
@@ -272,6 +273,7 @@ async def _on_connection(connection):
     peer = getattr(connection, "peer_address", "?")
     if _is_classic(connection):
         logger.warning("unexpected Classic connection rejected: %s", peer)
+        record_connection_event("classic_connection_rejected", peer=str(peer))
         try:
             await connection.disconnect()
         except Exception:
@@ -282,6 +284,11 @@ async def _on_connection(connection):
         "LE connected: %s encrypted=%s",
         peer,
         getattr(connection, "is_encrypted", False),
+    )
+    record_connection_event(
+        "le_connected",
+        peer=str(peer),
+        encrypted=bool(getattr(connection, "is_encrypted", False)),
     )
 
     if (
@@ -300,6 +307,10 @@ async def _on_connection(connection):
         and _connection_is_active(iphone_connection)
     ):
         logger.warning("duplicate iPhone connection rejected: %s", peer)
+        record_connection_event(
+            "iphone_duplicate_rejected",
+            peer=str(peer),
+        )
         try:
             await connection.disconnect()
         except Exception:
@@ -325,24 +336,49 @@ async def _on_connection(connection):
             return
         started = True
         logger.info("iPhone services start (%s)", reason)
+        record_connection_event(
+            "iphone_services_start",
+            peer=str(peer),
+            trigger=str(reason),
+        )
         try:
             await iphone.setup(connection)
         except Exception as error:
             started = False
             logger.warning("iPhone services failed: %s", error)
+            record_connection_event(
+                "iphone_services_failed",
+                peer=str(peer),
+                error=str(error),
+            )
             return
         if iphone_connection is not connection or not _connection_is_active(connection):
             return
         await _sync_trusted_iphone(connection)
         await orch.on_bonded()
-        await orch.start_session_bootstrap()
+        if settings is not None and bool(settings.get("client_enabled", False)):
+            await orch.start_session_bootstrap()
+        record_connection_event(
+            "iphone_services_ready",
+            peer=str(peer),
+        )
 
     def disconnected(reason=None, *_args):
         global iphone, iphone_connection
         if iphone_connection is not connection:
             logger.info("stale iPhone disconnect ignored: %s reason=%s", peer, reason)
+            record_connection_event(
+                "iphone_stale_disconnect",
+                peer=str(peer),
+                reason=reason,
+            )
             return
         logger.info("iPhone disconnected: %s reason=%s", peer, reason)
+        record_connection_event(
+            "iphone_disconnected",
+            peer=str(peer),
+            reason=reason,
+        )
         iphone_connection = None
         if iphone is not None:
             iphone.reset()
@@ -533,6 +569,11 @@ async def main():
 
     _milestone("runtime.main_start")
     _verify_persistent_state()
+    record_connection_event(
+        "runtime_start",
+        pid=os.getpid(),
+        version=os.environ.get("CARTHING_RUNTIME_VERSION", "unknown"),
+    )
 
     import hardware_inventory
     from settings_service import SettingsService
