@@ -113,7 +113,11 @@ final class CarThingBTLink {
     // TCP-режим: агент живёт под launchd (там CB/TCC работают), а потребитель (bt_whisper)
     // цепляется по локальному TCP — отдаём аудио, принимаем команды (text ...).
     private let tcpPort = ProcessInfo.processInfo.environment["CARTHING_BT_TCP_PORT"].flatMap { UInt16($0) }
+    private let homePodControlPort =
+        ProcessInfo.processInfo.environment["CARTHING_HOMEPOD_CONTROL_PORT"]
+            .flatMap { UInt16($0) } ?? 49_501
     private var listener: NWListener?
+    private var homePodControl: NWConnection?
     private var clients: [TCPAudioClient] = []    // доступ только с main
     private var rxText = Data()
     private var latencyProbeSequence: UInt32 = 0
@@ -307,6 +311,8 @@ final class CarThingBTLink {
             handleLatencyProbe(frame)
         case .status:
             applyStreamingStatus(frame.payload)
+        case .command:
+            forwardDeviceCommand(frame.payload)
         case .error:
             let text = String(data: frame.payload, encoding: .utf8) ?? "\(frame.payload.count) bytes"
             fputs("carthing-btlink: device_error=\(text)\n", stderr)
@@ -491,6 +497,7 @@ final class CarThingBTLink {
     }
 
     private func startTCP(_ port: UInt16) {
+        startHomePodControl()
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
         params.requiredLocalEndpoint = .hostPort(
@@ -505,6 +512,47 @@ final class CarThingBTLink {
         l.newConnectionHandler = { [weak self] conn in self?.acceptConn(conn) }
         l.start(queue: netQueue)
         fputs("carthing-btlink: TCP server on 127.0.0.1:\(port)\n", stderr)
+    }
+
+    private func startHomePodControl() {
+        guard homePodControl == nil,
+              let port = NWEndpoint.Port(rawValue: homePodControlPort) else {
+            return
+        }
+        let connection = NWConnection(
+            host: "127.0.0.1",
+            port: port,
+            using: .udp
+        )
+        connection.stateUpdateHandler = { state in
+            if case .failed(let error) = state {
+                fputs("carthing-btlink: HomePod control failed: \(error)\n", stderr)
+            }
+        }
+        homePodControl = connection
+        connection.start(queue: netQueue)
+    }
+
+    private func forwardDeviceCommand(_ data: Data) {
+        guard let command = String(data: data, encoding: .utf8),
+              command == "media_control:vol_up"
+                || command == "media_control:vol_down",
+              let homePodControl else {
+            return
+        }
+        homePodControl.send(
+            content: Data(command.utf8),
+            completion: .contentProcessed { error in
+                if let error {
+                    fputs(
+                        "carthing-btlink: HomePod control send failed: \(error)\n",
+                        stderr
+                    )
+                } else {
+                    fputs("carthing-btlink: \(command)\n", stderr)
+                }
+            }
+        )
     }
 
     private func acceptConn(_ conn: NWConnection) {

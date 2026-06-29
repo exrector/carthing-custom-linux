@@ -433,6 +433,18 @@ class SessionPlaneService:
         if connection is not None:
             asyncio.create_task(self._disconnect_if_active(connection, 0.2))
 
+    def send_media_control(self, command):
+        payload = f"media_control:{command}".encode("ascii")
+        sent = False
+        for runtime in self._runtimes.values():
+            connector = runtime.connector
+            channel = connector.channel
+            if not connector.connected or channel is None:
+                continue
+            if self._write(channel, T_COMMAND, payload):
+                sent = True
+        return sent
+
     def _on_channel_data(self, runtime, channel, data: bytes):
         runtime.connector.last_seen = time.time()
         runtime.connector.rx_buffer.extend(data)
@@ -544,8 +556,10 @@ class SessionPlaneService:
     def _write(channel, frame_type: int, payload: bytes, seq: int = 0, flags: int = 0):
         try:
             channel.write(_ctsp_frame(frame_type, payload, seq=seq, flags=flags))
+            return True
         except Exception as exc:
             logger.warning("session CoC write failed: %s", exc)
+            return False
 
     def _on_client_toggle_write(self, _connection, value):
         enabled = bool(bytes(value or b"\x00")[0])

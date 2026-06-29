@@ -153,9 +153,14 @@ session_gate = SessionPlaneService.__new__(SessionPlaneService)
 session_gate._listening = False
 session_gate._runtimes = {
     "mac": SimpleNamespace(
-        connector=SimpleNamespace(channel=object()),
+        connector=SimpleNamespace(channel=object(), connected=True),
     )
 }
+session_commands = []
+def record_session_command(_channel, frame_type, payload):
+    session_commands.append((frame_type, payload))
+    return True
+session_gate._write = record_session_command
 session_gate._start_mic = lambda _runtime, _channel: capture_events.append("start")
 session_gate._stop_mic = lambda _runtime: capture_events.append("stop")
 session_gate._sync_model = lambda: None
@@ -164,6 +169,10 @@ session_gate.set_listening(True)
 session_gate.set_listening(False)
 if capture_events != ["start", "stop"]:
     raise SystemExit("microphone task is not strictly gated by listening state")
+if not session_gate.send_media_control("vol_up"):
+    raise SystemExit("connected CTSP route rejected media control")
+if session_commands != [(0x05, b"media_control:vol_up")]:
+    raise SystemExit("CTSP media control payload is incorrect")
 
 class FakeHIDDevice:
     def __init__(self):

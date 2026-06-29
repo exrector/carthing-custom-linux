@@ -78,12 +78,20 @@ def _on_command(source, command):
             "vol_up": "vol_up",
             "vol_down": "vol_down",
         }.get(command)
-        if command in ("vol_up", "vol_down") or (
-            model.remote_media_active and hid_command is not None
-        ):
+        if command in ("vol_up", "vol_down"):
+            if (
+                model.remote_media_active
+                and session_plane is not None
+                and session_plane.send_media_control(command)
+            ):
+                logger.info("volume command -> AirPlay bridge: %s", command)
+            else:
+                logger.info("volume command -> AMS: %s", command)
+                asyncio.create_task(iphone.command(command))
+        elif model.remote_media_active and hid_command is not None:
             from hid_remote_service import send_consumer_usage
 
-            asyncio.create_task(send_consumer_usage(hid_command or command))
+            asyncio.create_task(send_consumer_usage(hid_command))
         else:
             asyncio.create_task(iphone.command(command))
 

@@ -112,6 +112,7 @@ async def start(get_ams=None, on_event=None):
         _, _, evtype, code, value = ev
         if evtype != EV_REL or code != REL_HWHEEL:
             return
+        log.info("Encoder raw value=%+d", value)
         if use_gui:
             on_event(EV_ENCODER_CW if value > 0 else EV_ENCODER_CCW)
             return
