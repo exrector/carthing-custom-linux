@@ -19,6 +19,16 @@ from ui_components import RegionSet
 
 log = logging.getLogger("carthing.ui")
 
+NOTIFICATION_BLINK_PERIOD_S = 8.0
+NOTIFICATION_BLINK_ON_S = 1.0
+
+
+def notification_indicator_visible(unread, enabled, now=None):
+    if not unread or not enabled:
+        return False
+    now = time.monotonic() if now is None else float(now)
+    return now % NOTIFICATION_BLINK_PERIOD_S < NOTIFICATION_BLINK_ON_S
+
 
 # ─── high-level input (decoupled from evdev) ──────────────────────────────────
 class Input:
@@ -368,7 +378,7 @@ class Compositor:
         if self.anim is not None:
             self.anim.set_pulsing(astate in ("listening", "thinking"))   # пульс орба
         blink_on = getattr(self.state, "notif_blink", True) if self.state else True
-        if unread and blink_on and int(time.monotonic() * 1.5) % 2 == 0:
+        if notification_indicator_visible(unread, blink_on):
             T.encoder_zone_glow(draw)
         T.encoder_arc(draw, level=vol)                 # ВСЕГДА — поверх любого вью
         if not full:

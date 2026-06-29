@@ -6,6 +6,7 @@ transport remain in the runtime services.
 
 import logging
 import os
+import threading
 import time
 
 import identity_service
@@ -20,13 +21,40 @@ from screens import (
     SettingsScreen,
 )
 from ui_anim import AnimDriver
-from ui_screen import Compositor, DRMDisplayAdapter, Input
+from ui_screen import (
+    Compositor,
+    DRMDisplayAdapter,
+    Input,
+    notification_indicator_visible,
+)
 from ui_statusbar import StatusBar
 
 logger = logging.getLogger(__name__)
 
 HOME, SETTINGS, NOTIFICATIONS, ASSISTANT = 0, 1, 2, 3
 NAVIGATION = (HOME, ASSISTANT, NOTIFICATIONS)
+
+
+def _freeze_presentation(value):
+    if isinstance(value, dict):
+        return tuple(
+            sorted((str(key), _freeze_presentation(item)) for key, item in value.items())
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_presentation(item) for item in value)
+    if isinstance(value, set):
+        return tuple(sorted(_freeze_presentation(item) for item in value))
+    if hasattr(value, "__dict__"):
+        return tuple(
+            sorted(
+                (name, _freeze_presentation(item))
+                for name, item in vars(value).items()
+                if not name.startswith("_")
+            )
+        )
+    if isinstance(value, (str, int, float, bool, type(None))):
+        return value
+    return str(value)
 
 
 class GuiController:
@@ -52,6 +80,9 @@ class GuiController:
             0.0,
             float(os.environ.get("CARTHING_IPHONE_UI_GRACE_S", "3.0")),
         )
+        self._render_lock = threading.Lock()
+        self._render_pending = False
+        self._last_presentation_key = None
 
         self.dispatcher = Dispatcher(
             self.app_state,
@@ -92,13 +123,13 @@ class GuiController:
             self._on_notif_dismiss(payload)
         elif intent == "notif_select":
             self.compositor.screens[NOTIFICATIONS].select(payload)
-            self.compositor.render()
+            self.render()
         elif intent == "settings_tap":
             self.compositor.screens[SETTINGS].tap(payload)
-            self.compositor.render()
+            self.render()
         else:
             self.dispatcher.dispatch(intent, payload)
-            self.compositor.render()
+            self.render()
 
     def needs_fast_render(self):
         state = self.app_state
@@ -111,7 +142,7 @@ class GuiController:
         if isinstance(event, tuple) and event:
             if event[0] == "scroll":
                 if self.compositor.current.on_input(event):
-                    self.compositor.render()
+                    self.render()
                 return
             if event[0] in ("scroll_end", "drag", "drag_end"):
                 return
@@ -125,7 +156,7 @@ class GuiController:
             )
             self._volume_touch_ts = time.monotonic()
             self.dispatcher.dispatch("media_vol_up" if up else "media_vol_down")
-            self.compositor.render()
+            self.render()
             return
 
         if self.compositor.modal is not None:
@@ -152,9 +183,74 @@ class GuiController:
             return
         self.compositor.handle_input(event)
 
+    def _presentation_key(self):
+        state = self.app_state
+        compositor = getattr(self, "compositor", None)
+        active = (
+            compositor.active if compositor is not None else state.active_desktop
+        )
+        modal = (
+            type(compositor.modal).__name__
+            if compositor is not None and compositor.modal is not None
+            else None
+        )
+        session = state.iphone
+        visible_state = {
+            "active_screen": active,
+            "modal": modal,
+            "encoder_volume": round(float(session.volume or 0.0), 3),
+            "notification_indicator_visible": notification_indicator_visible(
+                state.unread_count, state.notif_blink
+            ),
+            "pairing_mode": state.pairing_mode,
+            "pairing_message": state.pairing_message,
+            "power_unplug_status": state.power_unplug_status,
+            "power_unplug_message": state.power_unplug_message,
+        }
+        if active == HOME:
+            visible_state["iphone"] = {
+                "connected": session.connected,
+                "title": session.title,
+                "artist": session.artist,
+                "duration": round(float(session.duration or 0.0), 1),
+                "position_second": int(float(session.position or 0.0)),
+                "playing": session.playing,
+                "supported_commands": session.supported_commands,
+                "liked": session.liked,
+            }
+        elif active == ASSISTANT:
+            visible_state["assistant"] = {
+                "remote_mic_enabled": state.remote_mic_enabled,
+                "remote_mic_state": state.remote_mic_state,
+                "remote_mic_message": state.remote_mic_message,
+                "status": state.assistant_status,
+                "transcript": state.assistant_transcript,
+                "live_text": state.assistant_live_text,
+                "live_target": state.assistant_live_target,
+            }
+        elif active == NOTIFICATIONS:
+            visible_state["notifications"] = state.notifications
+        else:
+            visible_state["settings"] = {
+                "iphone_connected": session.connected,
+                "screen_brightness": state.screen_brightness,
+                "notif_blink": state.notif_blink,
+                "device_name": state.device_name,
+            }
+        return _freeze_presentation(visible_state)
+
     def apply(self, model):
         state = self.app_state
-        state.advance_assistant_live()
+        if getattr(self, "compositor", None) is not None:
+            assistant_visible = self.compositor.active == ASSISTANT
+        else:
+            assistant_visible = state.active_desktop == ASSISTANT
+        if assistant_visible:
+            state.advance_assistant_live()
+        elif state.assistant_live_text != state.assistant_live_target:
+            state.assistant_live_text = state.assistant_live_target
+            state._assistant_typewriter_credit = 0.0
+            state._assistant_typewriter_at = time.monotonic()
         session = model.session
         now = time.monotonic()
         transport_connected = bool(
@@ -233,21 +329,39 @@ class GuiController:
         state.unread_count = len(state.notifications)
         state.clock_text = time.strftime("%H:%M")
         state.device_name = identity_service.visible_name()
+        presentation_key = self._presentation_key()
+        changed = presentation_key != getattr(self, "_last_presentation_key", None)
+        self._last_presentation_key = presentation_key
+        return changed
 
     def render(self):
+        if not self._render_lock.acquire(blocking=False):
+            self._render_pending = True
+            return False
+        started = time.monotonic()
         try:
-            self.compositor.broadcast_state(self.app_state)
+            while True:
+                self._render_pending = False
+                self.compositor.broadcast_state(self.app_state)
+                if not self._render_pending:
+                    break
         except Exception:
             logger.exception("render error")
+        finally:
+            self._render_lock.release()
+        elapsed_ms = (time.monotonic() - started) * 1000.0
+        if elapsed_ms > 50.0:
+            logger.warning("slow GUI render: %.1fms screen=%s", elapsed_ms, self.compositor.active)
+        return True
 
     def set_pairing_mode(self, enabled, role=None):
         self.app_state.pairing_role = "input"
         self.app_state.pairing_mode = bool(enabled)
-        self.compositor.render()
+        self.render()
 
     def show_screen(self, index):
         self.compositor.active = int(index)
-        self.compositor.render()
+        self.render()
 
     def show_home(self):
         self.show_screen(HOME)

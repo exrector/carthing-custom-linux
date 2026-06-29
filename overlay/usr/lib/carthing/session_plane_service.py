@@ -285,14 +285,14 @@ class SessionPlaneService:
             await self._gate(
                 "session-update-parameters",
                 lambda: connection.update_parameters(
-                    connection_interval_min=30.0,
+                    connection_interval_min=15.0,
                     connection_interval_max=30.0,
                     max_latency=0,
                     supervision_timeout=6000.0,
                     use_l2cap=True,
                 ),
             )
-            logger.info("session LE interval requested: 30ms")
+            logger.info("session LE interval requested: 15-30ms")
         except Exception as exc:
             logger.info("session LE interval unchanged: %s", exc)
         await asyncio.sleep(0.75)
@@ -406,6 +406,7 @@ class SessionPlaneService:
         self._sync_model()
         self.on_change()
         self._write(channel, T_HELLO, self._status_bytes())
+        self._start_mic(runtime, channel)
 
     def _on_channel_close(self, runtime, channel):
         if runtime.connector.channel is not channel:
@@ -508,6 +509,15 @@ class SessionPlaneService:
         except Exception:
             pass
 
+    async def disconnect_all(self):
+        channels = [
+            runtime.connector.channel
+            for runtime in self._runtimes.values()
+            if runtime.connector.channel is not None
+        ]
+        for channel in channels:
+            await self._disconnect_peer(channel)
+
     async def _disconnect_if_active(self, connection, delay):
         await asyncio.sleep(delay)
         try:
@@ -534,7 +544,9 @@ class SessionPlaneService:
         self.on_client_toggle(enabled)
 
     def _start_mic(self, runtime, channel):
-        self._stop_mic(runtime)
+        task = getattr(runtime.connector, "mic_task", None)
+        if task is not None and not task.done():
+            return
         if AlsaPcmCapture is None or CarThingVoiceDsp is None:
             runtime.connector.last_error = "mic_capture_unavailable"
             self._write(channel, T_ERROR, b"mic_capture_unavailable")
@@ -714,7 +726,8 @@ class SessionPlaneService:
                     del pending_audio[:process_bytes]
                     if preprocessor is not None:
                         dsp_started_ns = time.monotonic_ns()
-                        payload = preprocessor.process(
+                        payload = await asyncio.to_thread(
+                            preprocessor.process,
                             block,
                             source_channels,
                             gain,

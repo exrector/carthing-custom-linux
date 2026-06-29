@@ -108,6 +108,17 @@ class AssistantScreen(Screen):
             return True
         return False
 
+    @staticmethod
+    def _visible_tail(text, limit=700):
+        text = str(text or "").strip()
+        if len(text) <= limit:
+            return text
+        tail = text[-limit:]
+        separator = tail.find(" ")
+        if separator >= 0:
+            tail = tail[separator + 1 :]
+        return f"...{tail}"
+
     def render(self, regions=None):
         img, draw = self.blank()
         right = T.ARC_SAFE_X
@@ -149,27 +160,39 @@ class AssistantScreen(Screen):
             getattr(self.state, "assistant_live_target", "") or ""
         ).strip()
         font = T.font(T.SZ_BODY)
-        lines = []
-        for utterance in transcript:
-            lines.extend(
-                C.wrap_lines(draw, str(utterance), font, right - 64)
-                or [str(utterance)]
-            )
-        committed_line_count = len(lines)
-        if live_text:
-            cursor = "_" if live_target else ""
-            lines.extend(
-                C.wrap_lines(draw, f"Вы: {live_text}{cursor}", font, right - 64)
-                or [f"Вы: {live_text}{cursor}"]
-            )
         top = 128
         bottom = T.H - 18
         line_height = 40
-        visible = lines[-max(1, (bottom - top) // line_height):]
+        max_lines = max(1, (bottom - top) // line_height)
+        live_rows = []
+        if live_text:
+            cursor = "_" if live_text != live_target else ""
+            display_text = f"Вы: {self._visible_tail(live_text)}{cursor}"
+            live_rows = [
+                (line, True)
+                for line in (
+                    C.wrap_lines(draw, display_text, font, right - 64)
+                    or [display_text]
+                )[-max_lines:]
+            ]
+
+        history_rows = []
+        remaining = max(0, max_lines - len(live_rows))
+        for utterance in reversed(transcript):
+            if remaining <= 0:
+                break
+            display_text = self._visible_tail(utterance)
+            wrapped = (
+                C.wrap_lines(draw, display_text, font, right - 64)
+                or [display_text]
+            )
+            selected = wrapped[-remaining:]
+            history_rows[0:0] = [(line, False) for line in selected]
+            remaining -= len(selected)
+
+        visible = (history_rows + live_rows)[-max_lines:]
         y = bottom - len(visible) * line_height
-        for index, line in enumerate(visible):
-            absolute_index = len(lines) - len(visible) + index
-            is_live = live_text and absolute_index >= committed_line_count
+        for index, (line, is_live) in enumerate(visible):
             draw.text(
                 (28, y),
                 line,

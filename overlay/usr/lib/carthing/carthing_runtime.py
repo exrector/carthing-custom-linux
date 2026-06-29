@@ -113,6 +113,8 @@ def _on_toggle_client(enabled):
         settings.set("client_enabled", enabled)
     if session_plane is not None:
         session_plane.set_listening(enabled)
+        if not enabled:
+            asyncio.create_task(session_plane.disconnect_all())
     else:
         model.set_remote_mic(
             enabled,
@@ -126,8 +128,34 @@ def _on_toggle_client(enabled):
         )
     if enabled and orch is not None and not orch.session_connected:
         asyncio.create_task(orch.start_session_bootstrap())
+    elif not enabled and orch is not None:
+        asyncio.create_task(orch.stop_session_bootstrap())
     logger.info("remote mic -> %s", "on" if enabled else "off")
     _publish()
+
+
+def _on_session_transport_toggle(enabled):
+    """The Mac owns its CTSP link, never the physical microphone capture."""
+    enabled = bool(enabled)
+    logger.info("session transport request -> %s", "on" if enabled else "off")
+    if session_plane is None:
+        return
+    if enabled:
+        session_plane.set_enabled(True)
+    else:
+        asyncio.create_task(session_plane.disconnect_all())
+    _publish()
+
+
+async def _on_session_disconnect(_address):
+    if orch is None:
+        return
+    if settings is not None and bool(settings.get("client_enabled", False)):
+        await orch.on_session_disconnect()
+        return
+    orch.session_connected = False
+    orch.session_bootstrap_active = False
+    await orch.apply_visibility()
 
 
 def _on_power_off():
@@ -493,16 +521,20 @@ def _init_gui():
 async def _render_loop():
     tick = 0
     render_inflight = False
+    render_requested = True
     loop = asyncio.get_running_loop()
 
-    def render():
+    def render_complete():
         nonlocal render_inflight
+        render_inflight = False
+
+    def render():
         try:
             gui.render()
         except Exception:
             logger.exception("render failed")
         finally:
-            render_inflight = False
+            loop.call_soon_threadsafe(render_complete)
 
     while True:
         try:
@@ -511,8 +543,15 @@ async def _render_loop():
                 power.tick()
                 model.power_tier = power.runtime_tier
             if gui is not None:
-                gui.apply(model)
-                if (power is None or power.display_awake) and not render_inflight:
+                changed = gui.apply(model)
+                if changed:
+                    render_requested = True
+                if (
+                    render_requested
+                    and (power is None or power.display_awake)
+                    and not render_inflight
+                ):
+                    render_requested = False
                     render_inflight = True
                     loop.run_in_executor(None, render)
             publish_due = (
@@ -544,7 +583,7 @@ async def _session_reconnect_loop():
         enabled = bool(settings.get("client_enabled", False))
         if enabled and orch is not None and not orch.session_connected:
             await orch.start_session_bootstrap()
-        await asyncio.sleep(15.0)
+        await asyncio.sleep(30.0)
 
 
 async def _start_input():
@@ -608,8 +647,8 @@ async def main():
             state,
             model,
             on_change=_publish,
-            on_client_toggle=_on_toggle_client,
-            on_disconnect=lambda _address: orch.on_session_disconnect(),
+            on_client_toggle=_on_session_transport_toggle,
+            on_disconnect=_on_session_disconnect,
             hci_gate=hci_gate,
         )
         session_plane.install()

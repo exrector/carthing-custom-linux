@@ -14,8 +14,6 @@
         <string>1</string>
         <key>CARTHING_BT_TCP_PORT</key>
         <string>49500</string>
-        <key>CARTHING_BT_EVENT_PORT</key>
-        <string>49501</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>

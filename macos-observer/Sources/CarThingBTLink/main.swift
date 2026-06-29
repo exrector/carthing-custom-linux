@@ -113,30 +113,18 @@ final class CarThingBTLink {
     // TCP-режим: агент живёт под launchd (там CB/TCC работают), а потребитель (bt_whisper)
     // цепляется по локальному TCP — отдаём аудио, принимаем команды (text ...).
     private let tcpPort = ProcessInfo.processInfo.environment["CARTHING_BT_TCP_PORT"].flatMap { UInt16($0) }
-    private let eventPort = ProcessInfo.processInfo.environment["CARTHING_BT_EVENT_PORT"].flatMap { UInt16($0) }
     private var listener: NWListener?
-    private var eventListener: NWListener?
     private var clients: [TCPAudioClient] = []    // доступ только с main
-    private var eventClients: [NWConnection] = [] // доступ только с main
     private var rxText = Data()
     private var latencyProbeSequence: UInt32 = 0
     private var clockOffsetDeviceMinusMacNs: Double?
     private var latestCTSPRTTMs: Double?
     private var latestAudioLatency: AudioLatencySample?
-    private var latestAudioReceivedNs: UInt64?
     private var linkLostNs: UInt64?
     private var linkOpenedNs: UInt64?
     private var firstAudioReceived = false
-    private var lastPartialSentAt = Date.distantPast
-    private var lastPartialText = ""
     private var opusDecoder = OpusAudioDecoder()
     private let netQueue = DispatchQueue(label: "carthing.bt.tcp")
-    private lazy var speechPipeline = AppleSpeechPipeline { [weak self] text, isFinal in
-        DispatchQueue.main.async {
-            self?.broadcastSpeech(text: text, isFinal: isFinal)
-        }
-    }
-
     init() {
         transport.onEvent = { [weak self] event in
             self?.handle(event)
@@ -161,10 +149,6 @@ final class CarThingBTLink {
         if let p = tcpPort {
             installSignalHandlers()
             startTCP(p)               // аудио + команды через локальный TCP, stdin не нужен
-            if let eventPort {
-                startEventTCP(eventPort)
-                speechPipeline.start()
-            }
         } else if headless {
             // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
             // EOF → exit(0); это и был флап). Реконнект — внутренний (scanRetry/l2capClosed).
@@ -242,9 +226,6 @@ final class CarThingBTLink {
             clockOffsetDeviceMinusMacNs = nil
             latestCTSPRTTMs = nil
             latestAudioLatency = nil
-            latestAudioReceivedNs = nil
-            lastPartialText = ""
-            lastPartialSentAt = .distantPast
             opusDecoder = OpusAudioDecoder()
             if let lost = linkLostNs {
                 fputs(
@@ -254,10 +235,7 @@ final class CarThingBTLink {
             }
             startLatencyProbes()
             transport.send(CTSPFrame(type: .hello, payload: Data("\(Date().timeIntervalSince1970)".utf8)))
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                fputs("carthing-btlink: command=start_mic\n", stderr)
-                self?.transport.send(CTSPFrame(type: .command, payload: Data("start_mic".utf8)))
-            }
+            fputs("carthing-btlink: capture gate remains device-owned\n", stderr)
         case .l2capClosed:
             streaming = false
             connected = false
@@ -387,7 +365,6 @@ final class CarThingBTLink {
             samples.append(sample)
             floats.append(max(-1.0, min(1.0, Float(sample) / 32768.0)))
         }
-        speechPipeline.append(samples: samples, sampleRate: 16_000)
         emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
     }
 
@@ -408,7 +385,6 @@ final class CarThingBTLink {
 
     private func audioPayload(from frame: CTSPFrame) -> Data {
         let receivedNs = DispatchTime.now().uptimeNanoseconds
-        latestAudioReceivedNs = receivedNs
         var data = frame.payload
         if frame.flags & CTSPFrame.Flag.audioTiming != 0,
            let captureEndNs = readUInt64BE(data, at: 0),
@@ -463,7 +439,6 @@ final class CarThingBTLink {
                 }
             }
         }
-        speechPipeline.append(samples: samples, sampleRate: sampleRate)
         emitAudio(Data(bytes: floats, count: floats.count * MemoryLayout<Float>.size))
     }
 
@@ -472,7 +447,6 @@ final class CarThingBTLink {
         guard let samples = opusDecoder?.decode(packet), !samples.isEmpty else {
             return
         }
-        speechPipeline.append(samples: samples, sampleRate: 16_000)
         let floats = samples.map {
             max(-1.0, min(1.0, Float($0) / 32768.0))
         }
@@ -517,25 +491,6 @@ final class CarThingBTLink {
         fputs("carthing-btlink: TCP server on 127.0.0.1:\(port)\n", stderr)
     }
 
-    private func startEventTCP(_ port: UInt16) {
-        let params = NWParameters.tcp
-        params.allowLocalEndpointReuse = true
-        params.requiredLocalEndpoint = .hostPort(
-            host: "127.0.0.1",
-            port: NWEndpoint.Port(rawValue: port)!
-        )
-        guard let listener = try? NWListener(using: params) else {
-            fputs("carthing-btlink: event TCP listen failed port=\(port)\n", stderr)
-            return
-        }
-        eventListener = listener
-        listener.newConnectionHandler = { [weak self] connection in
-            self?.acceptEventConn(connection)
-        }
-        listener.start(queue: netQueue)
-        fputs("carthing-btlink: speech events on 127.0.0.1:\(port)\n", stderr)
-    }
-
     private func acceptConn(_ conn: NWConnection) {
         var client: TCPAudioClient?
         conn.stateUpdateHandler = { [weak self] state in
@@ -558,119 +513,10 @@ final class CarThingBTLink {
         conn.start(queue: netQueue)
     }
 
-    private func acceptEventConn(_ conn: NWConnection) {
-        conn.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                DispatchQueue.main.async {
-                    self?.eventClients.append(conn)
-                    self?.receiveText(conn)
-                }
-                fputs("carthing-btlink: speech event client connected\n", stderr)
-            case .failed, .cancelled:
-                self?.removeConn(conn)
-            default:
-                break
-            }
-        }
-        conn.start(queue: netQueue)
-    }
-
     private func removeConn(_ conn: NWConnection) {
         DispatchQueue.main.async { [weak self] in
             self?.clients.removeAll { $0.connection === conn }
-            self?.eventClients.removeAll { $0 === conn }
         }
-    }
-
-    private func broadcastSpeech(text: String, isFinal: Bool) {
-        let nowNs = DispatchTime.now().uptimeNanoseconds
-        let audioTailToTextMs = latestAudioReceivedNs.map { Self.ms(nowNs, since: $0) }
-        var object: [String: Any] = [
-            "type": isFinal ? "final" : "partial",
-            "text": text,
-            "timestamp": Date().timeIntervalSince1970,
-        ]
-        if let latency = latestAudioLatency {
-            object["audio_sequence"] = latency.sequence
-            object["dsp_ms"] = latency.dspMs
-            object["device_pipeline_ms"] = latency.devicePipelineMs
-            object["bluetooth_ms"] = latency.bluetoothMs
-            object["capture_to_mac_ms"] = latency.captureToMacMs
-            object["ctsp_rtt_ms"] = latency.ctspRTTMs
-            if let tail = audioTailToTextMs {
-                object["audio_tail_to_text_ms"] = tail
-                object["capture_to_text_edge_ms"] = latency.captureToMacMs + tail
-            }
-        }
-        let kind = isFinal ? "final" : "partial"
-        fputs(
-            "carthing-btlink: speech_\(kind) metrics=\(metricsSummary(object)) text=\(text.prefix(80))\n",
-            stderr
-        )
-        let shouldSendToDevice = isFinal
-            || (text != lastPartialText && Date().timeIntervalSince(lastPartialSentAt) >= 0.15)
-        if shouldSendToDevice {
-            let displayText = String(text.prefix(4_000))
-            let previous = lastPartialText
-            lastPartialText = displayText
-            lastPartialSentAt = Date()
-            let command: String
-            if isFinal {
-                command = "text:U|\(displayText)"
-            } else if previous.isEmpty {
-                command = "text:P|\(displayText)"
-            } else {
-                let prefix = commonPrefixLength(previous, displayText)
-                let suffix = String(displayText.dropFirst(prefix))
-                command = "text:D|\(prefix)|\(suffix)"
-            }
-            transport.send(
-                CTSPFrame(
-                    type: .command,
-                    payload: Data(command.utf8)
-                )
-            )
-        }
-        guard var data = try? JSONSerialization.data(withJSONObject: object) else {
-            return
-        }
-        data.append(0x0A)
-        for connection in eventClients {
-            connection.send(content: data, completion: .contentProcessed { [weak self] error in
-                if error != nil {
-                    self?.removeConn(connection)
-                }
-            })
-        }
-    }
-
-    private func commonPrefixLength(_ lhs: String, _ rhs: String) -> Int {
-        var count = 0
-        var left = lhs.makeIterator()
-        var right = rhs.makeIterator()
-        while let leftCharacter = left.next(),
-              let rightCharacter = right.next(),
-              leftCharacter == rightCharacter {
-            count += 1
-        }
-        return count
-    }
-
-    private func metricsSummary(_ object: [String: Any]) -> String {
-        let keys = [
-            "dsp_ms",
-            "device_pipeline_ms",
-            "bluetooth_ms",
-            "capture_to_mac_ms",
-            "audio_tail_to_text_ms",
-            "capture_to_text_edge_ms",
-            "ctsp_rtt_ms",
-        ]
-        return keys.compactMap { key in
-            guard let value = object[key] as? Double else { return nil }
-            return String(format: "%@=%.1f", key, value)
-        }.joined(separator: " ")
     }
 
     private func startLatencyProbes() {

@@ -12,9 +12,10 @@ python3 -m py_compile overlay/usr/lib/carthing/*.py
 
 PYTHONPATH=overlay/usr/lib/carthing python3 - <<'PY'
 from app_state import AppState
-from gui_controller import GuiController
+from gui_controller import ASSISTANT, GuiController
 from runtime_model import RuntimeModel
 from screens import AssistantScreen, NotificationsScreen, NowPlayingScreen, SettingsScreen
+from ui_screen import notification_indicator_visible
 
 state = AppState()
 model = RuntimeModel()
@@ -72,6 +73,42 @@ controller._iphone_grace_until = 0.0
 controller.apply(model)
 if controller.app_state.iphone.connected or controller.app_state.iphone.title:
     raise SystemExit("expired iPhone GUI grace retained stale session")
+if not notification_indicator_visible(1, True, now=0.5):
+    raise SystemExit("notification indicator did not enter its short on-window")
+if notification_indicator_visible(1, True, now=1.5):
+    raise SystemExit("notification indicator on-window is too long")
+if not notification_indicator_visible(1, True, now=8.5):
+    raise SystemExit("notification indicator period is not stable")
+if notification_indicator_visible(0, True, now=0.5):
+    raise SystemExit("notification indicator ignored unread count")
+
+class FakeDisplay:
+    def set_on_event(self, _callback):
+        pass
+
+    def blit(self, _frame):
+        pass
+
+capture_toggles = []
+navigation = GuiController(
+    FakeDisplay(),
+    on_toggle_client=lambda enabled: capture_toggles.append(enabled),
+)
+navigation.show_screen(ASSISTANT)
+if capture_toggles:
+    raise SystemExit("opening Assistant view changed microphone capture")
+if navigation.app_state.remote_mic_enabled:
+    raise SystemExit("opening Assistant view enabled microphone state")
+stable_model = RuntimeModel()
+if not navigation.apply(stable_model):
+    raise SystemExit("first GUI model apply was not marked dirty")
+if navigation.apply(stable_model):
+    raise SystemExit("unchanged GUI model still requested a full render")
+navigation.show_home()
+navigation.apply(stable_model)
+navigation.app_state.set_assistant_live_target("hidden assistant update")
+if navigation.apply(stable_model):
+    raise SystemExit("hidden Assistant state invalidated the visible view")
 print("MINIMAL RUNTIME SMOKE: OK")
 PY
 

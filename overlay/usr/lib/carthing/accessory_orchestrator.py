@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 APPEARANCE_REMOTE = 0x0180
 HID_SERVICE_UUID = 0x1812
 SESSION_SERVICE_UUID = "C7C50000-0000-4000-8000-00C7C7C7C7C7"
-STICKY_ADV_INTERVAL_MS = 60
+PAIRING_ADV_INTERVAL_MS = 20
+STICKY_ADV_INTERVAL_MS = 152.5
+SESSION_ADV_INTERVAL_MS = 20
 LE_ONLY_FLAGS = (
     AdvertisingData.LE_GENERAL_DISCOVERABLE_MODE_FLAG
     | AdvertisingData.BR_EDR_NOT_SUPPORTED_FLAG
@@ -178,8 +180,11 @@ class AccessoryOrchestrator:
             pass
         self.device.advertising_data = self._iphone_payload()
         self.device.scan_response_data = self._scan_response(include_name)
-        self.device.advertising_interval_min = STICKY_ADV_INTERVAL_MS
-        self.device.advertising_interval_max = STICKY_ADV_INTERVAL_MS
+        interval = (
+            PAIRING_ADV_INTERVAL_MS if include_name else STICKY_ADV_INTERVAL_MS
+        )
+        self.device.advertising_interval_min = interval
+        self.device.advertising_interval_max = interval
         for attempt in range(3):
             try:
                 await self._gate(
@@ -345,8 +350,8 @@ class AccessoryOrchestrator:
                     ]
                 )
             )
-            self.device.advertising_interval_min = STICKY_ADV_INTERVAL_MS
-            self.device.advertising_interval_max = STICKY_ADV_INTERVAL_MS
+            self.device.advertising_interval_min = SESSION_ADV_INTERVAL_MS
+            self.device.advertising_interval_max = SESSION_ADV_INTERVAL_MS
             await self._gate(
                 "session-advertising",
                 lambda: self.device.start_advertising(
@@ -368,6 +373,14 @@ class AccessoryOrchestrator:
         self._session_timeout_task = asyncio.create_task(
             self._session_timeout(float(timeout))
         )
+
+    async def stop_session_bootstrap(self):
+        self.session_bootstrap_active = False
+        if self._session_timeout_task is not None:
+            self._session_timeout_task.cancel()
+            self._session_timeout_task = None
+        await self._stop_advertising()
+        await self.apply_visibility()
 
     async def _session_timeout(self, timeout):
         try:
