@@ -11,11 +11,19 @@ export PYTHONPYCACHEPREFIX="$PYCACHE_DIR"
 python3 -m py_compile overlay/usr/lib/carthing/*.py
 
 PYTHONPATH=overlay/usr/lib/carthing python3 - <<'PY'
+import asyncio
+import sys
+from types import SimpleNamespace
+
 from app_state import AppState
 from gui_controller import ASSISTANT, GuiController
 from runtime_model import RuntimeModel
 from screens import AssistantScreen, NotificationsScreen, NowPlayingScreen, SettingsScreen
 from ui_screen import notification_indicator_visible
+
+sys.path.append("overlay/usr/lib/carthing/vendor")
+from hid_remote_service import install_hid_remote_profile, send_consumer_usage
+from session_plane_service import SessionPlaneService
 
 state = AppState()
 model = RuntimeModel()
@@ -50,6 +58,29 @@ if set(model.bt_block()) != expected:
     raise SystemExit("runtime model exposes non-minimal state")
 if state.control_source_key != "iphone":
     raise SystemExit("encoder control target is not iPhone")
+if not model.apply_remote_media({
+    "active": True,
+    "identifier": "airplay-track",
+    "title": "AirPlay title",
+    "artist": "AirPlay artist",
+    "duration": 120,
+    "elapsed": 10,
+    "playing": True,
+}):
+    raise SystemExit("active AirPlay metadata was rejected")
+if model.session.title != "AirPlay title" or not model.remote_media_active:
+    raise SystemExit("AirPlay metadata did not overlay the AMS session")
+if not model.apply_remote_media({
+    "active": True,
+    "identifier": "airplay-track",
+    "title": "AirPlay title",
+    "elapsed": 11,
+    "playing": False,
+}):
+    raise SystemExit("paused selected AirPlay session was not retained")
+model.clear_remote_media()
+if model.remote_media_active:
+    raise SystemExit("AirPlay metadata overlay did not clear")
 
 controller = GuiController.__new__(GuiController)
 controller.app_state = AppState()
@@ -109,6 +140,50 @@ navigation.apply(stable_model)
 navigation.app_state.set_assistant_live_target("hidden assistant update")
 if navigation.apply(stable_model):
     raise SystemExit("hidden Assistant state invalidated the visible view")
+navigation.show_screen(ASSISTANT)
+navigation.dispatcher.dispatch("remote_mic_set", True)
+navigation.show_home()
+if capture_toggles[-2:] != [True, False]:
+    raise SystemExit("leaving Assistant did not stop microphone capture")
+if navigation.app_state.remote_mic_enabled:
+    raise SystemExit("microphone remained enabled outside Assistant")
+
+capture_events = []
+session_gate = SessionPlaneService.__new__(SessionPlaneService)
+session_gate._listening = False
+session_gate._runtimes = {
+    "mac": SimpleNamespace(
+        connector=SimpleNamespace(channel=object()),
+    )
+}
+session_gate._start_mic = lambda _runtime, _channel: capture_events.append("start")
+session_gate._stop_mic = lambda _runtime: capture_events.append("stop")
+session_gate._sync_model = lambda: None
+session_gate._notify_status = lambda: None
+session_gate.set_listening(True)
+session_gate.set_listening(False)
+if capture_events != ["start", "stop"]:
+    raise SystemExit("microphone task is not strictly gated by listening state")
+
+class FakeHIDDevice:
+    def __init__(self):
+        self.notifications = []
+
+    def add_service(self, _service):
+        pass
+
+    async def notify_subscribers(self, _attribute, value):
+        self.notifications.append(bytes(value))
+
+hid_device = FakeHIDDevice()
+install_hid_remote_profile(hid_device)
+asyncio.run(send_consumer_usage("vol_up"))
+if hid_device.notifications != [b"\x08", b"\x00"]:
+    raise SystemExit("HID volume usage did not send press and release")
+hid_device.notifications.clear()
+asyncio.run(send_consumer_usage("play_pause"))
+if hid_device.notifications != [b"\x01", b"\x00"]:
+    raise SystemExit("HID play/pause usage did not send press and release")
 print("MINIMAL RUNTIME SMOKE: OK")
 PY
 

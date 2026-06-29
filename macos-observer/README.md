@@ -7,7 +7,7 @@
 Car Thing PDM microphones
   -> HCIC gain + SpeexDSP
   -> BLE GATT bootstrap
-  -> Bluetooth LE L2CAP CoC (CTSP, Opus VOIP 16 kHz / 40 ms)
+  -> Bluetooth LE L2CAP CoC (CTSP, Opus VOIP 16 kHz / 60 ms)
   -> CarThingBTLink + Apple DictationTranscriber
   -> live partial text on Car Thing
   -> 127.0.0.1:49501 for the optional assistant process

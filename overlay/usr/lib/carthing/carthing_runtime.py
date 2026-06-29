@@ -68,7 +68,24 @@ def _publish():
 
 def _on_command(source, command):
     if source == "iphone" and iphone is not None:
-        asyncio.create_task(iphone.command(command))
+        hid_command = {
+            "toggle": "play_pause",
+            "play": "play_pause",
+            "pause": "play_pause",
+            "next": "next",
+            "prev": "prev",
+            "previous": "prev",
+            "vol_up": "vol_up",
+            "vol_down": "vol_down",
+        }.get(command)
+        if command in ("vol_up", "vol_down") or (
+            model.remote_media_active and hid_command is not None
+        ):
+            from hid_remote_service import send_consumer_usage
+
+            asyncio.create_task(send_consumer_usage(hid_command or command))
+        else:
+            asyncio.create_task(iphone.command(command))
 
 
 def _on_pairing(enabled, role="input"):
@@ -113,8 +130,6 @@ def _on_toggle_client(enabled):
         settings.set("client_enabled", enabled)
     if session_plane is not None:
         session_plane.set_listening(enabled)
-        if not enabled:
-            asyncio.create_task(session_plane.disconnect_all())
     else:
         model.set_remote_mic(
             enabled,
@@ -128,8 +143,6 @@ def _on_toggle_client(enabled):
         )
     if enabled and orch is not None and not orch.session_connected:
         asyncio.create_task(orch.start_session_bootstrap())
-    elif not enabled and orch is not None:
-        asyncio.create_task(orch.stop_session_bootstrap())
     logger.info("remote mic -> %s", "on" if enabled else "off")
     _publish()
 
@@ -156,6 +169,13 @@ async def _on_session_disconnect(_address):
     orch.session_connected = False
     orch.session_bootstrap_active = False
     await orch.apply_visibility()
+
+
+def _on_remote_media_clear():
+    if iphone is not None:
+        iphone.activate_source()
+    else:
+        _publish()
 
 
 def _on_power_off():
@@ -384,8 +404,7 @@ async def _on_connection(connection):
             return
         await _sync_trusted_iphone(connection)
         await orch.on_bonded()
-        if settings is not None and bool(settings.get("client_enabled", False)):
-            await orch.start_session_bootstrap()
+        await orch.start_session_bootstrap()
         record_connection_event(
             "iphone_services_ready",
             peer=str(peer),
@@ -580,8 +599,7 @@ async def _render_loop():
 async def _session_reconnect_loop():
     await asyncio.sleep(8.0)
     while True:
-        enabled = bool(settings.get("client_enabled", False))
-        if enabled and orch is not None and not orch.session_connected:
+        if orch is not None and not orch.session_connected:
             await orch.start_session_bootstrap()
         await asyncio.sleep(30.0)
 
@@ -619,6 +637,9 @@ async def main():
 
     hardware = hardware_inventory.probe()
     settings = SettingsService()
+    if bool(settings.get("client_enabled", False)):
+        settings.set("client_enabled", False)
+        logger.info("remote mic reset to off at runtime start")
     settings.save()
     logger.info(
         "hardware capabilities: %s",
@@ -649,6 +670,7 @@ async def main():
             on_change=_publish,
             on_client_toggle=_on_session_transport_toggle,
             on_disconnect=_on_session_disconnect,
+            on_remote_media_clear=_on_remote_media_clear,
             hci_gate=hci_gate,
         )
         session_plane.install()

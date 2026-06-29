@@ -89,6 +89,7 @@ class SessionPlaneService:
         on_change=None,
         on_client_toggle=None,
         on_disconnect=None,
+        on_remote_media_clear=None,
         hci_gate=None,
     ):
         self.device = device
@@ -97,6 +98,7 @@ class SessionPlaneService:
         self.on_change = on_change or (lambda: None)
         self.on_client_toggle = on_client_toggle or (lambda enabled: None)
         self.on_disconnect = on_disconnect or (lambda address: None)
+        self.on_remote_media_clear = on_remote_media_clear or (lambda: None)
         self.hci_gate = hci_gate
         self.enabled = False
         self.psm = 0
@@ -182,6 +184,12 @@ class SessionPlaneService:
             return
         self._listening = on
         logger.info("session listening -> %s", on)
+        for runtime in self._runtimes.values():
+            channel = runtime.connector.channel
+            if on and channel is not None:
+                self._start_mic(runtime, channel)
+            elif not on:
+                self._stop_mic(runtime)
         self._sync_model()
         self._notify_status()
 
@@ -228,6 +236,11 @@ class SessionPlaneService:
             "disconnection",
             lambda *_, attached=connection: self._on_disconnect(address, attached),
         )
+        connection.on(
+            "connection_parameters_update",
+            lambda: self._log_connection_parameters(connection, "updated"),
+        )
+        self._log_connection_parameters(connection, "negotiated")
         asyncio.create_task(self._tune_connection(connection))
         old_watchdog = runtime.connector.handshake_task
         if old_watchdog is not None and not old_watchdog.done():
@@ -238,6 +251,19 @@ class SessionPlaneService:
         self._sync_model()
         self.on_change()
         return True
+
+    @staticmethod
+    def _log_connection_parameters(connection, stage):
+        parameters = getattr(connection, "parameters", None)
+        if parameters is None:
+            return
+        logger.info(
+            "session LE parameters %s: interval=%.1fms latency=%d timeout=%.0fms",
+            stage,
+            float(parameters.connection_interval),
+            int(parameters.peripheral_latency),
+            float(parameters.supervision_timeout),
+        )
 
     async def _handshake_watchdog(self, runtime, connection):
         try:
@@ -272,29 +298,9 @@ class SessionPlaneService:
                 runtime.connector.handshake_task = None
 
     async def _tune_connection(self, connection):
-        try:
-            from bumble.hci import Phy
-            await self._gate(
-                "session-set-phy",
-                lambda: connection.set_phy([Phy.LE_2M], [Phy.LE_2M]),
-            )
-            logger.info("session LE 2M PHY requested")
-        except Exception as exc:
-            logger.info("session LE PHY unchanged: %s", exc)
-        try:
-            await self._gate(
-                "session-update-parameters",
-                lambda: connection.update_parameters(
-                    connection_interval_min=15.0,
-                    connection_interval_max=30.0,
-                    max_latency=0,
-                    supervision_timeout=6000.0,
-                    use_l2cap=True,
-                ),
-            )
-            logger.info("session LE interval requested: 15-30ms")
-        except Exception as exc:
-            logger.info("session LE interval unchanged: %s", exc)
+        # BCM20703 does not support LE 2M. CoreBluetooth is the central and
+        # owns the LE parameters. A 60 ms Opus cadence reduces radio-event
+        # pressure without forcing another Link Layer procedure.
         await asyncio.sleep(0.75)
         try:
             await self._gate(
@@ -406,7 +412,8 @@ class SessionPlaneService:
         self._sync_model()
         self.on_change()
         self._write(channel, T_HELLO, self._status_bytes())
-        self._start_mic(runtime, channel)
+        if self._listening:
+            self._start_mic(runtime, channel)
 
     def _on_channel_close(self, runtime, channel):
         if runtime.connector.channel is not channel:
@@ -481,6 +488,8 @@ class SessionPlaneService:
                 asyncio.create_task(self._disconnect_peer(channel))
             elif payload.startswith(b"text:"):
                 self._show_screen_text(payload[5:])
+            elif payload.startswith(b"now_playing:"):
+                self._apply_remote_now_playing(payload[12:])
             else:
                 self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
         elif frame_type == T_LATENCY_PROBE:
@@ -544,6 +553,8 @@ class SessionPlaneService:
         self.on_client_toggle(enabled)
 
     def _start_mic(self, runtime, channel):
+        if not self._listening:
+            return
         task = getattr(runtime.connector, "mic_task", None)
         if task is not None and not task.done():
             return
@@ -614,6 +625,24 @@ class SessionPlaneService:
         except Exception as exc:
             logger.warning("session screen text failed: %s", exc)
 
+    def _apply_remote_now_playing(self, raw):
+        try:
+            payload = json.loads(bytes(raw).decode("utf-8"))
+            changed = self.model.apply_remote_media(payload)
+            if changed:
+                if not payload.get("active"):
+                    self.on_remote_media_clear()
+                logger.info(
+                    "AirPlay Now Playing: %s — %s playing=%s route=%s",
+                    str(payload.get("title") or "")[:80],
+                    str(payload.get("artist") or "")[:60],
+                    bool(payload.get("playing")),
+                    str(payload.get("route") or "")[:80],
+                )
+                self.on_change()
+        except Exception as exc:
+            logger.warning("AirPlay Now Playing payload rejected: %s", exc)
+
     async def _mic_loop(self, runtime, channel):
         device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")
         source_rate = int(os.environ.get("CARTHING_BT_MIC_SOURCE_RATE", "48000"))
@@ -629,9 +658,9 @@ class SessionPlaneService:
         )
         if target_rate not in (8000, 16000):
             raise ValueError("CARTHING_BT_MIC_TARGET_RATE must be 8000 or 16000")
-        frame_ms = int(os.environ.get("CARTHING_BT_MIC_FRAME_MS", "40"))
-        if frame_ms not in (10, 20, 40):
-            raise ValueError("CARTHING_BT_MIC_FRAME_MS must be 10, 20, or 40")
+        frame_ms = int(os.environ.get("CARTHING_BT_MIC_FRAME_MS", "60"))
+        if frame_ms not in (10, 20, 40, 60):
+            raise ValueError("CARTHING_BT_MIC_FRAME_MS must be 10, 20, 40, or 60")
         default_read_frames = source_rate * frame_ms // 1000
         read_frames = int(
             os.environ.get(
@@ -873,7 +902,7 @@ class SessionPlaneService:
                 "channels": 1,
                 "mode": "on_demand",
                 "frame_ms": int(
-                    os.environ.get("CARTHING_BT_MIC_FRAME_MS", "40")
+                    os.environ.get("CARTHING_BT_MIC_FRAME_MS", "60")
                 ),
                 "audio_timing": "capture_end_ns,send_ns,dsp_us",
                 "latency_probe": True,

@@ -109,7 +109,7 @@ class AssistantScreen(Screen):
         return False
 
     @staticmethod
-    def _visible_tail(text, limit=700):
+    def _visible_tail(text, limit=440):
         text = str(text or "").strip()
         if len(text) <= limit:
             return text

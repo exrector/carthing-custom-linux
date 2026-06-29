@@ -1,5 +1,6 @@
 """Minimal HID-over-GATT profile for the iPhone Play Now connection."""
 
+import asyncio
 import logging
 import struct
 
@@ -42,9 +43,22 @@ HID_REPORT_MAP = bytes(
     ]
 )
 HID_INFORMATION = struct.pack("<HBB", 0x0111, 0x00, 0x03)
+CONSUMER_USAGE_BITS = {
+    "play_pause": 0x01,
+    "next": 0x02,
+    "prev": 0x04,
+    "vol_up": 0x08,
+    "vol_down": 0x10,
+}
+
+_device = None
+_report_char = None
+_send_lock = None
 
 
 def install_hid_remote_profile(device):
+    global _device, _report_char
+
     report_char = Characteristic(
         REPORT_UUID,
         Characteristic.READ | Characteristic.NOTIFY,
@@ -63,6 +77,8 @@ def install_hid_remote_profile(device):
             ),
         ],
     )
+    _device = device
+    _report_char = report_char
     device.add_service(Service(GATT_SERVICE_UUID, []))
     device.add_service(
         Service(
@@ -110,3 +126,19 @@ def install_hid_remote_profile(device):
         )
     )
     logger.info("minimal HID remote profile installed")
+
+
+async def send_consumer_usage(command):
+    global _send_lock
+
+    value = CONSUMER_USAGE_BITS.get(str(command))
+    if value is None or _device is None or _report_char is None:
+        return False
+    if _send_lock is None:
+        _send_lock = asyncio.Lock()
+    async with _send_lock:
+        await _device.notify_subscribers(_report_char, bytes([value]))
+        await asyncio.sleep(0.035)
+        await _device.notify_subscribers(_report_char, bytes([0x00]))
+    logger.info("HID consumer usage sent: %s", command)
+    return True

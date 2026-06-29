@@ -17,6 +17,7 @@ public final class TransportCore: NSObject {
 
     private let decoder = CTSPFrameDecoder()
     private var outQueue = Data()       // байты, ждущие записи в OutputStream
+    private var pendingNowPlaying: CTSPFrame?
     private var pendingPSM: UInt16?
     private var bootstrapEmitted = false
     private var clientEnabled = false
@@ -103,10 +104,27 @@ public final class TransportCore: NSObject {
         var f = frame
         seqCounter &+= 1
         f.seq = seqCounter
+        guard channel != nil else {
+            if Self.isNowPlaying(f) {
+                pendingNowPlaying = f
+                emit(.log("Now Playing сохранён как latest-only до открытия CTSP"))
+            } else {
+                emit(.log("CTSP frame \(f.type) отброшен: канал закрыт"))
+            }
+            return
+        }
         let bytes = CTSPEncoder.encode(f)
         outQueue.append(bytes)
         flushOutput()
         emit(.bytesOut(bytes.count))
+    }
+
+    private static func isNowPlaying(_ frame: CTSPFrame) -> Bool {
+        guard frame.type == .command,
+              let payload = String(data: frame.payload, encoding: .utf8) else {
+            return false
+        }
+        return payload.hasPrefix("now_playing:")
     }
 
     // MARK: - Internal state
@@ -278,6 +296,7 @@ extension TransportCore: CBPeripheralDelegate {
             pendingPSM = Self.parsePSM(value)
         case CarThingGATT.statusUUID:
             emit(.log("GATT status notify: \(value.count) байт"))
+            emit(.status(value))
         default:
             break
         }
@@ -317,6 +336,10 @@ extension TransportCore: CBPeripheralDelegate {
         channel.outputStream.schedule(in: .main, forMode: .default)
         channel.inputStream.open()
         channel.outputStream.open()
+        if let pending = pendingNowPlaying {
+            pendingNowPlaying = nil
+            send(pending)
+        }
 
         let psm = UInt16(channel.psm)
         emit(.phaseChanged(.l2capOpen))

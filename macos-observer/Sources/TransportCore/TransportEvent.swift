@@ -33,6 +33,7 @@ public enum TransportEvent: Sendable {
     case discovered(DiscoveredPeripheral)
     /// GATT bootstrap прочитан: версия протокола, endpoint id, динамический PSM.
     case bootstrap(protocolVersion: UInt8?, endpointID: String?, psm: UInt16?, capabilities: Data?)
+    case status(Data)
     case l2capOpened(psm: UInt16)
     case l2capClosed
     /// Принято сырых байт по CoC (для метрик).

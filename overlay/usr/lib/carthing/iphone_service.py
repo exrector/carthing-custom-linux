@@ -94,6 +94,10 @@ class IPhoneService:
     # ── AMS -> MediaSession (живой elapsed через snapshot) ───────────────────
     def _on_ams(self, *args):
         s, sess = self._ams_state, self.model.session
+        if s.playing:
+            self.model.clear_remote_media()
+        if self.model.remote_media_active:
+            return
         sess.title = s.title
         sess.artist = s.artist
         sess.album = getattr(s, "album", "")
@@ -111,6 +115,8 @@ class IPhoneService:
     # ── AMS supported-команды -> сессия (GUI рисует только рабочие кнопки) ────
     def _on_commands(self, cmds):
         self._supported_commands = set(cmds)
+        if self.model.remote_media_active:
+            return
         self.model.session.supported_commands = set(cmds)
         self._publish()
 

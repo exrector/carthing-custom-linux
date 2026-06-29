@@ -219,14 +219,15 @@ class GuiController:
                 "liked": session.liked,
             }
         elif active == ASSISTANT:
+            transcript = list(state.assistant_transcript or [])[-3:]
             visible_state["assistant"] = {
                 "remote_mic_enabled": state.remote_mic_enabled,
                 "remote_mic_state": state.remote_mic_state,
                 "remote_mic_message": state.remote_mic_message,
                 "status": state.assistant_status,
-                "transcript": state.assistant_transcript,
-                "live_text": state.assistant_live_text,
-                "live_target": state.assistant_live_target,
+                "transcript": tuple(str(item)[-500:] for item in transcript),
+                "live_text": str(state.assistant_live_text)[-500:],
+                "live_target": str(state.assistant_live_target)[-500:],
             }
         elif active == NOTIFICATIONS:
             visible_state["notifications"] = state.notifications
@@ -360,7 +361,13 @@ class GuiController:
         self.render()
 
     def show_screen(self, index):
-        self.compositor.active = int(index)
+        index = int(index)
+        leaving_assistant = (
+            self.compositor.active == ASSISTANT and index != ASSISTANT
+        )
+        if leaving_assistant and self.app_state.remote_mic_enabled:
+            self.dispatcher.dispatch("remote_mic_set", False)
+        self.compositor.active = index
         self.render()
 
     def show_home(self):

@@ -66,6 +66,9 @@ class MediaSession:
 class RuntimeModel:
     def __init__(self):
         self.session = MediaSession()
+        self.remote_media_active = False
+        self.remote_media_id = ""
+        self.remote_media_updated_at = 0.0
         self.notifications = []
         self.rssi = None
         self.proximity_zone = "gone"
@@ -81,6 +84,46 @@ class RuntimeModel:
     def select_source(self, source):
         if self.session.source != source:
             self.session = MediaSession(source)
+
+    def apply_remote_media(self, payload):
+        """Overlay an active AirPlay receiver session on the iPhone session."""
+        payload = dict(payload or {})
+        if not payload.get("active"):
+            return self.clear_remote_media()
+
+        identifier = str(payload.get("identifier") or "")
+        playing = bool(payload.get("playing"))
+        loading = bool(payload.get("loading"))
+        same_session = bool(
+            self.remote_media_active
+            and identifier
+            and identifier == self.remote_media_id
+        )
+        if not (playing or loading or same_session):
+            return False
+
+        session = self.session
+        self.remote_media_active = True
+        self.remote_media_id = identifier
+        self.remote_media_updated_at = time.monotonic()
+        session.title = str(payload.get("title") or "")
+        session.artist = str(payload.get("artist") or "")
+        session.album = str(payload.get("album") or "")
+        session.duration = max(0.0, float(payload.get("duration") or 0.0))
+        session.set_playback(
+            max(0.0, float(payload.get("elapsed") or 0.0)),
+            1.0,
+            playing,
+        )
+        session.supported_commands = {0, 1, 2, 3, 4, 5, 6}
+        return True
+
+    def clear_remote_media(self):
+        was_active = self.remote_media_active
+        self.remote_media_active = False
+        self.remote_media_id = ""
+        self.remote_media_updated_at = 0.0
+        return was_active
 
     def update_rssi(self, rssi):
         self.rssi = rssi

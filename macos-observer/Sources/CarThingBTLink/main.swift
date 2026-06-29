@@ -233,7 +233,6 @@ final class CarThingBTLink {
                     stderr
                 )
             }
-            startLatencyProbes()
             transport.send(CTSPFrame(type: .hello, payload: Data("\(Date().timeIntervalSince1970)".utf8)))
             fputs("carthing-btlink: capture gate remains device-owned\n", stderr)
         case .l2capClosed:
@@ -250,6 +249,8 @@ final class CarThingBTLink {
             scheduleReconnect()
         case .frame(let frame):
             handle(frame)
+        case .status(let data):
+            applyStreamingStatus(data)
         case .error(let message):
             fputs("carthing-btlink: error=\(message)\n", stderr)
         case .log(let message):
@@ -305,11 +306,7 @@ final class CarThingBTLink {
         case .latencyProbe:
             handleLatencyProbe(frame)
         case .status:
-            let text = String(data: frame.payload, encoding: .utf8) ?? "\(frame.payload.count) bytes"
-            if !streaming, text.contains("\"streaming_mic\":[\"") {
-                streaming = true
-                fputs("carthing-btlink: streaming_mic=on\n", stderr)
-            }
+            applyStreamingStatus(frame.payload)
         case .error:
             let text = String(data: frame.payload, encoding: .utf8) ?? "\(frame.payload.count) bytes"
             fputs("carthing-btlink: device_error=\(text)\n", stderr)
@@ -319,6 +316,9 @@ final class CarThingBTLink {
     }
 
     private func reportAudioFrame() {
+        if latencyProbeTimer == nil {
+            startLatencyProbes()
+        }
         frames += 1
         let now = Date()
         if !firstAudioReceived {
@@ -348,6 +348,22 @@ final class CarThingBTLink {
                 fputs("carthing-btlink: audio_frames=\(frames)\n", stderr)
             }
         }
+    }
+
+    private func applyStreamingStatus(_ data: Data) {
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let active = text.contains("\"streaming_mic\":[\"")
+        guard active != streaming else { return }
+        streaming = active
+        if active {
+            startLatencyProbes()
+        } else {
+            stopLatencyProbes()
+        }
+        fputs(
+            "carthing-btlink: streaming_mic=\(active ? "on" : "off")\n",
+            stderr
+        )
     }
 
     private func writeFloat32PCM(from pcm16: Data) {
@@ -632,6 +648,14 @@ final class CarThingBTLink {
             // Текст распознавания вниз на экран устройства: T_COMMAND "text:<utf8>".
             let txt = String(command.dropFirst(5))
             transport.send(CTSPFrame(type: .command, payload: Data(("text:" + txt).utf8)))
+        } else if command.hasPrefix("now_playing ") {
+            let json = String(command.dropFirst(12))
+            transport.send(
+                CTSPFrame(
+                    type: .command,
+                    payload: Data(("now_playing:" + json).utf8)
+                )
+            )
         }
     }
 
