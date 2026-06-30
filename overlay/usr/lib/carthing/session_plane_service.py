@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import struct
 import time
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from bumble.gatt import Characteristic, Service
 from bumble import l2cap
 
 import identity_service
+from maintenance_service import MaintenanceError, MaintenanceService
 from connection_journal import record_connection_event
 
 logger = logging.getLogger(__name__)
@@ -39,6 +41,7 @@ T_ERROR = 0x08
 T_AUDIO_IMA_ADPCM = 0x09
 T_LATENCY_PROBE = 0x0A
 T_AUDIO_OPUS = 0x0B
+T_MAINTENANCE = 0x0C
 
 AUDIO_TIMING_FLAG = 1 << 8
 AUDIO_RATE_16K_FLAG = 1 << 9
@@ -110,6 +113,7 @@ class SessionPlaneService:
         self._listening = False   # гейт микрофона: труба открыта всегда, звук течёт только при True
         self._remote_media_owner = ""
         self._plugin_owner = ""
+        self._maintenance = MaintenanceService()
 
     async def _gate(self, label, operation):
         if self.hci_gate is None:
@@ -558,6 +562,32 @@ class SessionPlaneService:
                     struct.pack(">QQQ", mac_send_ns, device_receive_ns, device_send_ns),
                     seq=seq,
                 )
+        elif frame_type == T_MAINTENANCE:
+            payload_len = struct.unpack(">I", data[12:16])[0]
+            payload = data[16:16 + payload_len]
+            try:
+                response, restart = self._maintenance.handle(payload)
+                self._write(
+                    channel,
+                    T_MAINTENANCE,
+                    response,
+                    seq=seq,
+                )
+                if restart:
+                    asyncio.get_running_loop().call_later(
+                        0.75,
+                        os.kill,
+                        os.getpid(),
+                        signal.SIGTERM,
+                    )
+            except MaintenanceError as exc:
+                logger.warning("maintenance request rejected: %s", exc)
+                self._write(
+                    channel,
+                    T_ERROR,
+                    b"maintenance_rejected",
+                    seq=seq,
+                )
         else:
             self._write(channel, T_ERROR, b"unsupported_frame_type", seq=seq)
 
@@ -999,6 +1029,12 @@ class SessionPlaneService:
             "roles": ["session_peer", "remote_mic_receiver"],
             "protocol_version": CTSP_VERSION,
             "transports": ["ble_gatt_bootstrap", "ble_l2cap_coc_session"],
+            "maintenance": {
+                "available": self._maintenance.available,
+                "transport": "ctsp_l2cap",
+                "authentication": "hmac_sha256",
+                "session": self._maintenance.session_id,
+            },
             "remote_mic": {
                 "format": os.environ.get("CARTHING_BT_MIC_CODEC", "opus"),
                 "sample_rate_hz": int(

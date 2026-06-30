@@ -1,0 +1,17 @@
+[
+  {
+    "id": "finder",
+    "label": "FINDER",
+    "command": ["/usr/bin/open", "-a", "Finder"]
+  },
+  {
+    "id": "music",
+    "label": "MUSIC",
+    "command": ["/usr/bin/open", "-a", "Music"]
+  },
+  {
+    "id": "notes",
+    "label": "NOTES",
+    "command": ["/usr/bin/open", "-a", "Notes"]
+  }
+]

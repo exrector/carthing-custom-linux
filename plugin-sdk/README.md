@@ -30,10 +30,10 @@ Minimal manifest:
 Build the included example:
 
 ```sh
-chmod +x plugin-sdk/examples/button-deck/button_deck.py
+chmod +x plugin-sdk/examples/mac-deck/mac_deck.py
 ./plugin-sdk/package-plugin.sh \
-  plugin-sdk/examples/button-deck \
-  build/ButtonDeck.ctplugin
+  plugin-sdk/examples/mac-deck \
+  build/MacDeck.ctplugin
 ```
 
 Every new or updated archive is installed disabled. The user must enable it in
@@ -69,5 +69,7 @@ transport is coalesced to at most two updates per second per plugin. Limits:
 8 cards, 8 rows and 4 actions per card, 48 KiB CTSP JSON payload. The device
 currently renders the first card, up to six rows, and up to three actions.
 
-The complete reference implementation is in
-`plugin-sdk/examples/button-deck`.
+The complete reference implementation is in `plugin-sdk/examples/mac-deck`.
+It is a working Bluetooth macro deck: the default buttons open Finder, Music,
+and Notes. Edit `actions.json` to replace labels and command arrays without
+changing the plugin executable.

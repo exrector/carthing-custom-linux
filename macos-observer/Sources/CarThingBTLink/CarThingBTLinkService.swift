@@ -147,6 +147,16 @@ final class CarThingBTLink {
     private lazy var pluginManager = ServerPluginManager(
         plugins: [appleMusicPlugin]
     )
+    private lazy var maintenanceBridge = MaintenanceBridge(
+        sendFrame: { [weak self] payload in
+            self?.transport.send(
+                CTSPFrame(type: .maintenance, payload: payload)
+            )
+        },
+        linkAvailable: { [weak self] in
+            self?.linkOpenedNs != nil
+        }
+    )
 
     init(
         appModel: LinkAppModel,
@@ -183,6 +193,10 @@ final class CarThingBTLink {
         }
         displayPluginHost.start()
         pluginManager.start()
+        maintenanceBridge.onEvent = { [weak self] message in
+            self?.appModel.addEvent(message)
+        }
+        maintenanceBridge.start()
         serverStatusTimer = Timer.scheduledTimer(
             withTimeInterval: 5.0,
             repeats: true
@@ -228,6 +242,7 @@ final class CarThingBTLink {
                 self?.stopAssistantWorker()
                 self?.pluginManager.stop()
                 self?.displayPluginHost.stop()
+                self?.maintenanceBridge.stop()
                 self?.transport.send(
                     CTSPFrame(type: .command, payload: Data("disconnect".utf8))
                 )
@@ -266,9 +281,20 @@ final class CarThingBTLink {
             appModel.rssi = peripheral.rssi
             transport.stopScan()
             transport.connect(peripheralID: peripheral.id)
-        case .bootstrap(let version, let endpointID, let psm, _):
+        case .bootstrap(let version, let endpointID, let psm, let capabilities):
             appModel.endpoint = endpointID ?? "Car Thing"
             appModel.psm = psm.map(Int.init)
+            if let capabilities,
+               let document = try? JSONSerialization.jsonObject(
+                   with: capabilities
+               ) as? [String: Any],
+               let maintenance = document["maintenance"] as? [String: Any] {
+                maintenanceBridge.setSession(
+                    maintenance["session"] as? String
+                )
+            } else {
+                maintenanceBridge.setSession(nil)
+            }
             fputs(
                 "carthing-btlink: bootstrap version=\(version.map(String.init) ?? "?") endpoint=\(endpointID ?? "?") psm=\(psm.map(String.init) ?? "?")\n",
                 stderr
@@ -309,6 +335,7 @@ final class CarThingBTLink {
             linkOpenedNs = nil
             stopLatencyProbes()
             stopScanRetry()
+            maintenanceBridge.linkClosed()
             fputs("carthing-btlink: l2cap_closed\n", stderr)
             if !shuttingDown {
                 transport.disconnect()
@@ -378,8 +405,13 @@ final class CarThingBTLink {
             applyStreamingStatus(frame.payload)
         case .command:
             forwardDeviceCommand(frame.payload)
+        case .maintenance:
+            maintenanceBridge.handleDevicePayload(frame.payload)
         case .error:
             let text = String(data: frame.payload, encoding: .utf8) ?? "\(frame.payload.count) bytes"
+            if text.hasPrefix("maintenance_") {
+                maintenanceBridge.handleDeviceError(text)
+            }
             fputs("carthing-btlink: device_error=\(text)\n", stderr)
         default:
             break
@@ -1018,6 +1050,7 @@ final class CarThingBTLink {
         stopAssistantWorker()
         pluginManager.stop()
         displayPluginHost.stop()
+        maintenanceBridge.stop()
         transport.send(
             CTSPFrame(type: .command, payload: Data("disconnect".utf8))
         )

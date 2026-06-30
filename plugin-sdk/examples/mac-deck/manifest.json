@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.mac-deck",
+  "name": "Mac Deck",
+  "version": "1.0.0",
+  "executable": "mac_deck.py",
+  "summary": "Configurable Bluetooth macro deck for macOS applications.",
+  "icon": "rectangle.grid.2x2",
+  "permissions": []
+}

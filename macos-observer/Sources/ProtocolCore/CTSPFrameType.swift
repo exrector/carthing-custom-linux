@@ -24,6 +24,8 @@ public enum CTSPFrameType: UInt8, CaseIterable, Sendable, CustomStringConvertibl
     case latencyProbe = 0x0A
     /// Один raw Opus packet, mono 16 kHz, VOIP, 10, 20 или 40 ms.
     case audioOpus = 0x0B
+    /// Аутентифицированное обслуживание устройства: файлы, логи, restart.
+    case maintenance = 0x0C
 
     public var description: String {
         switch self {
@@ -36,6 +38,7 @@ public enum CTSPFrameType: UInt8, CaseIterable, Sendable, CustomStringConvertibl
         case .audioIMAADPCM: return "audio_ima_adpcm"
         case .latencyProbe: return "latency_probe"
         case .audioOpus: return "audio_opus"
+        case .maintenance: return "maintenance"
         }
     }
 }

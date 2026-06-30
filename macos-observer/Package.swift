@@ -8,6 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "CarThingBTLink", targets: ["CarThingBTLink"]),
+        .executable(name: "carthingctl", targets: ["CarThingCtl"]),
         .library(name: "ProtocolCore", targets: ["ProtocolCore"]),
         .library(name: "ServerPlugins", targets: ["ServerPlugins"]),
         .library(name: "TransportCore", targets: ["TransportCore"]),
@@ -43,6 +44,7 @@ let package = Package(
                 ])
             ]
         ),
+        .executableTarget(name: "CarThingCtl"),
         .testTarget(
             name: "ProtocolCoreTests",
             dependencies: ["ProtocolCore", "ServerPlugins"]

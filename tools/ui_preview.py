@@ -35,7 +35,7 @@ def _state():
     s.plugin_catalog = [{
         "manifest": {
             "id": "dev.carthing.example",
-            "name": "Button Deck",
+            "name": "Mac Deck",
         },
         "enabled": True,
     }]
@@ -43,18 +43,30 @@ def _state():
         "dev.carthing.example": {
             "cards": [{
                 "id": "main",
-                "title": "Button Deck",
-                "subtitle": "External plugin preview",
+                "title": "Mac Deck",
+                "subtitle": "Bluetooth desktop controls",
                 "status": "READY",
                 "rows": [
-                    {"label": "PRESSES", "value": "4"},
-                    {"label": "UPDATED", "value": "14:32:08"},
+                    {"label": "MAC", "value": "MacBook"},
+                    {"label": "LAST", "value": "MUSIC"},
                 ],
                 "actions": [
                     {
-                        "id": "run",
-                        "label": "RUN",
+                        "id": "finder",
+                        "label": "FINDER",
                         "style": "primary",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "music",
+                        "label": "MUSIC",
+                        "style": "normal",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "notes",
+                        "label": "NOTES",
+                        "style": "normal",
                         "enabled": True,
                     },
                 ],

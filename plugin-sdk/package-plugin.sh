@@ -12,5 +12,9 @@ OUTPUT="${2:-$(basename "$SOURCE").ctplugin}"
 
 test -f "$SOURCE/manifest.json"
 rm -f "$OUTPUT"
-/usr/bin/ditto -c -k --norsrc "$SOURCE/." "$OUTPUT"
+(
+  cd "$SOURCE"
+  /usr/bin/zip -q -r "$OUTPUT" . \
+    -x '*/__pycache__/*' '*.pyc' '.DS_Store' '._*'
+)
 echo "$OUTPUT"

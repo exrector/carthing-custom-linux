@@ -12,6 +12,10 @@ python3 -m py_compile overlay/usr/lib/carthing/*.py
 
 PYTHONPATH=overlay/usr/lib/carthing python3 - <<'PY'
 import asyncio
+import base64
+import hashlib
+import hmac
+import json
 import sys
 import tempfile
 import time
@@ -37,6 +41,7 @@ from hid_remote_service import install_hid_remote_profile, send_consumer_usage
 from ams_client import AMSClient, MediaState
 from session_plane_service import SessionPlaneService
 from power_policy import IdlePowerController
+import maintenance_service
 
 state = AppState()
 model = RuntimeModel()
@@ -203,6 +208,66 @@ if not service.send_plugin_action({
     raise SystemExit("plugin action did not enter CTSP")
 if b"plugin_action:" not in fake_channel.frames[-1][16:]:
     raise SystemExit("plugin action CTSP payload has the wrong command")
+
+with tempfile.TemporaryDirectory() as maintenance_tmp:
+    maintenance_root = Path(maintenance_tmp)
+    key_path = maintenance_root / "maintenance.key"
+    key = bytes(range(32))
+    key_path.write_text(key.hex())
+    maintenance_service.KEY_PATH = key_path
+    maintenance_service.ALLOWED_ROOTS = (maintenance_root,)
+    maintenance_service.WORK_ROOT = maintenance_root / "work"
+    maintenance = maintenance_service.MaintenanceService()
+
+    def maintenance_envelope(request_id, operation, payload):
+        payload64 = base64.b64encode(
+            json.dumps(
+                payload,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode()
+        ).decode()
+        session_id = maintenance.session_id
+        signed = (
+            f"1\n{session_id}\n{request_id}\n{operation}\n{payload64}"
+        ).encode()
+        return json.dumps({
+            "version": 1,
+            "session": session_id,
+            "id": request_id,
+            "op": operation,
+            "payload": payload64,
+            "auth": hmac.new(key, signed, hashlib.sha256).hexdigest(),
+        }).encode()
+
+    response, restart = maintenance.handle(
+        maintenance_envelope("status-001", "status", {})
+    )
+    if restart or b'"op":"result"' not in response:
+        raise SystemExit("maintenance status protocol failed")
+    payload = b"abc"
+    digest = hashlib.sha256(payload).hexdigest()
+    maintenance.handle(maintenance_envelope(
+        "upload-001",
+        "put_begin",
+        {
+            "path": str(maintenance_root / "screens.py"),
+            "size": len(payload),
+            "sha256": digest,
+            "mode": 0o644,
+        },
+    ))
+    maintenance.handle(maintenance_envelope(
+        "upload-001",
+        "put_chunk",
+        {"seq": 0, "data": base64.b64encode(payload).decode()},
+    ))
+    upload = maintenance._uploads["upload-001"]
+    if upload["received"] != 3 or upload["hasher"].hexdigest() != digest:
+        raise SystemExit("maintenance upload chunk failed")
+    maintenance.handle(
+        maintenance_envelope("upload-001", "put_abort", {})
+    )
 model.add_notification(
     42,
     "Телефон",

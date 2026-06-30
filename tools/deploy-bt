@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OVERLAY="$ROOT/overlay"
+CTL=${CARTHING_CTL:-"$HOME/.local/bin/carthingctl"}
+
+[ -x "$CTL" ] || {
+    echo "deploy-bt: carthingctl is not installed" >&2
+    exit 1
+}
+
+restart=0
+paths=""
+for argument in "$@"; do
+    case "$argument" in
+        --restart) restart=1 ;;
+        --*) echo "deploy-bt: unknown flag: $argument" >&2; exit 2 ;;
+        *)
+            [ -f "$OVERLAY/$argument" ] || {
+                echo "deploy-bt: missing overlay/$argument" >&2
+                exit 2
+            }
+            paths="$paths $argument"
+            ;;
+    esac
+done
+[ -n "$paths" ] || {
+    echo "usage: tools/deploy-bt usr/lib/carthing/file.py [...] [--restart]" >&2
+    exit 2
+}
+
+for path in $paths; do
+    "$CTL" push "$OVERLAY/$path" "/$path"
+done
+if [ "$restart" = "1" ]; then
+    "$CTL" restart
+fi
