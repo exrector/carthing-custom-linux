@@ -19,16 +19,17 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app_state import AppState
-from gui_controller import ASSISTANT, HOME, NOTIFICATIONS, SERVER, GuiController
+from gui_controller import ASSISTANT, HOME, NOTIFICATIONS, PLUGINS, GuiController
 from runtime_model import RuntimeModel
 from screens import (
     AssistantScreen,
     NotificationsScreen,
     NowPlayingScreen,
-    ServerStatusScreen,
+    PluginDashboardScreen,
     SettingsScreen,
 )
 from ui_components import truncate
+from ui_components import RegionSet
 from ui_screen import Input, notification_indicator_visible
 
 sys.path.append("overlay/usr/lib/carthing/vendor")
@@ -50,7 +51,7 @@ for screen in (
     AssistantScreen(),
     NotificationsScreen(),
     SettingsScreen(),
-    ServerStatusScreen(),
+    PluginDashboardScreen(),
 ):
     screen.on_state(state)
     screen.render()
@@ -66,6 +67,7 @@ expected = {
     "operation_mode",
     "power_tier",
     "server_status",
+    "plugins",
     "remote_mic",
 }
 if set(model.bt_block()) != expected:
@@ -129,10 +131,78 @@ model.update_server_status({
     "connected": True,
     "assistant": True,
 })
-state.server_status = dict(model.server_status)
-server_screen = ServerStatusScreen()
-server_screen.on_state(state)
-server_screen.render()
+model.update_plugin_catalog({
+    "schema": 1,
+    "plugins": [{
+        "manifest": {
+            "schema": 1,
+            "id": "dev.carthing.test",
+            "name": "Test Plugin",
+            "version": "1.0.0",
+            "executable": "test",
+            "summary": "",
+            "permissions": [],
+            "default_enabled": False,
+        },
+        "enabled": True,
+        "status": "running",
+        "message": "",
+        "card_count": 1,
+    }],
+})
+model.update_plugin_snapshot({
+    "schema": 1,
+    "plugin_id": "dev.carthing.test",
+    "revision": 1,
+    "cards": [{
+        "id": "main",
+        "title": "Test Plugin",
+        "rows": [{"id": "value", "label": "VALUE", "value": "42"}],
+        "actions": [{
+            "id": "run",
+            "label": "RUN",
+            "style": "primary",
+            "enabled": True,
+        }],
+    }],
+})
+state.plugin_catalog = list(model.plugin_catalog)
+state.plugin_snapshots = dict(model.plugin_snapshots)
+plugin_screen = PluginDashboardScreen()
+plugin_screen.on_state(state)
+plugin_regions = RegionSet()
+plugin_screen.render(plugin_regions)
+plugin_action = plugin_regions.hit(50, 290)
+if (
+    plugin_action is None
+    or plugin_action.intent != "plugin_action"
+    or plugin_action.payload.get("action_id") != "run"
+):
+    raise SystemExit("plugin dashboard did not expose its touch action")
+
+class FakePluginChannel:
+    def __init__(self):
+        self.frames = []
+
+    def write(self, frame):
+        self.frames.append(frame)
+
+fake_channel = FakePluginChannel()
+service = SessionPlaneService.__new__(SessionPlaneService)
+service._plugin_owner = "AA:BB:CC:DD:EE:FF"
+service._runtimes = {
+    "AA:BB:CC:DD:EE:FF": SimpleNamespace(
+        connector=SimpleNamespace(channel=fake_channel)
+    )
+}
+if not service.send_plugin_action({
+    "plugin_id": "dev.carthing.test",
+    "card_id": "main",
+    "action_id": "run",
+}):
+    raise SystemExit("plugin action did not enter CTSP")
+if b"plugin_action:" not in fake_channel.frames[-1][16:]:
+    raise SystemExit("plugin action CTSP payload has the wrong command")
 model.add_notification(
     42,
     "Телефон",
@@ -235,7 +305,7 @@ for button, expected_screen in (
     (Input.BTN_1, HOME),
     (Input.BTN_2, ASSISTANT),
     (Input.BTN_3, NOTIFICATIONS),
-    (Input.BTN_4, SERVER),
+    (Input.BTN_4, PLUGINS),
 ):
     navigation.handle_input(button)
     if navigation.compositor.active != expected_screen:

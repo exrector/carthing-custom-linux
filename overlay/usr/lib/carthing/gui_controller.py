@@ -18,7 +18,7 @@ from screens import (
     NotificationsScreen,
     NowPlayingScreen,
     PairingModal,
-    ServerStatusScreen,
+    PluginDashboardScreen,
     SettingsScreen,
 )
 from ui_anim import AnimDriver
@@ -32,13 +32,13 @@ from ui_statusbar import StatusBar
 
 logger = logging.getLogger(__name__)
 
-HOME, SETTINGS, NOTIFICATIONS, ASSISTANT, SERVER = 0, 1, 2, 3, 4
-NAVIGATION = (HOME, ASSISTANT, NOTIFICATIONS, SERVER)
+HOME, SETTINGS, NOTIFICATIONS, ASSISTANT, PLUGINS = 0, 1, 2, 3, 4
+NAVIGATION = (HOME, ASSISTANT, NOTIFICATIONS, PLUGINS)
 VIEW_BUTTONS = {
     Input.BTN_1: HOME,
     Input.BTN_2: ASSISTANT,
     Input.BTN_3: NOTIFICATIONS,
-    Input.BTN_4: SERVER,
+    Input.BTN_4: PLUGINS,
 }
 WEEKDAYS_RU = ("ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС")
 
@@ -79,11 +79,13 @@ class GuiController:
         on_set_screensaver_timeout=None,
         on_power_off=None,
         on_toggle_client=None,
+        on_plugin_action=None,
         **_unused,
     ):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
         self._on_notif_action = on_notif_action or (lambda payload: None)
+        self._on_plugin_action = on_plugin_action or (lambda payload: None)
         self._volume_touch_ts = 0.0
         self._iphone_transport_connected = False
         self._iphone_grace_until = 0.0
@@ -115,7 +117,7 @@ class GuiController:
                 SettingsScreen(on_select=lambda key: emit("settings_select", key)),
                 NotificationsScreen(emit=self._intent),
                 AssistantScreen(emit=emit),
-                ServerStatusScreen(),
+                PluginDashboardScreen(emit=self._intent),
             ],
             status_bar=StatusBar(),
             anim=AnimDriver(),
@@ -143,6 +145,31 @@ class GuiController:
             self.render()
         elif intent == "settings_tap":
             self.compositor.screens[SETTINGS].tap(payload)
+            self.render()
+        elif intent == "plugin_select":
+            self.app_state.plugin_selected_id = str(payload or "")
+            self.render()
+        elif intent == "plugin_next":
+            plugin_ids = [
+                str((record.get("manifest") or {}).get("id") or "")
+                for record in self.app_state.plugin_catalog
+                if bool(record.get("enabled"))
+                and str((record.get("manifest") or {}).get("id") or "")
+                in self.app_state.plugin_snapshots
+            ]
+            if plugin_ids:
+                current = self.app_state.plugin_selected_id
+                index = (
+                    plugin_ids.index(current)
+                    if current in plugin_ids
+                    else -1
+                )
+                self.app_state.plugin_selected_id = plugin_ids[
+                    (index + 1) % len(plugin_ids)
+                ]
+            self.render()
+        elif intent == "plugin_action":
+            self._on_plugin_action(payload or {})
             self.render()
         else:
             self.dispatcher.dispatch(intent, payload)
@@ -300,8 +327,12 @@ class GuiController:
             }
         elif active == NOTIFICATIONS:
             visible_state["notifications"] = state.notifications
-        elif active == SERVER:
-            visible_state["server_status"] = state.server_status
+        elif active == PLUGINS:
+            visible_state["plugins"] = {
+                "catalog": state.plugin_catalog,
+                "snapshots": state.plugin_snapshots,
+                "selected": state.plugin_selected_id,
+            }
         else:
             visible_state["settings"] = {
                 "iphone_connected": session.connected,
@@ -405,6 +436,12 @@ class GuiController:
         state.notifications = list(model.notifications)
         state.unread_count = len(state.notifications)
         state.server_status = dict(getattr(model, "server_status", {}) or {})
+        state.plugin_catalog = list(
+            getattr(model, "plugin_catalog", []) or []
+        )
+        state.plugin_snapshots = dict(
+            getattr(model, "plugin_snapshots", {}) or {}
+        )
         state.clock_text = time.strftime("%H:%M")
         local_time = time.localtime()
         state.clock_date_text = (

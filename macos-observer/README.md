@@ -19,14 +19,17 @@ Bluetooth обслуживается только нативным CoreBluetooth
 
 ## Состав
 
-- `CarThingBTLink` - единое headless-приложение: CoreBluetooth, CTSP, Opus,
-  локальный audio pipe и lifecycle Whisper/Assistant worker.
+- `CarThingBTLink` - единое приложение с нативным GUI: CoreBluetooth, CTSP,
+  Opus, локальный audio pipe, lifecycle Whisper/Assistant worker и управление
+  внешними экранными модулями.
 - `ServerPlugins` - подключаемые серверные модули. По умолчанию активен
   `mac_music`: он передаёт локальную Apple Music-сессию и принимает media-команды.
 - `TransportCore` - scan, connect, GATT bootstrap и L2CAP CoC.
 - `ProtocolCore` - потоковый кодек CTSP.
 - `install-btlink-app.sh` - release build, подпись, установка `.app` и LaunchAgent.
 - `launchd/com.carthing.btlink.plist` - шаблон LaunchAgent.
+- `../plugin-sdk` - публичный JSONL API, упаковщик `.ctplugin` и независимый
+  пример button deck.
 
 ## Установка
 
@@ -53,6 +56,12 @@ CARTHING_SERVER_PLUGINS=mac_music
 HomePod/AirPlay остаётся внешним provider ассистента; координатор отдаёт ему
 приоритет, а при отсутствии активного AirPlay автоматически показывает
 локальную Music-сессию Mac.
+
+Внешние экранные модули не компилируются с приложением. Пользователь
+устанавливает архив `.ctplugin` во вкладке «Модули», отдельно включает его, и
+его карточки появляются в четвёртом фиксированном view Car Thing. Transport
+каталога, snapshot и touch-action идёт только по CTSP Bluetooth. Полный
+контракт: `../plugin-sdk/README.md`.
 
 ## Проверка
 

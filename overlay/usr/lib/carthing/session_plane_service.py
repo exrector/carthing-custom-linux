@@ -109,6 +109,7 @@ class SessionPlaneService:
         self._installed = False
         self._listening = False   # гейт микрофона: труба открыта всегда, звук течёт только при True
         self._remote_media_owner = ""
+        self._plugin_owner = ""
 
     async def _gate(self, label, operation):
         if self.hci_gate is None:
@@ -340,6 +341,7 @@ class SessionPlaneService:
         self._stop_mic(runtime)
         runtime.connector.connected = False
         self._release_remote_media_owner(address)
+        self._release_plugin_owner(address)
         record_connection_event(
             "session_disconnected",
             peer=address,
@@ -424,6 +426,7 @@ class SessionPlaneService:
         runtime.connector.connected = False
         self._stop_mic(runtime)
         self._release_remote_media_owner(runtime.address)
+        self._release_plugin_owner(runtime.address)
         logger.info("session CoC closed: peer=%s", runtime.address)
         record_connection_event(
             "session_coc_closed",
@@ -451,6 +454,31 @@ class SessionPlaneService:
         if not connector.connected or channel is None:
             return False
         return self._write(channel, T_COMMAND, payload)
+
+    def send_plugin_action(self, action):
+        runtime = self._runtime(self._plugin_owner, create=False)
+        if runtime is None or runtime.connector.channel is None:
+            return False
+        try:
+            payload = json.dumps(
+                {
+                    "schema": 1,
+                    "plugin_id": str(action.get("plugin_id") or "")[:128],
+                    "card_id": str(action.get("card_id") or "")[:80],
+                    "action_id": str(action.get("action_id") or "")[:80],
+                },
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        except Exception:
+            return False
+        if len(payload) > 2048:
+            return False
+        return self._write(
+            runtime.connector.channel,
+            T_COMMAND,
+            b"plugin_action:" + payload,
+        )
 
     def _on_channel_data(self, runtime, channel, data: bytes):
         runtime.connector.last_seen = time.time()
@@ -511,6 +539,10 @@ class SessionPlaneService:
                 self._apply_remote_now_playing(runtime, payload[12:])
             elif payload.startswith(b"server_status:"):
                 self._apply_server_status(payload[14:])
+            elif payload.startswith(b"plugin_catalog:"):
+                self._apply_plugin_catalog(runtime, payload[15:])
+            elif payload.startswith(b"plugin_snapshot:"):
+                self._apply_plugin_snapshot(runtime, payload[16:])
             else:
                 self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
         elif frame_type == T_LATENCY_PROBE:
@@ -655,6 +687,31 @@ class SessionPlaneService:
             self.on_change()
         except Exception as exc:
             logger.warning("server status payload rejected: %s", exc)
+
+    def _apply_plugin_catalog(self, runtime, raw):
+        try:
+            payload = json.loads(bytes(raw).decode("utf-8"))
+            self._plugin_owner = runtime.address
+            self.model.update_plugin_catalog(payload)
+            self.on_change()
+        except Exception as exc:
+            logger.warning("plugin catalog payload rejected: %s", exc)
+
+    def _apply_plugin_snapshot(self, runtime, raw):
+        try:
+            payload = json.loads(bytes(raw).decode("utf-8"))
+            self._plugin_owner = runtime.address
+            self.model.update_plugin_snapshot(payload)
+            self.on_change()
+        except Exception as exc:
+            logger.warning("plugin snapshot payload rejected: %s", exc)
+
+    def _release_plugin_owner(self, address):
+        if normalize_address(address) != self._plugin_owner:
+            return False
+        self._plugin_owner = ""
+        self.model.clear_plugins()
+        return True
 
     def _release_remote_media_owner(self, address):
         if normalize_address(address) != self._remote_media_owner:

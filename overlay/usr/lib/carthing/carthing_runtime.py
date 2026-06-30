@@ -126,6 +126,13 @@ def _on_notification_action(payload):
     )
 
 
+def _on_plugin_action(payload):
+    if session_plane is None:
+        return
+    if not session_plane.send_plugin_action(payload or {}):
+        logger.warning("plugin action dropped: no active CTSP plugin owner")
+
+
 def _on_toggle_notifications(enabled):
     if settings is not None:
         settings.set("notif_blink", bool(enabled))
@@ -536,6 +543,7 @@ def _init_gui():
             on_set_screensaver_timeout=_on_set_screensaver_timeout,
             on_power_off=_on_power_off,
             on_toggle_client=_on_toggle_client,
+            on_plugin_action=_on_plugin_action,
         )
         from power_policy import IdlePowerController
 

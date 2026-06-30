@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.button-deck",
+  "name": "Button Deck",
+  "version": "1.0.0",
+  "executable": "button_deck.py",
+  "summary": "Independent example with state rows and touch actions.",
+  "icon": "rectangle.grid.2x2",
+  "permissions": []
+}

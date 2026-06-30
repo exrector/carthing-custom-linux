@@ -13,7 +13,13 @@ sys.path.insert(0, os.path.abspath(os.path.join(HERE, "..", "overlay", "usr", "l
 from ui_screen import Compositor, PreviewDisplay     # noqa: E402
 from ui_statusbar import StatusBar                    # noqa: E402
 from ui_anim import AnimDriver                         # noqa: E402
-from screens import NowPlayingScreen, MacOSScreen, SettingsScreen  # noqa: E402
+from screens import (  # noqa: E402
+    AssistantScreen,
+    NotificationsScreen,
+    NowPlayingScreen,
+    PluginDashboardScreen,
+    SettingsScreen,
+)
 from app_state import AppState                         # noqa: E402
 
 
@@ -26,14 +32,48 @@ def _state():
     s.iphone.duration = 757
     s.iphone.position = 192
     s.iphone.playing = True
-    s.mac.connected = False
+    s.plugin_catalog = [{
+        "manifest": {
+            "id": "dev.carthing.example",
+            "name": "Button Deck",
+        },
+        "enabled": True,
+    }]
+    s.plugin_snapshots = {
+        "dev.carthing.example": {
+            "cards": [{
+                "id": "main",
+                "title": "Button Deck",
+                "subtitle": "External plugin preview",
+                "status": "READY",
+                "rows": [
+                    {"label": "PRESSES", "value": "4"},
+                    {"label": "UPDATED", "value": "14:32:08"},
+                ],
+                "actions": [
+                    {
+                        "id": "run",
+                        "label": "RUN",
+                        "style": "primary",
+                        "enabled": True,
+                    },
+                ],
+            }],
+        },
+    }
     return s
 
 
 def main():
     disp = PreviewDisplay(os.path.join(HERE, "previews"))
     st = _state()
-    comp = Compositor(disp, [NowPlayingScreen(), MacOSScreen(), SettingsScreen()],
+    comp = Compositor(disp, [
+        NowPlayingScreen(),
+        SettingsScreen(),
+        NotificationsScreen(),
+        AssistantScreen(),
+        PluginDashboardScreen(),
+    ],
                       status_bar=StatusBar(), anim=AnimDriver(), state=st)
     comp.broadcast_state(st)
 
@@ -47,13 +87,6 @@ def main():
     st.active_desktop = 0
     disp.present(_compose(comp), name="nowplaying_unread")
     print("wrote nowplaying_unread.png")
-
-    comp.active = 2
-    comp.screens[2].expanded.add("display")
-    comp.screens[2].sel = 3
-    disp.present(_compose(comp), name="settings_expanded")
-    print("wrote settings_expanded.png")
-
 
 def _compose(comp, guide=True):
     from PIL import ImageDraw

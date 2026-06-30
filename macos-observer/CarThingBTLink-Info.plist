@@ -20,8 +20,8 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
-    <key>LSUIElement</key>
-    <true/>
+	<key>LSUIElement</key>
+	<false/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth connects Car Thing microphones to the voice assistant.</string>
 	<key>NSAppleEventsUsageDescription</key>

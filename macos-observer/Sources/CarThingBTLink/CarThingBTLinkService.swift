@@ -96,6 +96,8 @@ private final class OpusAudioDecoder {
 
 final class CarThingBTLink {
     private let transport = TransportCore()
+    private let appModel: LinkAppModel
+    private let displayPluginHost: DisplayPluginHost
     private let output = FileHandle.standardOutput
     private var engine: AVAudioEngine?
     private var mixer: AVAudioMixerNode?
@@ -146,7 +148,12 @@ final class CarThingBTLink {
         plugins: [appleMusicPlugin]
     )
 
-    init() {
+    init(
+        appModel: LinkAppModel,
+        displayPluginHost: DisplayPluginHost
+    ) {
+        self.appModel = appModel
+        self.displayPluginHost = displayPluginHost
         transport.onEvent = { [weak self] event in
             self?.handle(event)
         }
@@ -167,6 +174,14 @@ final class CarThingBTLink {
         // до того, как CBCentralManager(queue:.main) включится. Под launchd что-то держало
         // RunLoop, но в subprocess/foreground — нет. Явный keepalive-Timer надёжен везде.
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+        displayPluginHost.onCatalogChanged = { [weak self] catalog in
+            self?.appModel.pluginRecords = catalog.plugins
+            self?.sendPluginCatalog(catalog)
+        }
+        displayPluginHost.onSnapshot = { [weak self] snapshot in
+            self?.sendPluginSnapshot(snapshot)
+        }
+        displayPluginHost.start()
         pluginManager.start()
         serverStatusTimer = Timer.scheduledTimer(
             withTimeInterval: 5.0,
@@ -191,6 +206,8 @@ final class CarThingBTLink {
             guard let self, !self.connected, !self.shuttingDown else { return }
             self.transport.startScan()
         }
+        appModel.phase = "Запуск"
+        appModel.addEvent("Bluetooth service started")
         fputs("carthing-btlink: ready sample_rate=16000 source=bluetooth_ctsp\n", stderr)
     }
 
@@ -210,6 +227,7 @@ final class CarThingBTLink {
                 self?.stopMic()
                 self?.stopAssistantWorker()
                 self?.pluginManager.stop()
+                self?.displayPluginHost.stop()
                 self?.transport.send(
                     CTSPFrame(type: .command, payload: Data("disconnect".utf8))
                 )
@@ -226,6 +244,7 @@ final class CarThingBTLink {
     private func handle(_ event: TransportEvent) {
         switch event {
         case .phaseChanged(let phase):
+            appModel.phase = phase.rawValue
             fputs("carthing-btlink: phase=\(phase.rawValue)\n", stderr)
             if phase == .idle, !connected, !shuttingDown {
                 transport.startScan()
@@ -243,15 +262,22 @@ final class CarThingBTLink {
             stopScanRetry()
             cancelReconnect()
             fputs("carthing-btlink: discovered name=\"\(peripheral.name)\" rssi=\(peripheral.rssi)\n", stderr)
+            appModel.deviceName = peripheral.name
+            appModel.rssi = peripheral.rssi
             transport.stopScan()
             transport.connect(peripheralID: peripheral.id)
         case .bootstrap(let version, let endpointID, let psm, _):
+            appModel.endpoint = endpointID ?? "Car Thing"
+            appModel.psm = psm.map(Int.init)
             fputs(
                 "carthing-btlink: bootstrap version=\(version.map(String.init) ?? "?") endpoint=\(endpointID ?? "?") psm=\(psm.map(String.init) ?? "?")\n",
                 stderr
             )
             transport.setClientEnabled(true)
         case .l2capOpened(let psm):
+            appModel.linkConnected = true
+            appModel.psm = Int(psm)
+            appModel.addEvent("CTSP L2CAP opened on PSM \(psm)")
             fputs("carthing-btlink: l2cap_open psm=\(psm)\n", stderr)
             let now = DispatchTime.now().uptimeNanoseconds
             linkOpenedNs = now
@@ -269,8 +295,14 @@ final class CarThingBTLink {
             transport.send(CTSPFrame(type: .hello, payload: Data("\(Date().timeIntervalSince1970)".utf8)))
             nowPlayingCoordinator.resend()
             sendServerStatus()
+            sendPluginCatalog(displayPluginHost.catalog())
+            for snapshot in displayPluginHost.snapshots.values {
+                sendPluginSnapshot(snapshot)
+            }
             fputs("carthing-btlink: capture gate remains device-owned\n", stderr)
         case .l2capClosed:
+            appModel.linkConnected = false
+            appModel.addEvent("CTSP L2CAP closed")
             streaming = false
             connected = false
             linkLostNs = DispatchTime.now().uptimeNanoseconds
@@ -287,6 +319,8 @@ final class CarThingBTLink {
         case .status(let data):
             applyStreamingStatus(data)
         case .error(let message):
+            appModel.lastError = message
+            appModel.addEvent(message)
             fputs("carthing-btlink: error=\(message)\n", stderr)
         case .log(let message):
             fputs("carthing-btlink: \(message)\n", stderr)
@@ -392,6 +426,7 @@ final class CarThingBTLink {
         let active = text.contains("\"streaming_mic\":[\"")
         guard active != streaming else { return }
         streaming = active
+        appModel.micStreaming = active
         if active {
             startLatencyProbes()
         } else {
@@ -571,6 +606,7 @@ final class CarThingBTLink {
                 guard let self else { return }
                 if self.assistantProcess === finished {
                     self.assistantProcess = nil
+                    self.appModel.assistantRunning = false
                 }
                 fputs(
                     "carthing-btlink: assistant worker exit=\(finished.terminationStatus)\n",
@@ -585,6 +621,7 @@ final class CarThingBTLink {
         do {
             try process.run()
             assistantProcess = process
+            appModel.assistantRunning = true
             fputs("carthing-btlink: assistant worker started pid=\(process.processIdentifier)\n", stderr)
         } catch {
             fputs("carthing-btlink: assistant worker start failed: \(error)\n", stderr)
@@ -594,6 +631,7 @@ final class CarThingBTLink {
     private func stopAssistantWorker() {
         guard let process = assistantProcess else { return }
         assistantProcess = nil
+        appModel.assistantRunning = false
         if process.isRunning {
             process.terminate()
         }
@@ -619,8 +657,24 @@ final class CarThingBTLink {
     }
 
     private func forwardDeviceCommand(_ data: Data) {
-        guard let command = String(data: data, encoding: .utf8),
-              [
+        guard let command = String(data: data, encoding: .utf8) else {
+            return
+        }
+        if command.hasPrefix("plugin_action:") {
+            let json = Data(command.dropFirst("plugin_action:".count).utf8)
+            if let action = try? JSONDecoder().decode(
+                DisplayPluginActionRequest.self,
+                from: json
+            ), displayPluginHost.handle(action: action) {
+                appModel.addEvent(
+                    "Plugin action \(action.pluginID)/\(action.actionID)"
+                )
+            } else {
+                appModel.lastError = "Отклонено действие модуля"
+            }
+            return
+        }
+        guard [
                 "media_control:toggle",
                 "media_control:play",
                 "media_control:pause",
@@ -808,6 +862,28 @@ final class CarThingBTLink {
         transport.send(CTSPFrame(type: .command, payload: command))
     }
 
+    private func sendPluginCatalog(_ catalog: DisplayPluginCatalog) {
+        sendPluginPayload(prefix: "plugin_catalog:", value: catalog)
+    }
+
+    private func sendPluginSnapshot(_ snapshot: DisplayPluginSnapshot) {
+        sendPluginPayload(prefix: "plugin_snapshot:", value: snapshot)
+    }
+
+    private func sendPluginPayload<T: Encodable>(
+        prefix: String,
+        value: T
+    ) {
+        guard linkOpenedNs != nil,
+              let json = try? JSONEncoder().encode(value),
+              json.count <= 48_000 else {
+            return
+        }
+        var command = Data(prefix.utf8)
+        command.append(json)
+        transport.send(CTSPFrame(type: .command, payload: command))
+    }
+
     private func receiveText(_ conn: NWConnection) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, isComplete, error in
             if let data, !data.isEmpty {
@@ -928,10 +1004,23 @@ final class CarThingBTLink {
             transport.send(CTSPFrame(type: .command, payload: Data("stop_mic".utf8)))
         }
     }
-}
 
-let app = NSApplication.shared
-app.setActivationPolicy(.accessory)
-let cap = CarThingBTLink()
-cap.start()
-app.run()
+    func shutdown() {
+        guard !shuttingDown else { return }
+        shuttingDown = true
+        stopScanRetry()
+        stopLatencyProbes()
+        serverStatusTimer?.invalidate()
+        serverStatusTimer = nil
+        cancelReconnect()
+        transport.stopScan()
+        stopMic()
+        stopAssistantWorker()
+        pluginManager.stop()
+        displayPluginHost.stop()
+        transport.send(
+            CTSPFrame(type: .command, payload: Data("disconnect".utf8))
+        )
+        transport.disconnect()
+    }
+}

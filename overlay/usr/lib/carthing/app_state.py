@@ -101,7 +101,8 @@ class MediaSession:
 
 
 class AppState:
-    IPHONE, SETTINGS, NOTIFICATIONS, ASSISTANT, SERVER = 0, 1, 2, 3, 4
+    IPHONE, SETTINGS, NOTIFICATIONS, ASSISTANT, PLUGINS = 0, 1, 2, 3, 4
+    SERVER = PLUGINS
 
     def __init__(self):
         self.iphone = MediaSession()
@@ -109,6 +110,9 @@ class AppState:
         self.last_media_source = "iphone"
         self.remote_media_active = False
         self.server_status = {}
+        self.plugin_catalog = []
+        self.plugin_snapshots = {}
+        self.plugin_selected_id = ""
         self.notifications = []
         self.unread_count = 0
         self.trusted = []

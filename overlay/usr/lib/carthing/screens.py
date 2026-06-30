@@ -364,25 +364,49 @@ class SettingsScreen(Screen):
         return img
 
 
-class ServerStatusScreen(Screen):
-    name = "server"
-    title = "Сервер"
+class PluginDashboardScreen(Screen):
+    name = "plugins"
+    title = "Модули"
     fullscreen = True
 
-    def __init__(self):
+    def __init__(self, emit=None):
         self.state = None
+        self.emit = emit or (lambda intent, payload=None: None)
 
     def on_state(self, state):
         self.state = state
 
+    @staticmethod
+    def _accent(value):
+        value = str(value or "").lstrip("#")
+        if len(value) != 6:
+            return T.FG
+        try:
+            return tuple(int(value[index:index + 2], 16) for index in (0, 2, 4))
+        except ValueError:
+            return T.FG
+
     def render(self, regions=None):
         img, draw = self.blank()
-        _title(draw, "Сервер")
-        status = dict(getattr(self.state, "server_status", {}) or {})
-        if not status:
+        _title(draw, "Модули")
+        catalog = list(getattr(self.state, "plugin_catalog", []) or [])
+        snapshots = dict(getattr(self.state, "plugin_snapshots", {}) or {})
+        modules = []
+        for record in catalog:
+            manifest = dict(record.get("manifest") or {})
+            plugin_id = str(manifest.get("id") or "")
+            snapshot = snapshots.get(plugin_id)
+            if (
+                plugin_id
+                and bool(record.get("enabled"))
+                and isinstance(snapshot, dict)
+                and snapshot.get("cards")
+            ):
+                modules.append((plugin_id, manifest, snapshot))
+        if not modules:
             C.text_centered(
                 draw,
-                "ОЖИДАНИЕ BLUETOOTH",
+                "МОДУЛИ ВЫБИРАЮТСЯ НА MAC",
                 T.font(T.SZ_BODY),
                 T.FAINT,
                 T.MAIN_CY - 18,
@@ -390,41 +414,159 @@ class ServerStatusScreen(Screen):
             )
             return img
 
-        host = str(status.get("host") or "Mac")
-        connected = bool(status.get("connected", False))
-        draw.text((34, 82), host, font=T.font(40), fill=T.FG)
-        draw.text(
-            (34, 132),
-            "CTSP ONLINE" if connected else "CTSP OFFLINE",
-            font=T.font(T.SZ_SMALL),
-            fill=T.STATUS_OK if connected else T.STATUS_OFF,
+        selected = str(
+            getattr(self.state, "plugin_selected_id", "") or ""
         )
-        uptime_s = float(status.get("uptime_s") or 0.0)
-        rows = (
-            ("CPU", f"{float(status.get('cpu_load_pct') or 0.0):.0f}%"),
-            ("RAM", f"{float(status.get('memory_gb') or 0.0):.1f} GB"),
-            ("THERMAL", str(status.get("thermal") or "unknown").upper()),
-            ("UPTIME", f"{int(uptime_s // 3600)} H"),
-            (
-                "CTSP RTT",
-                (
-                    f"{float(status['ctsp_rtt_ms']):.1f} MS"
-                    if status.get("ctsp_rtt_ms") is not None
-                    else "--"
-                ),
-            ),
-            (
-                "ASSISTANT",
-                "ONLINE" if bool(status.get("assistant")) else "OFFLINE",
-            ),
+        if selected not in {item[0] for item in modules}:
+            selected = modules[0][0]
+            self.state.plugin_selected_id = selected
+
+        visible_modules = modules
+        show_next = len(modules) > 4
+        if show_next:
+            selected_index = next(
+                index
+                for index, item in enumerate(modules)
+                if item[0] == selected
+            )
+            page_start = (selected_index // 4) * 4
+            visible_modules = modules[page_start:page_start + 4]
+        tab_area_right = T.ARC_SAFE_X - (54 if show_next else 0)
+        tab_width = min(
+            164,
+            max(108, (tab_area_right - 28) // len(visible_modules)),
         )
-        y = 188
-        for index, (label, value) in enumerate(rows):
-            x = 34 + (index % 2) * 330
-            if index and index % 2 == 0:
-                y += 72
-            draw.text((x, y), label, font=T.font(T.SZ_SMALL), fill=T.FAINT)
-            draw.text((x, y + 26), value, font=T.font(T.SZ_META), fill=T.MUTED)
+        for index, (plugin_id, manifest, _snapshot) in enumerate(visible_modules):
+            rect = (
+                28 + index * tab_width,
+                72,
+                24 + (index + 1) * tab_width,
+                108,
+            )
+            active = plugin_id == selected
+            if active:
+                draw.rectangle(rect, fill=T.SURFACE_SEL)
+            label = C.truncate(
+                draw,
+                str(manifest.get("name") or plugin_id),
+                T.font(18),
+                rect[2] - rect[0] - 12,
+            )
+            C.text_centered(
+                draw,
+                label,
+                T.font(18),
+                T.BG if active else T.MUTED,
+                80,
+                cx=(rect[0] + rect[2]) // 2,
+            )
+            if regions is not None:
+                regions.add(rect, "plugin_select", payload=plugin_id)
+        if show_next:
+            next_rect = (T.ARC_SAFE_X - 46, 72, T.ARC_SAFE_X, 108)
+            draw.rectangle(next_rect, outline=T.HAIRLINE, width=2)
+            C.text_centered(
+                draw,
+                ">",
+                T.font(22),
+                T.FG,
+                76,
+                cx=(next_rect[0] + next_rect[2]) // 2,
+            )
+            if regions is not None:
+                regions.add(next_rect, "plugin_next")
+
+        plugin_id, _manifest, snapshot = next(
+            item for item in modules if item[0] == selected
+        )
+        card = dict(snapshot.get("cards")[0] or {})
+        accent = self._accent(card.get("accent"))
+        title = C.truncate(
+            draw,
+            str(card.get("title") or "Модуль"),
+            T.font(34),
+            450,
+        )
+        draw.text((28, 120), title, font=T.font(34), fill=accent)
+        status = str(card.get("status") or "")
+        if status:
+            status = C.truncate(draw, status, T.font(20), 190)
+            draw.text((520, 130), status, font=T.font(20), fill=T.MUTED)
+        subtitle = str(card.get("subtitle") or "")
+        if subtitle:
+            subtitle = C.truncate(
+                draw, subtitle, T.font(T.SZ_SMALL), T.ARC_SAFE_X - 56
+            )
+            draw.text((28, 164), subtitle, font=T.font(T.SZ_SMALL), fill=T.FAINT)
+
+        actions = [
+            dict(action)
+            for action in (card.get("actions") or [])[:3]
+            if isinstance(action, dict) and bool(action.get("enabled", True))
+        ]
+        rows = [
+            dict(row)
+            for row in (card.get("rows") or [])[:(4 if actions else 6)]
+            if isinstance(row, dict)
+        ]
+        for index, row in enumerate(rows):
+            column = index % 2
+            line = index // 2
+            x = 28 + column * 344
+            y = 202 + line * 52
+            label = C.truncate(
+                draw,
+                str(row.get("label") or ""),
+                T.font(18),
+                130,
+            )
+            value = C.truncate(
+                draw,
+                str(row.get("value") or ""),
+                T.font(T.SZ_SMALL),
+                180,
+            )
+            draw.text((x, y), label, font=T.font(18), fill=T.FAINT)
+            draw.text((x + 138, y - 2), value, font=T.font(T.SZ_SMALL), fill=T.MUTED)
+
+        if actions:
+            button_width = min(210, (T.ARC_SAFE_X - 56) // len(actions) - 10)
+            y0 = 278
+            for index, action in enumerate(actions):
+                x0 = 28 + index * (button_width + 10)
+                rect = (x0, y0, x0 + button_width, 316)
+                primary = action.get("style") == "primary"
+                destructive = action.get("style") == "destructive"
+                fill = (
+                    T.STATUS_OFF
+                    if destructive
+                    else (T.SURFACE_SEL if primary else T.SURFACE)
+                )
+                draw.rectangle(rect, fill=fill, outline=T.HAIRLINE, width=2)
+                label = C.truncate(
+                    draw,
+                    str(action.get("label") or "Действие"),
+                    T.font(18),
+                    button_width - 14,
+                )
+                C.text_centered(
+                    draw,
+                    label,
+                    T.font(18),
+                    T.BG if primary or destructive else T.FG,
+                    y0 + 8,
+                    cx=x0 + button_width // 2,
+                )
+                if regions is not None:
+                    regions.add(
+                        rect,
+                        "plugin_action",
+                        payload={
+                            "plugin_id": plugin_id,
+                            "card_id": str(card.get("id") or ""),
+                            "action_id": str(action.get("id") or ""),
+                        },
+                    )
         return img
 
 

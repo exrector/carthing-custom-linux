@@ -76,6 +76,8 @@ class RuntimeModel:
         self.power_tier = "interactive"
         self.operation_mode = "playnow"
         self.server_status = {}
+        self.plugin_catalog = []
+        self.plugin_snapshots = {}
         self.remote_mic = {
             "enabled": False,
             "state": "off",
@@ -173,6 +175,47 @@ class RuntimeModel:
         self.server_status["connected"] = False
         self.server_status["assistant"] = False
 
+    def update_plugin_catalog(self, payload):
+        payload = dict(payload or {})
+        if int(payload.get("schema") or 0) != 1:
+            raise ValueError("unsupported plugin catalog schema")
+        records = payload.get("plugins") or []
+        if not isinstance(records, list):
+            raise ValueError("plugin catalog must contain a list")
+        self.plugin_catalog = [
+            dict(record)
+            for record in records[:32]
+            if isinstance(record, dict)
+        ]
+        installed = {
+            str((record.get("manifest") or {}).get("id") or "")
+            for record in self.plugin_catalog
+        }
+        self.plugin_snapshots = {
+            key: value
+            for key, value in self.plugin_snapshots.items()
+            if key in installed
+        }
+
+    def update_plugin_snapshot(self, payload):
+        payload = dict(payload or {})
+        if int(payload.get("schema") or 0) != 1:
+            raise ValueError("unsupported plugin snapshot schema")
+        plugin_id = str(payload.get("plugin_id") or "")[:128]
+        cards = payload.get("cards") or []
+        if not plugin_id or not isinstance(cards, list):
+            raise ValueError("invalid plugin snapshot")
+        payload["plugin_id"] = plugin_id
+        payload["cards"] = [
+            dict(card) for card in cards[:8] if isinstance(card, dict)
+        ]
+        payload["revision"] = max(0, int(payload.get("revision") or 0))
+        self.plugin_snapshots[plugin_id] = payload
+
+    def clear_plugins(self):
+        self.plugin_catalog = []
+        self.plugin_snapshots = {}
+
     def add_notification(
         self,
         uid,
@@ -240,6 +283,10 @@ class RuntimeModel:
             "operation_mode": self.operation_mode,
             "power_tier": self.power_tier,
             "server_status": dict(self.server_status),
+            "plugins": {
+                "catalog": list(self.plugin_catalog),
+                "snapshots": dict(self.plugin_snapshots),
+            },
             "remote_mic": dict(self.remote_mic),
         }
 
