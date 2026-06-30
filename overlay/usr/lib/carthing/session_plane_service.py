@@ -108,6 +108,7 @@ class SessionPlaneService:
         self._psm_char: Characteristic | None = None
         self._installed = False
         self._listening = False   # гейт микрофона: труба открыта всегда, звук течёт только при True
+        self._remote_media_owner = ""
 
     async def _gate(self, label, operation):
         if self.hci_gate is None:
@@ -338,6 +339,7 @@ class SessionPlaneService:
             watchdog.cancel()
         self._stop_mic(runtime)
         runtime.connector.connected = False
+        self._release_remote_media_owner(address)
         record_connection_event(
             "session_disconnected",
             peer=address,
@@ -421,6 +423,7 @@ class SessionPlaneService:
         runtime.connector.channel = None
         runtime.connector.connected = False
         self._stop_mic(runtime)
+        self._release_remote_media_owner(runtime.address)
         logger.info("session CoC closed: peer=%s", runtime.address)
         record_connection_event(
             "session_coc_closed",
@@ -440,15 +443,14 @@ class SessionPlaneService:
 
     def send_media_control(self, command):
         payload = f"media_control:{command}".encode("ascii")
-        sent = False
-        for runtime in self._runtimes.values():
-            connector = runtime.connector
-            channel = connector.channel
-            if not connector.connected or channel is None:
-                continue
-            if self._write(channel, T_COMMAND, payload):
-                sent = True
-        return sent
+        runtime = self._runtime(self._remote_media_owner, create=False)
+        if runtime is None:
+            return False
+        connector = runtime.connector
+        channel = connector.channel
+        if not connector.connected or channel is None:
+            return False
+        return self._write(channel, T_COMMAND, payload)
 
     def _on_channel_data(self, runtime, channel, data: bytes):
         runtime.connector.last_seen = time.time()
@@ -506,7 +508,7 @@ class SessionPlaneService:
             elif payload.startswith(b"text:"):
                 self._show_screen_text(payload[5:])
             elif payload.startswith(b"now_playing:"):
-                self._apply_remote_now_playing(payload[12:])
+                self._apply_remote_now_playing(runtime, payload[12:])
             elif payload.startswith(b"server_status:"):
                 self._apply_server_status(payload[14:])
             else:
@@ -654,23 +656,43 @@ class SessionPlaneService:
         except Exception as exc:
             logger.warning("server status payload rejected: %s", exc)
 
-    def _apply_remote_now_playing(self, raw):
+    def _release_remote_media_owner(self, address):
+        if normalize_address(address) != self._remote_media_owner:
+            return False
+        self._remote_media_owner = ""
+        changed = self.model.clear_remote_media()
+        if changed:
+            self.on_remote_media_clear()
+        return changed
+
+    def _apply_remote_now_playing(self, runtime, raw):
         try:
             payload = json.loads(bytes(raw).decode("utf-8"))
+            active = bool(payload.get("active"))
+            if (
+                not active
+                and self._remote_media_owner
+                and self._remote_media_owner != runtime.address
+            ):
+                return
             changed = self.model.apply_remote_media(payload)
             if changed:
-                if not payload.get("active"):
+                if active:
+                    self._remote_media_owner = runtime.address
+                else:
+                    self._remote_media_owner = ""
                     self.on_remote_media_clear()
                 logger.info(
-                    "AirPlay Now Playing: %s — %s playing=%s route=%s",
+                    "Mac Now Playing: %s — %s playing=%s route=%s source=%s",
                     str(payload.get("title") or "")[:80],
                     str(payload.get("artist") or "")[:60],
                     bool(payload.get("playing")),
                     str(payload.get("route") or "")[:80],
+                    str(payload.get("source") or "")[:40],
                 )
                 self.on_change()
         except Exception as exc:
-            logger.warning("AirPlay Now Playing payload rejected: %s", exc)
+            logger.warning("Mac Now Playing payload rejected: %s", exc)
 
     async def _mic_loop(self, runtime, channel):
         device = os.environ.get("CARTHING_BT_MIC_PCM_DEV", "/dev/snd/pcmC0D1c")

@@ -24,6 +24,8 @@
     <true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth connects Car Thing microphones to the voice assistant.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Car Thing reads and controls Apple Music playback selected on this Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Speech recognition transcribes audio streamed from Car Thing.</string>
 </dict>

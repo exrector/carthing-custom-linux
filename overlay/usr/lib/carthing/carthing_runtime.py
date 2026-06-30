@@ -86,7 +86,7 @@ def _on_command(source, command):
             and session_plane is not None
             and session_plane.send_media_control(command)
         ):
-            logger.info("media command -> AirPlay bridge: %s", command)
+            logger.info("media command -> Mac media provider: %s", command)
             return
         logger.info("media command -> AMS: %s", command)
         asyncio.create_task(iphone.command(command))

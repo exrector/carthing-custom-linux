@@ -5,6 +5,7 @@ import Darwin
 import Foundation
 import Network
 import ProtocolCore
+import ServerPlugins
 import TransportCore
 
 private final class TCPAudioClient {
@@ -131,7 +132,20 @@ final class CarThingBTLink {
     private var linkOpenedNs: UInt64?
     private var firstAudioReceived = false
     private var opusDecoder = OpusAudioDecoder()
+    private var lastNowPlayingLogKey = ""
     private let netQueue = DispatchQueue(label: "carthing.bt.tcp")
+    private lazy var nowPlayingCoordinator = NowPlayingCoordinator {
+        [weak self] json in
+        self?.sendNowPlaying(json)
+    }
+    private lazy var appleMusicPlugin = AppleMusicPlugin {
+        [weak self] payload in
+        self?.nowPlayingCoordinator.update(payload)
+    }
+    private lazy var pluginManager = ServerPluginManager(
+        plugins: [appleMusicPlugin]
+    )
+
     init() {
         transport.onEvent = { [weak self] event in
             self?.handle(event)
@@ -153,6 +167,7 @@ final class CarThingBTLink {
         // до того, как CBCentralManager(queue:.main) включится. Под launchd что-то держало
         // RunLoop, но в subprocess/foreground — нет. Явный keepalive-Timer надёжен везде.
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+        pluginManager.start()
         serverStatusTimer = Timer.scheduledTimer(
             withTimeInterval: 5.0,
             repeats: true
@@ -194,6 +209,7 @@ final class CarThingBTLink {
                 fputs("carthing-btlink: signal -> clean disconnect\n", stderr)
                 self?.stopMic()
                 self?.stopAssistantWorker()
+                self?.pluginManager.stop()
                 self?.transport.send(
                     CTSPFrame(type: .command, payload: Data("disconnect".utf8))
                 )
@@ -251,6 +267,7 @@ final class CarThingBTLink {
                 )
             }
             transport.send(CTSPFrame(type: .hello, payload: Data("\(Date().timeIntervalSince1970)".utf8)))
+            nowPlayingCoordinator.resend()
             sendServerStatus()
             fputs("carthing-btlink: capture gate remains device-owned\n", stderr)
         case .l2capClosed:
@@ -614,10 +631,18 @@ final class CarThingBTLink {
                 "media_control:skip_back",
                 "media_control:vol_up",
                 "media_control:vol_down",
-              ].contains(command),
-              let homePodControl else {
+              ].contains(command) else {
             return
         }
+        let action = String(command.dropFirst("media_control:".count))
+        if pluginManager.handle(
+            mediaCommand: action,
+            activeSource: nowPlayingCoordinator.activeSource
+        ) {
+            fputs("carthing-btlink: mac_music \(command)\n", stderr)
+            return
+        }
+        guard let homePodControl else { return }
         homePodControl.send(
             content: Data(command.utf8),
             completion: .contentProcessed { error in
@@ -759,6 +784,30 @@ final class CarThingBTLink {
         transport.send(CTSPFrame(type: .command, payload: command))
     }
 
+    private func sendNowPlaying(_ json: Data) {
+        guard linkOpenedNs != nil else { return }
+        if let payload = try? JSONSerialization.jsonObject(
+            with: json
+        ) as? [String: Any] {
+            let source = String(describing: payload["source"] ?? "none")
+            let active = payload["active"] as? Bool ?? false
+            let playing = payload["playing"] as? Bool ?? false
+            let title = String(describing: payload["title"] ?? "")
+            let route = String(describing: payload["route"] ?? "")
+            let key = "\(source)|\(active)|\(playing)|\(title)|\(route)"
+            if key != lastNowPlayingLogKey {
+                lastNowPlayingLogKey = key
+                fputs(
+                    "carthing-btlink: now_playing source=\(source) active=\(active) playing=\(playing) route=\"\(route)\" title=\"\(title)\"\n",
+                    stderr
+                )
+            }
+        }
+        var command = Data("now_playing:".utf8)
+        command.append(json)
+        transport.send(CTSPFrame(type: .command, payload: command))
+    }
+
     private func receiveText(_ conn: NWConnection) {
         conn.receive(minimumIncompleteLength: 1, maximumLength: 4096) { [weak self] data, _, isComplete, error in
             if let data, !data.isEmpty {
@@ -811,13 +860,10 @@ final class CarThingBTLink {
             let txt = String(command.dropFirst(5))
             transport.send(CTSPFrame(type: .command, payload: Data(("text:" + txt).utf8)))
         } else if command.hasPrefix("now_playing ") {
-            let json = String(command.dropFirst(12))
-            transport.send(
-                CTSPFrame(
-                    type: .command,
-                    payload: Data(("now_playing:" + json).utf8)
-                )
-            )
+            let json = Data(command.dropFirst(12).utf8)
+            if !nowPlayingCoordinator.update(json: json) {
+                fputs("carthing-btlink: rejected now_playing payload\n", stderr)
+            }
         }
     }
 

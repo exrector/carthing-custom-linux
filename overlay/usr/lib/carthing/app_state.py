@@ -198,7 +198,7 @@ class AppState:
         backlog = len(self.assistant_live_target) - len(self.assistant_live_text)
         if backlog <= 0:
             return False
-        chars_per_second = min(120.0, 24.0 + backlog * 1.5)
+        chars_per_second = 28.0
         self._assistant_typewriter_credit += elapsed * chars_per_second
         count = min(backlog, int(self._assistant_typewriter_credit))
         if count <= 0:

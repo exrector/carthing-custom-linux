@@ -21,6 +21,8 @@ def _title(draw, text):
 class NowPlayingScreen(Screen):
     name = "playnow"
     title = "Play Now"
+    TITLE_SIZE = 40
+    TITLE_LINE_HEIGHT = 48
 
     def __init__(self, emit=None):
         self.state = None
@@ -79,13 +81,12 @@ class NowPlayingScreen(Screen):
             return img
 
         display_title = session.title or "-"
-        lines = C.wrap_lines(
-            draw, display_title, T.font(T.SZ_TITLE), T.CONTENT_W
-        )
-        lines = lines[:4]
-        if len(lines) == 4:
+        title_font = T.font(self.TITLE_SIZE)
+        lines = C.wrap_lines(draw, display_title, title_font, T.CONTENT_W)
+        lines = lines[:3]
+        if len(lines) == 3:
             lines[-1] = C.truncate(
-                draw, lines[-1], T.font(T.SZ_TITLE), T.CONTENT_W
+                draw, lines[-1], title_font, T.CONTENT_W
             )
         app_label = (
             str(session.app_name or "").strip()
@@ -94,7 +95,7 @@ class NowPlayingScreen(Screen):
         )
         artist = str(session.artist or "").strip()
         block_height = (
-            len(lines) * 56
+            len(lines) * self.TITLE_LINE_HEIGHT
             + (34 if app_label else 0)
             + (50 if artist else 0)
         )
@@ -113,9 +114,9 @@ class NowPlayingScreen(Screen):
             y += 34
         for line in lines:
             C.text_centered(
-                draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX
+                draw, line, title_font, T.FG, y, cx=T.CONTENT_CX
             )
-            y += 56
+            y += self.TITLE_LINE_HEIGHT
         if artist:
             self._artist(img, draw, artist, y + 6)
         if regions is not None:
@@ -164,14 +165,14 @@ class AssistantScreen(Screen):
         state = str(getattr(self.state, "remote_mic_state", "off") or "off")
         _title(draw, "Ассистент")
 
-        button = (right - 178, 10, right - 10, 54)
+        button = (right - 250, 8, right - 10, 60)
         draw.rectangle(button, fill=T.STATUS_OK if enabled else T.SURFACE_SEL)
         C.text_centered(
             draw,
             "МИКРОФОН ВКЛ" if enabled else "МИКРОФОН ВЫКЛ",
-            T.font(T.SZ_SMALL),
+            T.font(20),
             T.BG if enabled else T.FG,
-            23,
+            24,
             cx=(button[0] + button[2]) // 2,
         )
         if regions is not None:
@@ -189,7 +190,7 @@ class AssistantScreen(Screen):
             (28, 82),
             live or status,
             font=T.font(T.SZ_META),
-            fill=T.ACCENT if enabled else T.FAINT,
+            fill=T.ROLE_STATUS if enabled else T.FAINT,
         )
 
         transcript = list(getattr(self.state, "assistant_transcript", []) or [])
@@ -207,7 +208,7 @@ class AssistantScreen(Screen):
             cursor = "_" if live_text != live_target else ""
             display_text = f"Вы: {self._visible_tail(live_text)}{cursor}"
             live_rows = [
-                (line, True)
+                (line, "user")
                 for line in (
                     C.wrap_lines(draw, display_text, font, right - 64)
                     or [display_text]
@@ -220,24 +221,36 @@ class AssistantScreen(Screen):
             if remaining <= 0:
                 break
             display_text = self._visible_tail(utterance)
+            role = (
+                "user"
+                if display_text.startswith("Вы:")
+                else (
+                    "assistant"
+                    if display_text.startswith("Ассистент:")
+                    else "status"
+                )
+            )
             wrapped = (
                 C.wrap_lines(draw, display_text, font, right - 64)
                 or [display_text]
             )
             selected = wrapped[-remaining:]
-            history_rows[0:0] = [(line, False) for line in selected]
+            history_rows[0:0] = [(line, role) for line in selected]
             remaining -= len(selected)
 
         visible = (history_rows + live_rows)[-max_lines:]
         y = bottom - len(visible) * line_height
-        for index, (line, is_live) in enumerate(visible):
+        colors = {
+            "user": T.ROLE_USER,
+            "assistant": T.ROLE_ASSISTANT,
+            "status": T.MUTED,
+        }
+        for line, role in visible:
             draw.text(
                 (28, y),
                 line,
                 font=font,
-                fill=T.ACCENT if is_live else (
-                    T.FG if index == len(visible) - 1 else T.MUTED
-                ),
+                fill=colors.get(role, T.MUTED),
             )
             y += line_height
         return img
@@ -282,7 +295,10 @@ class SettingsScreen(Screen):
         if key == "screensaver":
             if not bool(getattr(self.state, "screensaver_enabled", True)):
                 return "Выкл"
-            return f"{int(getattr(self.state, 'screen_off_sec', 60))} с"
+            seconds = int(getattr(self.state, "screen_off_sec", 60))
+            if seconds < 60:
+                return f"{seconds} с"
+            return f"{seconds // 60} мин"
         if key == "add_iphone":
             return "Подключён" if bool(getattr(self.state.iphone, "connected", False)) else ""
         if key == "about":
@@ -475,8 +491,6 @@ class NotificationsScreen(Screen):
         for index, note in enumerate(notes):
             row = (28, y, right, y + self.ROW_HEIGHT - 8)
             if row[3] >= viewport_top and row[1] <= viewport_bottom:
-                if index == self.sel:
-                    draw.rectangle(row, outline=T.SURFACE_SEL, width=2)
                 app = str(note.get("app", "") or "")
                 title = str(note.get("title", "") or note.get("text", "") or "-")
                 body = str(note.get("body", "") or "")

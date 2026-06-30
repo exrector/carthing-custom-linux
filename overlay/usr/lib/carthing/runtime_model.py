@@ -88,7 +88,7 @@ class RuntimeModel:
             self.session = MediaSession(source)
 
     def apply_remote_media(self, payload):
-        """Overlay an active AirPlay receiver session on the iPhone session."""
+        """Overlay active media supplied by the paired Mac server."""
         payload = dict(payload or {})
         if not payload.get("active"):
             return self.clear_remote_media()
@@ -112,7 +112,10 @@ class RuntimeModel:
         session.title = str(payload.get("title") or "")
         session.artist = str(payload.get("artist") or "")
         session.album = str(payload.get("album") or "")
-        session.app_name = str(payload.get("route") or "AirPlay")
+        session.app_name = str(
+            payload.get("route")
+            or ("Mac" if payload.get("source") == "mac_local" else "AirPlay")
+        )
         if payload.get("volume") is not None:
             session.volume = max(0.0, min(1.0, float(payload["volume"])))
         session.duration = max(0.0, float(payload.get("duration") or 0.0))

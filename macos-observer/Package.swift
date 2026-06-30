@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .executable(name: "CarThingBTLink", targets: ["CarThingBTLink"]),
         .library(name: "ProtocolCore", targets: ["ProtocolCore"]),
+        .library(name: "ServerPlugins", targets: ["ServerPlugins"]),
         .library(name: "TransportCore", targets: ["TransportCore"]),
     ],
     targets: [
@@ -20,13 +21,19 @@ let package = Package(
             ]
         ),
         .target(name: "ProtocolCore"),
+        .target(name: "ServerPlugins"),
         .target(
             name: "TransportCore",
             dependencies: ["ProtocolCore"]
         ),
         .executableTarget(
             name: "CarThingBTLink",
-            dependencies: ["TransportCore", "ProtocolCore", "COpus"],
+            dependencies: [
+                "TransportCore",
+                "ProtocolCore",
+                "ServerPlugins",
+                "COpus",
+            ],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-sectcreate",
@@ -38,7 +45,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ProtocolCoreTests",
-            dependencies: ["ProtocolCore"]
+            dependencies: ["ProtocolCore", "ServerPlugins"]
         ),
     ]
 )

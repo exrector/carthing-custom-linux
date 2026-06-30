@@ -28,6 +28,9 @@ WARN        = (255, 102, 68)   # .err сайта
 STATUS_OK   = (51, 255, 136)
 STATUS_WARN = (255, 170, 0)    # янтарь сайта
 STATUS_OFF  = (255, 68, 68)
+ROLE_USER = FG
+ROLE_ASSISTANT = (102, 204, 255)
+ROLE_STATUS = STATUS_WARN
 
 # ─── spacing / layout tokens ──────────────────────────────────────────────────
 MARGIN     = 40          # outer side margin
@@ -110,10 +113,12 @@ def _build_fx_mask(size):
     w, h = size
     mask = Image.new("L", size, 255)
     md = ImageDraw.Draw(mask)
-    for y in range(0, h, 4):
-        md.line([0, y, w, y], fill=168)
+    for y in range(0, h, 3):
+        md.line([0, y, w, y], fill=122)
         if y + 1 < h:
-            md.line([0, y + 1, w, y + 1], fill=226)
+            md.line([0, y + 1, w, y + 1], fill=214)
+    for x in range(0, w, 7):
+        md.line([x, 0, x, h], fill=242)
     vig = Image.new("L", size, 0)
     vd = ImageDraw.Draw(vig)
     vd.ellipse([-w * 0.35, -h * 0.5, w * 1.35, h * 1.5], fill=255)

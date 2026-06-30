@@ -267,8 +267,9 @@ if counting_draw.calls > 20:
 capture_events = []
 session_gate = SessionPlaneService.__new__(SessionPlaneService)
 session_gate._listening = False
+session_gate._remote_media_owner = "AA:BB:CC:DD:EE:FF"
 session_gate._runtimes = {
-    "mac": SimpleNamespace(
+    "AA:BB:CC:DD:EE:FF": SimpleNamespace(
         connector=SimpleNamespace(channel=object(), connected=True),
     )
 }
@@ -283,6 +284,7 @@ session_gate._sync_model = lambda: None
 session_gate._notify_status = lambda: None
 session_gate.model = RuntimeModel()
 session_gate.on_change = lambda: None
+session_gate.on_remote_media_clear = lambda: None
 session_gate.set_listening(True)
 session_gate.set_listening(False)
 if capture_events != ["start", "stop"]:
@@ -308,10 +310,29 @@ settings_controller.app_state.screensaver_enabled = True
 settings_controller.app_state.screen_off_sec = 60
 settings_controller.dispatcher.dispatch(
     "display_adjust",
+    ("screensaver", "-"),
+)
+if timeout_updates[-1:] != [30] or screensaver_toggles[-1:] != [True]:
+    raise SystemExit("screensaver minus control did not select 30 seconds")
+settings_controller.dispatcher.dispatch(
+    "display_adjust",
     ("screensaver", "+"),
 )
-if timeout_updates[-1:] != [120] or screensaver_toggles[-1:] != [True]:
+if timeout_updates[-1:] != [60] or screensaver_toggles[-1:] != [True]:
     raise SystemExit("screensaver plus control did not select next timeout")
+settings_controller.app_state.screen_off_sec = 600
+settings_controller.dispatcher.dispatch(
+    "display_adjust",
+    ("screensaver", "+"),
+)
+if timeout_updates[-1:] != [600]:
+    raise SystemExit("screensaver exceeded the 10 minute maximum")
+
+typewriter = AppState()
+typewriter.set_assistant_live_target("Посимвольно")
+typewriter.advance_assistant_live(typewriter._assistant_typewriter_at + 0.05)
+if len(typewriter.assistant_live_text) != 1:
+    raise SystemExit("assistant typewriter is not advancing character by character")
 
 class FakeHIDDevice:
     def __init__(self):

@@ -3,7 +3,7 @@
 
 class Dispatcher:
     BRIGHTNESS_PRESETS = tuple(range(10, 101, 10))
-    SCREENSAVER_PRESETS = (0, 30, 60, 120, 300)
+    SCREENSAVER_PRESETS = (0, 30, *range(60, 601, 60))
 
     def __init__(
         self,

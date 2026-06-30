@@ -14,6 +14,8 @@
         <string>1</string>
         <key>CARTHING_BT_TCP_PORT</key>
         <string>49500</string>
+        <key>CARTHING_SERVER_PLUGINS</key>
+        <string>mac_music</string>
         <key>CARTHING_ASSISTANT_PYTHON</key>
         <string>__CARTHING_ASSISTANT_PYTHON__</string>
         <key>CARTHING_ASSISTANT_SCRIPT</key>

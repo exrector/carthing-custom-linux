@@ -21,6 +21,8 @@ Bluetooth обслуживается только нативным CoreBluetooth
 
 - `CarThingBTLink` - единое headless-приложение: CoreBluetooth, CTSP, Opus,
   локальный audio pipe и lifecycle Whisper/Assistant worker.
+- `ServerPlugins` - подключаемые серверные модули. По умолчанию активен
+  `mac_music`: он передаёт локальную Apple Music-сессию и принимает media-команды.
 - `TransportCore` - scan, connect, GATT bootstrap и L2CAP CoC.
 - `ProtocolCore` - потоковый кодек CTSP.
 - `install-btlink-app.sh` - release build, подпись, установка `.app` и LaunchAgent.
@@ -38,7 +40,19 @@ Bluetooth обслуживается только нативным CoreBluetooth
 приложения. Оно само запускает и контролирует Assistant worker; отдельный
 `com.carthing.btwhisper` удаляется. Opus runtime копируется внутрь `.app`.
 При первом запуске macOS запрашивает Bluetooth для приложения, а Terminal в
-рабочем цикле не участвует.
+рабочем цикле не участвует. При первом чтении Apple Music приложение также
+запросит Automation-доступ к Music.
+
+Список серверных модулей задаётся одной переменной окружения:
+
+```sh
+CARTHING_SERVER_PLUGINS=mac_music
+```
+
+Модули реализуют `ServerPlugin` и подключаются через `ServerPluginManager`.
+HomePod/AirPlay остаётся внешним provider ассистента; координатор отдаёт ему
+приоритет, а при отсутствии активного AirPlay автоматически показывает
+локальную Music-сессию Mac.
 
 ## Проверка
 

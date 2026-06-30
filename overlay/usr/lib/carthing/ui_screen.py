@@ -311,10 +311,10 @@ class Compositor:
                 getattr(self.state, "clock_text", "--:--"),
                 T.W // 2,
                 T.H // 2,
-                size=164,
+                size=190,
                 date_text=getattr(self.state, "clock_date_text", ""),
-                date_size=36,
-                gap=24,
+                date_size=42,
+                gap=28,
             )
             return self.display.present(
                 T.postprocess(img),
@@ -334,13 +334,13 @@ class Compositor:
         # arc over settings/notifications/lists.
         fullscreen = getattr(self.current, "fullscreen", False) and not transitioning
         self._draw_overlays(img, full=fullscreen)
-        self._draw_call_banner(img)
         if self.modal is not None:
             self._draw_modal(img)
             # дуга громкости остаётся видна поверх полноэкранного модала (энкодер всегда активен)
             if getattr(self.modal, "fullscreen", False):
                 cs = getattr(self.state, "control_source", None) if self.state else None
                 T.encoder_arc(ImageDraw.Draw(img), level=(cs.volume if cs is not None else None))
+        self._draw_call_banner(img)
 
         img = self._apply_tap_flash(img)
         return self.display.present(T.postprocess(img), name=self.current.name)
@@ -361,43 +361,52 @@ class Compositor:
         )
         if call is None:
             return
+        self._regions.clear()
         draw = ImageDraw.Draw(img)
-        rect = (20, 18, T.ARC_SAFE_X, 148)
-        draw.rectangle(rect, fill=T.SURFACE, outline=T.ACCENT, width=2)
+        draw.rectangle((0, 0, T.W - 1, T.H - 1), fill=T.BG)
         draw.text(
-            (34, 30),
+            (T.W // 2, 42),
             "ВХОДЯЩИЙ ЗВОНОК",
-            font=T.font(T.SZ_SMALL),
+            font=T.font(26),
             fill=T.ACCENT,
+            anchor="ma",
         )
         title = str(call.get("title") or call.get("app") or "iPhone")
         draw.text(
-            (34, 62),
-            truncate(draw, title, T.font(T.SZ_BODY), 380),
-            font=T.font(T.SZ_BODY),
+            (T.W // 2, 128),
+            truncate(draw, title, T.font(48), 690),
+            font=T.font(48),
             fill=T.FG,
+            anchor="ma",
         )
         body = str(call.get("body") or "")
         if body:
             draw.text(
-                (34, 104),
-                truncate(draw, body, T.font(T.SZ_SMALL), 350),
-                font=T.font(T.SZ_SMALL),
+                (T.W // 2, 210),
+                truncate(draw, body, T.font(24), 650),
+                font=T.font(24),
                 fill=T.MUTED,
+                anchor="ma",
             )
         uid = call.get("uid")
         if call.get("negative_action") and uid is not None:
-            negative = (448, 38, 560, 126)
+            negative = (44, 344, 354, 444)
             label = str(call.get("negative_label") or "ОТКЛ.")
-            width = text_w(draw, label, T.font(T.SZ_SMALL))
+            draw.rectangle(
+                negative,
+                fill=T.SURFACE,
+                outline=T.STATUS_OFF,
+                width=4,
+            )
             draw.text(
                 (
-                    (negative[0] + negative[2] - width) // 2,
-                    72,
+                    (negative[0] + negative[2]) // 2,
+                    (negative[1] + negative[3]) // 2,
                 ),
                 label,
-                font=T.font(T.SZ_SMALL),
+                font=T.font(30),
                 fill=T.STATUS_OFF,
+                anchor="mm",
             )
             self._regions.add(
                 negative,
@@ -405,17 +414,23 @@ class Compositor:
                 payload={"uid": uid, "positive": False},
             )
         if call.get("positive_action") and uid is not None:
-            positive = (570, 38, 700, 126)
+            positive = (402, 344, 712, 444)
             label = str(call.get("positive_label") or "ПРИНЯТЬ")
-            width = text_w(draw, label, T.font(T.SZ_SMALL))
+            draw.rectangle(
+                positive,
+                fill=T.ACCENT,
+                outline=T.FG,
+                width=3,
+            )
             draw.text(
                 (
-                    (positive[0] + positive[2] - width) // 2,
-                    72,
+                    (positive[0] + positive[2]) // 2,
+                    (positive[1] + positive[3]) // 2,
                 ),
                 label,
-                font=T.font(T.SZ_SMALL),
-                fill=T.STATUS_OK,
+                font=T.font(30),
+                fill=T.BG,
+                anchor="mm",
             )
             self._regions.add(
                 positive,
