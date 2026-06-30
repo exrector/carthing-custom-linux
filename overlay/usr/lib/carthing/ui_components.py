@@ -78,9 +78,14 @@ def wrap_lines(draw, text, fnt, max_w):
 def truncate(draw, text, fnt, max_w):
     if text_w(draw, text, fnt) <= max_w:
         return text
-    while text and text_w(draw, text + "…", fnt) > max_w:
-        text = text[:-1]
-    return text + "…"
+    low, high = 0, len(text)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if text_w(draw, text[:middle] + "…", fnt) <= max_w:
+            low = middle
+        else:
+            high = middle - 1
+    return text[:low] + "…"
 
 
 # ─── progress bar ─────────────────────────────────────────────────────────────

@@ -28,6 +28,7 @@ class MediaSession:
         self.source = source
         self.connected = False
         self.peer = None
+        self.app_name = ""
         self.title = ""
         self.artist = ""
         self.album = ""
@@ -109,6 +110,9 @@ class RuntimeModel:
         session.title = str(payload.get("title") or "")
         session.artist = str(payload.get("artist") or "")
         session.album = str(payload.get("album") or "")
+        session.app_name = str(payload.get("route") or "AirPlay")
+        if payload.get("volume") is not None:
+            session.volume = max(0.0, min(1.0, float(payload["volume"])))
         session.duration = max(0.0, float(payload.get("duration") or 0.0))
         session.set_playback(
             max(0.0, float(payload.get("elapsed") or 0.0)),
@@ -167,6 +171,7 @@ class RuntimeModel:
                 "title": session.title,
                 "artist": session.artist,
                 "album": session.album,
+                "app_name": session.app_name,
                 "playing": session.playing,
                 "elapsed": round(session.elapsed, 1),
                 "duration": round(session.duration, 1),

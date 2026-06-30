@@ -124,6 +124,14 @@ def _on_toggle_notifications(enabled):
         settings.set("notif_blink", bool(enabled))
 
 
+def _on_toggle_screensaver(enabled):
+    enabled = bool(enabled)
+    if power is not None:
+        power.set_screensaver_enabled(enabled)
+    if settings is not None:
+        settings.set("screensaver_enabled", enabled)
+
+
 def _on_set_brightness(percent):
     percent = int(percent)
     if power is not None:
@@ -507,6 +515,7 @@ def _init_gui():
             on_pairing=_on_pairing,
             on_notif_dismiss=_on_notification_dismiss,
             on_toggle_notif_blink=_on_toggle_notifications,
+            on_toggle_screensaver=_on_toggle_screensaver,
             on_set_brightness=_on_set_brightness,
             on_power_off=_on_power_off,
             on_toggle_client=_on_toggle_client,
@@ -514,8 +523,9 @@ def _init_gui():
         from power_policy import IdlePowerController
 
         power = IdlePowerController(settings)
-        gui.app_state.sleep_on_idle = bool(getattr(power, "enabled", True))
+        gui.app_state.sleep_on_idle = bool(getattr(power, "sleep_enabled", True))
         gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
+        gui.app_state.screensaver_enabled = bool(power.screensaver_enabled)
         gui.app_state.notif_blink = bool(settings.get("notif_blink", True))
         gui.app_state.screen_brightness = int(
             settings.get("screen_brightness_pct", 100)
@@ -533,6 +543,7 @@ def _init_gui():
             def dispatch_input(event):
                 if power is not None:
                     power.note_activity("input")
+                    gui.app_state.screensaver_active = power.screensaver_active
                 gui.handle_input(event)
 
             display.set_on_event(
@@ -570,8 +581,12 @@ async def _render_loop():
                 power.tick()
                 model.power_tier = power.runtime_tier
             if gui is not None:
+                if power is not None:
+                    gui.app_state.screensaver_active = power.screensaver_active
                 changed = gui.apply(model)
                 if changed:
+                    render_requested = True
+                if gui.needs_fast_render():
                     render_requested = True
                 if (
                     render_requested
@@ -595,7 +610,7 @@ async def _render_loop():
                 else power.render_interval
             )
             if gui is not None and gui.needs_fast_render():
-                interval = min(interval, 0.05)
+                interval = min(interval, 0.033)
             await asyncio.sleep(interval)
         except asyncio.CancelledError:
             raise
@@ -621,6 +636,7 @@ async def _start_input():
         def on_input(event):
             if power is not None:
                 power.note_activity("input")
+                gui.app_state.screensaver_active = power.screensaver_active
             gui.handle_input(event)
 
         asyncio.create_task(input_handler.start(on_event=on_input))

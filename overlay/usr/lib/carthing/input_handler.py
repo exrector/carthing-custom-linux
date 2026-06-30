@@ -74,10 +74,12 @@ _KEY_TO_BTN    = {KEY_1: "btn_1", KEY_2: "btn_2", KEY_3: "btn_3", KEY_4: "btn_4"
 # Touch → landscape canvas. Panel is portrait 480x800; the screen is rotated -90,
 # so canvas_x = touch_y and canvas_y = (CANVAS_H-1) - touch_x.
 CANVAS_H     = 480
-SWIPE_MIN_PX = 100   # min horizontal canvas travel to switch desktops
+SWIPE_MIN_PX = 72    # deliberate but light horizontal travel to switch views
 TAP_MAX_PX   = 30    # max travel to count as a tap
 LONG_TAP_SEC = 0.65  # deliberate hold for destructive/test-mode activation
 EDGE_PX      = 36    # узкая системная edge-зона; остальной экран ведёт себя как обычный scroll-view
+DIRECTION_LOCK_PX = 14
+DIRECTION_RATIO = 1.15
 
 
 async def _read_events(path, callback):
@@ -156,12 +158,13 @@ async def start(get_ams=None, on_event=None):
     # Touch: a single-finger gesture → horizontal swipe (desktop switch) or tap.
     # MT type B; we track the active contact only (good enough for swipe/tap).
     EDGE_DRAG_START = 10   # как мало нужно увести палец от края, чтобы шторка начала ехать
-    SCROLL_START   = 6     # небольшой touch-slop: список начинает ехать почти сразу, но тап остаётся тапом
+    EDGE_SWIPE_MIN = 54
     t = {"rawx": None, "rawy": None, "down": False,
          "sx": None, "sy": None, "cx": None, "cy": None,
          "down_t": None,
          "lasty": None, "last_scroll_t": None, "velocity": 0.0,
-         "vstepped": False, "zone": "mid", "dragging": False}
+         "vstepped": False, "zone": "mid", "dragging": False,
+         "axis": None}
 
     def _finish_touch():
         if not t["down"]:
@@ -170,13 +173,16 @@ async def start(get_ams=None, on_event=None):
         if t["sx"] is None or t["cx"] is None:
             return
         dx, dy = t["cx"] - t["sx"], t["cy"] - t["sy"]
-        if t["dragging"]:                         # начатый edge-drag -> доводка (по позиции пальца)
-            kind = "open" if t["zone"] == "top" else "close"
-            on_event(("drag_end", kind, t["cy"]))
-        elif abs(dx) >= SWIPE_MIN_PX and abs(dx) >= abs(dy) * 1.5:
-            # [CLAUDE 2026-06-02] Явно ГОРИЗОНТАЛЬНЫЙ жест по ВСЕМУ экрану = переключение вью.
-            # Приоритет выше скролла: при лёгком вертикальном дрейфе свайп больше НЕ съедается
-            # инерцией списка (раньше vstepped перехватывал и свайп «срабатывал один раз и всё»).
+        if t["dragging"]:
+            if t["zone"] == "top" and dy >= EDGE_SWIPE_MIN:
+                on_event(EV_EDGE_TOP)
+            elif t["zone"] == "bottom" and dy <= -EDGE_SWIPE_MIN:
+                on_event(EV_EDGE_BOTTOM)
+        elif (
+            t["axis"] in (None, "horizontal")
+            and abs(dx) >= SWIPE_MIN_PX
+            and abs(dx) >= abs(dy) * DIRECTION_RATIO
+        ):
             on_event(EV_SWIPE_LEFT if dx < 0 else EV_SWIPE_RIGHT)
         elif t["vstepped"]:
             on_event(("scroll_end", t["velocity"]))  # отпустили список -> единая инерция в GUI
@@ -190,6 +196,7 @@ async def start(get_ams=None, on_event=None):
         t["vstepped"] = False
         t["zone"] = "mid"
         t["dragging"] = False
+        t["axis"] = None
 
     async def on_touch(ev):
         if not use_gui:
@@ -212,6 +219,7 @@ async def start(get_ams=None, on_event=None):
                     t["vstepped"] = False
                     t["zone"] = "mid"
                     t["dragging"] = False
+                    t["axis"] = None
         elif evtype == EV_KEY and code == BTN_TOUCH and value == 0:
             _finish_touch()
         elif evtype == EV_SYN and code == SYN_REPORT:
@@ -227,8 +235,18 @@ async def start(get_ams=None, on_event=None):
                                  else "mid")
                 t["cx"], t["cy"] = cx, cy
                 if t["zone"] == "mid":
-                    # середина: НЕПРЕРЫВНЫЙ пиксельный скролл «за пальцем» (delta = смещение)
-                    if t["vstepped"] or abs(t["cy"] - t["sy"]) >= SCROLL_START:
+                    total_dx = t["cx"] - t["sx"]
+                    total_dy = t["cy"] - t["sy"]
+                    if (
+                        t["axis"] is None
+                        and max(abs(total_dx), abs(total_dy)) >= DIRECTION_LOCK_PX
+                    ):
+                        if abs(total_dx) >= abs(total_dy) * DIRECTION_RATIO:
+                            t["axis"] = "horizontal"
+                        elif abs(total_dy) >= abs(total_dx) * DIRECTION_RATIO:
+                            t["axis"] = "vertical"
+                    # Only a direction-locked vertical gesture may move a list.
+                    if t["axis"] == "vertical":
                         d = t["cy"] - t["lasty"]
                         if d != 0:
                             now = time.monotonic()
@@ -238,14 +256,11 @@ async def start(get_ams=None, on_event=None):
                             t["last_scroll_t"] = now
                             on_event(("scroll", d)); t["lasty"] = t["cy"]; t["vstepped"] = True
                 elif t["zone"] == "top":
-                    # от верхнего края: НИЖНИЙ край шторки = позиция пальца (cy), едет за ним
                     if t["dragging"] or t["cy"] - t["sy"] >= EDGE_DRAG_START:
                         t["dragging"] = True
-                        on_event(("drag", "open", t["cy"]))
                 elif t["zone"] == "bottom":
                     if t["dragging"] or t["sy"] - t["cy"] >= EDGE_DRAG_START:
                         t["dragging"] = True
-                        on_event(("drag", "close", t["cy"]))
 
     await _read_events('/dev/input/event1', on_encoder)
     await _read_events('/dev/input/event0', on_buttons)

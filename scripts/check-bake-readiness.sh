@@ -13,17 +13,23 @@ python3 -m py_compile overlay/usr/lib/carthing/*.py
 PYTHONPATH=overlay/usr/lib/carthing python3 - <<'PY'
 import asyncio
 import sys
+import tempfile
+import time
+from pathlib import Path
 from types import SimpleNamespace
 
 from app_state import AppState
 from gui_controller import ASSISTANT, GuiController
 from runtime_model import RuntimeModel
 from screens import AssistantScreen, NotificationsScreen, NowPlayingScreen, SettingsScreen
-from ui_screen import notification_indicator_visible
+from ui_components import truncate
+from ui_screen import Input, notification_indicator_visible
 
 sys.path.append("overlay/usr/lib/carthing/vendor")
 from hid_remote_service import install_hid_remote_profile, send_consumer_usage
+from ams_client import AMSClient, MediaState
 from session_plane_service import SessionPlaneService
+from power_policy import IdlePowerController
 
 state = AppState()
 model = RuntimeModel()
@@ -66,10 +72,13 @@ if not model.apply_remote_media({
     "duration": 120,
     "elapsed": 10,
     "playing": True,
+    "volume": 0.42,
 }):
     raise SystemExit("active AirPlay metadata was rejected")
 if model.session.title != "AirPlay title" or not model.remote_media_active:
     raise SystemExit("AirPlay metadata did not overlay the AMS session")
+if model.session.volume != 0.42:
+    raise SystemExit("AirPlay volume did not replace stale AMS volume")
 if not model.apply_remote_media({
     "active": True,
     "identifier": "airplay-track",
@@ -81,6 +90,17 @@ if not model.apply_remote_media({
 model.clear_remote_media()
 if model.remote_media_active:
     raise SystemExit("AirPlay metadata overlay did not clear")
+
+ams_state = MediaState()
+ams = AMSClient(ams_state)
+ams._handle_entity_update(bytes([0, 0, 0]) + "Музыка".encode())
+ams._handle_entity_update(bytes([2, 1, 0]) + "Альбом".encode())
+ams_state.duration = 123.0
+ams._handle_entity_update(bytes([2, 3, 0]))
+if ams_state.app_name != "Музыка" or ams_state.album != "Альбом":
+    raise SystemExit("AMS app/album metadata was not retained")
+if ams_state.duration != 0.0:
+    raise SystemExit("empty AMS duration retained stale track length")
 
 controller = GuiController.__new__(GuiController)
 controller.app_state = AppState()
@@ -131,10 +151,15 @@ if capture_toggles:
 if navigation.app_state.remote_mic_enabled:
     raise SystemExit("opening Assistant view enabled microphone state")
 stable_model = RuntimeModel()
+stable_model.select_source("iphone")
+stable_model.session.connected = True
 if not navigation.apply(stable_model):
     raise SystemExit("first GUI model apply was not marked dirty")
 if navigation.apply(stable_model):
     raise SystemExit("unchanged GUI model still requested a full render")
+stable_model.session.set_playback(10, 1, True)
+if navigation.apply(stable_model):
+    raise SystemExit("empty Play Now repainted for invisible playback position")
 navigation.show_home()
 navigation.apply(stable_model)
 navigation.app_state.set_assistant_live_target("hidden assistant update")
@@ -147,6 +172,28 @@ if capture_toggles[-2:] != [True, False]:
     raise SystemExit("leaving Assistant did not stop microphone capture")
 if navigation.app_state.remote_mic_enabled:
     raise SystemExit("microphone remained enabled outside Assistant")
+navigation.handle_input(Input.SWIPE_LEFT)
+if navigation.compositor.active != ASSISTANT:
+    raise SystemExit("left swipe did not move to the next view")
+if not navigation.needs_fast_render():
+    raise SystemExit("swipe transition did not request animation frames")
+navigation.handle_input(Input.SWIPE_RIGHT)
+if navigation.compositor.active != 0:
+    raise SystemExit("right swipe did not return to the previous view")
+
+class CountingDraw:
+    def __init__(self):
+        self.calls = 0
+
+    def textbbox(self, _origin, text, font=None):
+        self.calls += 1
+        return (0, 0, len(text), 1)
+
+counting_draw = CountingDraw()
+if not truncate(counting_draw, "x" * 10000, None, 100).endswith("…"):
+    raise SystemExit("long UI text was not truncated")
+if counting_draw.calls > 20:
+    raise SystemExit("UI truncation regressed to linear text measurement")
 
 capture_events = []
 session_gate = SessionPlaneService.__new__(SessionPlaneService)
@@ -193,6 +240,30 @@ hid_device.notifications.clear()
 asyncio.run(send_consumer_usage("play_pause"))
 if hid_device.notifications != [b"\x01", b"\x00"]:
     raise SystemExit("HID play/pause usage did not send press and release")
+
+with tempfile.TemporaryDirectory() as directory:
+    panel = Path(directory) / "aml-bl"
+    panel.mkdir()
+    for name, value in (
+        ("brightness", "1"),
+        ("bl_power", "0"),
+        ("max_brightness", "255"),
+    ):
+        (panel / name).write_text(value)
+    power = IdlePowerController(
+        {
+            "sleep_on_idle": False,
+            "screensaver_enabled": True,
+            "screen_off_after_sec": 30,
+        },
+        directory,
+    )
+    power._last_activity = time.monotonic() - 31
+    if power.tick() != "screensaver" or not power.screensaver_active:
+        raise SystemExit("idle power policy did not enter screensaver")
+    power.note_activity("smoke")
+    if power.tick() != "active" or power.screensaver_active:
+        raise SystemExit("screensaver did not wake on activity")
 print("MINIMAL RUNTIME SMOKE: OK")
 PY
 

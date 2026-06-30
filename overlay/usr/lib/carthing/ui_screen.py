@@ -301,6 +301,22 @@ class Compositor:
     # ── render ───────────────────────────────────────────────────────────────
     def render(self):
         self._sync_modal()
+        if self.anim is not None:
+            self.anim.tick()
+        if bool(getattr(self.state, "screensaver_active", False)):
+            self._regions.clear()
+            img = Image.new("RGB", (T.W, T.H), (0, 0, 0))
+            T.draw_clock(
+                ImageDraw.Draw(img),
+                getattr(self.state, "clock_text", "--:--"),
+                T.W // 2,
+                T.H // 2,
+                size=126,
+            )
+            return self.display.present(
+                T.postprocess(img),
+                name="screensaver",
+            )
         if self._shade is not None:                  # интерактивная шторка тянется/доводится
             return self._present_shade()
         self._regions.clear()

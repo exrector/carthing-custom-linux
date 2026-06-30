@@ -98,6 +98,7 @@ class IPhoneService:
             self.model.clear_remote_media()
         if self.model.remote_media_active:
             return
+        sess.app_name = getattr(s, "app_name", "")
         sess.title = s.title
         sess.artist = s.artist
         sess.album = getattr(s, "album", "")
@@ -159,6 +160,7 @@ class IPhoneService:
         sess = self.model.session
         sess.connected = bool(self._connected)
         sess.peer = self._peer
+        sess.app_name = getattr(self._ams_state, "app_name", "")
         sess.title = self._ams_state.title
         sess.artist = self._ams_state.artist
         sess.album = getattr(self._ams_state, "album", "")

@@ -55,6 +55,7 @@ CMD_NAMES = {
 
 
 class MediaState:
+    app_name = ""
     title    = ""
     artist   = ""
     album    = ""
@@ -172,13 +173,16 @@ class AMSClient:
                 self.state.title = data
             elif attr_id == TRACK_ATTR_ARTIST:
                 self.state.artist = data
+            elif attr_id == TRACK_ATTR_ALBUM:
+                self.state.album = data
             elif attr_id == TRACK_ATTR_DURATION:
                 try:
-                    self.state.duration = float(data)
+                    self.state.duration = float(data) if data.strip() else 0.0
                 except ValueError:
                     pass
         elif entity_id == ENTITY_PLAYER:
             if attr_id == PLAYER_ATTR_NAME:
+                self.state.app_name = data
                 logger.info("AMS player: %s", data)
             elif attr_id == PLAYER_ATTR_PLAYBACK_INFO:
                 # Format: "playState,playbackRate,elapsedTime"

@@ -10,6 +10,7 @@ class Dispatcher:
         on_command=None,
         on_pairing=None,
         on_toggle_notif_blink=None,
+        on_toggle_screensaver=None,
         on_set_brightness=None,
         on_power_off=None,
         on_toggle_client=None,
@@ -19,6 +20,7 @@ class Dispatcher:
         self.on_command = on_command or (lambda source, command: None)
         self.on_pairing = on_pairing or (lambda enabled, role="input": None)
         self.on_toggle_notif_blink = on_toggle_notif_blink or (lambda enabled: None)
+        self.on_toggle_screensaver = on_toggle_screensaver or (lambda enabled: None)
         self.on_set_brightness = on_set_brightness or (lambda percent: None)
         self.on_power_off = on_power_off or (lambda: None)
         self.on_toggle_client = on_toggle_client or (lambda enabled: None)
@@ -74,6 +76,8 @@ class Dispatcher:
             self._display_adjust("brightness", "+")
         elif key == "notif_blink":
             self._display_adjust("notif_blink", "+")
+        elif key == "screensaver":
+            self._display_adjust("screensaver", "+")
         elif key == "power_off_confirm":
             self.on_power_off()
 
@@ -94,6 +98,10 @@ class Dispatcher:
             value = not bool(getattr(self.state, "notif_blink", True))
             self.state.notif_blink = value
             self.on_toggle_notif_blink(value)
+        elif key == "screensaver":
+            value = not bool(getattr(self.state, "screensaver_enabled", True))
+            self.state.screensaver_enabled = value
+            self.on_toggle_screensaver(value)
 
     def _set_remote_mic(self, enabled):
         self.state.set_remote_mic(

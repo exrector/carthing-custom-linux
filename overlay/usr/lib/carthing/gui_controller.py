@@ -65,6 +65,7 @@ class GuiController:
         on_pairing=None,
         on_notif_dismiss=None,
         on_toggle_notif_blink=None,
+        on_toggle_screensaver=None,
         on_set_brightness=None,
         on_power_off=None,
         on_toggle_client=None,
@@ -89,6 +90,7 @@ class GuiController:
             on_command=on_command,
             on_pairing=on_pairing,
             on_toggle_notif_blink=on_toggle_notif_blink,
+            on_toggle_screensaver=on_toggle_screensaver,
             on_set_brightness=on_set_brightness,
             on_power_off=on_power_off,
             on_toggle_client=on_toggle_client,
@@ -133,9 +135,22 @@ class GuiController:
 
     def needs_fast_render(self):
         state = self.app_state
+        anim = getattr(self.compositor, "anim", None)
+        transition_active = bool(
+            anim is not None and getattr(anim, "transition_active", False)
+        )
+        assistant_ambient = bool(
+            anim is not None
+            and self.compositor.active == ASSISTANT
+            and anim.needs_tick()
+        )
         return bool(
-            self.compositor.active == ASSISTANT
-            and state.assistant_live_text != state.assistant_live_target
+            (
+                self.compositor.active == ASSISTANT
+                and state.assistant_live_text != state.assistant_live_target
+            )
+            or transition_active
+            or assistant_ambient
         )
 
     def handle_input(self, event):
@@ -150,9 +165,10 @@ class GuiController:
         if event in (Input.ENCODER_CW, Input.ENCODER_CCW):
             up = event == Input.ENCODER_CW
             session = self.app_state.iphone
+            step = 0.025 if self.app_state.remote_media_active else 0.0625
             session.volume = max(
                 0.0,
-                min(1.0, (session.volume or 0.0) + (0.0625 if up else -0.0625)),
+                min(1.0, (session.volume or 0.0) + (step if up else -step)),
             )
             self._volume_touch_ts = time.monotonic()
             self.dispatcher.dispatch("media_vol_up" if up else "media_vol_down")
@@ -170,6 +186,7 @@ class GuiController:
             self.show_home()
             return
         if event == Input.EDGE_TOP:
+            self.show_screen(NOTIFICATIONS)
             return
         if event in (Input.SWIPE_LEFT, Input.SWIPE_RIGHT):
             current = self.compositor.active
@@ -177,9 +194,14 @@ class GuiController:
                 self.show_home()
                 return
             index = NAVIGATION.index(current)
-            step = 1 if event == Input.SWIPE_RIGHT else -1
+            step = 1 if event == Input.SWIPE_LEFT else -1
             target = NAVIGATION[max(0, min(len(NAVIGATION) - 1, index + step))]
-            self.show_screen(target)
+            if target == current:
+                return
+            if current == ASSISTANT and self.app_state.remote_mic_enabled:
+                self.dispatcher.dispatch("remote_mic_set", False)
+            direction = 1 if event == Input.SWIPE_LEFT else -1
+            self.compositor.animate_switch(target, direction)
             return
         self.compositor.handle_input(event)
 
@@ -199,6 +221,9 @@ class GuiController:
             "active_screen": active,
             "modal": modal,
             "encoder_volume": round(float(session.volume or 0.0), 3),
+            "remote_media_active": state.remote_media_active,
+            "clock_text": state.clock_text,
+            "screensaver_active": state.screensaver_active,
             "notification_indicator_visible": notification_indicator_visible(
                 state.unread_count, state.notif_blink
             ),
@@ -208,16 +233,22 @@ class GuiController:
             "power_unplug_message": state.power_unplug_message,
         }
         if active == HOME:
-            visible_state["iphone"] = {
-                "connected": session.connected,
-                "title": session.title,
-                "artist": session.artist,
-                "duration": round(float(session.duration or 0.0), 1),
-                "position_second": int(float(session.position or 0.0)),
-                "playing": session.playing,
-                "supported_commands": session.supported_commands,
-                "liked": session.liked,
-            }
+            if session.title:
+                visible_state["iphone"] = {
+                    "connected": session.connected,
+                    "app_name": session.app_name,
+                    "title": session.title,
+                    "artist": session.artist,
+                    "duration": round(float(session.duration or 0.0), 1),
+                    "position_second": int(float(session.position or 0.0)),
+                    "playing": session.playing,
+                    "supported_commands": session.supported_commands,
+                    "liked": session.liked,
+                }
+            else:
+                visible_state["iphone"] = {
+                    "connected": session.connected,
+                }
         elif active == ASSISTANT:
             transcript = list(state.assistant_transcript or [])[-3:]
             visible_state["assistant"] = {
@@ -235,6 +266,7 @@ class GuiController:
             visible_state["settings"] = {
                 "iphone_connected": session.connected,
                 "screen_brightness": state.screen_brightness,
+                "screensaver_enabled": state.screensaver_enabled,
                 "notif_blink": state.notif_blink,
                 "device_name": state.device_name,
             }
@@ -253,6 +285,7 @@ class GuiController:
             state._assistant_typewriter_credit = 0.0
             state._assistant_typewriter_at = time.monotonic()
         session = model.session
+        state.remote_media_active = bool(model.remote_media_active)
         now = time.monotonic()
         transport_connected = bool(
             session.source == "iphone" and session.connected
@@ -300,6 +333,7 @@ class GuiController:
                 and now < self._iphone_grace_until
             )
             if not preserve_stale_metadata:
+                state.iphone.app_name = session.app_name
                 state.iphone.title = session.title
                 state.iphone.artist = session.artist
                 state.iphone.duration = session.duration
@@ -314,6 +348,7 @@ class GuiController:
                 record_connection_event("gui_iphone_grace_expired")
             self._iphone_grace_until = 0.0
             state.iphone.title = ""
+            state.iphone.app_name = ""
             state.iphone.artist = ""
             state.iphone.duration = 0.0
             state.iphone.position = 0.0

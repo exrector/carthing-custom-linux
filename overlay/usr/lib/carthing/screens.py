@@ -64,22 +64,58 @@ class NowPlayingScreen(Screen):
         img, draw = self.blank()
         session = self.state.iphone if self.state else None
         if session is None or not session.connected:
-            C.text_centered(
-                draw, "-", T.font(56), T.FAINT, T.MAIN_CY - 20, cx=T.CONTENT_CX
+            T.draw_clock(
+                draw,
+                getattr(self.state, "clock_text", "--:--"),
+                T.CONTENT_CX,
+                T.MAIN_CY,
+                size=94,
             )
             return img
 
+        if not session.title:
+            T.draw_clock(
+                draw,
+                getattr(self.state, "clock_text", "--:--"),
+                T.CONTENT_CX,
+                T.MAIN_CY,
+                size=94,
+            )
+            return img
+
+        display_title = session.title or "-"
         lines = C.wrap_lines(
-            draw, session.title or "-", T.font(T.SZ_TITLE), T.CONTENT_W
+            draw, display_title, T.font(T.SZ_TITLE), T.CONTENT_W
         )
         lines = lines[:4]
         if len(lines) == 4:
             lines[-1] = C.truncate(
                 draw, lines[-1], T.font(T.SZ_TITLE), T.CONTENT_W
             )
+        app_label = (
+            str(session.app_name or "").strip()
+            if session.title
+            else ""
+        )
         artist = str(session.artist or "").strip()
-        block_height = len(lines) * 56 + (50 if artist else 0)
+        block_height = (
+            len(lines) * 56
+            + (34 if app_label else 0)
+            + (50 if artist else 0)
+        )
         y = max(T.CONTENT_TOP, T.MAIN_CY - block_height // 2)
+        if app_label:
+            C.text_centered(
+                draw,
+                C.truncate(
+                    draw, app_label, T.font(T.SZ_SMALL), T.CONTENT_W
+                ),
+                T.font(T.SZ_SMALL),
+                T.MUTED,
+                y,
+                cx=T.CONTENT_CX,
+            )
+            y += 34
         for line in lines:
             C.text_centered(
                 draw, line, T.font(T.SZ_TITLE), T.FG, y, cx=T.CONTENT_CX
@@ -209,7 +245,7 @@ class SettingsScreen(Screen):
     name = "settings"
     title = "Настройки"
     fullscreen = True
-    ROW_HEIGHT = 70
+    ROW_HEIGHT = 64
 
     def __init__(self, on_select=None):
         self.state = None
@@ -217,6 +253,7 @@ class SettingsScreen(Screen):
         self.rows = (
             ("add_iphone", "Добавить iPhone"),
             ("brightness", "Яркость"),
+            ("screensaver", "Заставка"),
             ("notif_blink", "Индикатор уведомлений"),
             ("power_off_confirm", "Подготовить отключение USB"),
             ("about", "О системе"),
@@ -240,6 +277,8 @@ class SettingsScreen(Screen):
             return f"{int(getattr(self.state, 'screen_brightness', 100))}%"
         if key == "notif_blink":
             return "Вкл" if bool(getattr(self.state, "notif_blink", True)) else "Выкл"
+        if key == "screensaver":
+            return "Вкл" if bool(getattr(self.state, "screensaver_enabled", True)) else "Выкл"
         if key == "add_iphone":
             return "Подключён" if bool(getattr(self.state.iphone, "connected", False)) else ""
         if key == "about":

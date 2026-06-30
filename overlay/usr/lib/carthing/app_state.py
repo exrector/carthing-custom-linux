@@ -89,6 +89,7 @@ class MediaSession:
         self.key = "iphone"
         self.label = "iPhone"
         self.connected = False
+        self.app_name = ""
         self.title = ""
         self.artist = ""
         self.duration = 0.0
@@ -106,12 +107,15 @@ class AppState:
         self.iphone = MediaSession()
         self.active_desktop = self.IPHONE
         self.last_media_source = "iphone"
+        self.remote_media_active = False
         self.notifications = []
         self.unread_count = 0
         self.trusted = []
         self.session_peers = []
         self.sleep_on_idle = True
         self.screen_off_sec = 150
+        self.screensaver_enabled = True
+        self.screensaver_active = False
         self.notif_blink = True
         self.screen_brightness = 100
         self.remote_mic_enabled = False

@@ -12,6 +12,8 @@ _DEFAULTS = {
     "notif_blink": True,
     "screen_brightness_pct": 100,
     "sleep_on_idle": True,
+    "screensaver_enabled": True,
+    "screensaver_brightness": 12,
     "screen_off_after_sec": 150,
     "screen_active_brightness": 100,
     "screen_dim_brightness": 12,

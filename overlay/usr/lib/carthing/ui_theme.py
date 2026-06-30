@@ -131,6 +131,21 @@ def postprocess(img):
     return ImageChops.multiply(img, _fx_mask)
 
 
+def draw_clock(draw, text, cx, cy, size=104, color=ACCENT):
+    """Draw the shared Play Now / screensaver clock face."""
+    value = str(text or "--:--")
+    face = font(size)
+    box = draw.textbbox((0, 0), value, font=face)
+    width = box[2] - box[0]
+    height = box[3] - box[1]
+    draw.text(
+        (int(cx - width / 2 - box[0]), int(cy - height / 2 - box[1])),
+        value,
+        font=face,
+        fill=color,
+    )
+
+
 _font_cache = {}
 
 

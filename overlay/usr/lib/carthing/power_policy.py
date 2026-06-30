@@ -20,7 +20,12 @@ class IdlePowerController:
     def __init__(self, settings=None, backlight_root="/sys/class/backlight"):
         self.settings = settings
         self.backlight = self._find_backlight(Path(backlight_root))
-        self.enabled = self._setting("sleep_on_idle", True)
+        self.sleep_enabled = bool(self._setting("sleep_on_idle", True))
+        self.screensaver_enabled = self._setting("screensaver_enabled", True)
+        self.enabled = self.sleep_enabled or self.screensaver_enabled
+        self.screensaver_brightness = int(
+            self._setting("screensaver_brightness", 12)
+        )
         self.dim_after = float(self._setting("screen_dim_after_sec", 45))
         self.off_after = float(self._setting("screen_off_after_sec", 150))
         self.quiet_after = float(self._setting("runtime_quiet_after_sec", 20))
@@ -48,10 +53,14 @@ class IdlePowerController:
 
         if not self.backlight:
             logger.info("Power: no backlight sysfs; idle policy disabled")
+            self.sleep_enabled = False
+            self.screensaver_enabled = False
             self.enabled = False
         elif self.enabled:
             logger.info(
-                "Power: runtime policy active dim=%ss off=%ss quiet=%ss active=%s dim_level=%s",
+                "Power: runtime policy active sleep=%s screensaver=%s dim=%ss off=%ss quiet=%ss active=%s dim_level=%s",
+                self.sleep_enabled,
+                self.screensaver_enabled,
                 self.dim_after,
                 self.off_after,
                 self.quiet_after,
@@ -132,6 +141,11 @@ class IdlePowerController:
         elif state == "dim":
             self._write_int("bl_power", 0)
             self._write_brightness(max(1, min(self.dim_brightness, self._max_brightness)))
+        elif state == "screensaver":
+            self._write_int("bl_power", 0)
+            self._write_brightness(
+                max(1, min(self.screensaver_brightness, self._max_brightness))
+            )
         elif state == "off":
             # bl_power is the real panel blanking switch; brightness is kept low
             # so a partially supported driver still dims visibly.
@@ -188,17 +202,22 @@ class IdlePowerController:
         """[CLAUDE 2026-06-01] Рантайм-переключатель сна экрана из Settings. off -> экран ВСЕГДА
         включён на полной яркости (для отладки); при enabled=False tick/dim/_set_display_state no-op."""
         if self.backlight is None:
+            self.sleep_enabled = False
             self.enabled = False
             return
         on = bool(on)
-        if on == self.enabled:
+        if on == self.sleep_enabled:
             return
-        self.enabled = on
-        if on:
+        self.sleep_enabled = on
+        self.enabled = self.sleep_enabled or self.screensaver_enabled
+        if self.enabled:
             self._last_activity = time.monotonic()
             self._display_state = "init"           # форсим применение "active"
             self._set_display_state("active")
-            logger.info("Power: idle sleep ENABLED (settings)")
+            logger.info(
+                "Power: idle sleep %s (settings); idle policy remains active",
+                "ENABLED" if on else "DISABLED",
+            )
         else:
             self._write_int("bl_power", 0)
             self._write_brightness(self._active_brightness)
@@ -213,6 +232,22 @@ class IdlePowerController:
             return
         self._last_activity = time.monotonic()   # перезапустить отсчёт от изменения
         logger.info("Power: screen-off timeout -> %ss", self.off_after)
+
+    def set_screensaver_enabled(self, enabled: bool) -> None:
+        self.screensaver_enabled = bool(enabled)
+        self.enabled = self.sleep_enabled or self.screensaver_enabled
+        self._last_activity = time.monotonic()
+        if not self.enabled:
+            self._write_int("bl_power", 0)
+            self._write_brightness(self._active_brightness)
+            self._display_state = "active"
+        elif self._display_state in ("screensaver", "off"):
+            self._display_state = "init"
+            self._set_display_state("active")
+        logger.info(
+            "Power: screensaver %s",
+            "enabled" if self.screensaver_enabled else "disabled",
+        )
 
     def note_model(self, model) -> None:
         """Wake briefly for meaningful content changes, not for position ticks."""
@@ -252,7 +287,9 @@ class IdlePowerController:
         if self._pairing_armed:
             self._set_display_state("active")
         elif idle >= self.off_after:
-            self._set_display_state("off")
+            self._set_display_state(
+                "screensaver" if self.screensaver_enabled else "off"
+            )
         else:
             # [CLAUDE 2026-06-01] Стадия "dim" УБРАНА: на панели aml-bl яркость 12/255 визуально
             # не темнеет (драйвер принимает значение, но подсветка не меняется перцептивно), а
@@ -270,7 +307,10 @@ class IdlePowerController:
     def render_interval(self) -> float:
         if self._display_state == "off":
             return self.render_interval_off
-        if self._runtime_tier in ("connected_quiet", "screen_off") or self._display_state == "dim":
+        if (
+            self._runtime_tier in ("connected_quiet", "screen_off")
+            or self._display_state in ("dim", "screensaver")
+        ):
             return self.render_interval_quiet
         return self.render_interval_active
 
@@ -293,3 +333,7 @@ class IdlePowerController:
     @property
     def display_awake(self) -> bool:
         return self._display_state != "off"
+
+    @property
+    def screensaver_active(self) -> bool:
+        return self._display_state == "screensaver"
