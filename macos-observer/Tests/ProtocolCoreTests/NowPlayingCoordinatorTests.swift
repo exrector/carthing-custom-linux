@@ -67,6 +67,62 @@ final class NowPlayingCoordinatorTests: XCTestCase {
         XCTAssertNil(coordinator.activeSource)
     }
 
+    func testElapsedOnlyUpdatesDoNotRepublishButReconnectUsesLatestPosition() {
+        var published: [NowPlayingPayload] = []
+        let coordinator = NowPlayingCoordinator { data in
+            published.append(
+                try! JSONDecoder().decode(NowPlayingPayload.self, from: data)
+            )
+        }
+        coordinator.update(
+            NowPlayingPayload(
+                active: true,
+                source: "mac_local",
+                title: "Local",
+                elapsed: 1,
+                playing: true
+            ),
+            now: 10
+        )
+        coordinator.update(
+            NowPlayingPayload(
+                active: true,
+                source: "mac_local",
+                title: "Local",
+                elapsed: 2,
+                playing: true
+            ),
+            now: 11
+        )
+        XCTAssertEqual(published.count, 1)
+
+        coordinator.resend(now: 11)
+        XCTAssertEqual(published.count, 2)
+        XCTAssertEqual(published.last?.elapsed, 2)
+    }
+
+    func testPausedHeartbeatKeepsLocalSnapshotAliveForReconnect() {
+        var published: [NowPlayingPayload] = []
+        let coordinator = NowPlayingCoordinator { data in
+            published.append(
+                try! JSONDecoder().decode(NowPlayingPayload.self, from: data)
+            )
+        }
+        let paused = NowPlayingPayload(
+            active: true,
+            source: "mac_local",
+            title: "Paused",
+            playing: false
+        )
+        coordinator.update(paused, now: 10)
+        coordinator.update(paused, now: 13.5)
+        XCTAssertEqual(published.count, 1)
+
+        coordinator.resend(now: 17)
+        XCTAssertEqual(published.last?.title, "Paused")
+        XCTAssertEqual(coordinator.activeSource, "mac_local")
+    }
+
     func testPluginListDefaultsToMacMusicAndCanBeOverridden() {
         XCTAssertEqual(
             ServerPluginManager.enabledIDs(environment: [:]),

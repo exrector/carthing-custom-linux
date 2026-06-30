@@ -8,7 +8,6 @@ public final class AppleMusicPlugin: ServerPlugin {
     private let queue = DispatchQueue(label: "carthing.plugin.mac-music")
     private var timer: Timer?
     private var pollInFlight = false
-    private var lastPayload: NowPlayingPayload?
 
     public init(publish: @escaping (NowPlayingPayload) -> Void) {
         self.publish = publish
@@ -59,8 +58,6 @@ public final class AppleMusicPlugin: ServerPlugin {
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.pollInFlight = false
-                guard payload != self.lastPayload else { return }
-                self.lastPayload = payload
                 self.publish(payload)
             }
         }

@@ -53,7 +53,7 @@ public final class NowPlayingCoordinator {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private var snapshots: [String: Snapshot] = [:]
-    private var lastPublished: Data?
+    private var lastPublished: NowPlayingPayload?
 
     public private(set) var activeSource: String?
 
@@ -94,9 +94,13 @@ public final class NowPlayingCoordinator {
     private func publishSelected(now: TimeInterval, force: Bool = false) {
         let selected = select(now: now)
         activeSource = selected.active ? selected.source : nil
+        var material = selected
+        material.elapsed = nil
+        var previous = lastPublished
+        previous?.elapsed = nil
+        guard force || material != previous else { return }
         guard let data = try? encoder.encode(selected) else { return }
-        guard force || data != lastPublished else { return }
-        lastPublished = data
+        lastPublished = selected
         publish(data)
     }
 
