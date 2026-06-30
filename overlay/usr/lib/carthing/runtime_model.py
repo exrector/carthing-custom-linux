@@ -75,6 +75,7 @@ class RuntimeModel:
         self.proximity_zone = "gone"
         self.power_tier = "interactive"
         self.operation_mode = "playnow"
+        self.server_status = {}
         self.remote_mic = {
             "enabled": False,
             "state": "off",
@@ -100,7 +101,8 @@ class RuntimeModel:
             and identifier
             and identifier == self.remote_media_id
         )
-        if not (playing or loading or same_session):
+        identified_media = bool(identifier and payload.get("title"))
+        if not (playing or loading or same_session or identified_media):
             return False
 
         session = self.session
@@ -143,14 +145,60 @@ class RuntimeModel:
             ),
         }
 
-    def add_notification(self, uid, app, title, body=""):
+    def update_server_status(self, payload):
+        payload = dict(payload or {})
+        self.server_status = {
+            "host": str(payload.get("host") or "Mac"),
+            "connected": bool(payload.get("connected", True)),
+            "assistant": bool(payload.get("assistant", False)),
+            "cpu_load_pct": max(
+                0.0, min(999.0, float(payload.get("cpu_load_pct") or 0.0))
+            ),
+            "memory_gb": max(0.0, float(payload.get("memory_gb") or 0.0)),
+            "thermal": str(payload.get("thermal") or "unknown"),
+            "uptime_s": max(0.0, float(payload.get("uptime_s") or 0.0)),
+            "ctsp_rtt_ms": (
+                max(0.0, float(payload["ctsp_rtt_ms"]))
+                if payload.get("ctsp_rtt_ms") is not None
+                else None
+            ),
+        }
+
+    def set_server_disconnected(self):
+        if not self.server_status:
+            return
+        self.server_status["connected"] = False
+        self.server_status["assistant"] = False
+
+    def add_notification(
+        self,
+        uid,
+        app,
+        title,
+        body="",
+        category="Other",
+        important=False,
+        positive_action=False,
+        negative_action=False,
+        positive_label="",
+        negative_label="",
+    ):
+        fields = {
+            "app": app,
+            "title": title,
+            "body": body,
+            "category": str(category or "Other"),
+            "important": bool(important),
+            "positive_action": bool(positive_action),
+            "negative_action": bool(negative_action),
+            "positive_label": str(positive_label or ""),
+            "negative_label": str(negative_label or ""),
+        }
         for notification in self.notifications:
             if notification["uid"] == uid:
-                notification.update(app=app, title=title, body=body)
+                notification.update(**fields)
                 return
-        self.notifications.append(
-            {"uid": uid, "app": app, "title": title, "body": body}
-        )
+        self.notifications.append({"uid": uid, **fields})
 
     def remove_notification(self, uid):
         self.notifications = [
@@ -188,6 +236,7 @@ class RuntimeModel:
             },
             "operation_mode": self.operation_mode,
             "power_tier": self.power_tier,
+            "server_status": dict(self.server_status),
             "remote_mic": dict(self.remote_mic),
         }
 

@@ -426,6 +426,11 @@ class SessionPlaneService:
             "session_coc_closed",
             peer=runtime.address,
         )
+        if not any(
+            peer.connector.connected
+            for peer in self._runtimes.values()
+        ):
+            self.model.set_server_disconnected()
         self._sync_model()
         self.on_change()
         self._notify_disconnect(runtime.address)
@@ -502,6 +507,8 @@ class SessionPlaneService:
                 self._show_screen_text(payload[5:])
             elif payload.startswith(b"now_playing:"):
                 self._apply_remote_now_playing(payload[12:])
+            elif payload.startswith(b"server_status:"):
+                self._apply_server_status(payload[14:])
             else:
                 self._write(channel, T_STATUS, self._status_bytes(), seq=seq)
         elif frame_type == T_LATENCY_PROBE:
@@ -638,6 +645,14 @@ class SessionPlaneService:
             logger.info("session screen text [%s]: %r", role or "?", s[:60])
         except Exception as exc:
             logger.warning("session screen text failed: %s", exc)
+
+    def _apply_server_status(self, raw):
+        try:
+            payload = json.loads(bytes(raw).decode("utf-8"))
+            self.model.update_server_status(payload)
+            self.on_change()
+        except Exception as exc:
+            logger.warning("server status payload rejected: %s", exc)
 
     def _apply_remote_now_playing(self, raw):
         try:

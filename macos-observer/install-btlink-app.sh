@@ -11,6 +11,11 @@ AGENT_PATH="$HOME/Library/LaunchAgents/com.carthing.btlink.plist"
 LOAD_AGENT=${CARTHING_BTLINK_LOAD_AGENT:-1}
 DOMAIN="gui/$(id -u)"
 OPUS_DYLIB=${CARTHING_OPUS_DYLIB:-/opt/homebrew/opt/opus/lib/libopus.0.dylib}
+VOICE_ROOT=${CARTHING_VOICE_ASSISTANT_ROOT:-"$HOME/Documents/ПРОЕКТЫ/voice-assistant"}
+ASSISTANT_PYTHON=${CARTHING_ASSISTANT_PYTHON:-"$VOICE_ROOT/.venv/bin/python"}
+ASSISTANT_SCRIPT=${CARTHING_ASSISTANT_SCRIPT:-"$VOICE_ROOT/bt_assistant_v2.py"}
+ASSISTANT_MODEL=${VA_STT_MLX_MODEL:-"$VOICE_ROOT/models/whisper-large-v3-turbo-npz"}
+OLD_ASSISTANT_AGENT="$HOME/Library/LaunchAgents/com.carthing.btwhisper.plist"
 
 [ -x "$SOURCE_BIN" ] || {
     echo "missing release binary: $SOURCE_BIN" >&2
@@ -18,6 +23,14 @@ OPUS_DYLIB=${CARTHING_OPUS_DYLIB:-/opt/homebrew/opt/opus/lib/libopus.0.dylib}
 }
 [ -f "$OPUS_DYLIB" ] || {
     echo "missing Opus runtime: $OPUS_DYLIB" >&2
+    exit 1
+}
+[ -x "$ASSISTANT_PYTHON" ] || {
+    echo "missing assistant Python: $ASSISTANT_PYTHON" >&2
+    exit 1
+}
+[ -f "$ASSISTANT_SCRIPT" ] || {
+    echo "missing assistant worker: $ASSISTANT_SCRIPT" >&2
     exit 1
 }
 OPUS_LOAD_PATH=$(
@@ -54,7 +67,18 @@ install -m 644 "$AGENT_TEMPLATE" "$AGENT_PATH"
 /usr/libexec/PlistBuddy \
     -c "Set :ProgramArguments:0 $APP_DIR/Contents/MacOS/CarThingBTLink" \
     "$AGENT_PATH"
+/usr/libexec/PlistBuddy \
+    -c "Set :EnvironmentVariables:CARTHING_ASSISTANT_PYTHON $ASSISTANT_PYTHON" \
+    "$AGENT_PATH"
+/usr/libexec/PlistBuddy \
+    -c "Set :EnvironmentVariables:CARTHING_ASSISTANT_SCRIPT $ASSISTANT_SCRIPT" \
+    "$AGENT_PATH"
+/usr/libexec/PlistBuddy \
+    -c "Set :EnvironmentVariables:VA_STT_MLX_MODEL $ASSISTANT_MODEL" \
+    "$AGENT_PATH"
 if [ "$LOAD_AGENT" != "0" ]; then
+    launchctl bootout "$DOMAIN" "$OLD_ASSISTANT_AGENT" >/dev/null 2>&1 || true
     launchctl bootstrap "$DOMAIN" "$AGENT_PATH"
+    rm -f "$OLD_ASSISTANT_AGENT"
 fi
 echo "$APP_DIR"

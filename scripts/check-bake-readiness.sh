@@ -19,9 +19,15 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app_state import AppState
-from gui_controller import ASSISTANT, GuiController
+from gui_controller import ASSISTANT, HOME, NOTIFICATIONS, SERVER, GuiController
 from runtime_model import RuntimeModel
-from screens import AssistantScreen, NotificationsScreen, NowPlayingScreen, SettingsScreen
+from screens import (
+    AssistantScreen,
+    NotificationsScreen,
+    NowPlayingScreen,
+    ServerStatusScreen,
+    SettingsScreen,
+)
 from ui_components import truncate
 from ui_screen import Input, notification_indicator_visible
 
@@ -44,6 +50,7 @@ for screen in (
     AssistantScreen(),
     NotificationsScreen(),
     SettingsScreen(),
+    ServerStatusScreen(),
 ):
     screen.on_state(state)
     screen.render()
@@ -58,6 +65,7 @@ expected = {
     "notifications",
     "operation_mode",
     "power_tier",
+    "server_status",
     "remote_mic",
 }
 if set(model.bt_block()) != expected:
@@ -90,6 +98,49 @@ if not model.apply_remote_media({
 model.clear_remote_media()
 if model.remote_media_active:
     raise SystemExit("AirPlay metadata overlay did not clear")
+if not model.apply_remote_media({
+    "active": True,
+    "identifier": "paused-airplay-track",
+    "title": "Paused AirPlay title",
+    "elapsed": 12,
+    "playing": False,
+}):
+    raise SystemExit("identified paused AirPlay session was rejected after a gap")
+if not model.remote_media_active:
+    raise SystemExit("paused AirPlay session did not restore remote ownership")
+model.clear_remote_media()
+model.update_server_status({
+    "host": "Test Mac",
+    "connected": True,
+    "assistant": True,
+    "cpu_load_pct": 12.5,
+    "memory_gb": 32,
+    "thermal": "nominal",
+    "uptime_s": 3600,
+    "ctsp_rtt_ms": 8.5,
+})
+if model.server_status["host"] != "Test Mac":
+    raise SystemExit("Bluetooth server status was not retained")
+model.set_server_disconnected()
+if model.server_status["connected"] or model.server_status["assistant"]:
+    raise SystemExit("server status remained online after CTSP disconnect")
+model.update_server_status({
+    "host": "Test Mac",
+    "connected": True,
+    "assistant": True,
+})
+state.server_status = dict(model.server_status)
+server_screen = ServerStatusScreen()
+server_screen.on_state(state)
+server_screen.render()
+model.add_notification(
+    42,
+    "Телефон",
+    "Тестовый звонок",
+    category="IncomingCall",
+    positive_action=True,
+    negative_action=True,
+)
 
 ams_state = MediaState()
 ams = AMSClient(ams_state)
@@ -172,6 +223,24 @@ if capture_toggles[-2:] != [True, False]:
     raise SystemExit("leaving Assistant did not stop microphone capture")
 if navigation.app_state.remote_mic_enabled:
     raise SystemExit("microphone remained enabled outside Assistant")
+navigation.handle_input(Input.PRESS)
+if navigation.compositor.active != ASSISTANT:
+    raise SystemExit("encoder press did not open Assistant")
+if capture_toggles[-1:] != [True]:
+    raise SystemExit("first encoder press did not enable microphone")
+navigation.handle_input(Input.PRESS)
+if capture_toggles[-1:] != [False]:
+    raise SystemExit("second encoder press did not disable microphone")
+for button, expected_screen in (
+    (Input.BTN_1, HOME),
+    (Input.BTN_2, ASSISTANT),
+    (Input.BTN_3, NOTIFICATIONS),
+    (Input.BTN_4, SERVER),
+):
+    navigation.handle_input(button)
+    if navigation.compositor.active != expected_screen:
+        raise SystemExit(f"{button} did not open fixed view {expected_screen}")
+navigation.show_home()
 navigation.handle_input(Input.SWIPE_LEFT)
 if navigation.compositor.active != ASSISTANT:
     raise SystemExit("left swipe did not move to the next view")
@@ -212,6 +281,8 @@ session_gate._start_mic = lambda _runtime, _channel: capture_events.append("star
 session_gate._stop_mic = lambda _runtime: capture_events.append("stop")
 session_gate._sync_model = lambda: None
 session_gate._notify_status = lambda: None
+session_gate.model = RuntimeModel()
+session_gate.on_change = lambda: None
 session_gate.set_listening(True)
 session_gate.set_listening(False)
 if capture_events != ["start", "stop"]:
@@ -220,6 +291,27 @@ if not session_gate.send_media_control("vol_up"):
     raise SystemExit("connected CTSP route rejected media control")
 if session_commands != [(0x05, b"media_control:vol_up")]:
     raise SystemExit("CTSP media control payload is incorrect")
+session_gate._apply_server_status(
+    b'{"host":"Mac","connected":true,"cpu_load_pct":20}'
+)
+if session_gate.model.server_status.get("host") != "Mac":
+    raise SystemExit("CTSP server status payload was rejected")
+
+timeout_updates = []
+screensaver_toggles = []
+settings_controller = GuiController(
+    FakeDisplay(),
+    on_set_screensaver_timeout=lambda value: timeout_updates.append(value),
+    on_toggle_screensaver=lambda value: screensaver_toggles.append(value),
+)
+settings_controller.app_state.screensaver_enabled = True
+settings_controller.app_state.screen_off_sec = 60
+settings_controller.dispatcher.dispatch(
+    "display_adjust",
+    ("screensaver", "+"),
+)
+if timeout_updates[-1:] != [120] or screensaver_toggles[-1:] != [True]:
+    raise SystemExit("screensaver plus control did not select next timeout")
 
 class FakeHIDDevice:
     def __init__(self):

@@ -8,9 +8,10 @@ Car Thing PDM microphones
   -> HCIC gain + SpeexDSP
   -> BLE GATT bootstrap
   -> Bluetooth LE L2CAP CoC (CTSP, Opus VOIP 16 kHz / 60 ms)
-  -> CarThingBTLink + Apple DictationTranscriber
+  -> CarThingBTLink.app
+  -> managed Whisper/Assistant worker
   -> live partial text on Car Thing
-  -> 127.0.0.1:49501 for the optional assistant process
+  -> live text and responses back over the same Bluetooth CTSP session
 ```
 
 Bluetooth обслуживается только нативным CoreBluetooth. BlueZ, HFP, Loopback и
@@ -18,7 +19,8 @@ Bluetooth обслуживается только нативным CoreBluetooth
 
 ## Состав
 
-- `CarThingBTLink` - headless LaunchAgent, Opus decoder, Apple Speech и локальный TCP.
+- `CarThingBTLink` - единое headless-приложение: CoreBluetooth, CTSP, Opus,
+  локальный audio pipe и lifecycle Whisper/Assistant worker.
 - `TransportCore` - scan, connect, GATT bootstrap и L2CAP CoC.
 - `ProtocolCore` - потоковый кодек CTSP.
 - `install-btlink-app.sh` - release build, подпись, установка `.app` и LaunchAgent.
@@ -33,8 +35,10 @@ Bluetooth обслуживается только нативным CoreBluetooth
 Скрипт собирает и подписывает
 `~/Applications/CarThingBTLink.app`, устанавливает
 `~/Library/LaunchAgents/com.carthing.btlink.plist` и запускает один экземпляр
-helper. Opus runtime копируется внутрь `.app`. При первом запуске macOS может
-запросить доступ к Bluetooth и Speech Recognition.
+приложения. Оно само запускает и контролирует Assistant worker; отдельный
+`com.carthing.btwhisper` удаляется. Opus runtime копируется внутрь `.app`.
+При первом запуске macOS запрашивает Bluetooth для приложения, а Terminal в
+рабочем цикле не участвует.
 
 ## Проверка
 

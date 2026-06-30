@@ -15,7 +15,7 @@ import time
 from PIL import Image, ImageDraw
 
 import ui_theme as T
-from ui_components import RegionSet
+from ui_components import RegionSet, text_w, truncate
 
 log = logging.getLogger("carthing.ui")
 
@@ -311,7 +311,10 @@ class Compositor:
                 getattr(self.state, "clock_text", "--:--"),
                 T.W // 2,
                 T.H // 2,
-                size=126,
+                size=164,
+                date_text=getattr(self.state, "clock_date_text", ""),
+                date_size=36,
+                gap=24,
             )
             return self.display.present(
                 T.postprocess(img),
@@ -331,6 +334,7 @@ class Compositor:
         # arc over settings/notifications/lists.
         fullscreen = getattr(self.current, "fullscreen", False) and not transitioning
         self._draw_overlays(img, full=fullscreen)
+        self._draw_call_banner(img)
         if self.modal is not None:
             self._draw_modal(img)
             # дуга громкости остаётся видна поверх полноэкранного модала (энкодер всегда активен)
@@ -340,6 +344,84 @@ class Compositor:
 
         img = self._apply_tap_flash(img)
         return self.display.present(T.postprocess(img), name=self.current.name)
+
+    def _draw_call_banner(self, img):
+        notifications = (
+            list(getattr(self.state, "notifications", []) or [])
+            if self.state is not None
+            else []
+        )
+        call = next(
+            (
+                item
+                for item in reversed(notifications)
+                if str(item.get("category") or "") == "IncomingCall"
+            ),
+            None,
+        )
+        if call is None:
+            return
+        draw = ImageDraw.Draw(img)
+        rect = (20, 18, T.ARC_SAFE_X, 148)
+        draw.rectangle(rect, fill=T.SURFACE, outline=T.ACCENT, width=2)
+        draw.text(
+            (34, 30),
+            "ВХОДЯЩИЙ ЗВОНОК",
+            font=T.font(T.SZ_SMALL),
+            fill=T.ACCENT,
+        )
+        title = str(call.get("title") or call.get("app") or "iPhone")
+        draw.text(
+            (34, 62),
+            truncate(draw, title, T.font(T.SZ_BODY), 380),
+            font=T.font(T.SZ_BODY),
+            fill=T.FG,
+        )
+        body = str(call.get("body") or "")
+        if body:
+            draw.text(
+                (34, 104),
+                truncate(draw, body, T.font(T.SZ_SMALL), 350),
+                font=T.font(T.SZ_SMALL),
+                fill=T.MUTED,
+            )
+        uid = call.get("uid")
+        if call.get("negative_action") and uid is not None:
+            negative = (448, 38, 560, 126)
+            label = str(call.get("negative_label") or "ОТКЛ.")
+            width = text_w(draw, label, T.font(T.SZ_SMALL))
+            draw.text(
+                (
+                    (negative[0] + negative[2] - width) // 2,
+                    72,
+                ),
+                label,
+                font=T.font(T.SZ_SMALL),
+                fill=T.STATUS_OFF,
+            )
+            self._regions.add(
+                negative,
+                "notif_action",
+                payload={"uid": uid, "positive": False},
+            )
+        if call.get("positive_action") and uid is not None:
+            positive = (570, 38, 700, 126)
+            label = str(call.get("positive_label") or "ПРИНЯТЬ")
+            width = text_w(draw, label, T.font(T.SZ_SMALL))
+            draw.text(
+                (
+                    (positive[0] + positive[2] - width) // 2,
+                    72,
+                ),
+                label,
+                font=T.font(T.SZ_SMALL),
+                fill=T.STATUS_OK,
+            )
+            self._regions.add(
+                positive,
+                "notif_action",
+                payload={"uid": uid, "positive": True},
+            )
 
     _FLASH_R = 78           # радиус пятна вспышки (большое, как просил владелец)
     _flash_sprite = None    # кэш радиального градиента (строится один раз)

@@ -14,6 +14,18 @@
         <string>1</string>
         <key>CARTHING_BT_TCP_PORT</key>
         <string>49500</string>
+        <key>CARTHING_ASSISTANT_PYTHON</key>
+        <string>__CARTHING_ASSISTANT_PYTHON__</string>
+        <key>CARTHING_ASSISTANT_SCRIPT</key>
+        <string>__CARTHING_ASSISTANT_SCRIPT__</string>
+        <key>VA_DENOISE</key>
+        <string>0</string>
+        <key>VA_STT_BACKEND</key>
+        <string>mlx</string>
+        <key>VA_STT_LANGUAGE</key>
+        <string>auto</string>
+        <key>VA_STT_MLX_MODEL</key>
+        <string>__CARTHING_ASSISTANT_MODEL__</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
@@ -24,7 +36,7 @@
     <key>ProcessType</key>
     <string>Interactive</string>
     <key>StandardOutPath</key>
-    <string>/dev/null</string>
+    <string>/private/tmp/carthing-btlink.out</string>
     <key>StandardErrorPath</key>
     <string>/private/tmp/carthing-btlink.err</string>
 </dict>

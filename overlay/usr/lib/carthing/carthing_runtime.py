@@ -68,32 +68,28 @@ def _publish():
 
 def _on_command(source, command):
     if source == "iphone" and iphone is not None:
-        hid_command = {
-            "toggle": "play_pause",
-            "play": "play_pause",
-            "pause": "play_pause",
-            "next": "next",
-            "prev": "prev",
-            "previous": "prev",
-            "vol_up": "vol_up",
-            "vol_down": "vol_down",
-        }.get(command)
-        if command in ("vol_up", "vol_down"):
-            if (
-                model.remote_media_active
-                and session_plane is not None
-                and session_plane.send_media_control(command)
-            ):
-                logger.info("volume command -> AirPlay bridge: %s", command)
-            else:
-                logger.info("volume command -> AMS: %s", command)
-                asyncio.create_task(iphone.command(command))
-        elif model.remote_media_active and hid_command is not None:
-            from hid_remote_service import send_consumer_usage
-
-            asyncio.create_task(send_consumer_usage(hid_command))
-        else:
-            asyncio.create_task(iphone.command(command))
+        airplay_commands = {
+            "toggle",
+            "play",
+            "pause",
+            "next",
+            "prev",
+            "previous",
+            "skip_fwd",
+            "skip_back",
+            "vol_up",
+            "vol_down",
+        }
+        if (
+            model.remote_media_active
+            and command in airplay_commands
+            and session_plane is not None
+            and session_plane.send_media_control(command)
+        ):
+            logger.info("media command -> AirPlay bridge: %s", command)
+            return
+        logger.info("media command -> AMS: %s", command)
+        asyncio.create_task(iphone.command(command))
 
 
 def _on_pairing(enabled, role="input"):
@@ -119,6 +115,17 @@ def _on_notification_dismiss(uid):
         asyncio.create_task(iphone.dismiss(uid))
 
 
+def _on_notification_action(payload):
+    if iphone is None or not isinstance(payload, dict):
+        return
+    asyncio.create_task(
+        iphone.notification_action(
+            payload.get("uid"),
+            bool(payload.get("positive")),
+        )
+    )
+
+
 def _on_toggle_notifications(enabled):
     if settings is not None:
         settings.set("notif_blink", bool(enabled))
@@ -138,6 +145,14 @@ def _on_set_brightness(percent):
         power.set_active_brightness_percent(percent)
     if settings is not None:
         settings.set("screen_brightness_pct", percent)
+
+
+def _on_set_screensaver_timeout(seconds):
+    seconds = max(30, int(seconds))
+    if power is not None:
+        power.set_off_after(seconds)
+    if settings is not None:
+        settings.set("screen_off_after_sec", seconds)
 
 
 def _on_toggle_client(enabled):
@@ -514,9 +529,11 @@ def _init_gui():
             on_command=_on_command,
             on_pairing=_on_pairing,
             on_notif_dismiss=_on_notification_dismiss,
+            on_notif_action=_on_notification_action,
             on_toggle_notif_blink=_on_toggle_notifications,
             on_toggle_screensaver=_on_toggle_screensaver,
             on_set_brightness=_on_set_brightness,
+            on_set_screensaver_timeout=_on_set_screensaver_timeout,
             on_power_off=_on_power_off,
             on_toggle_client=_on_toggle_client,
         )

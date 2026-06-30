@@ -91,10 +91,12 @@ ATTR_POSITIVE_ACTION_LABEL  = 6
 ATTR_NEGATIVE_ACTION_LABEL  = 7
 
 DEFAULT_ATTRS_WITH_LEN = (
-    (ATTR_TITLE,    255),
-    (ATTR_SUBTITLE, 255),
-    (ATTR_MESSAGE,  512),   # тело: берём максимум доступного сниппета (письма длинные).
-)                           # Полное письмо по ANCS НЕдоступно — это лишь превью из шторки.
+    (ATTR_TITLE,                  96),
+    (ATTR_SUBTITLE,               96),
+    (ATTR_MESSAGE,               192),
+    (ATTR_POSITIVE_ACTION_LABEL,  48),
+    (ATTR_NEGATIVE_ACTION_LABEL,  48),
+)
 DEFAULT_ATTRS_NO_LEN = (
     ATTR_APP_IDENTIFIER,
     ATTR_DATE,
@@ -113,6 +115,8 @@ class Notification:
     subtitle: str = ""
     message: str = ""
     date: str = ""
+    positive_action_label: str = ""
+    negative_action_label: str = ""
 
     @property
     def app_name(self) -> str:
@@ -342,6 +346,14 @@ class ANCSClient:
         notif.subtitle = attrs.get(ATTR_SUBTITLE, notif.subtitle)
         notif.message  = attrs.get(ATTR_MESSAGE, notif.message)
         notif.date     = attrs.get(ATTR_DATE, notif.date)
+        notif.positive_action_label = attrs.get(
+            ATTR_POSITIVE_ACTION_LABEL,
+            notif.positive_action_label,
+        )
+        notif.negative_action_label = attrs.get(
+            ATTR_NEGATIVE_ACTION_LABEL,
+            notif.negative_action_label,
+        )
         logger.info("ANCS detail: %s", notif)
         if self.on_fetched:
             try:

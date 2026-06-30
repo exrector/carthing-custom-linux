@@ -18,6 +18,7 @@ from screens import (
     NotificationsScreen,
     NowPlayingScreen,
     PairingModal,
+    ServerStatusScreen,
     SettingsScreen,
 )
 from ui_anim import AnimDriver
@@ -31,8 +32,15 @@ from ui_statusbar import StatusBar
 
 logger = logging.getLogger(__name__)
 
-HOME, SETTINGS, NOTIFICATIONS, ASSISTANT = 0, 1, 2, 3
-NAVIGATION = (HOME, ASSISTANT, NOTIFICATIONS)
+HOME, SETTINGS, NOTIFICATIONS, ASSISTANT, SERVER = 0, 1, 2, 3, 4
+NAVIGATION = (HOME, ASSISTANT, NOTIFICATIONS, SERVER)
+VIEW_BUTTONS = {
+    Input.BTN_1: HOME,
+    Input.BTN_2: ASSISTANT,
+    Input.BTN_3: NOTIFICATIONS,
+    Input.BTN_4: SERVER,
+}
+WEEKDAYS_RU = ("ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС")
 
 
 def _freeze_presentation(value):
@@ -64,15 +72,18 @@ class GuiController:
         on_command=None,
         on_pairing=None,
         on_notif_dismiss=None,
+        on_notif_action=None,
         on_toggle_notif_blink=None,
         on_toggle_screensaver=None,
         on_set_brightness=None,
+        on_set_screensaver_timeout=None,
         on_power_off=None,
         on_toggle_client=None,
         **_unused,
     ):
         self.app_state = AppState()
         self._on_notif_dismiss = on_notif_dismiss or (lambda uid: None)
+        self._on_notif_action = on_notif_action or (lambda payload: None)
         self._volume_touch_ts = 0.0
         self._iphone_transport_connected = False
         self._iphone_grace_until = 0.0
@@ -92,6 +103,7 @@ class GuiController:
             on_toggle_notif_blink=on_toggle_notif_blink,
             on_toggle_screensaver=on_toggle_screensaver,
             on_set_brightness=on_set_brightness,
+            on_set_screensaver_timeout=on_set_screensaver_timeout,
             on_power_off=on_power_off,
             on_toggle_client=on_toggle_client,
         )
@@ -103,6 +115,7 @@ class GuiController:
                 SettingsScreen(on_select=lambda key: emit("settings_select", key)),
                 NotificationsScreen(emit=self._intent),
                 AssistantScreen(emit=emit),
+                ServerStatusScreen(),
             ],
             status_bar=StatusBar(),
             anim=AnimDriver(),
@@ -123,6 +136,8 @@ class GuiController:
             self.show_screen(SETTINGS)
         elif intent == "notif_dismiss":
             self._on_notif_dismiss(payload)
+        elif intent == "notif_action":
+            self._on_notif_action(payload)
         elif intent == "notif_select":
             self.compositor.screens[NOTIFICATIONS].select(payload)
             self.render()
@@ -161,6 +176,19 @@ class GuiController:
                 return
             if event[0] in ("scroll_end", "drag", "drag_end"):
                 return
+
+        if event in VIEW_BUTTONS:
+            self.show_screen(VIEW_BUTTONS[event])
+            return
+
+        if event == Input.PRESS:
+            if self.compositor.active != ASSISTANT:
+                self.show_screen(ASSISTANT)
+                self.dispatcher.dispatch("remote_mic_set", True)
+            else:
+                self.dispatcher.dispatch("remote_mic_toggle")
+            self.render()
+            return
 
         if event in (Input.ENCODER_CW, Input.ENCODER_CCW):
             up = event == Input.ENCODER_CW
@@ -217,16 +245,26 @@ class GuiController:
             else None
         )
         session = state.iphone
+        incoming_call = next(
+            (
+                item
+                for item in reversed(state.notifications)
+                if str(item.get("category") or "") == "IncomingCall"
+            ),
+            None,
+        )
         visible_state = {
             "active_screen": active,
             "modal": modal,
             "encoder_volume": round(float(session.volume or 0.0), 3),
             "remote_media_active": state.remote_media_active,
             "clock_text": state.clock_text,
+            "clock_date_text": state.clock_date_text,
             "screensaver_active": state.screensaver_active,
             "notification_indicator_visible": notification_indicator_visible(
                 state.unread_count, state.notif_blink
             ),
+            "incoming_call": incoming_call,
             "pairing_mode": state.pairing_mode,
             "pairing_message": state.pairing_message,
             "power_unplug_status": state.power_unplug_status,
@@ -262,11 +300,14 @@ class GuiController:
             }
         elif active == NOTIFICATIONS:
             visible_state["notifications"] = state.notifications
+        elif active == SERVER:
+            visible_state["server_status"] = state.server_status
         else:
             visible_state["settings"] = {
                 "iphone_connected": session.connected,
                 "screen_brightness": state.screen_brightness,
                 "screensaver_enabled": state.screensaver_enabled,
+                "screen_off_sec": state.screen_off_sec,
                 "notif_blink": state.notif_blink,
                 "device_name": state.device_name,
             }
@@ -363,7 +404,13 @@ class GuiController:
         )
         state.notifications = list(model.notifications)
         state.unread_count = len(state.notifications)
+        state.server_status = dict(getattr(model, "server_status", {}) or {})
         state.clock_text = time.strftime("%H:%M")
+        local_time = time.localtime()
+        state.clock_date_text = (
+            f"{WEEKDAYS_RU[local_time.tm_wday]} · "
+            f"{local_time.tm_mday:02d}.{local_time.tm_mon:02d}"
+        )
         state.device_name = identity_service.visible_name()
         presentation_key = self._presentation_key()
         changed = presentation_key != getattr(self, "_last_presentation_key", None)
@@ -397,12 +444,15 @@ class GuiController:
 
     def show_screen(self, index):
         index = int(index)
+        previous = self.compositor.active
         leaving_assistant = (
-            self.compositor.active == ASSISTANT and index != ASSISTANT
+            previous == ASSISTANT and index != ASSISTANT
         )
         if leaving_assistant and self.app_state.remote_mic_enabled:
             self.dispatcher.dispatch("remote_mic_set", False)
         self.compositor.active = index
+        if index != previous:
+            logger.info("GUI screen -> %s", index)
         self.render()
 
     def show_home(self):

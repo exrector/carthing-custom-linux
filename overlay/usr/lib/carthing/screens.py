@@ -30,15 +30,6 @@ class NowPlayingScreen(Screen):
         self.state = state
 
     def on_input(self, event):
-        if event in (Input.PRESS, Input.BTN_4):
-            self.emit("media_play_pause")
-            return True
-        if event == Input.BTN_2:
-            self.emit("media_next")
-            return True
-        if event == Input.BTN_3:
-            self.emit("media_prev")
-            return True
         return False
 
     def _artist(self, img, draw, text, y):
@@ -69,7 +60,9 @@ class NowPlayingScreen(Screen):
                 getattr(self.state, "clock_text", "--:--"),
                 T.CONTENT_CX,
                 T.MAIN_CY,
-                size=94,
+                size=108,
+                date_text=getattr(self.state, "clock_date_text", ""),
+                date_size=28,
             )
             return img
 
@@ -79,7 +72,9 @@ class NowPlayingScreen(Screen):
                 getattr(self.state, "clock_text", "--:--"),
                 T.CONTENT_CX,
                 T.MAIN_CY,
-                size=94,
+                size=108,
+                date_text=getattr(self.state, "clock_date_text", ""),
+                date_size=28,
             )
             return img
 
@@ -123,6 +118,16 @@ class NowPlayingScreen(Screen):
             y += 56
         if artist:
             self._artist(img, draw, artist, y + 6)
+        if regions is not None:
+            regions.add(
+                (
+                    T.CONTENT_X0,
+                    T.CONTENT_TOP,
+                    T.ARC_SAFE_X,
+                    T.OCCLUSION_BOTTOM,
+                ),
+                "media_play_pause",
+            )
         return img
 
 
@@ -139,9 +144,6 @@ class AssistantScreen(Screen):
         self.state = state
 
     def on_input(self, event):
-        if event in (Input.PRESS, Input.BTN_4):
-            self.emit("remote_mic_toggle")
-            return True
         return False
 
     @staticmethod
@@ -278,7 +280,9 @@ class SettingsScreen(Screen):
         if key == "notif_blink":
             return "Вкл" if bool(getattr(self.state, "notif_blink", True)) else "Выкл"
         if key == "screensaver":
-            return "Вкл" if bool(getattr(self.state, "screensaver_enabled", True)) else "Выкл"
+            if not bool(getattr(self.state, "screensaver_enabled", True)):
+                return "Выкл"
+            return f"{int(getattr(self.state, 'screen_off_sec', 60))} с"
         if key == "add_iphone":
             return "Подключён" if bool(getattr(self.state.iphone, "connected", False)) else ""
         if key == "about":
@@ -295,13 +299,116 @@ class SettingsScreen(Screen):
             draw.line((28, rect[3], right, rect[3]), fill=T.HAIRLINE, width=1)
             draw.text((40, y + 14), label, font=T.font(T.SZ_BODY), fill=T.FG)
             value = self._value(key)
-            if value:
+            adjustable = key in ("brightness", "screensaver")
+            if adjustable:
+                minus = (right - 224, y + 4, right - 174, y + 52)
+                plus = (right - 58, y + 4, right - 8, y + 52)
+                T.icon_minus(
+                    draw,
+                    (minus[0] + minus[2]) // 2,
+                    (minus[1] + minus[3]) // 2,
+                    10,
+                    color=T.MUTED,
+                    width=3,
+                )
+                T.icon_plus(
+                    draw,
+                    (plus[0] + plus[2]) // 2,
+                    (plus[1] + plus[3]) // 2,
+                    10,
+                    color=T.MUTED,
+                    width=3,
+                )
+                font = T.font(T.SZ_META)
+                width = C.text_w(draw, value, font)
+                draw.text(
+                    (right - 116 - width // 2, y + 18),
+                    value,
+                    font=font,
+                    fill=T.FG,
+                )
+            elif value:
                 font = T.font(T.SZ_META)
                 width = C.text_w(draw, value, font)
                 draw.text((right - width - 12, y + 18), value, font=font, fill=T.MUTED)
             if regions is not None:
                 regions.add(rect, "settings_tap", payload=index)
+                if adjustable:
+                    regions.add(
+                        minus,
+                        "display_adjust",
+                        payload=(key, "-"),
+                    )
+                    regions.add(
+                        plus,
+                        "display_adjust",
+                        payload=(key, "+"),
+                    )
             y += self.ROW_HEIGHT
+        return img
+
+
+class ServerStatusScreen(Screen):
+    name = "server"
+    title = "Сервер"
+    fullscreen = True
+
+    def __init__(self):
+        self.state = None
+
+    def on_state(self, state):
+        self.state = state
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        _title(draw, "Сервер")
+        status = dict(getattr(self.state, "server_status", {}) or {})
+        if not status:
+            C.text_centered(
+                draw,
+                "ОЖИДАНИЕ BLUETOOTH",
+                T.font(T.SZ_BODY),
+                T.FAINT,
+                T.MAIN_CY - 18,
+                cx=T.ARC_SAFE_X // 2,
+            )
+            return img
+
+        host = str(status.get("host") or "Mac")
+        connected = bool(status.get("connected", False))
+        draw.text((34, 82), host, font=T.font(40), fill=T.FG)
+        draw.text(
+            (34, 132),
+            "CTSP ONLINE" if connected else "CTSP OFFLINE",
+            font=T.font(T.SZ_SMALL),
+            fill=T.STATUS_OK if connected else T.STATUS_OFF,
+        )
+        uptime_s = float(status.get("uptime_s") or 0.0)
+        rows = (
+            ("CPU", f"{float(status.get('cpu_load_pct') or 0.0):.0f}%"),
+            ("RAM", f"{float(status.get('memory_gb') or 0.0):.1f} GB"),
+            ("THERMAL", str(status.get("thermal") or "unknown").upper()),
+            ("UPTIME", f"{int(uptime_s // 3600)} H"),
+            (
+                "CTSP RTT",
+                (
+                    f"{float(status['ctsp_rtt_ms']):.1f} MS"
+                    if status.get("ctsp_rtt_ms") is not None
+                    else "--"
+                ),
+            ),
+            (
+                "ASSISTANT",
+                "ONLINE" if bool(status.get("assistant")) else "OFFLINE",
+            ),
+        )
+        y = 188
+        for index, (label, value) in enumerate(rows):
+            x = 34 + (index % 2) * 330
+            if index and index % 2 == 0:
+                y += 72
+            draw.text((x, y), label, font=T.font(T.SZ_SMALL), fill=T.FAINT)
+            draw.text((x, y + 26), value, font=T.font(T.SZ_META), fill=T.MUTED)
         return img
 
 

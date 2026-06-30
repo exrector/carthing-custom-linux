@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import COpus
+import Darwin
 import Foundation
 import Network
 import ProtocolCore
@@ -104,6 +105,7 @@ final class CarThingBTLink {
     private var lastReport = Date()
     private var scanRetryTimer: Timer?
     private var latencyProbeTimer: Timer?
+    private var serverStatusTimer: Timer?
     private var reconnectWorkItem: DispatchWorkItem?
     private var signalSources: [DispatchSourceSignal] = []
     private var shuttingDown = false
@@ -118,6 +120,7 @@ final class CarThingBTLink {
             .flatMap { UInt16($0) } ?? 49_501
     private var listener: NWListener?
     private var homePodControl: NWConnection?
+    private var assistantProcess: Process?
     private var clients: [TCPAudioClient] = []    // доступ только с main
     private var rxText = Data()
     private var latencyProbeSequence: UInt32 = 0
@@ -150,9 +153,16 @@ final class CarThingBTLink {
         // до того, как CBCentralManager(queue:.main) включится. Под launchd что-то держало
         // RunLoop, но в subprocess/foreground — нет. Явный keepalive-Timer надёжен везде.
         Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { _ in }
+        serverStatusTimer = Timer.scheduledTimer(
+            withTimeInterval: 5.0,
+            repeats: true
+        ) { [weak self] _ in
+            self?.sendServerStatus()
+        }
         if let p = tcpPort {
             installSignalHandlers()
             startTCP(p)               // аудио + команды через локальный TCP, stdin не нужен
+            startAssistantWorker()
         } else if headless {
             // Демон-«липучка»: stdin не читаем (под LaunchAgent stdin=/dev/null → мгновенный
             // EOF → exit(0); это и был флап). Реконнект — внутренний (scanRetry/l2capClosed).
@@ -177,10 +187,13 @@ final class CarThingBTLink {
                 self?.shuttingDown = true
                 self?.stopScanRetry()
                 self?.stopLatencyProbes()
+                self?.serverStatusTimer?.invalidate()
+                self?.serverStatusTimer = nil
                 self?.cancelReconnect()
                 self?.transport.stopScan()
                 fputs("carthing-btlink: signal -> clean disconnect\n", stderr)
                 self?.stopMic()
+                self?.stopAssistantWorker()
                 self?.transport.send(
                     CTSPFrame(type: .command, payload: Data("disconnect".utf8))
                 )
@@ -238,6 +251,7 @@ final class CarThingBTLink {
                 )
             }
             transport.send(CTSPFrame(type: .hello, payload: Data("\(Date().timeIntervalSince1970)".utf8)))
+            sendServerStatus()
             fputs("carthing-btlink: capture gate remains device-owned\n", stderr)
         case .l2capClosed:
             streaming = false
@@ -514,6 +528,60 @@ final class CarThingBTLink {
         fputs("carthing-btlink: TCP server on 127.0.0.1:\(port)\n", stderr)
     }
 
+    private func startAssistantWorker() {
+        guard !shuttingDown, assistantProcess?.isRunning != true else { return }
+        let environment = ProcessInfo.processInfo.environment
+        guard let python = environment["CARTHING_ASSISTANT_PYTHON"],
+              let script = environment["CARTHING_ASSISTANT_SCRIPT"],
+              !python.isEmpty,
+              !script.isEmpty else {
+            fputs("carthing-btlink: assistant worker not configured\n", stderr)
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: python)
+        process.arguments = [script]
+        process.currentDirectoryURL = URL(
+            fileURLWithPath: script
+        ).deletingLastPathComponent()
+        var workerEnvironment = environment
+        workerEnvironment["CARTHING_ASSISTANT_PARENT_PID"] = String(getpid())
+        process.environment = workerEnvironment
+        process.standardOutput = FileHandle.standardError
+        process.standardError = FileHandle.standardError
+        process.terminationHandler = { [weak self] finished in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if self.assistantProcess === finished {
+                    self.assistantProcess = nil
+                }
+                fputs(
+                    "carthing-btlink: assistant worker exit=\(finished.terminationStatus)\n",
+                    stderr
+                )
+                guard !self.shuttingDown else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    self.startAssistantWorker()
+                }
+            }
+        }
+        do {
+            try process.run()
+            assistantProcess = process
+            fputs("carthing-btlink: assistant worker started pid=\(process.processIdentifier)\n", stderr)
+        } catch {
+            fputs("carthing-btlink: assistant worker start failed: \(error)\n", stderr)
+        }
+    }
+
+    private func stopAssistantWorker() {
+        guard let process = assistantProcess else { return }
+        assistantProcess = nil
+        if process.isRunning {
+            process.terminate()
+        }
+    }
+
     private func startHomePodControl() {
         guard homePodControl == nil,
               let port = NWEndpoint.Port(rawValue: homePodControlPort) else {
@@ -535,8 +603,18 @@ final class CarThingBTLink {
 
     private func forwardDeviceCommand(_ data: Data) {
         guard let command = String(data: data, encoding: .utf8),
-              command == "media_control:vol_up"
-                || command == "media_control:vol_down",
+              [
+                "media_control:toggle",
+                "media_control:play",
+                "media_control:pause",
+                "media_control:next",
+                "media_control:prev",
+                "media_control:previous",
+                "media_control:skip_fwd",
+                "media_control:skip_back",
+                "media_control:vol_up",
+                "media_control:vol_down",
+              ].contains(command),
               let homePodControl else {
             return
         }
@@ -643,6 +721,42 @@ final class CarThingBTLink {
     private static func ms(_ end: UInt64, since start: UInt64) -> Double {
         guard end >= start else { return 0 }
         return Double(end - start) / 1_000_000
+    }
+
+    private func sendServerStatus() {
+        guard linkOpenedNs != nil else { return }
+        var values = [Double](repeating: 0, count: 3)
+        let count = getloadavg(&values, Int32(values.count))
+        let load1 = count > 0 ? values[0] : 0
+        let cores = max(1, ProcessInfo.processInfo.activeProcessorCount)
+        let thermal: String
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: thermal = "nominal"
+        case .fair: thermal = "fair"
+        case .serious: thermal = "serious"
+        case .critical: thermal = "critical"
+        @unknown default: thermal = "unknown"
+        }
+        var payload: [String: Any] = [
+            "host": Host.current().localizedName ?? "Mac",
+            "connected": true,
+            "assistant": assistantProcess?.isRunning == true && !clients.isEmpty,
+            "cpu_load_pct": min(999, load1 / Double(cores) * 100),
+            "memory_gb": Double(ProcessInfo.processInfo.physicalMemory)
+                / 1_073_741_824,
+            "thermal": thermal,
+            "uptime_s": ProcessInfo.processInfo.systemUptime,
+        ]
+        payload["ctsp_rtt_ms"] = latestCTSPRTTMs ?? NSNull()
+        guard let json = try? JSONSerialization.data(
+            withJSONObject: payload,
+            options: [.sortedKeys]
+        ) else {
+            return
+        }
+        var command = Data("server_status:".utf8)
+        command.append(json)
+        transport.send(CTSPFrame(type: .command, payload: command))
     }
 
     private func receiveText(_ conn: NWConnection) {

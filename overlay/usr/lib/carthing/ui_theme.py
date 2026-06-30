@@ -111,7 +111,9 @@ def _build_fx_mask(size):
     mask = Image.new("L", size, 255)
     md = ImageDraw.Draw(mask)
     for y in range(0, h, 4):
-        md.line([0, y, w, y], fill=200)
+        md.line([0, y, w, y], fill=168)
+        if y + 1 < h:
+            md.line([0, y + 1, w, y + 1], fill=226)
     vig = Image.new("L", size, 0)
     vd = ImageDraw.Draw(vig)
     vd.ellipse([-w * 0.35, -h * 0.5, w * 1.35, h * 1.5], fill=255)
@@ -131,19 +133,50 @@ def postprocess(img):
     return ImageChops.multiply(img, _fx_mask)
 
 
-def draw_clock(draw, text, cx, cy, size=104, color=ACCENT):
+def draw_clock(
+    draw,
+    text,
+    cx,
+    cy,
+    size=104,
+    color=ACCENT,
+    date_text="",
+    date_size=30,
+    gap=18,
+):
     """Draw the shared Play Now / screensaver clock face."""
     value = str(text or "--:--")
     face = font(size)
     box = draw.textbbox((0, 0), value, font=face)
     width = box[2] - box[0]
     height = box[3] - box[1]
+    subtitle = str(date_text or "")
+    subtitle_face = font(date_size)
+    subtitle_box = draw.textbbox((0, 0), subtitle, font=subtitle_face)
+    subtitle_width = subtitle_box[2] - subtitle_box[0]
+    subtitle_height = (
+        subtitle_box[3] - subtitle_box[1]
+        if subtitle
+        else 0
+    )
+    total_height = height + (gap + subtitle_height if subtitle else 0)
+    top = cy - total_height / 2
     draw.text(
-        (int(cx - width / 2 - box[0]), int(cy - height / 2 - box[1])),
+        (int(cx - width / 2 - box[0]), int(top - box[1])),
         value,
         font=face,
         fill=color,
     )
+    if subtitle:
+        draw.text(
+            (
+                int(cx - subtitle_width / 2 - subtitle_box[0]),
+                int(top + height + gap - subtitle_box[1]),
+            ),
+            subtitle,
+            font=subtitle_face,
+            fill=MUTED,
+        )
 
 
 _font_cache = {}
@@ -197,6 +230,10 @@ def icon_plus(draw, cx, cy, r, color=FG, width=3):
     """[CLAUDE 2026-06-03] Плюс (добавить/сопряжение)."""
     draw.line([(cx - r, cy), (cx + r, cy)], fill=color, width=width)
     draw.line([(cx, cy - r), (cx, cy + r)], fill=color, width=width)
+
+
+def icon_minus(draw, cx, cy, r, color=FG, width=3):
+    draw.line([(cx - r, cy), (cx + r, cy)], fill=color, width=width)
 
 
 def icon_gear(draw, cx, cy, r, color=FG, width=2):

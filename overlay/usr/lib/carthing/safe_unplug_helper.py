@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import signal
 import subprocess
@@ -185,13 +186,46 @@ def enter_suspend(suspend_state: str) -> None:
             log(f"{mode} failed: {exc}")
 
 
+def verify_environment(state_mount: str, suspend_state: str) -> dict:
+    try:
+        suspend_modes = open(
+            suspend_state,
+            "r",
+            encoding="ascii",
+            errors="replace",
+        ).read().split()
+    except Exception:
+        suspend_modes = []
+    return {
+        "state_mounted": state_is_mounted(state_mount),
+        "state_read_only": state_is_ro(state_mount),
+        "state_holders": sorted(processes_holding_path(state_mount)),
+        "suspend_modes": suspend_modes,
+        "supervisor_pid": read_int(SUPERVISOR_PID),
+        "ready": (
+            state_is_mounted(state_mount)
+            and bool({"mem", "freeze"}.intersection(suspend_modes))
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--state-mount", default="/run/carthing-state")
     parser.add_argument("--boot-mount", default="/run/carthing-boot")
     parser.add_argument("--suspend-state", default="/sys/power/state")
     parser.add_argument("--reason", default="unspecified")
+    parser.add_argument("--verify-only", action="store_true")
     args = parser.parse_args()
+
+    if args.verify_only:
+        print(
+            json.dumps(
+                verify_environment(args.state_mount, args.suspend_state),
+                sort_keys=True,
+            )
+        )
+        return 0
 
     log(f"finalizer begin reason={args.reason}")
     time.sleep(0.35)

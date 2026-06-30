@@ -101,13 +101,14 @@ class MediaSession:
 
 
 class AppState:
-    IPHONE, SETTINGS, NOTIFICATIONS, ASSISTANT = 0, 1, 2, 3
+    IPHONE, SETTINGS, NOTIFICATIONS, ASSISTANT, SERVER = 0, 1, 2, 3, 4
 
     def __init__(self):
         self.iphone = MediaSession()
         self.active_desktop = self.IPHONE
         self.last_media_source = "iphone"
         self.remote_media_active = False
+        self.server_status = {}
         self.notifications = []
         self.unread_count = 0
         self.trusted = []
@@ -129,6 +130,7 @@ class AppState:
         self._assistant_typewriter_at = time.monotonic()
         self._assistant_typewriter_credit = 0.0
         self.clock_text = "--:--"
+        self.clock_date_text = ""
         self.device_name = device_name()
         self.pairing_mode = False
         self.pairing_role = "input"

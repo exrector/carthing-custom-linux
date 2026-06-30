@@ -3,6 +3,7 @@
 
 class Dispatcher:
     BRIGHTNESS_PRESETS = tuple(range(10, 101, 10))
+    SCREENSAVER_PRESETS = (0, 30, 60, 120, 300)
 
     def __init__(
         self,
@@ -12,6 +13,7 @@ class Dispatcher:
         on_toggle_notif_blink=None,
         on_toggle_screensaver=None,
         on_set_brightness=None,
+        on_set_screensaver_timeout=None,
         on_power_off=None,
         on_toggle_client=None,
         **_unused,
@@ -22,6 +24,9 @@ class Dispatcher:
         self.on_toggle_notif_blink = on_toggle_notif_blink or (lambda enabled: None)
         self.on_toggle_screensaver = on_toggle_screensaver or (lambda enabled: None)
         self.on_set_brightness = on_set_brightness or (lambda percent: None)
+        self.on_set_screensaver_timeout = (
+            on_set_screensaver_timeout or (lambda seconds: None)
+        )
         self.on_power_off = on_power_off or (lambda: None)
         self.on_toggle_client = on_toggle_client or (lambda enabled: None)
 
@@ -99,9 +104,23 @@ class Dispatcher:
             self.state.notif_blink = value
             self.on_toggle_notif_blink(value)
         elif key == "screensaver":
-            value = not bool(getattr(self.state, "screensaver_enabled", True))
-            self.state.screensaver_enabled = value
-            self.on_toggle_screensaver(value)
+            current = (
+                int(getattr(self.state, "screen_off_sec", 60))
+                if bool(getattr(self.state, "screensaver_enabled", True))
+                else 0
+            )
+            presets = self.SCREENSAVER_PRESETS
+            index = min(
+                range(len(presets)),
+                key=lambda candidate: abs(presets[candidate] - current),
+            )
+            step = 1 if direction == "+" else -1
+            value = presets[max(0, min(len(presets) - 1, index + step))]
+            self.state.screensaver_enabled = value > 0
+            if value > 0:
+                self.state.screen_off_sec = value
+                self.on_set_screensaver_timeout(value)
+            self.on_toggle_screensaver(value > 0)
 
     def _set_remote_mic(self, enabled):
         self.state.set_remote_mic(

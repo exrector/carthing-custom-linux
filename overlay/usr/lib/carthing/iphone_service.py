@@ -26,9 +26,15 @@ _AMS_CMD = {
 }
 
 try:
-    from ancs_client import ANCSClient
+    from ancs_client import (
+        ANCSClient,
+        FLAG_NEGATIVE_ACTION,
+        FLAG_POSITIVE_ACTION,
+    )
 except Exception:
     ANCSClient = None
+    FLAG_POSITIVE_ACTION = 0x08
+    FLAG_NEGATIVE_ACTION = 0x10
 try:
     from cts_client import CTSClient
 except Exception:
@@ -130,7 +136,30 @@ class IPhoneService:
         body = (getattr(notif, "message", "") or getattr(notif, "subtitle", "") or "").strip()
         if not title:                      # если title пуст — поднять body в заголовок
             title, body = body, ""
-        self.model.add_notification(notif.uid, notif.app_name, title, body)
+        self.model.add_notification(
+            notif.uid,
+            notif.app_name,
+            title,
+            body,
+            category=getattr(notif, "category", "Other"),
+            important=bool(getattr(notif, "important", False)),
+            positive_action=bool(
+                getattr(notif, "event_flags", 0) & FLAG_POSITIVE_ACTION
+            ),
+            negative_action=bool(
+                getattr(notif, "event_flags", 0) & FLAG_NEGATIVE_ACTION
+            ),
+            positive_label=getattr(
+                notif,
+                "positive_action_label",
+                "",
+            ),
+            negative_label=getattr(
+                notif,
+                "negative_action_label",
+                "",
+            ),
+        )
         self._publish()
 
     def _on_removed(self, uid):
@@ -145,6 +174,20 @@ class IPhoneService:
             except Exception as e:
                 logger.warning("ANCS dismiss failed: %s", e)
         self.model.remove_notification(uid)
+        self._publish()
+
+    async def notification_action(self, uid, positive):
+        if self.ancs is not None:
+            action_id = 0 if positive else 1
+            try:
+                await self._gate(
+                    "iphone-ancs-action",
+                    lambda: self.ancs.perform_action(uid, action_id),
+                )
+            except Exception as error:
+                logger.warning("ANCS action failed: %s", error)
+        if not positive:
+            self.model.remove_notification(uid)
         self._publish()
 
     def reset(self):
