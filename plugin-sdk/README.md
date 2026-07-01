@@ -28,13 +28,12 @@ Minimal manifest:
 }
 ```
 
-Build the included example:
+Build one included example:
 
 ```sh
-chmod +x plugin-sdk/examples/mac-deck/mac_deck.py
 ./plugin-sdk/package-plugin.sh \
-  plugin-sdk/examples/mac-deck \
-  build/MacDeck.ctplugin
+  plugin-sdk/examples/shortcut-finder \
+  build/Finder.ctplugin
 ```
 
 Every new or updated archive is installed disabled. The user must enable it in
@@ -72,7 +71,7 @@ flattens cards from all enabled plugins and renders the first nine tiles.
 
 The reference implementations are:
 
-- `plugin-sdk/examples/mac-deck`: three configurable macOS shortcuts;
+- `plugin-sdk/examples/shortcut-*`: seven independent macOS shortcut plugins;
 - `plugin-sdk/examples/weather`: current weather from Open-Meteo;
 - `plugin-sdk/examples/currency`: official USD/EUR rates from the Bank of Russia.
 
@@ -81,6 +80,7 @@ action becomes a large tappable tile. A card without actions becomes an
 information tile and shows up to two rows. There are no nested plugin screens
 or plugin-specific swipe gestures.
 
-Mac Deck commands run as the current macOS user. Install only trusted archives;
-the v1 plugin host isolates lifecycle and protocol parsing, but it is not an OS
-sandbox.
+Shortcut commands run as the current macOS user. Each tile is a separate plugin
+and can be enabled or removed without affecting the other eight. Install only
+trusted archives; the v1 plugin host isolates lifecycle and protocol parsing,
+but it is not an OS sandbox.

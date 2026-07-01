@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.safari",
+  "action_id": "open",
+  "label": "SAFARI",
+  "command": ["/usr/bin/open", "-a", "Safari"]
+}

@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.shortcut.terminal",
+  "name": "Terminal",
+  "version": "1.0.0",
+  "executable": "shortcut_plugin.py",
+  "summary": "Open Terminal from Car Thing.",
+  "icon": "terminal"
+}

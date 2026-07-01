@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.shortcut.calendar",
+  "name": "Calendar",
+  "version": "1.0.0",
+  "executable": "shortcut_plugin.py",
+  "summary": "Open Calendar from Car Thing.",
+  "icon": "calendar"
+}

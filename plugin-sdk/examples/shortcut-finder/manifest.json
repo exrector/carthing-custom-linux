@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.shortcut.finder",
+  "name": "Finder",
+  "version": "1.0.0",
+  "executable": "shortcut_plugin.py",
+  "summary": "Open Finder from Car Thing.",
+  "icon": "folder"
+}

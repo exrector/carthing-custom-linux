@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.shortcut.music",
+  "name": "Music",
+  "version": "1.0.0",
+  "executable": "shortcut_plugin.py",
+  "summary": "Open Music from Car Thing.",
+  "icon": "music.note"
+}

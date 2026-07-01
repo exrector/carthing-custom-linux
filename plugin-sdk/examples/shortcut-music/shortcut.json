@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.music",
+  "action_id": "open",
+  "label": "MUSIC",
+  "command": ["/usr/bin/open", "-a", "Music"]
+}

@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.mail",
+  "action_id": "open",
+  "label": "MAIL",
+  "command": ["/usr/bin/open", "-a", "Mail"]
+}

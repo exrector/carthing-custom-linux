@@ -28,3 +28,11 @@
 | 2026-06-18 | Commutator snapshot standby: one-shot trusted-output scan on Коммутатор entry, hold all found online outputs, Play Now clears all external output footprints, Route-view mode/status line, external outputs dimmed in Play Now | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-015815`, rootfs sha256 `174ad69defe7a2edf4ed857ef61cf513e90b81766c2769109de2268fae2ed589`, runtime tree sha1 `1dd0d1d9ab0e2cdad4662c665eb2caeee3487b61`; proof `artifacts/route-load-20260618-015708/proof.json` |
 | 2026-06-18 | Source-first gentle Play Now teardown: when leaving Коммутатор, close iPhone/source AVDTP stream/signaling before suspending/closing receiver outputs and releasing speaker ACLs | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-102714`, rootfs sha256 `713cfc81bccf9f53ad83ac7c6360f144a3bdd51f34934daaac695d9b9a51a8a2`, runtime tree sha1 `c7899528cc75dfaf0b97e1780de72595779b4a83`; live deploy verified source ACL closes before Play Now resource teardown, active-RTP graceful-close proof still needs Fosi + playback |
 | 2026-06-18 | Play Now incoming-output gate: trusted speaker-owned Classic/AVCTP/AVDTP surfaces are rejected outside Коммутатор snapshot/selected-output ownership, preventing Fosi from self-attaching while GUI shows Play Now; iPhone source stickiness preserved | `tools/bake-rootfs.py` → `flash-bake-unified-stable-20260618-103948`, rootfs sha256 `6b13a8de1aa5e58e6f564d8088b724cb613f55428bb89f8edd663171fb7c1044`, runtime tree sha1 `70fca5213c2c3b23df05307f1d6aa27dc2de520f`; live deploy verified Play Now keeps Fosi/Maedhawk disconnected while iPhone AMS/ANCS/CTS stay active |
+
+## 2026-07-01 — Ожидает следующего бейка
+
+- Опциональная Pac-Man-анимация заставки с persisted-настройкой, обновлённый
+  компактный экран настроек и runtime tree sha1
+  `8ad251f840b5bd639cd2daf0d19b5e7a7497bf7c`. Изменения доставлены на живое
+  устройство через `tools/deploy`, проверены по SHA-256 и bake-readiness, но
+  пока не записаны в `rootfs.img`.

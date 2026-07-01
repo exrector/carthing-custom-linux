@@ -12,6 +12,7 @@ class Dispatcher:
         on_pairing=None,
         on_toggle_notif_blink=None,
         on_toggle_screensaver=None,
+        on_toggle_screensaver_pacman=None,
         on_set_brightness=None,
         on_set_screensaver_timeout=None,
         on_power_off=None,
@@ -23,6 +24,9 @@ class Dispatcher:
         self.on_pairing = on_pairing or (lambda enabled, role="input": None)
         self.on_toggle_notif_blink = on_toggle_notif_blink or (lambda enabled: None)
         self.on_toggle_screensaver = on_toggle_screensaver or (lambda enabled: None)
+        self.on_toggle_screensaver_pacman = (
+            on_toggle_screensaver_pacman or (lambda enabled: None)
+        )
         self.on_set_brightness = on_set_brightness or (lambda percent: None)
         self.on_set_screensaver_timeout = (
             on_set_screensaver_timeout or (lambda seconds: None)
@@ -83,6 +87,8 @@ class Dispatcher:
             self._display_adjust("notif_blink", "+")
         elif key == "screensaver":
             self._display_adjust("screensaver", "+")
+        elif key == "screensaver_pacman":
+            self._display_adjust("screensaver_pacman", "+")
         elif key == "power_off_confirm":
             self.on_power_off()
 
@@ -121,6 +127,12 @@ class Dispatcher:
                 self.state.screen_off_sec = value
                 self.on_set_screensaver_timeout(value)
             self.on_toggle_screensaver(value > 0)
+        elif key == "screensaver_pacman":
+            value = not bool(
+                getattr(self.state, "screensaver_pacman_enabled", False)
+            )
+            self.state.screensaver_pacman_enabled = value
+            self.on_toggle_screensaver_pacman(value)
 
     def _set_remote_mic(self, enabled):
         self.state.set_remote_mic(

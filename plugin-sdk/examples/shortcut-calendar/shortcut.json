@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.calendar",
+  "action_id": "open",
+  "label": "CALENDAR",
+  "command": ["/usr/bin/open", "-a", "Calendar"]
+}

@@ -13,6 +13,7 @@ _DEFAULTS = {
     "screen_brightness_pct": 100,
     "sleep_on_idle": True,
     "screensaver_enabled": True,
+    "screensaver_pacman_enabled": False,
     "screensaver_brightness": 12,
     "screen_off_after_sec": 150,
     "screen_active_brightness": 100,

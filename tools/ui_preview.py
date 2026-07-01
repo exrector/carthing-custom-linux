@@ -32,14 +32,25 @@ def _state():
     s.iphone.duration = 757
     s.iphone.position = 192
     s.iphone.playing = True
+    shortcuts = (
+        ("finder", "FINDER"),
+        ("music", "MUSIC"),
+        ("notes", "NOTES"),
+        ("safari", "SAFARI"),
+        ("calendar", "CALENDAR"),
+        ("mail", "MAIL"),
+        ("terminal", "TERMINAL"),
+    )
     s.plugin_catalog = [
         {
             "manifest": {
-                "id": "dev.carthing.example.mac-deck",
-                "name": "Mac Deck",
+                "id": f"dev.carthing.example.shortcut.{identifier}",
+                "name": label.title(),
             },
             "enabled": True,
-        },
+        }
+        for identifier, label in shortcuts
+    ] + [
         {
             "manifest": {
                 "id": "dev.carthing.example.currency",
@@ -56,67 +67,27 @@ def _state():
         },
     ]
     s.plugin_snapshots = {
-        "dev.carthing.example.mac-deck": {
+        f"dev.carthing.example.shortcut.{identifier}": {
             "cards": [{
-                "id": "main-1",
-                "title": "MAC DECK",
+                "id": "shortcut",
+                "title": label,
                 "subtitle": "",
                 "status": "READY",
+                "accent": "#33FF88",
                 "rows": [],
                 "actions": [
                     {
-                        "id": "finder",
-                        "label": "FINDER",
-                        "style": "primary",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "music",
-                        "label": "MUSIC",
-                        "style": "normal",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "notes",
-                        "label": "NOTES",
-                        "style": "normal",
-                        "enabled": True,
-                    },
-                ],
-            }, {
-                "id": "main-2",
-                "title": "MAC DECK",
-                "subtitle": "",
-                "status": "READY",
-                "rows": [],
-                "actions": [
-                    {
-                        "id": "safari",
-                        "label": "SAFARI",
-                        "style": "normal",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "calendar",
-                        "label": "CALENDAR",
-                        "style": "normal",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "mail",
-                        "label": "MAIL",
-                        "style": "normal",
-                        "enabled": True,
-                    },
-                    {
-                        "id": "terminal",
-                        "label": "TERMINAL",
+                        "id": "open",
+                        "label": label,
                         "style": "normal",
                         "enabled": True,
                     },
                 ],
             }],
-        },
+        }
+        for identifier, label in shortcuts
+    }
+    s.plugin_snapshots.update({
         "dev.carthing.example.currency": {
             "cards": [{
                 "id": "rates",
@@ -145,7 +116,7 @@ def _state():
                 "actions": [],
             }],
         },
-    }
+    })
     return s
 
 
@@ -172,6 +143,11 @@ def main():
     st.active_desktop = 0
     disp.present(_compose(comp), name="nowplaying_unread")
     print("wrote nowplaying_unread.png")
+
+    st.screensaver_active = True
+    st.screensaver_pacman_enabled = True
+    print("wrote", comp.render())
+
 
 def _compose(comp, guide=True):
     from PIL import ImageDraw

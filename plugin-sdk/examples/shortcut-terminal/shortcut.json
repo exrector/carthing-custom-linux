@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.terminal",
+  "action_id": "open",
+  "label": "TERMINAL",
+  "command": ["/usr/bin/open", "-a", "Terminal"]
+}

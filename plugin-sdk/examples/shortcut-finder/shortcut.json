@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.finder",
+  "action_id": "open",
+  "label": "FINDER",
+  "command": ["/usr/bin/open", "-a", "Finder"]
+}

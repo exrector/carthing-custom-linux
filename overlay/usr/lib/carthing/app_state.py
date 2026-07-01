@@ -119,6 +119,7 @@ class AppState:
         self.sleep_on_idle = True
         self.screen_off_sec = 150
         self.screensaver_enabled = True
+        self.screensaver_pacman_enabled = False
         self.screensaver_active = False
         self.notif_blink = True
         self.screen_brightness = 100

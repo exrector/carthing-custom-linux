@@ -146,6 +146,11 @@ def _on_toggle_screensaver(enabled):
         settings.set("screensaver_enabled", enabled)
 
 
+def _on_toggle_screensaver_pacman(enabled):
+    if settings is not None:
+        settings.set("screensaver_pacman_enabled", bool(enabled))
+
+
 def _on_set_brightness(percent):
     percent = int(percent)
     if power is not None:
@@ -539,6 +544,7 @@ def _init_gui():
             on_notif_action=_on_notification_action,
             on_toggle_notif_blink=_on_toggle_notifications,
             on_toggle_screensaver=_on_toggle_screensaver,
+            on_toggle_screensaver_pacman=_on_toggle_screensaver_pacman,
             on_set_brightness=_on_set_brightness,
             on_set_screensaver_timeout=_on_set_screensaver_timeout,
             on_power_off=_on_power_off,
@@ -551,6 +557,9 @@ def _init_gui():
         gui.app_state.sleep_on_idle = bool(getattr(power, "sleep_enabled", True))
         gui.app_state.screen_off_sec = int(getattr(power, "off_after", 150))
         gui.app_state.screensaver_enabled = bool(power.screensaver_enabled)
+        gui.app_state.screensaver_pacman_enabled = bool(
+            settings.get("screensaver_pacman_enabled", False)
+        )
         gui.app_state.notif_blink = bool(settings.get("notif_blink", True))
         gui.app_state.screen_brightness = int(
             settings.get("screen_brightness_pct", 100)
@@ -635,7 +644,7 @@ async def _render_loop():
                 else power.render_interval
             )
             if gui is not None and gui.needs_fast_render():
-                interval = min(interval, 0.033)
+                interval = min(interval, gui.fast_render_interval())
             await asyncio.sleep(interval)
         except asyncio.CancelledError:
             raise

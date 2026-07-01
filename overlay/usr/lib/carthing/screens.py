@@ -260,7 +260,7 @@ class SettingsScreen(Screen):
     name = "settings"
     title = "Настройки"
     fullscreen = True
-    ROW_HEIGHT = 64
+    ROW_HEIGHT = 56
 
     def __init__(self, on_select=None):
         self.state = None
@@ -269,6 +269,7 @@ class SettingsScreen(Screen):
             ("add_iphone", "Добавить iPhone"),
             ("brightness", "Яркость"),
             ("screensaver", "Заставка"),
+            ("screensaver_pacman", "Pac-Man в заставке"),
             ("notif_blink", "Индикатор уведомлений"),
             ("power_off_confirm", "Подготовить отключение USB"),
             ("about", "О системе"),
@@ -299,6 +300,14 @@ class SettingsScreen(Screen):
             if seconds < 60:
                 return f"{seconds} с"
             return f"{seconds // 60} мин"
+        if key == "screensaver_pacman":
+            return (
+                "Вкл"
+                if bool(
+                    getattr(self.state, "screensaver_pacman_enabled", False)
+                )
+                else "Выкл"
+            )
         if key == "add_iphone":
             return "Подключён" if bool(getattr(self.state.iphone, "connected", False)) else ""
         if key == "about":
@@ -345,6 +354,13 @@ class SettingsScreen(Screen):
                 )
             elif value:
                 font = T.font(T.SZ_META)
+                label_width = C.text_w(draw, label, T.font(T.SZ_BODY))
+                value = C.truncate(
+                    draw,
+                    value,
+                    font,
+                    max(40, right - (40 + label_width + 28) - 12),
+                )
                 width = C.text_w(draw, value, font)
                 draw.text((right - width - 12, y + 18), value, font=font, fill=T.MUTED)
             if regions is not None:

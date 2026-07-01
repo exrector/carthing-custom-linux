@@ -75,6 +75,7 @@ class GuiController:
         on_notif_action=None,
         on_toggle_notif_blink=None,
         on_toggle_screensaver=None,
+        on_toggle_screensaver_pacman=None,
         on_set_brightness=None,
         on_set_screensaver_timeout=None,
         on_power_off=None,
@@ -104,6 +105,7 @@ class GuiController:
             on_pairing=on_pairing,
             on_toggle_notif_blink=on_toggle_notif_blink,
             on_toggle_screensaver=on_toggle_screensaver,
+            on_toggle_screensaver_pacman=on_toggle_screensaver_pacman,
             on_set_brightness=on_set_brightness,
             on_set_screensaver_timeout=on_set_screensaver_timeout,
             on_power_off=on_power_off,
@@ -164,6 +166,10 @@ class GuiController:
             and self.compositor.active == ASSISTANT
             and anim.needs_tick()
         )
+        screensaver_pacman = bool(
+            state.screensaver_active
+            and state.screensaver_pacman_enabled
+        )
         return bool(
             (
                 self.compositor.active == ASSISTANT
@@ -171,7 +177,17 @@ class GuiController:
             )
             or transition_active
             or assistant_ambient
+            or screensaver_pacman
         )
+
+    def fast_render_interval(self):
+        state = self.app_state
+        if (
+            state.screensaver_active
+            and state.screensaver_pacman_enabled
+        ):
+            return 0.08
+        return 0.033
 
     def handle_input(self, event):
         if isinstance(event, tuple) and event:
@@ -266,6 +282,7 @@ class GuiController:
             "clock_text": state.clock_text,
             "clock_date_text": state.clock_date_text,
             "screensaver_active": state.screensaver_active,
+            "screensaver_pacman_enabled": state.screensaver_pacman_enabled,
             "notification_indicator_visible": notification_indicator_visible(
                 state.unread_count, state.notif_blink
             ),
@@ -315,6 +332,7 @@ class GuiController:
                 "iphone_connected": session.connected,
                 "screen_brightness": state.screen_brightness,
                 "screensaver_enabled": state.screensaver_enabled,
+                "screensaver_pacman_enabled": state.screensaver_pacman_enabled,
                 "screen_off_sec": state.screen_off_sec,
                 "notif_blink": state.notif_blink,
                 "device_name": state.device_name,

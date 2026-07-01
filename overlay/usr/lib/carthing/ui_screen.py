@@ -9,8 +9,10 @@ real DRM display via DRMDisplayAdapter.
 """
 import ctypes
 import logging
+import math
 import os
 import asyncio
+import random
 import time
 from PIL import Image, ImageDraw
 
@@ -163,6 +165,153 @@ class Screen:
         return img, ImageDraw.Draw(img)
 
 
+class PacManScreensaver:
+    """Two low-cost sprites moving on a rectilinear ring around the clock."""
+
+    SPEED = 118.0
+    RADIUS = 18
+
+    def __init__(self):
+        xs = (48, 112, 176, 624, 688, 752)
+        ys = (40, 92, 388, 440)
+        self._nodes = [
+            (x, y)
+            for y in ys
+            for x in xs
+            if x <= 176 or x >= 624 or y <= 92 or y >= 388
+        ]
+        self._neighbors = {index: [] for index in range(len(self._nodes))}
+        for index, (x, y) in enumerate(self._nodes):
+            horizontal = sorted(
+                (
+                    other
+                    for other, (_other_x, other_y) in enumerate(self._nodes)
+                    if other_y == y
+                ),
+                key=lambda other: self._nodes[other][0],
+            )
+            vertical = sorted(
+                (
+                    other
+                    for other, (other_x, _other_y) in enumerate(self._nodes)
+                    if other_x == x
+                ),
+                key=lambda other: self._nodes[other][1],
+            )
+            for line in (horizontal, vertical):
+                position = line.index(index)
+                for neighbor_position in (position - 1, position + 1):
+                    if 0 <= neighbor_position < len(line):
+                        other = line[neighbor_position]
+                        if other not in self._neighbors[index]:
+                            self._neighbors[index].append(other)
+        self._rng = random.Random()
+        self._agents = [
+            self._agent((48, 40), (112, 40), T.STATUS_WARN),
+            self._agent((752, 440), (688, 440), T.ACCENT),
+        ]
+        self._last_tick = time.monotonic()
+
+    def _agent(self, start, target, color):
+        node = self._nodes.index(start)
+        target_node = self._nodes.index(target)
+        return {
+            "node": node,
+            "target": target_node,
+            "previous": node,
+            "x": float(start[0]),
+            "y": float(start[1]),
+            "dx": float(target[0] - start[0]),
+            "dy": float(target[1] - start[1]),
+            "color": color,
+        }
+
+    def _choose_target(self, agent, chase=None):
+        candidates = list(self._neighbors[agent["node"]])
+        forward = [
+            candidate
+            for candidate in candidates
+            if candidate != agent["previous"]
+        ]
+        if forward:
+            candidates = forward
+        if chase is not None and self._rng.random() > 0.22:
+            cx, cy = chase
+            best = min(
+                abs(self._nodes[index][0] - cx)
+                + abs(self._nodes[index][1] - cy)
+                for index in candidates
+            )
+            candidates = [
+                index
+                for index in candidates
+                if abs(self._nodes[index][0] - cx)
+                + abs(self._nodes[index][1] - cy)
+                == best
+            ]
+        agent["previous"] = agent["node"]
+        agent["target"] = self._rng.choice(candidates)
+
+    def _advance(self, agent, distance, chase=None):
+        while distance > 0.0:
+            tx, ty = self._nodes[agent["target"]]
+            dx = tx - agent["x"]
+            dy = ty - agent["y"]
+            remaining = math.hypot(dx, dy)
+            if remaining <= 0.001:
+                agent["node"] = agent["target"]
+                self._choose_target(agent, chase=chase)
+                continue
+            agent["dx"], agent["dy"] = dx, dy
+            step = min(distance, remaining)
+            agent["x"] += dx / remaining * step
+            agent["y"] += dy / remaining * step
+            distance -= step
+            if step >= remaining - 0.001:
+                agent["node"] = agent["target"]
+                self._choose_target(agent, chase=chase)
+
+    def draw(self, draw):
+        now = time.monotonic()
+        delta = min(0.12, max(0.0, now - self._last_tick))
+        self._last_tick = now
+        distance = self.SPEED * delta
+        leader, chaser = self._agents
+        self._advance(leader, distance)
+        self._advance(chaser, distance * 1.04, chase=(leader["x"], leader["y"]))
+        for offset, agent in enumerate(self._agents):
+            self._draw_agent(draw, agent, now, offset)
+
+    def _draw_agent(self, draw, agent, now, offset):
+        x = int(agent["x"])
+        y = int(agent["y"])
+        radius = self.RADIUS
+        color = agent["color"]
+        draw.ellipse(
+            (x - radius, y - radius, x + radius, y + radius),
+            fill=color,
+        )
+        angle = math.atan2(agent["dy"], agent["dx"])
+        mouth = 0.22 + 0.28 * abs(math.sin(now * 7.0 + offset))
+        edge = radius + 2
+        p1 = (
+            int(x + math.cos(angle - mouth) * edge),
+            int(y + math.sin(angle - mouth) * edge),
+        )
+        p2 = (
+            int(x + math.cos(angle + mouth) * edge),
+            int(y + math.sin(angle + mouth) * edge),
+        )
+        draw.polygon(((x, y), p1, p2), fill=(0, 0, 0))
+        eye_angle = angle - math.pi / 2
+        eye_x = int(x + math.cos(eye_angle) * 7)
+        eye_y = int(y + math.sin(eye_angle) * 7)
+        draw.ellipse(
+            (eye_x - 2, eye_y - 2, eye_x + 2, eye_y + 2),
+            fill=(0, 0, 0),
+        )
+
+
 # ─── compositor ───────────────────────────────────────────────────────────────
 class Compositor:
     """Owns desktops + status bar + modal; renders layers and routes input."""
@@ -185,6 +334,7 @@ class Compositor:
         self._pairing_modal = pairing_modal
         self._regions = RegionSet()
         self._shade = None        # интерактивная «шторка»: {p, bg, panel} или None
+        self._pacman_screensaver = PacManScreensaver()
 
     @property
     def active(self):
@@ -306,8 +456,13 @@ class Compositor:
         if bool(getattr(self.state, "screensaver_active", False)):
             self._regions.clear()
             img = Image.new("RGB", (T.W, T.H), (0, 0, 0))
+            draw = ImageDraw.Draw(img)
+            if bool(
+                getattr(self.state, "screensaver_pacman_enabled", False)
+            ):
+                self._pacman_screensaver.draw(draw)
             T.draw_clock(
-                ImageDraw.Draw(img),
+                draw,
                 getattr(self.state, "clock_text", "--:--"),
                 T.W // 2,
                 T.H // 2,

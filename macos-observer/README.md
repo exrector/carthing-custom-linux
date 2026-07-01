@@ -28,8 +28,8 @@ Bluetooth обслуживается только нативным CoreBluetooth
 - `ProtocolCore` - потоковый кодек CTSP.
 - `install-btlink-app.sh` - release build, подпись, установка `.app` и LaunchAgent.
 - `launchd/com.carthing.btlink.plist` - шаблон LaunchAgent.
-- `../plugin-sdk` - публичный JSONL API, упаковщик `.ctplugin` и независимый
-  пример Mac Deck.
+- `../plugin-sdk` - публичный JSONL API, упаковщик `.ctplugin`, семь
+  независимых shortcut-примеров и два информационных виджета.
 - `carthingctl` - status, logs, file upload и restart через Bluetooth CTSP.
 
 ## Установка

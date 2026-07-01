@@ -1,0 +1,6 @@
+{
+  "plugin_id": "dev.carthing.example.shortcut.notes",
+  "action_id": "open",
+  "label": "NOTES",
+  "command": ["/usr/bin/open", "-a", "Notes"]
+}

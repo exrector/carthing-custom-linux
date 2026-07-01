@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.shortcut.safari",
+  "name": "Safari",
+  "version": "1.0.0",
+  "executable": "shortcut_plugin.py",
+  "summary": "Open Safari from Car Thing.",
+  "icon": "safari"
+}
