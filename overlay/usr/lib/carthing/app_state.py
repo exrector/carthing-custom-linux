@@ -112,7 +112,6 @@ class AppState:
         self.server_status = {}
         self.plugin_catalog = []
         self.plugin_snapshots = {}
-        self.plugin_selected_id = ""
         self.notifications = []
         self.unread_count = 0
         self.trusted = []

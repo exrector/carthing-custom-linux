@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import json
-import os
 import subprocess
 import sys
 import time
@@ -21,7 +20,7 @@ def load_actions():
     except Exception:
         rows = []
     actions = []
-    for row in rows[:3]:
+    for row in rows[:8]:
         if not isinstance(row, dict):
             continue
         action_id = str(row.get("id") or "")[:80]
@@ -49,50 +48,35 @@ def send(message):
 def publish():
     global revision
     revision += 1
-    send(
-        {
-            "type": "snapshot",
-            "snapshot": {
-                "schema": 1,
-                "plugin_id": PLUGIN_ID,
-                "revision": revision,
-                "cards": [
-                    {
-                        "id": "deck",
-                        "title": "Mac Deck",
-                        "subtitle": "Bluetooth desktop controls",
-                        "status": status,
-                        "accent": "#33FF88",
-                        "rows": [
-                            {
-                                "id": "host",
-                                "label": "MAC",
-                                "value": os.uname().nodename.split(".")[0],
-                            },
-                            {
-                                "id": "last",
-                                "label": "LAST",
-                                "value": last_action,
-                            },
-                        ],
-                        "actions": [
-                            {
-                                "id": action["id"],
-                                "label": action["label"],
-                                "style": (
-                                    "primary"
-                                    if index == 0
-                                    else "normal"
-                                ),
-                                "enabled": True,
-                            }
-                            for index, action in enumerate(actions)
-                        ],
-                    }
-                ],
-            },
-        }
-    )
+    cards = []
+    for card_index, start in enumerate(range(0, len(actions), 4)):
+        chunk = actions[start:start + 4]
+        cards.append({
+            "id": f"deck-{card_index + 1}",
+            "title": "MAC DECK",
+            "subtitle": "",
+            "status": status,
+            "accent": "#33FF88",
+            "rows": [],
+            "actions": [
+                {
+                    "id": action["id"],
+                    "label": action["label"],
+                    "style": "primary" if start + index == 0 else "normal",
+                    "enabled": True,
+                }
+                for index, action in enumerate(chunk)
+            ],
+        })
+    send({
+        "type": "snapshot",
+        "snapshot": {
+            "schema": 1,
+            "plugin_id": PLUGIN_ID,
+            "revision": revision,
+            "cards": cards,
+        },
+    })
 
 
 for line in sys.stdin:

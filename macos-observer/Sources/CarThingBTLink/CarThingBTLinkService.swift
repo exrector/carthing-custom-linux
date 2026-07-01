@@ -167,6 +167,16 @@ final class CarThingBTLink {
         transport.onEvent = { [weak self] event in
             self?.handle(event)
         }
+        appModel.onAssistantEnabledChanged = { [weak self] enabled in
+            if enabled {
+                self?.startAssistantWorker()
+            } else {
+                self?.stopAssistantWorker()
+            }
+        }
+        appModel.onAssistantConfigurationChanged = { [weak self] in
+            self?.restartAssistantWorker()
+        }
     }
 
     func start() {
@@ -613,8 +623,14 @@ final class CarThingBTLink {
     }
 
     private func startAssistantWorker() {
-        guard !shuttingDown, assistantProcess?.isRunning != true else { return }
-        let environment = ProcessInfo.processInfo.environment
+        guard !shuttingDown,
+              appModel.assistantEnabled,
+              assistantProcess?.isRunning != true else {
+            return
+        }
+        let environment = appModel.assistantWorkerEnvironment(
+            base: ProcessInfo.processInfo.environment
+        )
         guard let python = environment["CARTHING_ASSISTANT_PYTHON"],
               let script = environment["CARTHING_ASSISTANT_SCRIPT"],
               !python.isEmpty,
@@ -639,12 +655,15 @@ final class CarThingBTLink {
                 if self.assistantProcess === finished {
                     self.assistantProcess = nil
                     self.appModel.assistantRunning = false
+                    self.appModel.assistantStatus = "Остановлен"
                 }
                 fputs(
                     "carthing-btlink: assistant worker exit=\(finished.terminationStatus)\n",
                     stderr
                 )
-                guard !self.shuttingDown else { return }
+                guard !self.shuttingDown, self.appModel.assistantEnabled else {
+                    return
+                }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                     self.startAssistantWorker()
                 }
@@ -654,6 +673,7 @@ final class CarThingBTLink {
             try process.run()
             assistantProcess = process
             appModel.assistantRunning = true
+            appModel.assistantStatus = "Запуск"
             fputs("carthing-btlink: assistant worker started pid=\(process.processIdentifier)\n", stderr)
         } catch {
             fputs("carthing-btlink: assistant worker start failed: \(error)\n", stderr)
@@ -664,8 +684,18 @@ final class CarThingBTLink {
         guard let process = assistantProcess else { return }
         assistantProcess = nil
         appModel.assistantRunning = false
+        appModel.assistantStatus = "Остановлен"
         if process.isRunning {
             process.terminate()
+        }
+    }
+
+    private func restartAssistantWorker() {
+        stopAssistantWorker()
+        guard appModel.assistantEnabled else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            [weak self] in
+            self?.startAssistantWorker()
         }
     }
 
@@ -964,8 +994,8 @@ final class CarThingBTLink {
         } else if command == "stop" {
             playerNode?.stop()
         } else if command.hasPrefix("text ") {
-            // Текст распознавания вниз на экран устройства: T_COMMAND "text:<utf8>".
             let txt = String(command.dropFirst(5))
+            appModel.ingestAssistantText(txt)
             transport.send(CTSPFrame(type: .command, payload: Data(("text:" + txt).utf8)))
         } else if command.hasPrefix("now_playing ") {
             let json = Data(command.dropFirst(12).utf8)

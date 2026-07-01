@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.weather",
+  "name": "Weather",
+  "version": "1.0.0",
+  "executable": "weather_plugin.py",
+  "summary": "Current weather tile powered by Open-Meteo.",
+  "icon": "cloud.sun",
+  "permissions": ["network"]
+}

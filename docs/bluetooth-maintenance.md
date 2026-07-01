@@ -1,8 +1,10 @@
 # Bluetooth maintenance
 
-Day-to-day device updates use the existing CTSP Bluetooth L2CAP CoC session.
-USB is required once to provision the shared key and remains the recovery path
-for bootloader, kernel, and rootfs failures.
+Bluetooth maintenance is an optional remote path over the existing CTSP L2CAP
+CoC session. Use USB/SSH for fast local development whenever the cable is
+available; use Bluetooth when USB is disconnected or the device is physically
+out of reach. USB is required once to provision the shared key and remains the
+recovery path for bootloader, kernel, and rootfs failures.
 
 ## One-time provisioning
 

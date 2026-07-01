@@ -2,6 +2,7 @@ import SwiftUI
 
 private enum AppSection: String, CaseIterable, Identifiable {
     case overview
+    case assistant
     case modules
     case diagnostics
 
@@ -10,6 +11,7 @@ private enum AppSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview: return "Обзор"
+        case .assistant: return "Ассистент"
         case .modules: return "Модули"
         case .diagnostics: return "Диагностика"
         }
@@ -18,6 +20,7 @@ private enum AppSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .overview: return "dot.radiowaves.left.and.right"
+        case .assistant: return "waveform"
         case .modules: return "puzzlepiece.extension"
         case .diagnostics: return "waveform.path.ecg"
         }
@@ -40,6 +43,8 @@ struct RootView: View {
             switch selection ?? .overview {
             case .overview:
                 OverviewView(model: model)
+            case .assistant:
+                AssistantView(model: model)
             case .modules:
                 ModulesView(model: model)
             case .diagnostics:

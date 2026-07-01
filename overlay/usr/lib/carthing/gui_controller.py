@@ -146,28 +146,6 @@ class GuiController:
         elif intent == "settings_tap":
             self.compositor.screens[SETTINGS].tap(payload)
             self.render()
-        elif intent == "plugin_select":
-            self.app_state.plugin_selected_id = str(payload or "")
-            self.render()
-        elif intent == "plugin_next":
-            plugin_ids = [
-                str((record.get("manifest") or {}).get("id") or "")
-                for record in self.app_state.plugin_catalog
-                if bool(record.get("enabled"))
-                and str((record.get("manifest") or {}).get("id") or "")
-                in self.app_state.plugin_snapshots
-            ]
-            if plugin_ids:
-                current = self.app_state.plugin_selected_id
-                index = (
-                    plugin_ids.index(current)
-                    if current in plugin_ids
-                    else -1
-                )
-                self.app_state.plugin_selected_id = plugin_ids[
-                    (index + 1) % len(plugin_ids)
-                ]
-            self.render()
         elif intent == "plugin_action":
             self._on_plugin_action(payload or {})
             self.render()
@@ -331,7 +309,6 @@ class GuiController:
             visible_state["plugins"] = {
                 "catalog": state.plugin_catalog,
                 "snapshots": state.plugin_snapshots,
-                "selected": state.plugin_selected_id,
             }
         else:
             visible_state["settings"] = {

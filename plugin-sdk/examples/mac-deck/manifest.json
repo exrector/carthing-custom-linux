@@ -6,5 +6,5 @@
   "executable": "mac_deck.py",
   "summary": "Configurable Bluetooth macro deck for macOS applications.",
   "icon": "rectangle.grid.2x2",
-  "permissions": []
+  "permissions": ["launch-applications"]
 }

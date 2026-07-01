@@ -3,7 +3,8 @@
 A display plugin is an independent `.ctplugin` ZIP archive. It is installed and
 enabled in the CarThingBTLink macOS app. The app runs each enabled plugin as a
 separate process and transports its UI model to the fixed fourth Car Thing view
-over CTSP Bluetooth L2CAP CoC. USB is not part of the product path.
+over CTSP Bluetooth L2CAP CoC. USB remains available for development and
+maintenance, but display plugin runtime traffic does not depend on it.
 
 ## Package
 
@@ -67,9 +68,19 @@ Host action:
 Only actions that are enabled in the latest snapshot are forwarded. Snapshot
 transport is coalesced to at most two updates per second per plugin. Limits:
 8 cards, 8 rows and 4 actions per card, 48 KiB CTSP JSON payload. The device
-currently renders the first card, up to six rows, and up to three actions.
+flattens cards from all enabled plugins and renders the first nine tiles.
 
-The complete reference implementation is in `plugin-sdk/examples/mac-deck`.
-It is a working Bluetooth macro deck: the default buttons open Finder, Music,
-and Notes. Edit `actions.json` to replace labels and command arrays without
-changing the plugin executable.
+The reference implementations are:
+
+- `plugin-sdk/examples/mac-deck`: three configurable macOS shortcuts;
+- `plugin-sdk/examples/weather`: current weather from Open-Meteo;
+- `plugin-sdk/examples/currency`: official USD/EUR rates from the Bank of Russia.
+
+The device flattens enabled cards into a fixed 3x3 tile matrix. Every published
+action becomes a large tappable tile. A card without actions becomes an
+information tile and shows up to two rows. There are no nested plugin screens
+or plugin-specific swipe gestures.
+
+Mac Deck commands run as the current macOS user. Install only trusted archives;
+the v1 plugin host isolates lifecycle and protocol parsing, but it is not an OS
+sandbox.

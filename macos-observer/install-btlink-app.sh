@@ -19,6 +19,7 @@ ASSISTANT_MODEL=${VA_STT_MLX_MODEL:-"$VOICE_ROOT/models/whisper-large-v3-turbo-n
 OLD_ASSISTANT_AGENT="$HOME/Library/LaunchAgents/com.carthing.btwhisper.plist"
 SUPPORT_DIR="$HOME/Library/Application Support/CarThingBTLink"
 MAINTENANCE_KEY="$SUPPORT_DIR/maintenance.key"
+ICON_FILE="$ROOT/Resources/CarThingIcon.icns"
 
 [ -x "$SOURCE_BIN" ] || {
     echo "missing release binary: $SOURCE_BIN" >&2
@@ -38,6 +39,10 @@ MAINTENANCE_KEY="$SUPPORT_DIR/maintenance.key"
 }
 [ -f "$ASSISTANT_SCRIPT" ] || {
     echo "missing assistant worker: $ASSISTANT_SCRIPT" >&2
+    exit 1
+}
+[ -f "$ICON_FILE" ] || {
+    echo "missing app icon: $ICON_FILE" >&2
     exit 1
 }
 OPUS_LOAD_PATH=$(
@@ -60,10 +65,14 @@ fi
 }
 
 launchctl bootout "$DOMAIN" "$AGENT_PATH" >/dev/null 2>&1 || true
-mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Frameworks"
+mkdir -p \
+    "$APP_DIR/Contents/MacOS" \
+    "$APP_DIR/Contents/Frameworks" \
+    "$APP_DIR/Contents/Resources"
 install -m 755 "$SOURCE_BIN" "$APP_DIR/Contents/MacOS/CarThingBTLink"
 install -m 755 "$CTL_BIN" "$APP_DIR/Contents/MacOS/carthingctl"
 install -m 755 "$OPUS_DYLIB" "$APP_DIR/Contents/Frameworks/libopus.0.dylib"
+install -m 644 "$ICON_FILE" "$APP_DIR/Contents/Resources/CarThingIcon.icns"
 install -m 644 "$ROOT/CarThingBTLink-Info.plist" "$APP_DIR/Contents/Info.plist"
 install_name_tool \
     -change "$OPUS_LOAD_PATH" \

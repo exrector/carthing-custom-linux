@@ -13,5 +13,25 @@
     "id": "notes",
     "label": "NOTES",
     "command": ["/usr/bin/open", "-a", "Notes"]
+  },
+  {
+    "id": "safari",
+    "label": "SAFARI",
+    "command": ["/usr/bin/open", "-a", "Safari"]
+  },
+  {
+    "id": "calendar",
+    "label": "CALENDAR",
+    "command": ["/usr/bin/open", "-a", "Calendar"]
+  },
+  {
+    "id": "mail",
+    "label": "MAIL",
+    "command": ["/usr/bin/open", "-a", "Mail"]
+  },
+  {
+    "id": "terminal",
+    "label": "TERMINAL",
+    "command": ["/usr/bin/open", "-a", "Terminal"]
   }
 ]

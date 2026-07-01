@@ -1,8 +1,21 @@
 import AppKit
 import Combine
 import Foundation
+import ProtocolCore
 import ServerPlugins
 import UniformTypeIdentifiers
+
+struct AssistantMessage: Identifiable, Equatable {
+    enum Role {
+        case user
+        case assistant
+    }
+
+    let id = UUID()
+    let role: Role
+    let text: String
+    let timestamp: Date
+}
 
 final class LinkAppModel: ObservableObject {
     @Published var phase = "Ожидание"
@@ -13,12 +26,41 @@ final class LinkAppModel: ObservableObject {
     @Published var linkConnected = false
     @Published var micStreaming = false
     @Published var assistantRunning = false
+    @Published var assistantEnabled: Bool
+    @Published var assistantProvider: String
+    @Published var assistantModel: String
+    @Published var assistantAPIKey: String
+    @Published var assistantEnvironmentFile: String
+    @Published var assistantSystemPrompt: String
+    @Published var assistantMessages: [AssistantMessage] = []
+    @Published var assistantLiveText = ""
+    @Published var assistantStatus = "Ожидание"
     @Published var pluginRecords: [DisplayPluginRecord] = []
     @Published var selectedPluginID: String?
     @Published var lastError = ""
     @Published var events: [String] = []
 
     weak var pluginHost: DisplayPluginHost?
+    var onAssistantEnabledChanged: ((Bool) -> Void)?
+    var onAssistantConfigurationChanged: (() -> Void)?
+
+    private let assistantConfigurationStore: AssistantConfigurationStore
+
+    init(
+        assistantConfigurationStore: AssistantConfigurationStore =
+            AssistantConfigurationStore()
+    ) {
+        self.assistantConfigurationStore = assistantConfigurationStore
+        let configuration = assistantConfigurationStore.load()
+        assistantEnabled = configuration.enabled
+        assistantProvider = configuration.provider
+        assistantModel = configuration.model
+        assistantAPIKey = assistantConfigurationStore.apiKey(
+            provider: configuration.provider
+        )
+        assistantEnvironmentFile = configuration.environmentFile
+        assistantSystemPrompt = configuration.systemPrompt
+    }
 
     var phaseLabel: String {
         switch phase {
@@ -97,5 +139,119 @@ final class LinkAppModel: ObservableObject {
             withIntermediateDirectories: true
         )
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    func setAssistantEnabled(_ enabled: Bool) {
+        assistantEnabled = enabled
+        saveAssistantConfiguration(restart: false)
+        onAssistantEnabledChanged?(enabled)
+    }
+
+    func selectAssistantProvider(_ provider: String) {
+        guard provider == "mistral" || provider == "gemini" else { return }
+        assistantProvider = provider
+        assistantModel = provider == "gemini"
+            ? "gemini-2.5-flash-lite"
+            : "mistral-large-latest"
+        assistantAPIKey = assistantConfigurationStore.apiKey(
+            provider: provider
+        )
+    }
+
+    func saveAssistantConfiguration(restart: Bool = true) {
+        let configuration = currentAssistantConfiguration
+        do {
+            try assistantConfigurationStore.save(configuration)
+            try assistantConfigurationStore.setAPIKey(
+                assistantAPIKey,
+                provider: assistantProvider
+            )
+            addEvent("Assistant configuration saved")
+            if restart, assistantEnabled {
+                onAssistantConfigurationChanged?()
+            }
+        } catch {
+            lastError = error.localizedDescription
+            addEvent("Assistant configuration failed: \(error.localizedDescription)")
+        }
+    }
+
+    func chooseAssistantEnvironmentFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Выберите файл окружения ассистента"
+        panel.prompt = "Выбрать"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.assistantEnvironmentFile = url.path
+        }
+    }
+
+    func clearAssistantConversation() {
+        assistantMessages.removeAll()
+        assistantLiveText = ""
+        assistantStatus = assistantRunning ? "Готов" : "Ожидание"
+    }
+
+    func ingestAssistantText(_ value: String) {
+        guard let event = AssistantTextProtocol.parse(value) else { return }
+        switch event {
+        case .partial(let text):
+            assistantLiveText = text
+        case .user(let text):
+            assistantLiveText = ""
+            appendAssistantMessage(role: .user, text: text)
+        case .assistant(let text):
+            appendAssistantMessage(role: .assistant, text: text)
+        case .status(let text):
+            assistantStatus = text.isEmpty
+                ? (assistantRunning ? "Готов" : "Ожидание")
+                : text
+        }
+    }
+
+    func assistantWorkerEnvironment(
+        base: [String: String]
+    ) -> [String: String] {
+        assistantConfigurationStore.workerEnvironment(
+            configuration: currentAssistantConfiguration,
+            base: base
+        )
+    }
+
+    private var currentAssistantConfiguration: AssistantConfiguration {
+        AssistantConfiguration(
+            enabled: assistantEnabled,
+            provider: assistantProvider,
+            model: assistantModel.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ),
+            environmentFile: assistantEnvironmentFile.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ),
+            systemPrompt: assistantSystemPrompt.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+        )
+    }
+
+    private func appendAssistantMessage(
+        role: AssistantMessage.Role,
+        text: String
+    ) {
+        guard !text.isEmpty else { return }
+        if let last = assistantMessages.last,
+           last.role == role,
+           last.text == text {
+            return
+        }
+        assistantMessages.append(
+            AssistantMessage(role: role, text: text, timestamp: Date())
+        )
+        if assistantMessages.count > 100 {
+            assistantMessages.removeFirst(assistantMessages.count - 100)
+        }
     }
 }

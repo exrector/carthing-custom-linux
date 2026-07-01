@@ -32,24 +32,37 @@ def _state():
     s.iphone.duration = 757
     s.iphone.position = 192
     s.iphone.playing = True
-    s.plugin_catalog = [{
-        "manifest": {
-            "id": "dev.carthing.example",
-            "name": "Mac Deck",
+    s.plugin_catalog = [
+        {
+            "manifest": {
+                "id": "dev.carthing.example.mac-deck",
+                "name": "Mac Deck",
+            },
+            "enabled": True,
         },
-        "enabled": True,
-    }]
+        {
+            "manifest": {
+                "id": "dev.carthing.example.currency",
+                "name": "Currency",
+            },
+            "enabled": True,
+        },
+        {
+            "manifest": {
+                "id": "dev.carthing.example.weather",
+                "name": "Weather",
+            },
+            "enabled": True,
+        },
+    ]
     s.plugin_snapshots = {
-        "dev.carthing.example": {
+        "dev.carthing.example.mac-deck": {
             "cards": [{
-                "id": "main",
-                "title": "Mac Deck",
-                "subtitle": "Bluetooth desktop controls",
+                "id": "main-1",
+                "title": "MAC DECK",
+                "subtitle": "",
                 "status": "READY",
-                "rows": [
-                    {"label": "MAC", "value": "MacBook"},
-                    {"label": "LAST", "value": "MUSIC"},
-                ],
+                "rows": [],
                 "actions": [
                     {
                         "id": "finder",
@@ -70,6 +83,66 @@ def _state():
                         "enabled": True,
                     },
                 ],
+            }, {
+                "id": "main-2",
+                "title": "MAC DECK",
+                "subtitle": "",
+                "status": "READY",
+                "rows": [],
+                "actions": [
+                    {
+                        "id": "safari",
+                        "label": "SAFARI",
+                        "style": "normal",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "calendar",
+                        "label": "CALENDAR",
+                        "style": "normal",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "mail",
+                        "label": "MAIL",
+                        "style": "normal",
+                        "enabled": True,
+                    },
+                    {
+                        "id": "terminal",
+                        "label": "TERMINAL",
+                        "style": "normal",
+                        "enabled": True,
+                    },
+                ],
+            }],
+        },
+        "dev.carthing.example.currency": {
+            "cards": [{
+                "id": "rates",
+                "title": "КУРС ЦБ",
+                "subtitle": "рублей за единицу",
+                "status": "01.07.2026",
+                "accent": "#FFAA00",
+                "rows": [
+                    {"label": "USD", "value": "78.27"},
+                    {"label": "EUR", "value": "89.27"},
+                ],
+                "actions": [],
+            }],
+        },
+        "dev.carthing.example.weather": {
+            "cards": [{
+                "id": "weather",
+                "title": "МОСКВА",
+                "subtitle": "Open-Meteo",
+                "status": "06:45",
+                "accent": "#66CCFF",
+                "rows": [
+                    {"label": "СЕЙЧАС", "value": "20°"},
+                    {"label": "", "value": "Ясно · 22°"},
+                ],
+                "actions": [],
             }],
         },
     }

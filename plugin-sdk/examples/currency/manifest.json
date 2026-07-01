@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "id": "dev.carthing.example.currency",
+  "name": "Currency",
+  "version": "1.0.0",
+  "executable": "currency_plugin.py",
+  "summary": "Official USD and EUR exchange-rate tile from the Bank of Russia.",
+  "icon": "rublesign.circle",
+  "permissions": ["network"]
+}

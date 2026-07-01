@@ -177,7 +177,7 @@ plugin_screen = PluginDashboardScreen()
 plugin_screen.on_state(state)
 plugin_regions = RegionSet()
 plugin_screen.render(plugin_regions)
-plugin_action = plugin_regions.hit(50, 290)
+plugin_action = plugin_regions.hit(80, 80)
 if (
     plugin_action is None
     or plugin_action.intent != "plugin_action"

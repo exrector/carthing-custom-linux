@@ -368,6 +368,8 @@ class PluginDashboardScreen(Screen):
     name = "plugins"
     title = "Модули"
     fullscreen = True
+    MAX_TILES = 9
+    GRID_COLUMNS = 3
 
     def __init__(self, emit=None):
         self.state = None
@@ -386,24 +388,173 @@ class PluginDashboardScreen(Screen):
         except ValueError:
             return T.FG
 
-    def render(self, regions=None):
-        img, draw = self.blank()
-        _title(draw, "Модули")
+    def _tiles(self):
         catalog = list(getattr(self.state, "plugin_catalog", []) or [])
         snapshots = dict(getattr(self.state, "plugin_snapshots", {}) or {})
-        modules = []
+        action_tiles = []
+        information_tiles = []
         for record in catalog:
             manifest = dict(record.get("manifest") or {})
             plugin_id = str(manifest.get("id") or "")
             snapshot = snapshots.get(plugin_id)
             if (
-                plugin_id
-                and bool(record.get("enabled"))
-                and isinstance(snapshot, dict)
-                and snapshot.get("cards")
+                not plugin_id
+                or not bool(record.get("enabled"))
+                or not isinstance(snapshot, dict)
             ):
-                modules.append((plugin_id, manifest, snapshot))
-        if not modules:
+                continue
+            for card in (snapshot.get("cards") or [])[:8]:
+                if not isinstance(card, dict):
+                    continue
+                card_id = str(card.get("id") or "")
+                actions = [
+                    dict(action)
+                    for action in (card.get("actions") or [])[:4]
+                    if isinstance(action, dict)
+                    and bool(action.get("enabled", True))
+                ]
+                for action in actions:
+                    action_tiles.append({
+                        "kind": "action",
+                        "plugin_id": plugin_id,
+                        "card_id": card_id,
+                        "action_id": str(action.get("id") or ""),
+                        "title": str(action.get("label") or "Действие"),
+                        "detail": str(card.get("title") or manifest.get("name") or ""),
+                        "style": str(action.get("style") or "normal"),
+                        "accent": card.get("accent"),
+                    })
+                if not actions:
+                    information_tiles.append({
+                        "kind": "information",
+                        "title": str(card.get("title") or manifest.get("name") or ""),
+                        "detail": str(card.get("subtitle") or ""),
+                        "status": str(card.get("status") or ""),
+                        "rows": [
+                            dict(row)
+                            for row in (card.get("rows") or [])[:2]
+                            if isinstance(row, dict)
+                        ],
+                        "accent": card.get("accent"),
+                    })
+        return (action_tiles + information_tiles)[:self.MAX_TILES]
+
+    @staticmethod
+    def _tile_rect(index):
+        gap = 8
+        left = 24
+        top = 12
+        right = T.ARC_SAFE_X
+        bottom = T.H - 12
+        width = (right - left - gap * 2) // 3
+        height = (bottom - top - gap * 2) // 3
+        column = index % PluginDashboardScreen.GRID_COLUMNS
+        row = index // PluginDashboardScreen.GRID_COLUMNS
+        x0 = left + column * (width + gap)
+        y0 = top + row * (height + gap)
+        return (x0, y0, x0 + width, y0 + height)
+
+    def _draw_action_tile(self, draw, rect, tile, regions):
+        accent = self._accent(tile.get("accent"))
+        primary = tile.get("style") == "primary"
+        destructive = tile.get("style") == "destructive"
+        fill = (
+            T.STATUS_OFF
+            if destructive
+            else (T.SURFACE_SEL if primary else T.SURFACE)
+        )
+        foreground = T.BG if primary or destructive else accent
+        draw.rectangle(rect, fill=fill, outline=T.HAIRLINE, width=2)
+        label = C.truncate(
+            draw,
+            tile["title"],
+            T.font(24),
+            rect[2] - rect[0] - 24,
+        )
+        C.text_centered(
+            draw,
+            label,
+            T.font(24),
+            foreground,
+            rect[1] + 31,
+            cx=(rect[0] + rect[2]) // 2,
+        )
+        if regions is not None and tile.get("action_id"):
+            regions.add(
+                rect,
+                "plugin_action",
+                payload={
+                    "plugin_id": tile["plugin_id"],
+                    "card_id": tile["card_id"],
+                    "action_id": tile["action_id"],
+                },
+            )
+
+    def _draw_information_tile(self, draw, rect, tile):
+        accent = self._accent(tile.get("accent"))
+        draw.rectangle(rect, fill=T.SURFACE, outline=T.HAIRLINE, width=2)
+        title = C.truncate(
+            draw,
+            tile["title"],
+            T.font(16),
+            rect[2] - rect[0] - 20,
+        )
+        draw.text(
+            (rect[0] + 12, rect[1] + 10),
+            title,
+            font=T.font(16),
+            fill=accent,
+        )
+        rows = tile.get("rows") or []
+        if rows:
+            row_height = 25 if len(rows) > 1 else 32
+            start_y = rect[1] + 31
+            for index, row in enumerate(rows):
+                y = start_y + index * row_height
+                label = C.truncate(
+                    draw,
+                    str(row.get("label") or ""),
+                    T.font(14),
+                    52,
+                )
+                value = C.truncate(
+                    draw,
+                    str(row.get("value") or ""),
+                    T.font(23 if len(rows) == 1 else 18),
+                    rect[2] - rect[0] - 68,
+                )
+                if label:
+                    draw.text(
+                        (rect[0] + 12, y + 5),
+                        label,
+                        font=T.font(14),
+                        fill=T.FAINT,
+                    )
+                draw.text(
+                    (rect[0] + (60 if label else 12), y),
+                    value,
+                    font=T.font(23 if len(rows) == 1 else 18),
+                    fill=T.MUTED,
+                )
+        footer = tile.get("status") or ""
+        if footer:
+            footer = C.truncate(
+                draw,
+                footer,
+                T.font(14),
+                rect[2] - rect[0] - 20,
+            )
+            draw.text(
+                (rect[0] + 12, rect[3] - 23),
+                footer,
+                font=T.font(14),
+                fill=T.FAINT,
+            )
+
+    def render(self, regions=None):
+        img, draw = self.blank()
+        tiles = self._tiles()
+        if not tiles:
             C.text_centered(
                 draw,
                 "МОДУЛИ ВЫБИРАЮТСЯ НА MAC",
@@ -413,160 +564,12 @@ class PluginDashboardScreen(Screen):
                 cx=T.ARC_SAFE_X // 2,
             )
             return img
-
-        selected = str(
-            getattr(self.state, "plugin_selected_id", "") or ""
-        )
-        if selected not in {item[0] for item in modules}:
-            selected = modules[0][0]
-            self.state.plugin_selected_id = selected
-
-        visible_modules = modules
-        show_next = len(modules) > 4
-        if show_next:
-            selected_index = next(
-                index
-                for index, item in enumerate(modules)
-                if item[0] == selected
-            )
-            page_start = (selected_index // 4) * 4
-            visible_modules = modules[page_start:page_start + 4]
-        tab_area_right = T.ARC_SAFE_X - (54 if show_next else 0)
-        tab_width = min(
-            164,
-            max(108, (tab_area_right - 28) // len(visible_modules)),
-        )
-        for index, (plugin_id, manifest, _snapshot) in enumerate(visible_modules):
-            rect = (
-                28 + index * tab_width,
-                72,
-                24 + (index + 1) * tab_width,
-                108,
-            )
-            active = plugin_id == selected
-            if active:
-                draw.rectangle(rect, fill=T.SURFACE_SEL)
-            label = C.truncate(
-                draw,
-                str(manifest.get("name") or plugin_id),
-                T.font(18),
-                rect[2] - rect[0] - 12,
-            )
-            C.text_centered(
-                draw,
-                label,
-                T.font(18),
-                T.BG if active else T.MUTED,
-                80,
-                cx=(rect[0] + rect[2]) // 2,
-            )
-            if regions is not None:
-                regions.add(rect, "plugin_select", payload=plugin_id)
-        if show_next:
-            next_rect = (T.ARC_SAFE_X - 46, 72, T.ARC_SAFE_X, 108)
-            draw.rectangle(next_rect, outline=T.HAIRLINE, width=2)
-            C.text_centered(
-                draw,
-                ">",
-                T.font(22),
-                T.FG,
-                76,
-                cx=(next_rect[0] + next_rect[2]) // 2,
-            )
-            if regions is not None:
-                regions.add(next_rect, "plugin_next")
-
-        plugin_id, _manifest, snapshot = next(
-            item for item in modules if item[0] == selected
-        )
-        card = dict(snapshot.get("cards")[0] or {})
-        accent = self._accent(card.get("accent"))
-        title = C.truncate(
-            draw,
-            str(card.get("title") or "Модуль"),
-            T.font(34),
-            450,
-        )
-        draw.text((28, 120), title, font=T.font(34), fill=accent)
-        status = str(card.get("status") or "")
-        if status:
-            status = C.truncate(draw, status, T.font(20), 190)
-            draw.text((520, 130), status, font=T.font(20), fill=T.MUTED)
-        subtitle = str(card.get("subtitle") or "")
-        if subtitle:
-            subtitle = C.truncate(
-                draw, subtitle, T.font(T.SZ_SMALL), T.ARC_SAFE_X - 56
-            )
-            draw.text((28, 164), subtitle, font=T.font(T.SZ_SMALL), fill=T.FAINT)
-
-        actions = [
-            dict(action)
-            for action in (card.get("actions") or [])[:3]
-            if isinstance(action, dict) and bool(action.get("enabled", True))
-        ]
-        rows = [
-            dict(row)
-            for row in (card.get("rows") or [])[:(4 if actions else 6)]
-            if isinstance(row, dict)
-        ]
-        for index, row in enumerate(rows):
-            column = index % 2
-            line = index // 2
-            x = 28 + column * 344
-            y = 202 + line * 52
-            label = C.truncate(
-                draw,
-                str(row.get("label") or ""),
-                T.font(18),
-                130,
-            )
-            value = C.truncate(
-                draw,
-                str(row.get("value") or ""),
-                T.font(T.SZ_SMALL),
-                180,
-            )
-            draw.text((x, y), label, font=T.font(18), fill=T.FAINT)
-            draw.text((x + 138, y - 2), value, font=T.font(T.SZ_SMALL), fill=T.MUTED)
-
-        if actions:
-            button_width = min(210, (T.ARC_SAFE_X - 56) // len(actions) - 10)
-            y0 = 278
-            for index, action in enumerate(actions):
-                x0 = 28 + index * (button_width + 10)
-                rect = (x0, y0, x0 + button_width, 316)
-                primary = action.get("style") == "primary"
-                destructive = action.get("style") == "destructive"
-                fill = (
-                    T.STATUS_OFF
-                    if destructive
-                    else (T.SURFACE_SEL if primary else T.SURFACE)
-                )
-                draw.rectangle(rect, fill=fill, outline=T.HAIRLINE, width=2)
-                label = C.truncate(
-                    draw,
-                    str(action.get("label") or "Действие"),
-                    T.font(18),
-                    button_width - 14,
-                )
-                C.text_centered(
-                    draw,
-                    label,
-                    T.font(18),
-                    T.BG if primary or destructive else T.FG,
-                    y0 + 8,
-                    cx=x0 + button_width // 2,
-                )
-                if regions is not None:
-                    regions.add(
-                        rect,
-                        "plugin_action",
-                        payload={
-                            "plugin_id": plugin_id,
-                            "card_id": str(card.get("id") or ""),
-                            "action_id": str(action.get("id") or ""),
-                        },
-                    )
+        for index, tile in enumerate(tiles):
+            rect = self._tile_rect(index)
+            if tile["kind"] == "action":
+                self._draw_action_tile(draw, rect, tile, regions)
+            else:
+                self._draw_information_tile(draw, rect, tile)
         return img
 
 
