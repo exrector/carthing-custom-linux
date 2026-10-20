@@ -334,7 +334,5 @@ offset `0x25` должен быть `0x00` в чистом образе, а `boo
 
 ## Обновление 2026-10-20
 
-Текущие образы: bootfs `f01e3078…` (2026-06-18, dtb "proxy", совпадает с live p1 QN19), rootfs `bdfd7b31…`
-(runtime tree sha1 `31c4708b…`: ротация журнала, лимит лога, AMS volume refresh, фильтр энкодера).
-Подробности — `docs/PENDING-BAKE.md` (2026-10-20). `tools/deploy` работает удалённо через NAS:
+Текущие образы: bootfs `f01e3078…` (2026-06-18, dtb "proxy", совпадает с live p1 QN19), rootfs `4e7a5de9…` (runtime tree SHA1 `6f9822e7…`). Runtime включает ротацию журнала, лимит лога и AMS volume refresh; пользовательский фильтр направления энкодера удалён. Подробности — `docs/PENDING-BAKE.md` (2026-10-20), включая причину задержки энкодера и live-доказательства. `tools/deploy` работает удалённо через NAS:
 `CARTHING_SSH_HOST="-i ~/.ssh/id_carthing -o IdentitiesOnly=yes -J root@100.65.216.72 root@172.16.42.77" tools/deploy <пути>`.

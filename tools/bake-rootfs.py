@@ -27,7 +27,7 @@ REPO_ROOT = TOOLS_DIR.parent                           # .../carthing-release-in
 OVERLAY = REPO_ROOT / "overlay"                        # overlay/ (основной overlay проекта)
 DEFAULT_BASE_BUNDLE = REPO_ROOT / "source" / "base-bundle"  # source/base-bundle
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "31c4708b8809097932ead8347f47f3b9a2df50ab"
+EXPECTED_RUNTIME_TREE_SHA1 = "6f9822e7d72e8e4a4d4f0be4b1bcc66abd47b743"
 # 2026-10-20: f01e3078 = bootfs от 2026-06-18 (новый superbird.dtb "proxy"), сверено по md5 с живым p1
 # QN19: superbird.dtb 3ed8c55d…, Image 68dc66ab…. Предыдущий канон 6e99a75c (2026-06-17).
 EXPECTED_BASE_BOOTFS_SHA256 = "f01e3078a7aca5534c0317459fd20073049091db393646493117deccf6a18ada"
