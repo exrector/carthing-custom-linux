@@ -49,4 +49,19 @@ fi
 ) &
 echo $! > /run/carthing/media-remote-supervisor.pid
 
+# Лог runtime живёт в tmpfs (RAM 487M) и пишется через O_APPEND, поэтому
+# безопасно усекается на месте. 2026-10-20: без лимита дорос до 25M за 41ч.
+(
+    set +e
+    while true; do
+        sleep 300
+        sz=$(wc -c < "$CARTHING_RUNTIME_LOG" 2>/dev/null || echo 0)
+        if [ "$sz" -gt 4194304 ]; then
+            tail -n 20000 "$CARTHING_RUNTIME_LOG" > /run/carthing/.log-trim.tmp \
+                && cat /run/carthing/.log-trim.tmp > "$CARTHING_RUNTIME_LOG"
+            rm -f /run/carthing/.log-trim.tmp
+        fi
+    done
+) &
+
 echo "[S50-carthing-remote] supervisor started"

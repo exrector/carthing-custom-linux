@@ -11,6 +11,10 @@ import state_paths
 
 logger = logging.getLogger(__name__)
 DEFAULT_PATH = state_paths.STATE_DIR / "connection-events.jsonl"
+# p1-FAT общий с Image/dtb и state.json: журнал обязан быть ограничен.
+# 2026-10-20: без лимита он за ~2 месяца забил p1 на 100%, после чего
+# state.json/keys.json перестали сохраняться (ENOSPC) → потеря BT-ключей.
+MAX_BYTES = int(os.environ.get("CARTHING_CONNECTION_JOURNAL_MAX_BYTES", 512 * 1024))
 
 
 def _boot_id():
@@ -50,6 +54,7 @@ class ConnectionJournal:
 
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._rotate_if_needed()
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(
                     json.dumps(
@@ -67,6 +72,15 @@ class ConnectionJournal:
                 logger.warning("connection journal append failed: %s", error)
                 self._warned = True
             return False
+
+    def _rotate_if_needed(self):
+        """Одно поколение: .jsonl -> .jsonl.1 (итого на p1 не больше 2*MAX_BYTES)."""
+        try:
+            if self.path.stat().st_size < MAX_BYTES:
+                return
+        except FileNotFoundError:
+            return
+        os.replace(str(self.path), str(self.path) + ".1")
 
 
 _journal = ConnectionJournal()
