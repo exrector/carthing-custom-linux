@@ -212,15 +212,11 @@ class GuiController:
             return
 
         if event in (Input.ENCODER_CW, Input.ENCODER_CCW):
-            up = event == Input.ENCODER_CW
-            session = self.app_state.iphone
-            step = 0.025 if self.app_state.remote_media_active else 0.0625
-            session.volume = max(
-                0.0,
-                min(1.0, (session.volume or 0.0) + (step if up else -step)),
+            # The iPhone is authoritative. A locally predicted value made the
+            # arc lie when AMS reports were delayed or when a raw tick bounced.
+            self.dispatcher.dispatch(
+                "media_vol_up" if event == Input.ENCODER_CW else "media_vol_down"
             )
-            self._volume_touch_ts = time.monotonic()
-            self.dispatcher.dispatch("media_vol_up" if up else "media_vol_down")
             self.render()
             return
 
@@ -407,8 +403,7 @@ class GuiController:
                 state.iphone.position = session.elapsed
                 state.iphone.playing = session.playing
                 state.iphone.supported_commands = set(session.supported_commands)
-                if now - self._volume_touch_ts > 0.8:
-                    state.iphone.volume = session.volume
+                state.iphone.volume = session.volume
                 self._iphone_grace_until = 0.0
         elif not hold_presentation:
             if state.iphone.title and self._iphone_grace_until:

@@ -11,6 +11,7 @@ AMS RemoteCommand values:
   0x06 = VolumeDown
 """
 import asyncio, struct, os, logging, time
+from encoder_window import EncoderWindow
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ EV_KEY = 0x01
 EV_REL = 0x02
 EV_ABS = 0x03
 REL_HWHEEL = 6
+ENCODER_WINDOW_SEC = 0.045
 
 # Touchscreen (event3, tlsc6x — MT protocol type B)
 ABS_MT_SLOT        = 0x2f
@@ -109,21 +111,39 @@ async def start(get_ams=None, on_event=None):
       - get_ams(): legacy fallback — drive AMS directly when no GUI sink is wired.
     """
     use_gui = on_event is not None
+    encoder_window = EncoderWindow()
+    encoder_window_task = None
 
-    async def on_encoder(ev):
-        _, _, evtype, code, value = ev
-        if evtype != EV_REL or code != REL_HWHEEL:
+    async def flush_encoder_window():
+        nonlocal encoder_window_task
+        await asyncio.sleep(ENCODER_WINDOW_SEC)
+        net = encoder_window.drain()
+        encoder_window_task = None
+        if not net:
+            log.info("Encoder window net=0 (opposite ticks cancelled)")
             return
-        log.info("Encoder raw value=%+d", value)
+        event = EV_ENCODER_CW if net > 0 else EV_ENCODER_CCW
+        command = CMD_VOL_UP if net > 0 else CMD_VOL_DOWN
+        log.info("Encoder window net=%+d", net)
         if use_gui:
-            on_event(EV_ENCODER_CW if value > 0 else EV_ENCODER_CCW)
+            for _ in range(abs(net)):
+                on_event(event)
             return
         ams = get_ams() if get_ams else None
         if not ams:
             return
-        cmd = CMD_VOL_UP if value > 0 else CMD_VOL_DOWN
-        log.info("Encoder %+d → cmd 0x%02x", value, cmd)
-        await ams.send_command(cmd)
+        for _ in range(abs(net)):
+            await ams.send_command(command)
+
+    async def on_encoder(ev):
+        nonlocal encoder_window_task
+        _, _, evtype, code, value = ev
+        if evtype != EV_REL or code != REL_HWHEEL:
+            return
+        log.info("Encoder raw value=%+d", value)
+        encoder_window.add(value)
+        if encoder_window_task is None or encoder_window_task.done():
+            encoder_window_task = asyncio.create_task(flush_encoder_window())
 
     async def on_buttons(ev):
         _, _, evtype, code, value = ev
