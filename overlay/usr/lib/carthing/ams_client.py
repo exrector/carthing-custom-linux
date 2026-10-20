@@ -99,6 +99,8 @@ class AMSClient:
         self.on_commands = on_commands        # колбэк: set(int) поддерживаемых команд
         self.supported = set()                # текущий supported-список (меняется с приложением)
         self._remote_cmd_char = None
+        self._entity_upd_char = None
+        self._vol_refresh_task = None
         self._client = None
 
     async def setup(self, connection):
@@ -128,6 +130,7 @@ class AMSClient:
             return False
 
         self._remote_cmd_char = remote_cmd
+        self._entity_upd_char = entity_upd
 
         # Subscribe to RemoteCommand notifications: iPhone NOTIFIES the array of
         # currently-supported RemoteCommandIDs (меняется при смене приложения/состояния).
@@ -236,8 +239,34 @@ class AMSClient:
         try:
             await self._remote_cmd_char.write_value(bytes([cmd_id]), with_response=True)
             logger.info("AMS: command 0x%02x sent OK", cmd_id)
+            if cmd_id in (CMD_VOL_UP, CMD_VOL_DOWN):
+                self._schedule_volume_refresh()
         except Exception as e:
             logger.error("AMS send_command error: %s", e)
+
+    # iOS 27 (замечено 2026-10-20): после команд громкости iPhone перестал
+    # присылать уведомления PlayerAttributeVolume (в июне шли непрерывно с шагом 1%).
+    # Повторная подписка на Player заставляет iPhone отдать текущую громкость —
+    # iPhone остаётся мастером, шкала берёт значение от него.
+    def _schedule_volume_refresh(self, delay=0.3):
+        if self._vol_refresh_task is not None and not self._vol_refresh_task.done():
+            self._vol_refresh_task.cancel()
+        self._vol_refresh_task = asyncio.create_task(self._volume_refresh(delay))
+
+    async def _volume_refresh(self, delay):
+        try:
+            await asyncio.sleep(delay)
+            if not self._entity_upd_char:
+                return
+            await self._entity_upd_char.write_value(
+                bytes([ENTITY_PLAYER, PLAYER_ATTR_NAME, PLAYER_ATTR_PLAYBACK_INFO, PLAYER_ATTR_VOLUME]),
+                with_response=True,
+            )
+            logger.info("AMS: volume refresh requested")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning("AMS volume refresh error: %s", e)
 
     async def toggle(self):    await self.send_command(CMD_TOGGLE)
     async def next(self):      await self.send_command(CMD_NEXT)

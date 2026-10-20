@@ -24,6 +24,14 @@ EV_REL = 0x02
 EV_ABS = 0x03
 REL_HWHEEL = 6
 
+# Фильтр энкодера (2026-10-20): ручка QN19 шлёт тики с неверным знаком (~25%),
+# iPhone их повторяет → громкость скачет.
+#  - пока ручка крутится, направление зафиксировано (LOCK);
+#  - разворот после паузы откладывается на HOLD: если сразу пришёл тик старого
+#    направления — это дребезг, отбросить; иначе — настоящий разворот.
+ENCODER_DIRECTION_LOCK_S = float(os.environ.get("CARTHING_ENCODER_LOCK_MS", "300")) / 1000.0
+ENCODER_REVERSAL_HOLD_S = float(os.environ.get("CARTHING_ENCODER_HOLD_MS", "250")) / 1000.0
+
 # Touchscreen (event3, tlsc6x — MT protocol type B)
 ABS_MT_SLOT        = 0x2f
 ABS_MT_POSITION_X  = 0x35
@@ -109,12 +117,54 @@ async def start(get_ams=None, on_event=None):
       - get_ams(): legacy fallback — drive AMS directly when no GUI sink is wired.
     """
     use_gui = on_event is not None
+    enc = {"dir": 0, "ts": 0.0, "pending": None}
+
+    def _resolve_pending():
+        # Отложенный разворот не был опровергнут — это настоящий разворот.
+        handle = enc["pending"]
+        if handle is None:
+            return
+        enc["pending"] = None
+        enc["dir"] = -enc["dir"]
+        enc["ts"] = time.monotonic()
+        asyncio.create_task(_emit(enc["dir"]))
 
     async def on_encoder(ev):
         _, _, evtype, code, value = ev
-        if evtype != EV_REL or code != REL_HWHEEL:
+        if evtype != EV_REL or code != REL_HWHEEL or value == 0:
             return
-        log.info("Encoder raw value=%+d", value)
+        now = time.monotonic()
+        direction = 1 if value > 0 else -1
+        if enc["pending"] is not None:
+            enc["pending"].cancel()
+            enc["pending"] = None
+            enc["ts"] = now
+            if direction == enc["dir"]:
+                log.info("Encoder raw value=%+d (reversal cancelled as bounce)", value)
+                await _emit(direction)
+            else:
+                log.info("Encoder raw value=%+d (reversal confirmed)", value)
+                enc["dir"] = direction
+                await _emit(direction)
+                await _emit(direction)
+            return
+        if enc["dir"] == 0 or direction == enc["dir"]:
+            enc["dir"] = direction
+            enc["ts"] = now
+            log.info("Encoder raw value=%+d", value)
+            await _emit(direction)
+            return
+        if now - enc["ts"] < ENCODER_DIRECTION_LOCK_S:
+            enc["ts"] = now
+            log.info("Encoder raw value=%+d dropped (direction lock)", value)
+            return
+        enc["ts"] = now
+        log.info("Encoder raw value=%+d held (possible reversal)", value)
+        enc["pending"] = asyncio.get_running_loop().call_later(
+            ENCODER_REVERSAL_HOLD_S, _resolve_pending
+        )
+
+    async def _emit(value):
         if use_gui:
             on_event(EV_ENCODER_CW if value > 0 else EV_ENCODER_CCW)
             return
