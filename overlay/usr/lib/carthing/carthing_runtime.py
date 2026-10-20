@@ -18,6 +18,7 @@ import identity_service
 import state_paths
 from connection_journal import record_connection_event
 from hci_operation_gate import HciOperationGate
+from relative_step_queue import RelativeStepQueue
 from runtime_model import RuntimeModel
 
 
@@ -39,6 +40,57 @@ settings = None
 power = None
 session_plane = None
 hci_gate = HciOperationGate()
+
+# Volume keys are relative commands. Do not create one BLE task per input tick:
+# a slow GATT write can otherwise leave an unbounded FIFO of stale commands,
+# which keeps applying the old direction after the user has reversed the knob.
+_iphone_volume_queue = RelativeStepQueue()
+_iphone_volume_worker = None
+
+
+async def _drain_iphone_volume_commands():
+    """Send a coalesced stream of relative iPhone volume steps in order."""
+    global _iphone_volume_worker
+    try:
+        while _iphone_volume_queue.pending:
+            step = _iphone_volume_queue.pop()
+            command = "vol_up" if step > 0 else "vol_down"
+            started = time.monotonic()
+            logger.info(
+                "volume queue dispatch command=%s pending=%+d",
+                command, _iphone_volume_queue.pending,
+            )
+            if iphone is not None:
+                await iphone.command(command)
+            logger.info(
+                "volume queue complete command=%s elapsed_ms=%.1f pending=%+d",
+                command, (time.monotonic() - started) * 1000,
+                _iphone_volume_queue.pending,
+            )
+    except Exception:
+        _iphone_volume_queue.pending = 0
+        logger.exception("volume command worker failed")
+    finally:
+        _iphone_volume_worker = None
+        # An event can arrive between the last loop check and finally.
+        if _iphone_volume_queue.pending:
+            _iphone_volume_worker = asyncio.create_task(
+                _drain_iphone_volume_commands()
+            )
+
+
+def _queue_iphone_volume_command(command):
+    """Coalesce unsent opposite steps; one in-flight GATT write is unavoidable."""
+    global _iphone_volume_worker
+    _iphone_volume_queue.push(1 if command == "vol_up" else -1)
+    logger.info(
+        "volume queue input command=%s pending=%+d",
+        command, _iphone_volume_queue.pending,
+    )
+    if _iphone_volume_worker is None or _iphone_volume_worker.done():
+        _iphone_volume_worker = asyncio.create_task(
+            _drain_iphone_volume_commands()
+        )
 hardware = {}
 
 
@@ -87,6 +139,9 @@ def _on_command(source, command):
             and session_plane.send_media_control(command)
         ):
             logger.info("media command -> Mac media provider: %s", command)
+            return
+        if command in ("vol_up", "vol_down"):
+            _queue_iphone_volume_command(command)
             return
         logger.info("media command -> AMS: %s", command)
         asyncio.create_task(iphone.command(command))
