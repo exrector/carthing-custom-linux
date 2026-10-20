@@ -36,3 +36,71 @@
   `8ad251f840b5bd639cd2daf0d19b5e7a7497bf7c`. Изменения доставлены на живое
   устройство через `tools/deploy`, проверены по SHA-256 и bake-readiness, но
   пока не записаны в `rootfs.img`.
+
+---
+
+## 2026-10-20 — переполнение p1 журналом событий (Claude)
+
+**Симптом (после ~4 мес. работы):** не подключается к iPhone, не публикует трек, не ищет iPhone.
+
+**Корень:** `connection-events.jsonl` без ротации дорос до 17M и 2026-08-26 забил p1-FAT (32M, там же Image/dtb) на 100%.
+С этого дня `state.json`/`settings`/`keys.json` не сохранялись (ENOSPC). После перепаривания на boot 2026-10-18
+Bumble: `!!! error while storing keys` → у iPhone новый LTK, у Car Thing старый → бесконечный цикл
+`LE connected encrypted=False → requesting pairing → disconnect reason=61 (MIC failure)`, ~48k раз за 41ч.
+Дополнительно: `/run/carthing/carthing-remote.log` (tmpfs/RAM) без лимита — 25M за 41ч.
+
+**Сделано на живом QN19 (без reboot, rootfs не трогали):** журнал усечён до 2000 строк (бэкап:
+`carthing-device-backups/journal-overflow-20261020/`), p1 = 50%; runtime перезапущен; временный сторож
+`/run/carthing/log-guard.sh` (до reboot) режет журнал >2M и лог >4M.
+
+**В overlay к следующему bake:**
+- `usr/lib/carthing/connection_journal.py` — ротация в одно поколение `.1`, лимит 512K (env `CARTHING_CONNECTION_JOURNAL_MAX_BYTES`).
+- `etc/init.d/disabled-S50-carthing-remote` — фоновое усечение лога runtime >4M до 20000 строк.
+
+**Удалённый доступ:** QN19 по USB в NAS UGREEN DXP2800 (`ugreen.tailb25627.ts.net`, Tailscale SSH root).
+UGOS не грузит `cdc_ncm` сам: `modprobe cdc_ncm; ip link set usb0 up; ip addr add 172.16.42.1/24 dev usb0`
+(не persistent). Вход: `ssh -i ~/.ssh/id_carthing -J root@100.65.216.72 root@172.16.42.77`.
+
+### 2026-10-20 (продолжение) — дребезг энкодера громкости
+
+После перепаривания (ключи сохранились, reason=61 ушёл) проявился дребезг ручки: ~25% тиков при вращении
+приходят с неверным знаком через 41–51мс (= обычный интервал тиков 50мс) — похоже на износ/грязь одного
+квадратурного контакта. iPhone часть таких +/- склеивает, а локальная шкала считает все → шкала ≠ реальной громкости.
+
+- overlay `usr/lib/carthing/input_handler.py`: антидребезг — тик против текущего направления быстрее 120мс
+  отбрасывается (окно скользит). env `CARTHING_ENCODER_REVERSAL_MS` (0 = выкл). Отброшенные пишутся в лог как `dropped (bounce)`.
+- На живом QN19 применено без записи в rootfs: `mount --bind /run/carthing/hotfix/input_handler.py /usr/lib/carthing/input_handler.py`
+  + рестарт runtime. Слетает при reboot — до bake.
+- Аппаратно: можно попробовать очиститель контактов (DeoxIT) в энкодер.
+
+**ОТКАТ (2026-10-20 14:13):** антидребезг энкодера и «свежая» синхронизация шкалы владелец забраковал — стало хуже,
+чем до вмешательства. Bind-mount'ы сняты, на QN19 и в overlay возвращён исходный код
+`input_handler.py`, `ams_client.py`, `iphone_service.py`, `runtime_model.py`, `gui_controller.py`.
+В bake остаются только ротация журнала и лимит лога runtime.
+
+### 2026-10-20 14:22 — громкость: iPhone перестал присылать AMS volume после команд с ручки
+
+Июньские логи: iPhone слал PlayerAttributeVolume непрерывно (шаг 1%). Сегодня (iPhone, вероятно iOS 27 beta):
+изменения с самого iPhone приходят, а после команд vol_up/vol_down с ручки — почти нет (34 команды → 2 значения).
+Фикс в overlay `usr/lib/carthing/ams_client.py`: через 0.3с после последней команды громкости — повторная запись
+подписки Player (name+playback+volume). После этого поток уведомлений восстановился: iPhone шлёт громкость на каждый тик,
+шкала показывает значение iPhone. На QN19 применено bind-mount'ом (до reboot).
+
+### 2026-10-20 14:32 — фильтр энкодера (по требованию владельца, после фикса AMS)
+
+overlay `usr/lib/carthing/input_handler.py`: (1) пока ручка крутится, направление зафиксировано, тики против
+направления в течение 300мс отбрасываются; (2) разворот после паузы откладывается на 250мс — если сразу пришёл тик
+старого направления, это дребезг (по логам: при медленном вращении первым часто приходит ложный тик, через ~60мс
+правильный). env: CARTHING_ENCODER_LOCK_MS / CARTHING_ENCODER_HOLD_MS. На записанных тиках: 161 → ~21 разворотов
+внутри жестов (остаток — реальные развороты). На QN19 — bind-mount до reboot. GUI не менялся.
+
+### 2026-10-20 14:35 — ЗАПЕЧЕНО
+
+- Живой QN19: `tools/deploy` (через NAS jump) записал в rootfs p2 `ams_client.py`, `input_handler.py`,
+  `connection_journal.py`, `etc/init.d/disabled-S50-carthing-remote` — md5 сверены, rootfs снова ro, переживает reboot.
+  Bind-mount'ы и временный log-guard сняты. Перепрошивка/Maskrom не понадобились, BT-ключи на p1 целы.
+- Образ: `tools/bake-rootfs.py` → `image/rootfs.img` sha256 `bdfd7b31…`, runtime tree sha1 `31c4708b…`.
+  Старый rootfs `b638d769…` → `image/archive-20261020-pre-encoder/`.
+- Guard bootfs в bake-rootfs.py обновлён на фактический `f01e3078…` (bootfs 2026-06-18 с новым dtb; сверен
+  по md5 с живым p1). Прежний `6e99a75c…` в SHA256SUMS был устаревшей записью.
+- ВНИМАНИЕ: полная прошивка `tools/flash.py` перезапишет p1 → сотрёт BT-ключи → потребуется перепаривание iPhone.

@@ -27,8 +27,10 @@ REPO_ROOT = TOOLS_DIR.parent                           # .../carthing-release-in
 OVERLAY = REPO_ROOT / "overlay"                        # overlay/ (основной overlay проекта)
 DEFAULT_BASE_BUNDLE = REPO_ROOT / "source" / "base-bundle"  # source/base-bundle
 DEFAULT_ARTIFACT_PREFIX = "flash-bake-unified-stable"
-EXPECTED_RUNTIME_TREE_SHA1 = "8ad251f840b5bd639cd2daf0d19b5e7a7497bf7c"
-EXPECTED_BASE_BOOTFS_SHA256 = "6e99a75c57e38acab5be5b818f559132a4b7a167e7ccfa80e4e3ce1aedd7df3e"
+EXPECTED_RUNTIME_TREE_SHA1 = "31c4708b8809097932ead8347f47f3b9a2df50ab"
+# 2026-10-20: f01e3078 = bootfs от 2026-06-18 (новый superbird.dtb "proxy"), сверено по md5 с живым p1
+# QN19: superbird.dtb 3ed8c55d…, Image 68dc66ab…. Предыдущий канон 6e99a75c (2026-06-17).
+EXPECTED_BASE_BOOTFS_SHA256 = "f01e3078a7aca5534c0317459fd20073049091db393646493117deccf6a18ada"
 REJECTED_BOOTFS_SHA256 = {
     "7977c31176b8531b27457bf7df23eb9e63c86499f8ef2054d1ed6b7c308259ee":
         "old non-booting bootfs; see INVARIANTS.md bootloop recovery note",
