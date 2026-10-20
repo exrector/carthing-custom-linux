@@ -1,0 +1,41 @@
+#!/bin/sh
+# Runs on the UGREEN NAS as root. Payload and private key are temporary files
+# uploaded by the invoking workstation and removed on every exit path.
+set -eu
+
+KEY=/tmp/id_carthing
+RUNTIME=/tmp/carthing_runtime.py
+QUEUE=/tmp/relative_step_queue.py
+DEVICE=root@172.16.42.77
+
+cleanup() {
+    rm -f "$KEY" "$RUNTIME" "$QUEUE"
+}
+trap cleanup EXIT INT TERM
+
+chmod 600 "$KEY"
+
+tar -C /tmp -cf - carthing_runtime.py relative_step_queue.py | \
+    ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no "$DEVICE" '
+        set -eu
+        mount -o remount,rw /
+        trap "mount -o remount,ro /" EXIT INT TERM
+        tar -C /usr/lib/carthing -xf -
+        python3 -m py_compile /usr/lib/carthing/carthing_runtime.py
+        python3 -m py_compile /usr/lib/carthing/relative_step_queue.py
+        sync
+    '
+
+ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=no "$DEVICE" '
+    set -eu
+    SUP=$(cat /run/carthing/media-remote-supervisor.pid 2>/dev/null || true)
+    [ -n "$SUP" ] && kill "$SUP" 2>/dev/null || true
+    PID=$(ps | grep carthing_runtime.py | grep -v grep | awk "{print \$1}")
+    [ -n "$PID" ] && kill "$PID" 2>/dev/null || true
+    sleep 3
+    /etc/init.d/disabled-S50-carthing-remote
+    sleep 10
+    md5sum /usr/lib/carthing/carthing_runtime.py /usr/lib/carthing/relative_step_queue.py
+    ps w | grep carthing_runtime.py | grep -v grep
+    tail -n 40 /var/run/carthing/carthing-remote.log
+'
